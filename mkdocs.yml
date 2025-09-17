@@ -1,0 +1,47 @@
+site_name: JAFF Documentation
+site_description: Just Another Fancy Format - An astrochemical network parser
+site_url: https://github.com/tgrassi/jaff
+repo_url: https://github.com/tgrassi/jaff
+repo_name: tgrassi/jaff
+
+theme:
+  name: readthedocs
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - codehilite
+  - admonition
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: installation.md
+    - Quick Start: quickstart.md
+  - User Guide:
+    - Supported Formats: formats.md
+    - Command Line Interface: cli.md
+    - Python API: api.md
+    - Table Export: table-export.md
+    - Code Generation: code-generation.md
+    - Auxiliary Functions: aux-functions.md
+    - Photochemistry: photochemistry.md
+  - API Reference:
+    - Network: reference/network.md
+    - Parsers: reference/parsers.md
+    - Reaction: reference/reaction.md
+    - Species: reference/species.md
+  - Examples: examples.md
+  - Development: development.md

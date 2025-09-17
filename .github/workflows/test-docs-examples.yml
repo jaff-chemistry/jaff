@@ -1,0 +1,42 @@
+# ABOUTME: GitHub Actions workflow for testing Python code examples in documentation
+# ABOUTME: Ensures all code snippets in MkDocs documentation are runnable without errors
+
+name: Test Documentation Examples
+
+on:
+  push:
+    branches: [ main, add-mkdocs ]
+    paths:
+      - 'docs/**/*.md'
+      - 'test_docs_examples.py'
+      - '.github/workflows/test-docs-examples.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'docs/**/*.md'
+      - 'test_docs_examples.py'
+      - '.github/workflows/test-docs-examples.yml'
+
+jobs:
+  test-examples:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+
+    - name: Install dependencies
+      run: |
+        uv pip install --system -e "."
+        uv add --dev matplotlib
+
+    - name: Test documentation examples
+      run: |
+        uv run python .github/workflows/test_docs_examples.py --verbose --fail-fast
