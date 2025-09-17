@@ -18,9 +18,15 @@ from .function_parser import parse_funcfile
 class Network:
 
     # ****************
-    def __init__(self, fname, errors=False, label=None,
-                 funcfile=None):
+    def __init__(self, fname, errors=False, label=None, funcfile=None):
+        """Initialize a chemical reaction network from file.
 
+        Args:
+            fname (str): Path to the network file
+            errors (bool): If True, exit on validation errors (default: False)
+            label (str): Custom label for the network (default: filename)
+            funcfile (str|None): Optional auxiliary functions file (default: None)
+        """
         self.motd()
 
         # Get the path to the data file relative to this module
@@ -242,8 +248,6 @@ class Network:
                 # convert it to a symbol
                 if hasattr(rate, '__name__') and rate.__name__ in [v[0] for v in variables_sympy]:
                     rate = symbols(rate.__name__)
-            print(rate)
-               
             # use sympy to replace custom variables into the rate expression
             # note: reverse order to allow for nested variable replacement
             for vv in variables_sympy[::-1]:
@@ -442,6 +446,12 @@ class Network:
 
     # ****************
     def compare_reactions(self, other, verbosity=1):
+        """Compare reactions between two networks.
+        
+        Args:
+            other (Network): Another Network object to compare with
+            verbosity (int): Output detail level (0=minimal, 1=differences, 2=all)
+        """
         print("Comparing networks \"%s\" and \"%s\"..." % (self.label, other.label))
 
         net1 = [x.serialized for x in self.reactions]
@@ -473,6 +483,12 @@ class Network:
 
     # ****************
     def compare_species(self, other, verbosity=1):
+        """Compare species between two networks.
+        
+        Args:
+            other (Network): Another Network object to compare with
+            verbosity (int): Output detail level (0=minimal, 1=summary, 2=detailed)
+        """
         print("Comparing species in networks \"%s\" and \"%s\"..." % (self.label, other.label))
 
         net1 = [x.serialized for x in self.species]
@@ -1048,18 +1064,47 @@ class Network:
 
     # *****************
     def get_number_of_species(self):
+        """Get the total number of species in the network.
+        
+        Returns:
+            int: Number of species
+        """
         return len(self.species)
 
     # *****************
     def get_species_index(self, name):
+        """Get the index of a species by name.
+        
+        Args:
+            name (str): Species name
+            
+        Returns:
+            int: Species index in the species list
+        """
         return self.species_dict[name]
 
     # *****************
     def get_species_object(self, name):
+        """Get a Species object by name.
+        
+        Args:
+            name (str): Species name
+            
+        Returns:
+            Species: Species object with properties like mass, charge, etc.
+        """
         return self.species[self.species_dict[name]]
 
     # *****************
     def get_reaction_index(self, name):
+        """Get the index of a reaction by its verbatim string representation.
+        
+        Args:
+            name (str): Reaction string (e.g., "H + H -> H2")
+            
+        Returns:
+            int: Reaction index in the reactions list
+        """
         return self.reactions_dict[name]
 
     # *****************
@@ -1286,7 +1331,7 @@ class Network:
                 max_err = np.nanmax(rel_err)
 
                 # Print output if verbose
-                if verbose:
+                if verbose and not np.isnan(max_err):
                     idx_max = np.unravel_index(np.nanargmax(rel_err),
                                                rel_err.shape)
                     print("nTemp = {:d}, max_err = {:f} in reaction {:s} at T = {:e}".
@@ -1295,7 +1340,7 @@ class Network:
                                  temp[idx_max[1]]))
 
                 # Check for convergence
-                if max_err < err_tol:
+                if np.isnan(max_err) or max_err < err_tol:
                     break
 
         # Return final table
@@ -1503,6 +1548,7 @@ class Network:
                     format(str(rt), str(r), str(p))
                 )
                 output_units.append('cm^3 s^-1')
+
             grp.create_dataset('output_names', data=output_names, dtype=h5py.string_dtype())
             grp.create_dataset('output_units', data=output_units, dtype=h5py.string_dtype())
 

@@ -2,6 +2,28 @@ import sys
 
 # ****************
 def parse_prizmo(line):
+    """Parse a PRIZMO format reaction line.
+    
+    Parses a chemical reaction line in PRIZMO format which uses '->' separator
+    and optional temperature ranges in square brackets.
+    
+    Args:
+        line (str): A reaction line in PRIZMO format.
+                   Example: "H + O2 [10, 1000] -> OH + O 1.2e-10"
+    
+    Returns:
+        tuple: A tuple containing:
+            - rr (list): List of reactant species names
+            - pp (list): List of product species names  
+            - tmin (float): Minimum temperature (K), defaults to 3.0
+            - tmax (float): Maximum temperature (K), defaults to 1e6
+            - rate (str): Rate coefficient expression as a string
+    
+    Note:
+        - Converts species names: HE->He, E->e-, GRAIN0->GRAIN
+        - Replaces variables: user_crflux->crate, user_av->av
+        - Adds ',1e10' to PHOTO reactions
+    """
 
     srow = line.strip()
 
@@ -43,6 +65,28 @@ def parse_prizmo(line):
 
 # ****************
 def parse_udfa(line):
+    """Parse a UDFA format reaction line.
+    
+    Parses a chemical reaction line in UDFA (UMIST Database for Astrochemistry) format
+    which uses ':' as delimiter between fields.
+    
+    Args:
+        line (str): A reaction line in UDFA format with colon-separated fields.
+                   Example: "1234:PH:H2:O::H2O::::1.0e-10:0.0:5.0:10.0:1000.0"
+    
+    Returns:
+        tuple: A tuple containing:
+            - rr (list): List of reactant species names
+            - pp (list): List of product species names
+            - tmin (float): Minimum temperature (K)
+            - tmax (float): Maximum temperature (K)
+            - rate (str): Rate coefficient expression as a string
+    
+    Note:
+        - Reaction types: CR (cosmic ray), PH (photo), standard
+        - Skips species: CR, CRP, PHOTON, CRPHOT, empty strings
+        - Rate formula depends on reaction type and coefficients ka, kb, kc
+    """
 
     arow = line.split(":")
     rtype = arow[1]
@@ -77,6 +121,31 @@ def parse_udfa(line):
 
 # ****************
 def parse_kida(line):
+    """Parse a KIDA format reaction line.
+    
+    Parses a chemical reaction line in KIDA (KInetic Database for Astrochemistry) format
+    which uses fixed-width columns for different fields.
+    
+    Args:
+        line (str): A reaction line in KIDA format with fixed-width columns.
+                   The line should contain reactants, products, and rate coefficients
+                   at specific column positions.
+    
+    Returns:
+        tuple: A tuple containing:
+            - rr (list): List of reactant species names
+            - pp (list): List of product species names
+            - tmin (float): Minimum temperature (K)
+            - tmax (float): Maximum temperature (K) 
+            - rate (str): Rate coefficient expression as a string
+    
+    Note:
+        - Ignores species: CR, CRP, Photon
+        - Supports 5 different formula types (1-5) for rate calculations
+        - Formula 1: cosmic ray, 2: photo, 3: standard Arrhenius
+        - Formula 4-5: special ion-neutral reactions
+        - Returns rate="0e0" for unimplemented formulas
+    """
 
     ignore = ["CR", "CRP", "Photon"]
 
@@ -137,6 +206,31 @@ def parse_kida(line):
 
 # ****************
 def parse_krome(line, fmt):
+    """Parse a KROME format reaction line.
+    
+    Parses a chemical reaction line in KROME format which uses comma-separated values
+    with a format specification header.
+    
+    Args:
+        line (str): A reaction line in KROME format (comma-separated).
+        fmt (str): Format specification string starting with '@format:' 
+                   that defines the meaning of each comma-separated field.
+                   Example: '@format:idx,r,r,p,p,tmin,tmax,rate'
+    
+    Returns:
+        tuple: A tuple containing:
+            - rr (list): List of reactant species names
+            - pp (list): List of product species names
+            - tmin (float): Minimum temperature (K), defaults to 3.0
+            - tmax (float): Maximum temperature (K), defaults to 1e6
+            - rate (str): Rate coefficient expression as a string
+    
+    Note:
+        - Format fields: r=reactant, p=product, tmin/tmax=temperature limits, rate=rate expr
+        - Converts species: E/e->e-, g->"", HE->He
+        - Replaces variables: user_crflux/user_crate->crate, user_av->av
+        - Converts Fortran syntax to Python using f90_convert()
+    """
 
     line = line.replace(" ", "")
 
@@ -215,6 +309,33 @@ def parse_krome(line, fmt):
 
 # ****************
 def parse_uclchem(line):
+    """Parse a UCLCHEM format reaction line.
+    
+    Parses a chemical reaction line in UCLCHEM format which uses comma-separated values
+    with specific ordering of reactants, products, and rate coefficients.
+    
+    Args:
+        line (str): A reaction line in UCLCHEM format (comma-separated).
+                   Format: Reactant1,Reactant2,Reactant3,Product1,Product2,Product3,Product4,
+                          Alpha,Beta,Gamma,T_min,T_max,extrapolate
+    
+    Returns:
+        tuple: A tuple containing:
+            - rr (list): List of reactant species names
+            - pp (list): List of product species names
+            - tmin (float): Minimum temperature (K)
+            - tmax (float): Maximum temperature (K)
+            - rate (str): Rate coefficient expression (currently always "0e0")
+    
+    Warning:
+        This parser is not fully implemented and always returns rate="0e0".
+    
+    Note:
+        - Converts species prefixes: #->_DUST suffix, @->_BULK suffix
+        - Handles special reactions: CRP, CRPHOT, PHOTON, FREEZE
+        - Ignores many process keywords like ER, DESOH2, THERM, etc.
+        - Species conversions: E-->e-, HE->He, SI->Si, CL->Cl, MG->Mg
+    """
 
     srow = line.strip()
 
@@ -281,6 +402,25 @@ def parse_uclchem(line):
 
 # ****************
 def f90_convert(line):
+    """Convert Fortran 90 syntax to Python-compatible expressions.
+    
+    Converts various Fortran 90 syntax elements in rate expressions to
+    Python-compatible format for evaluation.
+    
+    Args:
+        line (str): A string containing Fortran 90 syntax elements.
+                   Example: "1.0d-10 * dexp(-100d0/T)"
+    
+    Returns:
+        str: The converted string with Python-compatible syntax.
+             Example: "1.0e-10 * exp(-100e0/T)"
+    
+    Note:
+        - Converts dexp() to exp()
+        - Removes array slice notation (:)
+        - Converts Fortran double precision notation (d) to Python scientific notation (e)
+          Example: 1.0d-10 becomes 1.0e-10
+    """
     import re
     # dexp -> exp
     line = line.replace("dexp(", "exp(")

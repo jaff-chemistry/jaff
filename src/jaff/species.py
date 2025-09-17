@@ -3,9 +3,26 @@ import sys
 
 
 class Species:
+    """Represents a chemical species with mass, charge, and elemental composition.
+    
+    Attributes:
+        name (str): Species name (e.g., "H2O", "CO+")
+        mass (float): Molecular mass in atomic mass units
+        charge (int): Electric charge
+        exploded (list): Elemental composition as list of atoms
+        latex (str): LaTeX representation for formatting
+        index (int): Index in the network's species list
+    """
 
     # ********************
     def __init__(self, name, mass_dict, index):
+        """Initialize a chemical species.
+        
+        Args:
+            name (str): Species name
+            mass_dict (dict): Dictionary mapping atomic symbols to masses
+            index (int): Species index in the network
+        """
 
         if name.lower() in ["e", "eletron", "electrons", "el", "els"] or name in ["E", "E-"]:
             sys.exit("ERROR: electrons found with name: " + name + ". Use e- instead.")

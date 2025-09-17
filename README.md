@@ -1,7 +1,7 @@
 # JAFF
 (Just Another Fancy Format)
 
-An astrochemical network parser that supports multiple reaction network formats including KIDA, UDFA, PRIZMO, KROME, and UCLCHEM.
+An astrochemical network parser that supports multiple reaction network formats including KIDA, UDFA, PRIZMO, KROME, and UCLCHEM, with code generation backends for Python, Fortran, and C++.
 
 ## Installation
 
@@ -37,6 +37,7 @@ jaff networks/test.dat --list-species --list-reactions
 
 ```python
 from jaff import Network
+from jaff.builder import Builder
 
 # Load a chemical network
 network = Network("networks/react_COthin")
@@ -48,6 +49,12 @@ for species in network.species:
 # Access reactions
 for reaction in network.reactions:
     print(f"{reaction.get_sympy()}")
+
+# Generate solver code (choose one)
+builder = Builder(network)
+# builder.build(template="python_solve_ivp")
+# builder.build(template="fortran_dlsodes")
+# builder.build(template="kokkos_ode")
 ```
 
 ## Features
@@ -55,8 +62,15 @@ for reaction in network.reactions:
 - **Multi-format support**: Automatically detects and parses KIDA, UDFA, PRIZMO, KROME, and UCLCHEM formats
 - **Validation**: Checks for mass and charge conservation in reactions
 - **Species analysis**: Automatic extraction of elemental composition and properties
-- **Rate calculations**: Temperature-dependent rate coefficient evaluation
-- **ODE generation**: Creates differential equations for chemical kinetics
+- **Rate calculations**: Temperature-dependent rate coefficient evaluation and adaptive table export (TXT/HDF5)
+- **Photochemistry**: Built-in loading of cross sections for photoionization/photodissociation
+- **Code generation**: Generate ODE solvers via templates:
+  - `python_solve_ivp` (SciPy)
+  - `fortran_dlsodes` (DLSODES)
+  - `kokkos_ode` (C++ header-only integrators)
+- **Analytical Jacobian**: Generation of analytic Jacobian for stiff solvers
+- **CSE optimization**: Common subexpression elimination in generated code (especially C++)
+- **Auxiliary functions**: Optional external function file parsing and substitution
 
 ## Supported Network Formats
 
@@ -103,6 +117,11 @@ black src/jaff
 # Lint code
 ruff check src/jaff
 ```
+
+## Contributing and License
+
+- See `CONTRIBUTING.md` for guidelines on developing and submitting changes.
+- Licensed under the terms of the `LICENSE` file (MIT).
 
 -----------------------------
 ![xkcd:927](./assets/xkcd.png)               
