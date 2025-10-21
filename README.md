@@ -31,6 +31,9 @@ jaff networks/gas_reactions_kida.uva.2024.in
 
 # List all species and reactions
 jaff networks/test.dat --list-species --list-reactions
+
+# Generate the Kokkos header (with steady-state generator enabled)
+jaff networks/test.dat --template kokkos_ode --output-dir build/kokkos --steady-state-generator
 ```
 
 ### Python API Usage
@@ -57,6 +60,7 @@ for reaction in network.reactions:
 - **Species analysis**: Automatic extraction of elemental composition and properties
 - **Rate calculations**: Temperature-dependent rate coefficient evaluation
 - **ODE generation**: Creates differential equations for chemical kinetics
+- **Steady-state generator (optional)**: Emit CTMC generators and GTH orderings for near-LTE integrators when using `--steady-state-generator` or `Builder(..., enable_steady_state_generator=True)` (see `headeronly-cppvode-linalg/docs/steady_state_departures.md` for integration details)
 
 ## Supported Network Formats
 

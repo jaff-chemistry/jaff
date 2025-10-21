@@ -17,6 +17,8 @@ struct ChemistryODE {
     using state_type = std::array<integrators::Real, neqs>;
     using rhs_type = std::array<integrators::Real, neqs>;
     using jacobian_type = std::array<std::array<integrators::Real, neqs>, neqs>;
+    using generator_matrix = std::array<std::array<integrators::Real, neqs>, neqs>;
+    using order_type = std::array<int, neqs>;
 
     // Species indices and common constants
     // PREPROCESS_COMMONS
@@ -70,6 +72,14 @@ struct ChemistryODE {
         // PREPROCESS_JACOBIAN
         // PREPROCESS_END
     }
+
+    // Steady-state generator support
+    // PREPROCESS_STEADY_STATE_GENERATOR_DECL
+    // PREPROCESS_END
+
+    // Steady-state ordering support
+    // PREPROCESS_STEADY_STATE_ORDER_DECL
+    // PREPROCESS_END
 };
 
 #endif // CHEMISTRY_ODE_HPP

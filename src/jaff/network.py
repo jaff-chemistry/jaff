@@ -31,6 +31,11 @@ class Network:
         self.reactions_dict = {}
         self.reactions = []
         self.rlist = self.plist = None
+        self.nu_minus = self.nu_plus = None
+        self.nu_plus_sum = None
+        self._generator_order_cache = None
+        self._generator_order_success = None
+        self._generator_symbolic_assignments = None
         self.dEdt_chem = parse_expr('0')
         self.file_name = fname
         self.label = label if label else os.path.basename(fname).split(".")[0]
@@ -668,6 +673,15 @@ class Network:
                 species_idx = product.index
                 self.plist[i, species_idx] += 1
 
+        # Cache stoichiometry for generator construction
+        self.nu_minus = self.rlist.copy()
+        self.nu_plus = self.plist.copy()
+        self.nu_plus_sum = self.nu_plus.sum(axis=1)
+        # Invalidate cached generator order when stoichiometry changes
+        self._generator_order_cache = None
+        self._generator_order_success = None
+        self._generator_symbolic_assignments = None
+
     # ****************
     def get_reaction_verbatim(self, idx):
         return self.reactions[idx].get_verbatim()
@@ -878,6 +892,277 @@ class Network:
                 sode += f"{derivative_var}{lb}{name}{rb} = {expr}\n"
 
         return sode
+
+    # ****************
+    def get_symbolic_generator(self, use_cse=True, language="c++"):
+        """
+        Construct symbolic expressions for the steady-state generator matrix.
+
+        Args:
+            use_cse (bool): Whether to apply common subexpression elimination.
+            language (str): Target language for code generation (C++ only for now).
+
+        Returns:
+            tuple[str, str]: (generator_assignments, cse_temporaries)
+        """
+        import sympy as sp
+        from sympy import Indexed, IndexedBase, Idx, numbered_symbols, cse
+
+        if language not in ["c++", "cpp", "cxx"]:
+            raise NotImplementedError("Symbolic generator is only implemented for C++ output.")
+
+        n_species = len(self.species)
+        if n_species == 0:
+            return "", ""
+
+        # Create scalar symbols mirroring species concentrations
+        y_syms = [sp.symbols(f"y_{i}") for i in range(n_species)]
+
+        # Map Indexed nden[...] usage to scalar y_i
+        nden_base = IndexedBase('nden')
+        nden_to_y = {}
+        for i in range(n_species):
+            nden_to_y[Indexed(nden_base, i)] = y_syms[i]
+            nden_to_y[Indexed(nden_base, Idx(i))] = y_syms[i]
+
+        # Precompute rate expressions with nden mapped to y symbols
+        k_exprs = []
+        for rea in self.reactions:
+            rate_expr = rea.rate
+            if isinstance(rate_expr, str):
+                raise ValueError("Symbolic generator requires analytic rate expressions.")
+            k_exprs.append(rate_expr.xreplace(nden_to_y))
+
+        # Build generator entries using cached stoichiometry
+        generator = [[sp.Integer(0) for _ in range(n_species)] for _ in range(n_species)]
+        for r_idx, rate_expr in enumerate(k_exprs):
+            nu_minus_row = self.nu_minus[r_idx]
+            nu_plus_row = self.nu_plus[r_idx]
+            total_plus = int(self.nu_plus_sum[r_idx])
+
+            if not np.any(nu_minus_row):
+                continue
+
+            flux = rate_expr
+            for s_idx, stoich in enumerate(nu_minus_row):
+                if stoich:
+                    flux *= y_syms[s_idx] ** int(stoich)
+
+            for i, stoich_minus in enumerate(nu_minus_row):
+                if stoich_minus == 0:
+                    continue
+                removal = flux * sp.Integer(int(stoich_minus))
+                generator[i][i] += removal
+                if total_plus <= 0:
+                    continue
+                denom = sp.Integer(total_plus)
+                for j, stoich_plus in enumerate(nu_plus_row):
+                    if stoich_plus == 0:
+                        continue
+                    generator[i][j] -= removal * sp.Integer(int(stoich_plus)) / denom
+
+        # Enforce row sums of zero by recomputing diagonals
+        for i in range(n_species):
+            off_diag_sum = sp.Integer(0)
+            for j in range(n_species):
+                if i == j:
+                    continue
+                off_diag_sum += generator[i][j]
+            generator[i][i] = -off_diag_sum
+
+        # Collect non-zero entries for code generation
+        assignments = []
+        indices = []
+        for i in range(n_species):
+            for j in range(n_species):
+                expr = sp.simplify(generator[i][j])
+                if expr == 0:
+                    continue
+                indices.append((i, j))
+                assignments.append(expr)
+
+        if not assignments:
+            return "", ""
+
+        self._generator_symbolic_assignments = list(zip(indices, assignments))
+
+        def _format_expr(expr):
+            expr_str = sp.cxxcode(expr, strict=False)
+            import re as _re
+            for idx in range(n_species):
+                expr_str = _re.sub(rf"\\by_{idx}\\b", f"nden[{idx}]", expr_str)
+            expr_str = expr_str.replace("std::", "Kokkos::")
+            return expr_str
+
+        def _prune_cse(replacements, exprs):
+            if not replacements:
+                return []
+            cse_syms = [var for var, _ in replacements]
+            cse_set = set(cse_syms)
+            used = set()
+            for e in exprs:
+                used |= (e.free_symbols & cse_set)
+            if not used:
+                return []
+            dep_map = {var: expr for var, expr in replacements}
+            changed = True
+            while changed:
+                changed = False
+                addl = set()
+                for v in list(used):
+                    ev = dep_map.get(v)
+                    if ev is None:
+                        continue
+                    deps = ev.free_symbols & cse_set
+                    new_deps = deps - used
+                    if new_deps:
+                        addl |= new_deps
+                if addl:
+                    used |= addl
+                    changed = True
+            return [(var, dep_map[var]) for var, _ in replacements if var in used]
+
+        if use_cse:
+            replacements, reduced_exprs = cse(assignments, symbols=numbered_symbols("g"))
+            reduced_exprs = list(reduced_exprs)
+            replacements = _prune_cse(replacements, reduced_exprs)
+        else:
+            replacements = []
+            reduced_exprs = assignments
+
+        cse_lines = []
+        for var, expr in replacements:
+            expr_code = _format_expr(expr)
+            cse_lines.append(f"const double {var} = {expr_code};")
+
+        generator_lines = []
+        for (i, j), expr in zip(indices, reduced_exprs):
+            expr_code = _format_expr(expr)
+            generator_lines.append(f"G[{i}][{j}] = {expr_code};")
+
+        generator_code = "\n".join(generator_lines)
+        cse_code = "\n".join(cse_lines)
+        return generator_code, cse_code
+
+    # ****************
+    def get_generator_order(self):
+        """
+        Compute a permutation that makes the generator block upper triangular.
+
+        Returns:
+            tuple[list[int], bool]: (permutation, success flag)
+        """
+        if self._generator_order_cache is not None:
+            return list(self._generator_order_cache), bool(self._generator_order_success)
+
+        n_species = len(self.species)
+        adjacency = [set() for _ in range(n_species)]
+
+        for r_idx in range(len(self.reactions)):
+            minus_row = self.nu_minus[r_idx]
+            plus_row = self.nu_plus[r_idx]
+            if not np.any(minus_row) or not np.any(plus_row):
+                continue
+            sources = [i for i, v in enumerate(minus_row) if v > 0]
+            targets = [j for j, v in enumerate(plus_row) if v > 0]
+            for src in sources:
+                for dst in targets:
+                    if src != dst:
+                        adjacency[src].add(dst)
+
+        n_nodes = n_species
+
+        # Tarjan's algorithm for SCC decomposition
+        index = 0
+        indices = [-1] * n_nodes
+        lowlinks = [0] * n_nodes
+        on_stack = [False] * n_nodes
+        stack = []
+        components = []
+
+        def strongconnect(v):
+            nonlocal index
+            indices[v] = index
+            lowlinks[v] = index
+            index += 1
+            stack.append(v)
+            on_stack[v] = True
+
+            for w in adjacency[v]:
+                if indices[w] == -1:
+                    strongconnect(w)
+                    lowlinks[v] = min(lowlinks[v], lowlinks[w])
+                elif on_stack[w]:
+                    lowlinks[v] = min(lowlinks[v], indices[w])
+
+            if lowlinks[v] == indices[v]:
+                component = []
+                while True:
+                    w = stack.pop()
+                    on_stack[w] = False
+                    component.append(w)
+                    if w == v:
+                        break
+                components.append(component)
+
+        for v in range(n_nodes):
+            if indices[v] == -1:
+                strongconnect(v)
+
+        comp_id = {}
+        for cid, comp in enumerate(components):
+            for node in comp:
+                comp_id[node] = cid
+
+        comp_graph = [set() for _ in range(len(components))]
+        in_degree = [0] * len(components)
+        for v in range(n_nodes):
+            for w in adjacency[v]:
+                cv = comp_id[v]
+                cw = comp_id[w]
+                if cv == cw:
+                    continue
+                if cw not in comp_graph[cv]:
+                    comp_graph[cv].add(cw)
+                    in_degree[cw] += 1
+
+        from collections import deque
+
+        queue = deque([cid for cid, deg in enumerate(in_degree) if deg == 0])
+        ordered_components = []
+        while queue:
+            cid = queue.popleft()
+            ordered_components.append(cid)
+            for nxt in comp_graph[cid]:
+                in_degree[nxt] -= 1
+                if in_degree[nxt] == 0:
+                    queue.append(nxt)
+
+        if len(ordered_components) != len(components):
+            success = False
+            permutation = list(range(n_species))
+        else:
+            permutation = []
+            for cid in ordered_components:
+                comp_nodes = components[cid]
+                permutation.extend(sorted(comp_nodes))
+            success = any(adjacency[v] for v in range(n_nodes))
+
+        self._generator_order_cache = list(permutation)
+        self._generator_order_success = bool(success)
+        return list(permutation), bool(success)
+
+    # ****************
+    def get_generator_symbolic_assignments(self):
+        """
+        Return cached symbolic generator entries as ((i, j), expression) tuples.
+        """
+        if self._generator_symbolic_assignments is None:
+            # Populate cache using non-CSE path for deterministic expressions
+            self.get_symbolic_generator(use_cse=False)
+            if self._generator_symbolic_assignments is None:
+                return []
+        return list(self._generator_symbolic_assignments)
 
     # *****************
     def get_symbolic_ode_and_jacobian(self, idx_offset=0, use_cse=True, language="c++"):

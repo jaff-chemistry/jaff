@@ -6,6 +6,7 @@
 import argparse
 import sys
 from .network import Network
+from .builder import Builder
 
 
 def main():
@@ -46,6 +47,28 @@ def main():
         action="store_true",
         help="List all reactions in the network"
     )
+    parser.add_argument(
+        "--template",
+        help="Generate code using the specified template"
+    )
+    parser.add_argument(
+        "--output-dir",
+        help="Directory to write generated template files"
+    )
+    generator_group = parser.add_mutually_exclusive_group()
+    generator_group.add_argument(
+        "--steady-state-generator",
+        dest="steady_state_generator",
+        action="store_true",
+        help="Enable steady-state generator emission when building templates"
+    )
+    generator_group.add_argument(
+        "--no-steady-state-generator",
+        dest="steady_state_generator",
+        action="store_false",
+        help="Disable steady-state generator emission (default)"
+    )
+    parser.set_defaults(steady_state_generator=False)
     
     args = parser.parse_args()
     
@@ -69,6 +92,14 @@ def main():
             print(f"\nReactions in network ({len(network.reactions)} total):")
             for i, reaction in enumerate(network.reactions):
                 print(f"  {i+1}: {reaction}")
+
+        if args.template:
+            builder = Builder(network)
+            builder.build(
+                template=args.template,
+                output_dir=args.output_dir,
+                enable_steady_state_generator=args.steady_state_generator,
+            )
                 
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

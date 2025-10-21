@@ -1,11 +1,12 @@
 import sys
 import os
+import inspect
 
 class Builder:
     def __init__(self, network):
         self.network = network
 
-    def build(self, template="python_solve_ivp", output_dir=None):
+    def build(self, template="python_solve_ivp", output_dir=None, enable_steady_state_generator=False):
 
         print("Building network with template:", template)
 
@@ -29,7 +30,12 @@ class Builder:
 
         # call the main function of the module to preprocess the files
         # the definition of the main function is in the plugin folder
-        module.main(self.network, path_template=path_template, path_build=path_build)
+        extra_kwargs = {}
+        sig = inspect.signature(module.main)
+        if "enable_steady_state_generator" in sig.parameters:
+            extra_kwargs["enable_steady_state_generator"] = enable_steady_state_generator
+
+        module.main(self.network, path_template=path_template, path_build=path_build, **extra_kwargs)
 
         print(f"Network built successfully using template '{template}'.")
         print(f"Output files are located in: {path_build}")
