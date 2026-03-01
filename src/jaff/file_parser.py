@@ -736,7 +736,7 @@ class Fileparser:
                 "FALSE",
             ]:
                 raise SyntaxError(
-                    "SORT modifier must be followed by TRUE or FALSE\nLine: {self.line}"
+                    f"SORT modifier must be followed by TRUE or FALSE\nLine: {self.line}"
                 )
             sort = extras[sort_idx + 1].upper() == "TRUE"
 
