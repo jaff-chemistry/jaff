@@ -1235,7 +1235,7 @@ class Fileparser:
                     },
                     # Returns: list[str] - species names
                     "species": {
-                        "func": lambda: [specie.name() for specie in self.net.species],
+                        "func": lambda: [specie.name for specie in self.net.species],
                         "vars": ["idx", "specie"],
                     },
                     # Returns: list[str] - species names with +/-
