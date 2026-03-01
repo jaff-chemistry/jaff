@@ -107,14 +107,7 @@ For more information, visit: https://github.com/tgrassi/jaff
     gen_group.add_argument(
         "--lang",
         metavar="LANGUAGE",
-        choices=[
-            "c",
-            "cxx",
-            "fortran",
-            "python",
-            "rust",
-            "julia",
-        ],
+        choices=["c", "cxx", "fortran", "python", "rust", "julia", "r"],
         help="Default programming language for unsupported files (choices: %(choices)s)",
     )
     args: argparse.Namespace = parser.parse_args()
