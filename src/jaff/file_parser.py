@@ -731,7 +731,14 @@ class Fileparser:
         # Sort modifier: sort the output list
         if "SORT" in extras:
             sort_idx = extras.index("SORT")
-            sort = extras[sort_idx] == "TRUE"
+            if not len(extras) > sort_idx + 1 or extras[sort_idx + 1].upper() not in [
+                "TRUE",
+                "FALSE",
+            ]:
+                raise SyntaxError(
+                    "SORT modifier must be followed by TRUE or FALSE\nLine: {self.line}"
+                )
+            sort = extras[sort_idx + 1].upper() == "TRUE"
 
             # Delete the corresponding list element for further processing
             del extras[sort_idx + 1]
