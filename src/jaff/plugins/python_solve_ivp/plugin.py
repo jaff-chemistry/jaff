@@ -23,4 +23,4 @@ def main(network, path_template, path_build=None):
 
 if __name__ == "__main__":
     net = Network("networks/test.dat")
-    main(net, path_template="src/jaff/templates/preproncessor/python_solve_ivp")
+    main(net, path_template="src/jaff/templates/preprocessor/python_solve_ivp")
