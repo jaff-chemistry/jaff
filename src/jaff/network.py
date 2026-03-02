@@ -1146,7 +1146,7 @@ class Network:
                 if spec_name == "all_He":
                     if replace_nH:
                         for spec in self.species:
-                            count = spec.exploded.count("H")
+                            count = spec.exploded.count("He")
                             if count > 0:
                                 if repl is None:
                                     repl = count * nden[Idx(self.species_dict[spec.name])]
