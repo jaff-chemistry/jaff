@@ -1366,7 +1366,7 @@ class Network:
                 # not consistently generate numpy expressions that work properly
                 # with vector inputs, so restricting the input to scalars is safer.
                 f_eval = np.array([f(t) for t in temp])
-                log_rates[i, :] = np.clip(f_eval, a_min=None, a_max=rate_max)
+                log_rates[i, :] = np.clip(f_eval, a_min=None, a_max=np.log(rate_max))
 
         # Fifth step: do adaptive growth of table
         if err_tol is not None:
@@ -1386,8 +1386,8 @@ class Network:
                 log_rates_approx = np.zeros((len(react_func), (nTemp - 1) // 2))
                 for i, f in enumerate(react_func):
                     if isinstance(f, float):
-                        log_rates_grow[i, 1::2] = np.log(f)
-                        log_rates_approx[i, :] = np.log(f)
+                        log_rates_grow[i, 1::2] = f
+                        log_rates_approx[i, :] = f
                     elif f is None:
                         log_rates_grow[i, 1::2] = np.nan
                         log_rates_approx[i, :] = np.nan
@@ -1396,7 +1396,7 @@ class Network:
                         # here instead of a straight array operation
                         f_eval = np.array([f(t) for t in temp_grow[1::2]])
                         log_rates_grow[i, 1::2] = np.clip(
-                            f_eval, a_min=None, a_max=rate_max
+                            f_eval, a_min=None, a_max=np.log(rate_max)
                         )
                         log_rates_approx[i, :] = 0.5 * (
                             log_rates_grow[i, :-1:2] + log_rates_grow[i, 2::2]
