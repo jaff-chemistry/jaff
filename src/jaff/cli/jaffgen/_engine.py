@@ -261,6 +261,17 @@ class JaffGen:
                 sn.rad_energy_density = v
             sn.c = nr.get("rsl") or sn.c
 
+            # background_field is a radiation property (selects the reference
+            # field used to scale chi_pe), so it lives in [network.radiation].
+            if (v := nr.get("background_field")) is not None:
+                sn.background_field = v
+
+        # The presence of a [network.dust] table enables the dust module
+        # (photoelectric emission, ...); it is a network-level module, not a
+        # radiation sub-property.
+        if np.get("dust") is not None:
+            sn.dust = True
+
     def set_template(self, template: str | None) -> None:
         """
         Resolve a named built-in template and collect its files.
@@ -626,6 +637,8 @@ class JaffGen:
             rad_bands=sn.rad_bands,
             rad_powerlaw_index=sn.rad_powerlaw_index,
             rad_energy_density=sn.rad_energy_density,
+            dust=sn.dust,
+            background_field=sn.background_field,
             c=sn.c,
             _from_cli=sn._from_cli,
             _metadata=sn._metadata,

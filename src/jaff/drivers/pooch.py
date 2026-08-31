@@ -1,5 +1,4 @@
 import logging
-from importlib import resources
 from pathlib import Path
 
 import pooch
@@ -76,8 +75,9 @@ class Pooch:
     from the class-level ``_registry``, avoiding redundant fetcher objects for
     the same remote source.
 
-    The registry of downloadable files (names, hashes, URLs) is loaded from the
-    packaged ``registry.txt``.
+    The registry of downloadable files (names, hashes, URLs) is downloaded from
+    ``registry.txt`` under ``base_url`` (fetched unverified, since its own hash
+    is not known ahead of time).
     """
 
     _registry: dict[str, "Pooch"] = {}
@@ -123,8 +123,13 @@ class Pooch:
             base_url=base_url,
             registry=None,
         )
-        registry_file = resources.open_text("jaff", "registry.txt")
-        self.pooch.load_registry(registry_file)
+        registry_path = pooch.retrieve(
+            url=f"{base_url}/registry.txt",
+            known_hash=None,
+            fname="registry.txt",
+            path=cache_path,
+        )
+        self.pooch.load_registry(registry_path)
 
     def fetch_file(self, filename: str) -> None:
         """Download ``filename`` from the registry, rendering a progress bar.
@@ -167,4 +172,20 @@ def download_shielding() -> None:
     )
 
     for file in ["shielding/leiden.hdf5"]:
+        pooch.fetch_file(file)
+
+
+def download_background_radiation() -> None:
+    """Fetch the background-radiation data file into ``data/background_radiation``.
+
+    Downloads the collapsed background-radiation HDF5 file from the ANU mirror,
+    caching it under the package ``data/background_radiation`` directory. Files
+    already present and hash-valid are not re-downloaded.
+    """
+    pooch = Pooch(
+        "https://www.mso.anu.edu.au/~anishs",
+        DATA_DIR,
+    )
+
+    for file in ["background_radiation/radiation.hdf5"]:
         pooch.fetch_file(file)

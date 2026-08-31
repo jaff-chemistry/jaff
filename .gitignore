@@ -89,6 +89,8 @@ uv.lock
 
 # pooch-downloaded cross-section data (fetched at runtime, not committed)
 src/jaff/data/shielding/*.hdf5
+src/jaff/data/background_radiation/*.hdf5
 src/jaff/data/shielding/*.csv
 src/jaff/data/xsecs/*.hdf5
 src/jaff/data/xsecs/*.csv
+registry.txt

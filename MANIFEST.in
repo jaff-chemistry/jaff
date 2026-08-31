@@ -3,12 +3,7 @@
 
 include README.md
 include LICENSE
-include src/jaff/registry.txt
 
 recursive-include src/jaff/data *.dat
 recursive-include src/jaff/templates *.hpp *.cpp *.txt
 recursive-include src/jaff/db *.db
-
-setup(
-    package_data={"jaff": ["registry.txt"]},
-)

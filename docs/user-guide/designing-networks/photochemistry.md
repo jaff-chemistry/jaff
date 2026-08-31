@@ -277,6 +277,58 @@ inputs are the H2 column density `ncol_H2` and velocity dispersion `vdisp`.
 
 ---
 
+## Self-consistent photoelectric field (`chi_pe`)
+
+Grain photoelectric heating is driven by far-UV photons in the **photoelectric
+band** — from the grain work function (`6 eV`) up to the hydrogen ionisation
+edge (`13.6 eV`). Rate and heating expressions parametrise this by `chi_pe`: the
+local radiation field in that band, scaled to a reference (Draine/ISRF) field.
+
+Whereas the plain [`chi`](network-formats.md#rate-expression-variables) symbol is
+a runtime input (an assumed external field), `chi_pe` is computed **from the
+network's own radiation bands**, so photoelectric heating stays consistent with
+the radiation transport actually being solved.
+
+### Definition
+
+`chi_pe` is the ratio of two energy densities in the `[6, 13.6] eV` band:
+
+$$
+\chi_\mathrm{pe} = \frac{u_\mathrm{bands}(6\text{–}13.6\,\mathrm{eV})}{u_\mathrm{background}(6\text{–}13.6\,\mathrm{eV})}
+$$
+
+- **numerator** — the energy density carried by the network's radiation bands,
+  summing over each band the fraction of its energy that overlaps the
+  photoelectric band. In photon-density mode each band's `photden` is multiplied
+  by the band-average photon energy `eavg` to get an energy density.
+- **denominator** — the energy density of the reference `background_field` in the
+  same band, obtained from its tabulated photon-flux spectrum.
+
+Both are energy densities in `erg cm⁻³`, so `chi_pe` is dimensionless.
+
+### Enabling it
+
+`chi_pe` needs **radiation transport and the dust module** both on. From Python:
+
+```python
+net = Network(
+    "networks/GOW/GOW.jet",
+    rad_bands=[6.0, 11.2, 13.6, "inf"],  # band edges in eV
+    dust=True,                            # enables the dust module
+    background_field="draine",            # reference field for the scaling
+)
+```
+
+From a [`jaffgen.toml`](../code-generation/jaffgen-toml.md#networkdust-section)
+add a `[network.dust]` table and a `background_field` key under
+`[network.radiation]`. If either radiation or dust is missing when a rate
+references `chi_pe`, generation aborts with a `ParserError`.
+
+Reference the symbol in any rate or `.jfunc` expression exactly like `chi`; JAFF
+substitutes the computed expression when the network is built.
+
+---
+
 ## Python API
 
 ```python
