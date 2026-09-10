@@ -33,16 +33,23 @@ average cross section in band *i* is::
     <σ>_i = ∫_{E_lo}^{E_hi} σ(E) n(E) dE  /  ∫_{E_lo}^{E_hi} n(E) dE
 
 The symbolic rate coefficient stored in the radiation density variable
-``den[i]`` (either energy density *u_i* in eV/cm³ or photon density *n_i*
+``den[i]`` (either energy density *u_i* in erg/cm³ or photon density *n_i*
 in cm⁻³) is::
 
     k_i = c * den[i] * <σ>_i          (photon density mode)
     k_i = c * den[i] * <σ>_i / <E>_i  (energy density mode)
 
 where *c* is the speed of light and ``<E>_i`` is the band-average photon
-energy.
+energy (``eavg``).
 
-All energies are in eV throughout this module.
+Energy units
+------------
+Band edges, the photon-energy symbol ``E`` and the cross-section tables are
+all in **eV**, and the band-average cross sections are energy-unit-free ratios.
+The one quantity carrying a net energy dimension, the band-average photon
+energy ``eavg`` (``<E>_i``), is converted to **erg** (see :data:`EV_TO_ERG`)
+so the rate coefficients and radiation-moment ODEs are consistent with the CGS
+solver; the ``radeden`` field is therefore an energy density in erg/cm³.
 """
 
 from __future__ import annotations
@@ -51,11 +58,13 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import sympy as sp
+from astropy import units as u
 
 from ...common._integrators import arr_integrate, smart_integrate
 from .._typing import RadiationGroupReactionProps
 from ._photochemistry import Photochemistry
 from ._typing._photochemistry import XsecsProps
+from .background_field import BackgroundField
 
 if TYPE_CHECKING:
     from ...core.network import Network
@@ -105,16 +114,19 @@ class RadiationGroup:
           (cm²), or ``None`` for custom-rate reactions.
         - ``"xsec_frac"`` : fraction of the total cross section (or total
           ``dRad``) attributed to this band (dimensionless).
-        - ``"delta_rad"`` : integrated ``dRad`` over the band
-          (eV/cm³/s or cm⁻³/s depending on the radiation mode).
+        - ``"delta_rad"`` : integrated ``dRad`` over the band -- the radiation
+          energy added to the band per reaction event (erg).
 
     eavg : float or None
-        Photon-number-weighted average energy of this band in eV, computed
-        lazily by :meth:`Radiation.set_reaction_rate_coefficient` and shared
-        across all reactions in the band.
+        Photon-number-weighted average energy of this band, in **erg** (the
+        band-edge integral is in eV and converted via :data:`EV_TO_ERG`), so
+        that dividing rate/ODE terms by it stays CGS-consistent.  Computed in
+        :class:`Radiation.__init__` and shared across all reactions in the band.
     """
 
-    def __init__(self, lower, upper, index):
+    def __init__(
+        self, lower: float | int, upper: float | int | sp.Basic, index: int, sym: sp.Basic
+    ):
         """Initialise a single radiation band.
 
         Parameters
@@ -128,11 +140,21 @@ class RadiationGroup:
             group list.
         """
         self.index: int = index
+        self.sym: sp.Basic = sym
         self.lower: float | int = lower
         self.upper: float | int | sp.Basic = upper
         self.band: tuple = (lower, upper)
+
+        if not isinstance(self.lower, (int, float)):
+            raise ValueError(
+                f"Radiation group lower bound must be a float or int. Found {self.lower}"
+            )
         # Band width; may be symbolic when upper is sp.oo.
-        self.dE: float | sp.Basic = self.upper - self.lower
+        self.dE: float | None = (
+            self.upper - self.lower  # type: ignore
+            if all(isinstance(val, (int, float)) for val in [self.upper, self.lower])
+            else None
+        )
         self.props: dict[Reaction, RadiationGroupReactionProps] = {}
         # Populated on the first call to set_reaction_rate_coefficient for this band.
         self.eavg: float | None = None
@@ -178,7 +200,7 @@ class Radiation:
         0 (flat photon spectrum).
     energy_density : bool
         If ``True`` the radiation field is tracked as energy density
-        (eV cm⁻³); if ``False`` as photon number density (cm⁻³).  This
+        (erg cm⁻³); if ``False`` as photon number density (cm⁻³).  This
         controls the name of the symbolic density variable (``"radeden"`` vs.
         ``"photden"``) and the normalisation of rate coefficients.
     c : float
@@ -208,6 +230,7 @@ class Radiation:
         powerlaw_idx: int | float,
         energy_density: bool,
         c: float | str,
+        background_field: str = "draine",
     ):
         """Parse band edges and construct one :class:`RadiationGroup` per band.
 
@@ -220,7 +243,7 @@ class Radiation:
         powerlaw_idx : int or float
             Power-law spectral index *α* for ``n(E) ∝ E^(α-2)``.
         energy_density : bool
-            If ``True``, radiation is tracked as energy density (eV cm⁻³);
+            If ``True``, radiation is tracked as energy density (erg cm⁻³);
             if ``False``, as photon number density (cm⁻³).
         c : float | str
             Speed of light in cm/s (CGS) or a string to be converted to a symbol.
@@ -230,14 +253,37 @@ class Radiation:
         self.powerlaw_idx: int | float = powerlaw_idx
         self.energy_density: bool = energy_density
         # Speed of light (cm/s) for k = c * σ * n(E) expressions
-        self.c: float | sp.Basic = sp.symbols(c) if isinstance(c, str) else c
+        self.c: float | sp.Symbol = sp.symbols(c) if isinstance(c, str) else c
+        self.background_field = BackgroundField(background_field)
 
         self.__parse_bands(bands)
         self.nbands: int = len(self.bands) - 1
+        # Symbolic radiation density variable: energy density (erg/cm³) or
+        # photon number density (cm⁻³), depending on the mode.
+        self.den = sp.MatrixSymbol(
+            "radeden" if self.energy_density else "photden", self.nbands, 1
+        )
         self.groups: list[RadiationGroup] = [
-            RadiationGroup(lower, self.bands[i + 1], i)
+            RadiationGroup(lower, self.bands[i + 1], i, self.den[sp.Idx(i)])  # type: ignore
             for i, lower in enumerate(self.bands[:-1])
         ]
+        self.E_sym: sp.Symbol = sp.Symbol("E")
+        self.ph_profile_sym: sp.Expr = self.E_sym ** (self.powerlaw_idx - 2)
+        self.energy_profile_sym: sp.Expr = self.E_sym * self.ph_profile_sym
+
+        self.photden_tot = smart_integrate(
+            self.ph_profile_sym, self.E_sym, (self.bands[0], self.bands[-1])
+        )
+
+        for grp in self.groups:
+            # Compute the band-average photon energy once per band (shared
+            # across all reactions): <E>_i = ∫ E n(E) dE / ∫ n(E) dE
+            grp.eavg = (
+                smart_integrate(
+                    self.energy_profile_sym, self.E_sym, (grp.lower, grp.upper)
+                )
+                / self.photden_tot
+            ) * u.eV.to(u.erg)
 
     def set_reaction_rate_coefficient(self, reaction: Reaction) -> None:
         """
@@ -269,8 +315,9 @@ class Radiation:
         reaction : Reaction
             The photochemical reaction to process.  ``reaction.dRad`` must
             be a SymPy expression in the symbol ``E`` (photon energy in eV)
-            describing the radiation energy-density source/sink rate
-            (eV cm⁻³ s⁻¹ per unit energy).
+            describing the radiation energy the reaction adds to the field per
+            unit photon energy (erg/eV); integrated over each band it gives the
+            energy added per reaction event (erg).
 
         Returns
         -------
@@ -308,81 +355,75 @@ class Radiation:
         # Photon-number spectrum: n(E) ∝ E^(α-2) used for weighing the cross-section
         # where α = powerlaw_idx.  The factor E^(α-2) arises from
         # n(E) = u(E)/E and u(E) ∝ E^(α-1).
-        E = xsec["photon_energy"]
-        E_sym = sp.Symbol("E")
-        n_profile = E ** (self.powerlaw_idx - 2)
-        n_profile_sym = E_sym ** (self.powerlaw_idx - 2)
-        n_tot = smart_integrate(n_profile_sym, E_sym, (self.bands[0], self.bands[-1]))
+        E = xsec["photon_energy"]  # photon energy array in eV
+        energy_profile = E ** (self.powerlaw_idx - 2)
         k_tot = sp.Float(0.0)  # Accumulates total rate coefficient over all bands
 
         # Total cross section integrated over the full spectrum (cm²),
         # stored on the reaction for later reference
         xsec_tot = (
-            arr_integrate(pr_xsec * n_profile, E, (self.bands[0], self.bands[-1])) / n_tot
+            arr_integrate(pr_xsec * energy_profile, E, (self.bands[0], self.bands[-1]))
+            / self.photden_tot
         )
         reaction.rad_xsecs = xsec_tot
-
-        # Symbolic radiation density variable: energy density (eV/cm³) or
-        # photon number density (cm⁻³), depending on the mode.
-        den = sp.MatrixSymbol(
-            "radeden" if self.energy_density else "photden", self.nbands, 1
-        )
 
         # Reset any back-references from a previous run before repopulating.
         reaction.rad_groups = []
 
-        for i, lower in enumerate(self.bands[:-1]):
-            upper = self.bands[i + 1]
-
+        for grp in self.groups:
             # ∫ n(E) dE over the band — used as normalisation for averages.
-            n_tot = smart_integrate(n_profile_sym, E_sym, (lower, upper))
+            photden_band = smart_integrate(
+                self.ph_profile_sym, self.E_sym, (grp.lower, grp.upper)
+            )
 
             # Photon-number-weighted average cross section in the band:
             # <σ>_i = ∫ σ(E) n(E) dE / ∫ n(E) dE
-            pr_xsec_avg = arr_integrate(pr_xsec * n_profile, E, (lower, upper)) / n_tot
+            pr_xsec_avg = (
+                arr_integrate(pr_xsec * energy_profile, E, (grp.lower, grp.upper))
+                / photden_band
+            )
             rad_xsec_avg = (
                 (
-                    arr_integrate(xsec["photo_absorption"] * n_profile, E, (lower, upper))
-                    / n_tot
+                    arr_integrate(
+                        xsec["photo_absorption"] * energy_profile,
+                        E,
+                        (grp.lower, grp.upper),
+                    )
+                    / photden_band
                 )
                 if xsec["_equations"]["pa"]
                 else pr_xsec_avg
             )
 
-            # Integral of the user-supplied radiation energy source per reaction
-            # per photon energy dRad over the band (eV per band).
-            delta_rad_band = smart_integrate(reaction.dRad, E_sym, (lower, upper))
+            # Integral of the user-supplied dRad (radiation energy per photon
+            # energy, erg/eV) over the band -> energy per reaction event (erg).
+            delta_rad_band = smart_integrate(
+                reaction.dRad, self.E_sym, (grp.lower, grp.upper)
+            )
 
             # Symbolic rate coefficient: k_i = c · den[i] · <σ>_i
             # (units: s⁻¹ for photon-density mode, cm³ s⁻¹ for two-body)
-            k = self.c * den[sp.Idx(i)] * rad_xsec_avg
+            k = self.c * self.den[sp.Idx(grp.index)] * rad_xsec_avg
             if "shielding" in reaction._metadata:
                 if "value" in reaction._metadata["shielding"]:
                     k *= reaction._metadata["shielding"]["value"]
                 else:
                     k *= Photochemistry.shielding(reaction, self.network)
 
-            self.groups[i].props[reaction] = {
+            grp.props[reaction] = {
                 "k": k,
                 "xsec": rad_xsec_avg,
                 "xsec_frac": rad_xsec_avg / xsec_tot,  # fraction of total cross section
                 "delta_rad": delta_rad_band,
             }
-            reaction.rad_groups.append(self.groups[i])
-
-            # Compute the band-average photon energy once per band (shared
-            # across all reactions): <E>_i = ∫ E n(E) dE / ∫ n(E) dE
-            if self.groups[i].eavg is None:
-                self.groups[i].eavg = (
-                    smart_integrate(E_sym * n_profile_sym, E_sym, (lower, upper)) / n_tot
-                )
+            reaction.rad_groups.append(grp)
 
             # In energy-density mode, convert from "per eV" to "per photon"
             # by dividing by the band-average energy <E>_i.
             k_tot += (
                 k
                 * (1.0 if not xsec["_equations"]["pa"] else (pr_xsec_avg / rad_xsec_avg))
-                / (self.groups[i].eavg if self.energy_density else 1)
+                / (grp.eavg if self.energy_density else 1)
             )
 
         reaction.rate = k_tot
@@ -432,10 +473,9 @@ class Radiation:
         # Reset any back-references from a previous run before repopulating.
         reaction.rad_groups = []
 
-        for i, lower in enumerate(self.bands[:-1]):
-            upper = self.bands[i + 1]
+        for grp in self.groups:
             # Band-integrated dRad (numerator of the fraction).
-            delta_rad_band = smart_integrate(reaction.dRad, E, (lower, upper))
+            delta_rad_band = smart_integrate(reaction.dRad, E, (grp.lower, grp.upper))
             # Fraction of the total radiation coupling attributed to this band.
             xsec_frac = (
                 0.0 if delta_rad_total_is_zero else delta_rad_band / delta_rad_total
@@ -443,13 +483,13 @@ class Radiation:
             # Scale the total user-supplied rate by the band fraction.
             k = reaction.rate * xsec_frac
 
-            self.groups[i].props[reaction] = {
+            grp.props[reaction] = {
                 "k": k,
                 "xsec": None,  # No tabulated cross section for custom reactions
                 "xsec_frac": xsec_frac,
                 "delta_rad": delta_rad_band,
             }
-            reaction.rad_groups.append(self.groups[i])
+            reaction.rad_groups.append(grp)
 
     def ordered_index(self, idx: int, order: int) -> tuple[int, int]:
         """

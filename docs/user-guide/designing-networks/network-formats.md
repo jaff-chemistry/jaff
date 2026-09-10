@@ -36,6 +36,7 @@ All rate expressions are parsed as SymPy expressions. The following physical sym
 | `av`    | Visual extinction                                | magnitudes    |
 | `crate` | Primary cosmic-ray ionisation rate per H nucleus | s⁻¹           |
 | `chi`   | Radiation field strength (Draine 1978 units)     | dimensionless |
+| `chi_pe`| Local field scaled to the photoelectric band (6–13.6 eV), from self-consistent radiation transport + dust. See [Photochemistry](photochemistry.md#self-consistent-photoelectric-field-chi_pe) | dimensionless |
 | `ntot`  | Total number density                             | cm⁻³          |
 | `nh`    | H nucleus number density                         | cm⁻³          |
 | `d2g`   | Dust-to-gas mass ratio                           | dimensionless |

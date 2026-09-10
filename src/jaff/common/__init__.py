@@ -12,7 +12,7 @@ from ._helper import (
     resolve_dependencies,
     resolve_symbolic_dependencies,
 )
-from ._integrators import integrate, smart_integrate
+from ._integrators import arr_integrate, integrate, smart_integrate
 from ._sympy_json import SCHEMA_VERSION, from_jsonable, to_jsonable
 from ._welcome import motd
 
@@ -21,6 +21,7 @@ __all__ = [
     inverse_fast_log2,
     smart_integrate,
     integrate,
+    arr_integrate,
     load_mass_dict,
     f90_convert,
     float_piecewise_branches,

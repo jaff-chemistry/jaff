@@ -112,9 +112,10 @@
     geff_H2 = 10**(-11.08 - 3.671/t - 2.023/t**2)
     return (2e-7 + k_photo) / (geff_H * xH + geff_H2 * xH2)
 
-@function kgr_gong(tgas, chi, av, ne, c0, c1, c2, c3, c4, c5, c6)
+@function kgr_gong(tgas, chi_pe, ne, c0, c1, c2, c3, c4, c5, c6)
     # tgas Gas temperature in K
-    # chi Radiation field strength in Draine (1972) units
+    # chi_pe Radiation field effecting photoelectric emission
+    # in grains in Draine (1972) units
     # av V-band extinction in magnitudes
     # ne Free electron number density in cm^-3
     # c0 Fitting coefficient
@@ -129,7 +130,7 @@
     # grain-assisted rate coefficients, k_gr
 
     # Gong's psi factor
-    psi = 1.7 * chi * exp(-1.87*av) * sqrt(tgas) / ne
+    psi = 1.7 * chi_pe * sqrt(tgas) / ne
 
     # Gong's k_gr
     logT = log(tgas)
@@ -217,54 +218,6 @@
 
     return 6.52 * crate / nH0
 
-@function chemRate8(chi, av, d2g, nH, n_C0, nH2)
-    # Reaction 8 (network ID 9): C + Photon -> C+ + e-
-    # Base Draine photo rate (alpha*chi*exp(-gamma*av)) times C
-    # self-shielding. Providing this chemRate replaces the standard
-    # .jet rate, so the dust attenuation term is included explicitly.
-    # chi Radiation field in Draine (1978) units
-    # av  V-band extinction in magnitudes
-    # d2g Dust to gas mass ratio
-    # nH  Number density of H nuclei in cm^-3
-    # n_C0 Number density of neutral C atoms in cm^-3
-    # nH2 Number density of H2 molecules in cm^-3
-
-    alpha = 3.5e-10
-    gamma = 3.76
-
-    return alpha * chi * exp(-gamma * av) * fshield_C(ncol_C, ncol_H2)
-
-@function chemRate10(chi, av, d2g, nH, n_CO, nH2)
-    # Reaction 10 (network ID 11): CO + Photon -> C + O
-    # Base Draine photo rate times CO self-shielding + shielding by H2
-    # (Visser+2009, via wrapper-provided fShield_CO_interp2d).
-    # chi Radiation field in Draine (1978) units
-    # av  V-band extinction in magnitudes
-    # d2g Dust to gas mass ratio
-    # nH  Number density of H nuclei in cm^-3
-    # n_CO Number density of CO molecules in cm^-3
-    # nH2 Number density of H2 molecules in cm^-3
-
-    alpha = 2.4e-10
-    gamma = 3.88
-
-    return alpha * chi * exp(-gamma * av) * fShield_CO_interp2d(ncol_CO, ncol_H2)
-
-@function chemRate13(chi, av, d2g, nH, nH2)
-    # Reaction 13 (network ID 14): H2 + Photon -> H + H
-    # Base Draine photo rate times H2 self-shielding (Draine & Bertoldi
-    # 1996).
-    # chi Radiation field in Draine (1978) units
-    # av  V-band extinction in magnitudes
-    # d2g Dust to gas mass ratio
-    # nH  Number density of H nuclei in cm^-3
-    # nH2 Number density of H2 molecules in cm^-3
-
-    alpha = 5.7e-11
-    gamma = 4.18
-
-    return alpha * chi * exp(-gamma * av) * fshield_H2(ncol_H2)
-
 @function chemRate14(d2g, nH, nH0)
     # Reaction 14: H + H -> H2 (grain-assisted)
     # d2g Dust to gas mass ratio
@@ -274,11 +227,12 @@
 
     return 3.0e-17 * (d2g / d2g_solar) * (nH / nH0)
 
-@function chemRate15(d2g, tgas, chi, av, nH, ne)
+@function chemRate15(d2g, tgas, chi_pe, av, nH, ne)
     # Reaction 15: H+ + e- -> H (grain-assisted)
     # d2g Dust to gas mass ratio
     # tgas Gas temperature in K
-    # chi ISRF strength normalized to the Draine (1978) field
+    # chi_pe ISRF strength affecting grain photoelectric
+    # effect normalized to the Draine (1978) field
     # av Visual extinction in magnitudes
     # nH Number density of H nuclei in cm^-3
     # ne Number density of free electrons in cm^-3
@@ -296,14 +250,15 @@
     c6 = 1.102e-5
 
     # Compute final rate
-    return kgr_gong(tgas, chi, av, ne, c0, c1, c2, c3, c4, c5, c6) * \
+    return kgr_gong(tgas, chi_pe, av, ne, c0, c1, c2, c3, c4, c5, c6) * \
         (d2g / d2g_solar) * nH/ne
 
-@function chemRate16(d2g, tgas, chi, av, nH, ne)
+@function chemRate16(d2g, tgas, chi_pe, av, nH, ne)
     # Reaction 16: C+ + e- -> C (grain-assisted)
     # d2g Dust to gas mass ratio
     # tgas Gas temperature in K
-    # chi ISRF strength normalized to the Draine (1978) field
+    # chi_pe ISRF strength affecting grain photoelectric
+    # effect normalized to the Draine (1978) field
     # av Visual extinction in magnitudes
     # nH Number density of H nuclei in cm^-3
     # ne Number density of free electrons in cm^-3
@@ -321,14 +276,15 @@
     c6 = 1.333e-4
 
     # Compute final rate
-    return kgr_gong(tgas, chi, av, ne, c0, c1, c2, c3, c4, c5, c6) * \
+    return kgr_gong(tgas, chi_pe, av, ne, c0, c1, c2, c3, c4, c5, c6) * \
         (d2g / d2g_solar) * nH/ne
 
-@function chemRate17(d2g, tgas, chi, av, nH, ne)
+@function chemRate17(d2g, tgas, chi_pe, av, nH, ne)
     # Reaction 17: He+ + e- -> He (grain-assisted)
     # d2g Dust to gas mass ratio
     # tgas Gas temperature in K
-    # chi ISRF strength normalized to the Draine (1978) field
+    # chi_pe ISRF strength affecting grain photoelectric
+    # effect normalized to the Draine (1978) field
     # av Visual extinction in magnitudes
     # nH Number density of H nuclei in cm^-3
     # ne Number density of free electrons in cm^-3
@@ -346,14 +302,14 @@
     c6 = 5.494e-7
 
     # Compute final rate
-    return kgr_gong(tgas, chi, av, ne, c0, c1, c2, c3, c4, c5, c6) * \
+    return kgr_gong(tgas, chi_pe, av, ne, c0, c1, c2, c3, c4, c5, c6) * \
         (d2g / d2g_solar) * nH/ne
 
-@function chemRate18(d2g, tgas, chi, av, nH, ne)
+@function chemRate18(d2g, tgas, chi_pe, av, nH, ne)
     # Reaction 18: Si+ + e- -> Si (grain-assisted)
     # d2g Dust to gas mass ratio
     # tgas Gas temperature in K
-    # chi ISRF strength normalized to the Draine (1978) field
+    # chi_pe ISRF strength normalized to the Draine (1978) field
     # av Visual extinction in magnitudes
     # nH Number density of H nuclei in cm^-3
     # ne Number density of free electrons in cm^-3
@@ -371,7 +327,7 @@
     c6 = 7.538e-5
 
     # Compute final rate
-    return kgr_gong(tgas, chi, av, ne, c0, c1, c2, c3, c4, c5, c6) * \
+    return kgr_gong(tgas, chi_pe, av, ne, c0, c1, c2, c3, c4, c5, c6) * \
         (d2g / d2g_solar) * nH/ne
 
 @function chemRate19(tgas, ne)
@@ -707,13 +663,12 @@
 
 #### Heating functions ####
 
-@function heating_grainPE(chi, av, d2g, tgas, nH, ne)
+@function heating_grainPE(chi_pe, av, d2g, tgas, nH, ne)
     # Grain photoelectric heating rate, in erg cm^-3 s^-1. The
     # expression here comes from Weingartner & Draine (2001),
     # their equation 44, using the coefficients from their Table 2
     # for the R_V = 3.1, b_c = 4.0, ISRF case.
-    # chi Radiation field in Draine (1972) units
-    # av V-band extinction in magnitudes
+    # chi_pe Radiation field in Draine (1972) units
     # d2g Dust to gas mass ratio
     # tgas Gas temperature in K
     # nH Number density of H nuclei in cm^-3
@@ -723,10 +678,10 @@
     C = Array([5.22, 2.25, 0.04996, 0.00430, 0.147, 0.431, 0.692])
 
     # Psi factor appearing in grain charging
-    psi = 1.7 * chi * exp(-1.87*av) * sqrt(tgas) / ne + 50
+    psi = 1.7 * chi_pe * sqrt(tgas) / ne + 50
 
     # PE heating rate
-    return 1e-26 * 1.7 * chi * exp(-1.87*av) * d2g / d2g_solar * nH * (C[0] + C[1] * tgas**C[4]) / \
+    return 1e-26 * 1.7 * chi_pe * d2g / d2g_solar * nH * (C[0] + C[1] * tgas**C[4]) / \
         (1 + C[2] * psi**C[5] * (1 + C[3] * psi**C[6]))
 
 #### Cooling functions ####
@@ -1135,11 +1090,11 @@
 
 # Cooling for dust
 
-@function cooling_dust_coll(chi, av, d2g, tgas, n_H)
+@function cooling_dust_coll(chi_pe, d2g, tgas, n_H)
     # Collsional cooling rate for dust (though in principle could
     # be heating as well)
-    # chi Radiation field in Draine (1972) units
-    # av V-band extinction in magnitudes
+    # chi_pe Radiation field effecting photoelectric emission
+    # in grains in Draine (1972) units
     # d2g Dust to gas mass ratio
     # tgas Gas temperature in k
     # n_H Number density of H nuclei, in cm^-3
@@ -1160,7 +1115,7 @@
 
     # Get dust heating rate from CMB and ISRF
     heat_rate_CMB = sigma_d10 * 0.01 * c_a * TCMB**6
-    heat_rate_ISRF = 3.9e-24 * chi * exp(-1.87*av)
+    heat_rate_ISRF = 3.9e-24 * chi_pe
 
     # Get dust temperature assuming radiative heating dominates
     Td_rad = ( (heat_rate_CMB + heat_rate_ISRF) / (0.01 * sigma_d10 * c_a) )**(1/6)
@@ -1171,16 +1126,16 @@
     # Return min cooling rate
     return Min(cool_rate_coll, cool_rate_rad)
 
-@function cooling_dust_rec(chi, av, d2g, tgas, n_e)
+@function cooling_dust_rec(chi_pe, d2g, tgas, n_e)
     # Dust recombination cooling
-    # chi Radiation field in Draine (1972) units
-    # av V-band extinction in magnitudes
+    # chi_pe Radiation field effecting photoelectric emission
+    # in grains in Draine (1972) units
     # d2g Dust to gas mass ratio
     # tgas Gas temperature in k
     # n_e Number density of free electrons, in cm^-3
 
     # Grain charge state parameter
-    x = 1.7 * chi * exp(-1.87*av) * sqrt(tgas) / (n_e + 1e-50) + 50
+    x = 1.7 * chi_pe * sqrt(tgas) / (n_e + 1e-50) + 50
     lnx = log(x)
 
     # Fit coefficients
@@ -1194,10 +1149,10 @@
 
 #### Total heating and cooling rate not associated with chemical reactions ####
 
-@function heatingCoolingRate(chi, av, d2g, tgas, n_H, n_H0, n_H2, n_Cp, n_C0, n_O0, n_CO, n_e, gradv)
+@function heatingCoolingRate(chi_pe, d2g, tgas, n_H, n_H0, n_H2, n_Cp, n_C0, n_O0, n_CO, n_e, gradv)
     # Total heating - cooling rate from all processes
-    # chi Radiation field in Draine (1972) units
-    # av V-band extinction in magnitudes
+    # chi_pe Radiation field effecting photoelectric emission
+    # in grains in Draine (1972) units
     # d2g Dust to gas mass ratio
     # tgas Gas temperature in k
     # n_H Number density of H nuclei, in cm^-3
@@ -1219,12 +1174,12 @@
     # On the other hand, recombination of e- onto grains is included here,
     # because we do not explicitly treat this reaction
 
-    return heating_grainPE(chi, av, d2g, tgas, n_H, n_e) \
+    return heating_grainPE(chi_pe, av, d2g, tgas, n_H, n_e) \
         - cooling_LyA(n_H0, n_e, tgas) \
         - cooling_H2(n_H2, n_H0, n_Hp, n_He, n_e, tgas) \
         - cooling_Cplus(n_Cp, n_H0, n_H2, n_e, tgas) \
         - cooling_C0(n_C0, n_H0, n_H2, n_e, tgas) \
         - cooling_O0(n_O0, n_H0, n_H2, n_e, tgas) \
         - cooling_CO(n_CO, n_H0, n_H2, n_e, tgas, gradv, n_H) \
-        - cooling_dust_coll(chi, av, d2g, tgas, n_H) \
-        - cooling_dust_rec(chi, av, d2g, tgas, n_e)
+        - cooling_dust_coll(chi_pe, av, d2g, tgas, n_H) \
+        - cooling_dust_rec(chi_pe, av, d2g, tgas, n_e)

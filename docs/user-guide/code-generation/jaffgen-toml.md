@@ -123,20 +123,43 @@ photochemistry radiation ode and jacobian radiation generation terms; omit it
 
 ```toml
 [network.radiation]
-bands           = [13.6, "inf"]    # band edges in eV; "inf" for an open upper bound
-power_law_index = 0                # spectral power-law index
-energy_density  = false            # true = energy density; false = photon density
-rsl             = 2.99792458e10    # speed of light (cm/s). Used to configure reduced speed of light for solvers
+bands            = [13.6, "inf"]    # band edges in eV; "inf" for an open upper bound
+power_law_index  = 0                # spectral power-law index
+energy_density   = false            # true = energy density; false = photon density
+rsl              = 2.99792458e10    # speed of light (cm/s). Used to configure reduced speed of light for solvers
+background_field = "draine"         # reference field used to scale chi_pe
 ```
 
-| Key               | Type             | Default                 | Description                                                                                       |
-| ----------------- | ---------------- | ----------------------- | ------------------------------------------------------------------------------------------------- |
-| `bands`           | `list`           | `[]`                    | Band boundaries in eV; omit to disable photochemistry                                             |
-| `power_law_index` | `int or float`   | `0`                     | Spectral index for band integration                                                               |
-| `energy_density`  | `bool`           | `false`                 | Radiation density variable type. `radeden` when `true` else `photden`                             |
-| `rsl`             | `float` or `str` | `constants.c.cgs.value` | Speed of light override (maps to the `c` constructor arg). Becomes a symbol if passed as a string |
+| Key                | Type             | Default                 | Description                                                                                       |
+| ------------------ | ---------------- | ----------------------- | ------------------------------------------------------------------------------------------------- |
+| `bands`            | `list`           | `[]`                    | Band boundaries in eV; omit to disable photochemistry                                             |
+| `power_law_index`  | `int or float`   | `0`                     | Spectral index for band integration                                                               |
+| `energy_density`   | `bool`           | `false`                 | Radiation density variable type. `radeden` when `true` else `photden`                             |
+| `rsl`              | `float` or `str` | `constants.c.cgs.value` | Speed of light override (maps to the `c` constructor arg). Becomes a symbol if passed as a string |
+| `background_field` | `str`            | `"draine"`              | Reference radiation field (HDF5 group name) used to scale the photoelectric-band `chi_pe` symbol  |
 
 `power_law_index` is used to configure the weight factor of the photo-reaction cross-sections (Refer to the [Photochemistry](../designing-networks/photochemistry.md) section for more information).
+
+`background_field` only matters when the [dust module](#networkdust-section) is
+enabled; it names the reference field that `chi_pe` is scaled against.
+
+---
+
+## `[network.dust]` section
+
+Present this (possibly empty) table to enable the **dust module**. It maps to the
+`dust=True` constructor argument and activates dust-driven physics — currently
+photoelectric emission, which supplies the [`chi_pe`](../designing-networks/photochemistry.md#self-consistent-photoelectric-field-chi_pe)
+symbol (the local field scaled to the photoelectric band).
+
+```toml
+[network.dust]
+# presence alone enables the dust module; no keys are required yet
+```
+
+The dust module needs radiation enabled — a `[network.radiation]` block with
+non-empty `bands` — because `chi_pe` is built from the radiation bands and the
+`background_field` reference; generation aborts otherwise.
 
 ---
 

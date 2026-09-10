@@ -30,6 +30,8 @@ class NetworkArgs:
     rad_bands: list = field(default_factory=list)
     rad_powerlaw_index: int | float = 0
     rad_energy_density: bool = False
+    dust: bool = False
+    background_field: str = "draine"
     c: float = constants.c.cgs.value
     _from_cli: bool = True
     _metadata: dict[str, Any] = field(default_factory=dict)

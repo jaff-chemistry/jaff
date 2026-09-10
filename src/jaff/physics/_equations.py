@@ -154,8 +154,8 @@ def get_sradodes(
 
     The radiation field is described by two moments per band:
 
-    - **Energy/photon density** ``den[i]`` (``radeden`` or ``photden``
-      depending on ``radiation.energy_density``).
+    - **Energy/photon density** ``den[i]`` (``radeden`` in erg/cm³, or
+      ``photden`` in cm⁻³, depending on ``radiation.energy_density``).
     - **Energy/photon flux** ``rflux[i]``.
 
     For each band *i* the function computes:
@@ -205,11 +205,14 @@ def get_sradodes(
 
     Notes
     -----
-    The ``dRad`` contribution from each reaction is in energy-density rate
-    units (erg cm⁻³ s⁻¹).  When the radiation field is tracked as a *photon*
-    density rather than an energy density (``radiation.energy_density=False``),
-    the term is divided by the band's average photon energy ``group.eavg``
-    (in erg) to convert to photon-density rate units (cm⁻³ s⁻¹).
+    Each reaction's ``dRad`` contribution is its band-integrated ``delta_rad``
+    (the radiation energy added per reaction event, erg) times the reaction
+    flux ``k * prod(nden)``, then divided by the band-average photon energy
+    ``group.eavg`` (erg) in **both** modes.  In energy-density mode ``props["k"]``
+    already carries an extra ``eavg`` (``radeden`` is an energy density), so the
+    division recovers the true flux and the result is erg cm⁻³ s⁻¹ added to
+    ``radeden``; in photon-density mode the division converts the per-event
+    energy to a photon count, giving cm⁻³ s⁻¹ added to ``photden``.
 
     The substitution ``den[i] → rflux[i]`` (via ``xreplace``) yields the
     flux-divergence term needed in the first-moment (flux) equation of the
@@ -248,25 +251,22 @@ def get_sradodes(
         group_dRad_dt_extra = Float(0.0)
         for reaction, props in group.props.items():
             rrate = props["k"]
-            # Accumulate any user-supplied radiation source terms
-            group_dRad_dt_extra += rrate * props["delta_rad"]
             # Multiply by all reactant number densities (mass-action kinetics)
+            # so rrate becomes the full reaction flux (k * prod(nden)).
             for reactant in reaction.reactants.core:
                 rrate *= nden[Idx(species[str(reactant)].index)]
 
             # Photochemical reactions *remove* radiation, hence the minus sign.
             group_rate -= rrate
+            group_dRad_dt_extra += props["delta_rad"] * rrate
 
         # The flux-moment equation is obtained by substituting den → rflux in
         # the density-moment equation (two-moment closure).
         flux = group_rate.xreplace(flux_map)
 
-        # Add the user-supplied dRad term to the density equation.
-        # If we are tracking photon number density instead, divide by the
-        # band-average photon energy (erg) to convert to photon rate units.
-        group_rate += group_dRad_dt_extra / (
-            1 if radiation.energy_density else (group.eavg or 1)
-        )
+        # Add the user-supplied dRad term to the density equation.  Divide by
+        # the band-average photon energy in BOTH modes:
+        group_rate += group_dRad_dt_extra / (group.eavg or 1)
 
         grate[group.index] = group_rate
         gflux[group.index] = flux

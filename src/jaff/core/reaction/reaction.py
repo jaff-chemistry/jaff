@@ -46,6 +46,7 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from astropy import units as u
 from sympy import (
     Basic,
     Expr,
@@ -96,8 +97,9 @@ class Reaction:
     dE : Basic
         SymPy expression for the energy released per reaction event (erg).
     dRad: Basic
-        SymPy expression for the radiation energy emission per photon
-        energy (eV) per reaction
+        SymPy expression (in the photon-energy symbol ``E``, eV) for the
+        radiation energy this reaction adds to the field per unit photon
+        energy, in erg/eV.
     verbatim : str
         Human-readable string ``"R1 + R2 -> P1 + P2"``.
     index : int
@@ -158,7 +160,8 @@ class Reaction:
         dE : Basic
             Energy change per event (erg), as a SymPy expression.
         dRad : Basic
-            Radiation energy emission per photon energy, as a SymPy expression.
+            Radiation energy added to the field per unit photon energy
+            (erg/eV), as a SymPy expression in ``E`` (eV).
         original_string : str
             The raw network-file line that produced this reaction.
         index : int
@@ -657,7 +660,11 @@ class Reaction:
             {
                 "lower": to_float_or_none(group.lower),
                 "upper": to_float_or_none(group.upper),
-                "eavg": to_float_or_none(group.eavg),
+                "eavg": (
+                    None
+                    if group.eavg is None
+                    else to_float_or_none(group.eavg * u.erg.to(u.eV))
+                ),
                 "xsec": to_float_or_none(group.props.get(self, {}).get("xsec")),
                 "xsec_frac": to_float_or_none(group.props.get(self, {}).get("xsec_frac")),
             }

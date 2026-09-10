@@ -44,6 +44,7 @@ from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
 from ...io._io import JaffProps, from_jaff_file, to_jaff_file, write_data_table
 from ...physics import (
+    Dust,
     Photochemistry,
     Radiation,
     constants,
@@ -178,6 +179,15 @@ class Network:
     #: Valid temperature cutoff behaviours for rate expressions.
     _valid_tcutoffs: list[str] = ["clip", "extrapolate"]
 
+    _simple_map: dict[str, str] = {
+        "nh0": "H",
+        "nh2": "H2",
+        "ne": "e-",
+        "nhp": "H+",
+    }
+
+    _n_suffixes: dict[str, str] = {"p": "+", "m": "-", "0": ""}
+
     def __init__(
         self,
         fname: str | Path,
@@ -190,6 +200,8 @@ class Network:
         rad_bands: list[str | int | float | Basic] = [],
         rad_powerlaw_index: int | float = 0,
         rad_energy_density: bool = False,
+        dust: bool = False,
+        background_field: str = "draine",
         c: float | str = constants.c.cgs.value,  # Speed of light in cgs unit
         _from_cli: bool = False,
         _metadata: dict[str, Any] = {},
@@ -292,13 +304,21 @@ class Network:
         self.dEdt_chem: Basic = Float(0.0)
         self.dEdt_other: Basic = Float(0.0)
         self.dRad_dt_extra: Basic = Float(0.0)
+        self._dust_enabled = dust
         self.radiation: Radiation | None = (
-            Radiation(self, rad_bands, rad_powerlaw_index, rad_energy_density, c)
+            Radiation(
+                self,
+                rad_bands,
+                rad_powerlaw_index,
+                rad_energy_density,
+                c,
+                background_field,
+            )
             if len(rad_bands) > 0
             else None
         )
-
         self.__photochemistry: None | Photochemistry = None
+        self.dust: Dust | None = Dust(self) if dust else None
         self.__element_sums: dict[str, Expr | None] = {}
         self.__tgas_clamp_cache: dict[tuple[float | None, float | None], Expr] = {}
 
@@ -312,6 +332,7 @@ class Network:
             self.__load_network()
         else:
             self.__load_network_from_jaff_file(jaff_props)
+
         self.__normalize_network_extras(replace_nH, loaded_from_jaff_file)
 
         self.check_sink_sources(errors)
@@ -619,7 +640,7 @@ class Network:
                 dE_dt *= nden[self.species[s.name].index]
                 dRad_dt *= nden[self.species[s.name].index]
             self.dEdt_chem += dE_dt
-            self.dRad_dt_extra += r.dRad  # type: ignore
+            self.dRad_dt_extra += dRad_dt
         self.dEdt_chem = self._standardize_symbols(self.dEdt_chem, replace_nH)
         self.dRad_dt_extra = self._standardize_symbols(self.dRad_dt_extra, replace_nH)
 
@@ -1082,15 +1103,8 @@ class Network:
                 self.__element_sums[element] = sum(terms) if terms else None
             return self.__element_sums[element]
 
-        simple_map = {
-            "nh0": "H",
-            "nh2": "H2",
-            "ne": "e-",
-            "nhp": "H+",
-        }
-
-        # n_X suffix convention: Xp→X+, X0→X, Xm→X-
-        n_suffixes = {"p": "+", "m": "-", "0": ""}
+        simple_map = self._simple_map
+        n_suffixes = self._n_suffixes
 
         for fs in expr.free_symbols:
             name = str(fs)
@@ -1106,6 +1120,19 @@ class Network:
             elif low_name in simple_map:
                 spec_name = simple_map[low_name]
                 repl = nden[Idx(self.species[spec_name].index)]
+
+            elif low_name == "chi_pe":
+                if self.radiation is None:
+                    raise ParserError(
+                        "In order to replace the 'chi_pe' symbol, radiation must be enabled"
+                    )
+
+                if self.dust is None:
+                    raise ParserError(
+                        "In order to replace the 'chi_pe' symbol, dust must be enabled"
+                    )
+
+                repl = self.dust.pe.chi
 
             elif low_name.startswith("n_"):
                 core = name[2:]

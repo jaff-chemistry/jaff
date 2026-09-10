@@ -20,7 +20,11 @@ from sympy import Basic, Expr, sympify
 
 from ...config import JAFF_DIR
 from ...drivers import HDF5, JaffDb
-from ...drivers.pooch import download_shielding, download_xsecs
+from ...drivers.pooch import (
+    download_background_radiation,
+    download_shielding,
+    download_xsecs,
+)
 from ._typing import XsecsProps
 from .shielding import _get_shielding_function
 
