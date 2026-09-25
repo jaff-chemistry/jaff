@@ -49,7 +49,7 @@ class Codegen:
     parsed :class:`~jaff.core.network.Network` it can produce assignment
     statements for:
 
-    * **Reaction rates** — ``k[i] = <rate_expr>``
+    * **Reaction rates** — ``k[i] = <rate_expa>``
     * **Flux expressions** — ``flux[i] = k[i] * y[r1] * y[r2]``
     * **ODE right-hand sides** — ``dy[i]/dt = sum(±flux[j])``
     * **Analytical Jacobian** — ``J[i, j] = ∂f_i/∂y_j``
@@ -211,20 +211,17 @@ class Codegen:
                 exprs = cse_dict.values()
 
                 # Create a numbered symbol generator for CSE temp names
-                cse_var = sp.numbered_symbols(prefix=cse_var)
+                cse_symbols = sp.numbered_symbols(prefix=cse_var)
                 replacements, reduced_exprs = sp.cse(
-                    exprs, optimizations="basic", symbols=cse_var
+                    exprs, optimizations="basic", symbols=cse_symbols
                 )
 
                 # Drop CSE temporaries not referenced by any reduced expression
                 replacements = self.__prune_cse(replacements, reduced_exprs)
 
                 if replacements:
-                    # Extract numeric suffix from the temp symbol name (e.g. "x3" -> 3)
-                    pattern = re.compile(r"(\d+)")
                     for var, expr in replacements:
-                        match = pattern.search(str(var))
-                        idx: int = int(match.group(0)) if match is not None else 0
+                        idx: int = self._cse_index(var, cse_var)
                         expr = self.lang.code_gen(
                             expr, strict=False, allow_unknown_functions=True
                         )
@@ -703,17 +700,14 @@ class Codegen:
 
         if use_cse:
             with jaff_progress.indeterminate("Generating cse expressions"):
-                cse_var = sp.numbered_symbols(prefix=cse_var)
-                replacements, reduced_exprs = sp.cse(ode_symbols, symbols=cse_var)
+                cse_symbols = sp.numbered_symbols(prefix=cse_var)
+                replacements, reduced_exprs = sp.cse(ode_symbols, symbols=cse_symbols)
 
                 # Remove unused CSE temporaries to keep generated code lean
                 replacements = self.__prune_cse(replacements, reduced_exprs)
 
-                # Extract numeric suffix from temp name (e.g. "cse7" -> 7)
-                pattern = re.compile(r"(\d+)")
                 for var, expr in replacements:
-                    match = pattern.search(str(var))
-                    idx: int = int(match.group(0)) if match is not None else 0
+                    idx: int = self._cse_index(var, cse_var)
                     expr = self.lang.code_gen(
                         expr, strict=False, allow_unknown_functions=True
                     )
@@ -869,16 +863,14 @@ class Codegen:
 
         if use_cse:
             with jaff_progress.indeterminate("Generating cse expressions"):
-                cse_var = sp.numbered_symbols(prefix=cse_var)
-                replacements, reduced_exprs = sp.cse(rhs_symbols, symbols=cse_var)
+                cse_symbols = sp.numbered_symbols(prefix=cse_var)
+                replacements, reduced_exprs = sp.cse(rhs_symbols, symbols=cse_symbols)
 
                 # Prune CSE temporaries unreachable from any expression
                 replacements = self.__prune_cse(replacements, reduced_exprs)
 
-                pattern = re.compile(r"(\d+)")
                 for var, expr in replacements:
-                    match = pattern.search(str(var))
-                    idx: int = int(match.group(0)) if match is not None else 0
+                    idx: int = self._cse_index(var, cse_var)
                     expr = self.lang.code_gen(
                         expr, strict=False, allow_unknown_functions=True
                     )
@@ -1019,17 +1011,15 @@ class Codegen:
 
         if use_cse:
             with jaff_progress.indeterminate("Generating cse expressions"):
-                cse_var = sp.numbered_symbols(prefix=cse_var)
-                replacements, reduced_exprs = sp.cse(radode_symbols, symbols=cse_var)
+                cse_symbols = sp.numbered_symbols(prefix=cse_var)
+                replacements, reduced_exprs = sp.cse(radode_symbols, symbols=cse_symbols)
 
                 # Prune unreferenced CSE temporaries to avoid dead code
                 replacements = self.__prune_cse(replacements, reduced_exprs)
 
                 # Emit only the CSE temporaries actually used by the radiation ODEs
-                pattern = re.compile(r"(\d+)")
                 for var, expr in replacements:
-                    match = pattern.search(str(var))
-                    idx: int = int(match.group(0)) if match is not None else 0
+                    idx: int = self._cse_index(var, cse_var)
                     expr = self.lang.code_gen(
                         expr, strict=False, allow_unknown_functions=True
                     )
@@ -1321,9 +1311,9 @@ class Codegen:
 
         if use_cse:
             with jaff_progress.indeterminate("Generating cse expressions"):
-                cse_var = sp.numbered_symbols(prefix=cse_var)
+                cse_symbols = sp.numbered_symbols(prefix=cse_var)
                 replacements, reduced_exprs = sp.cse(
-                    list(jacobian_matrix), symbols=cse_var
+                    list(jacobian_matrix), symbols=cse_symbols
                 )
 
                 replacements = self.__prune_cse(replacements, reduced_exprs)
@@ -1331,13 +1321,11 @@ class Codegen:
                 # resolve CSE symbols back to their defining expressions.
                 replacements_dict = {str(k): v for k, v in replacements}
 
-                pattern = re.compile(r"(\d+)")
                 for var, expr in replacements:
                     # Handle Derivative() nodes arising from user-defined rate
                     # functions before serialisation
                     expr = self.__convert_unknown_derivatives(expr, replacements_dict)
-                    match = pattern.search(str(var))
-                    idx: int = int(match.group(0)) if match is not None else 0
+                    idx: int = self._cse_index(var, cse_var)
                     expr_str = self.lang.code_gen(
                         expr, strict=False, allow_unknown_functions=True
                     )
@@ -1565,15 +1553,16 @@ class Codegen:
                     continue
 
                 deriv_name = dexpr.func.__name__
-                # Apply the substitution to both the differentiation variables
-                # and the function arguments so the new call is fully evaluated
-                vars = [var.xreplace(sub_dict) for var in deriv.variables]
-                args = [arg.xreplace(sub_dict) for arg in dexpr.args]
-
+                orig_args = list(dexpr.args)
                 try:
-                    func_sig_suffix = "_".join([str(args.index(var)) for var in vars])
+                    func_sig_suffix = "_".join(
+                        [str(orig_args.index(var)) for var in deriv.variables]
+                    )
                 except ValueError:
                     continue
+
+                # Evaluate only the call's argument values at the point
+                args = [arg.xreplace(sub_dict) for arg in orig_args]
 
                 new_func_sig = f"{deriv_name}_partial_{func_sig_suffix}"
 
@@ -1583,6 +1572,40 @@ class Codegen:
         expr = expr.xreplace(replacement_dict)
 
         return expr
+
+    @staticmethod
+    def _cse_index(var: sp.Symbol, prefix: str) -> int:
+        """Recover the numeric suffix of a CSE temporary named ``<prefix><n>``.
+
+        Only the text after *prefix* is parsed, so digits inside the prefix
+        itself (e.g. ``"tmp2"`` or ``"stage2_cse"``) are never mistaken for
+        part of the index.
+
+        Parameters
+        ----------
+        var : sympy.Symbol
+            Temporary produced by ``sp.numbered_symbols(prefix=prefix)``.
+        prefix : str
+            The prefix the symbol generator was created with.
+
+        Returns
+        -------
+        int
+            The generator's counter value ``n``.
+
+        Raises
+        ------
+        ValueError
+            If *var* is not of the form ``<prefix><digits>``.
+        """
+        name = str(var)
+        suffix = name[len(prefix) :] if name.startswith(prefix) else ""
+        if not suffix.isdigit():
+            raise ValueError(
+                f"CSE temporary '{name}' does not match '{prefix}<index>' naming"
+            )
+
+        return int(suffix)
 
     @staticmethod
     def __prune_cse(

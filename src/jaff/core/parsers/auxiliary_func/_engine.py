@@ -164,6 +164,27 @@ class AuxiliaryFunctionParser:
                 self.cline = ""
                 self.__parse_line()
 
+        # A trailing backslash with no following line leaves an unterminated
+        # continuation buffer; the pending directive would be silently dropped.
+        if self.cline.strip():
+            raise ParserError(
+                "Unterminated line continuation at end of file",
+                self.og_line,
+                self.nline,
+                self.file,
+            )
+
+        # A function block that never saw a ``return`` leaves the scope open;
+        # its ``def`` would stay 0.0 with unresolved locals.
+        if self.scope == "function":
+            raise ParserError(
+                f"Unterminated function block '{self.current_func}': "
+                f"missing return statement",
+                self.og_line,
+                self.nline,
+                self.file,
+            )
+
     def __parse_line(self) -> None:
         """Dispatch the current line to the appropriate handler.
 
@@ -453,8 +474,17 @@ class AuxiliaryFunctionParser:
                     func_name = func.func.__name__.lower()
                     nested_f_def = dfs_resolve_func(func_name)
                     nested_f_args = self.func_dict[func_name]["args"]
+                    if len(func.args) != len(nested_f_args):
+                        raise ParserError(
+                            f"Function '{func_name}' called with "
+                            f"{len(func.args)} argument(s) but expects "
+                            f"{len(nested_f_args)}",
+                            fname=self.file,
+                        )
+
                     arg_map = dict(zip(nested_f_args, func.args))
-                    repl[func] = nested_f_def.subs(arg_map)
+                    repl[func] = nested_f_def.subs(arg_map, simultaneous=True)
+
                 expr = expr.xreplace(repl)
 
             visiting.remove(name)

@@ -23,13 +23,14 @@ class UdfaParser(Parser):
 
         for rec in records:
             handler = by_name[rec.format]
-            fields = handler.parse(rec.line, rec.nline, state, self.file)
-            reactions.append(
-                ParsedRecord(
-                    **fields,
-                    source_index=rec.source_index,
-                    sub_order=rec.sub_order,
+            segments = handler.parse(rec.line, rec.nline, state, self.file)
+            for i, fields in enumerate(segments):
+                reactions.append(
+                    ParsedRecord(
+                        **fields,
+                        source_index=rec.source_index,
+                        sub_order=rec.sub_order + i,
+                    )
                 )
-            )
 
         return ParseResult(reactions, {})

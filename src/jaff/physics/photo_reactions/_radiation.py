@@ -168,6 +168,7 @@ class RadiationGroup:
             if all(isinstance(val, (int, float)) for val in [self.upper, self.lower])
             else None
         )
+        self.photden: float = 0.0
         self.props: dict[Reaction, RadiationGroupReactionProps] = {}
         # Populated on the first call to set_reaction_rate_coefficient for this band.
         self.eavg: float | None = None
@@ -301,13 +302,17 @@ class Radiation:
         )
 
         for grp in self.groups:
+            # ∫ n(E) dE over the band — used as normalisation for averages.
+            grp.photden = smart_integrate(
+                self.ph_profile_sym, self.E_sym, (grp.lower, grp.upper)
+            )
             # Compute the band-average photon energy once per band (shared
             # across all reactions): <E>_i = ∫ E n(E) dE / ∫ n(E) dE
             grp.eavg = (
                 smart_integrate(
                     self.energy_profile_sym, self.E_sym, (grp.lower, grp.upper)
                 )
-                / self.photden_tot
+                / grp.photden
             ) * u.eV.to(u.erg)
 
     def set_reaction_rate_coefficient(self, reaction: Reaction) -> None:
@@ -396,16 +401,11 @@ class Radiation:
         reaction.rad_groups = []
 
         for grp in self.groups:
-            # ∫ n(E) dE over the band — used as normalisation for averages.
-            photden_band = smart_integrate(
-                self.ph_profile_sym, self.E_sym, (grp.lower, grp.upper)
-            )
-
             # Photon-number-weighted average cross section in the band:
             # <σ>_i = ∫ σ(E) n(E) dE / ∫ n(E) dE
             pr_xsec_avg = (
                 arr_integrate(pr_xsec * ph_profile, E, (grp.lower, grp.upper))
-                / photden_band
+                / grp.photden
             )
             rad_xsec_avg = (
                 (
@@ -414,7 +414,7 @@ class Radiation:
                         E,
                         (grp.lower, grp.upper),
                     )
-                    / photden_band
+                    / grp.photden
                 )
                 if xsec["_equations"]["pa"]
                 else pr_xsec_avg
@@ -449,7 +449,11 @@ class Radiation:
             # by dividing by the band-average energy <E>_i.
             k_tot += (
                 k
-                * (1.0 if not xsec["_equations"]["pa"] else (pr_xsec_avg / rad_xsec_avg))
+                * (
+                    1.0
+                    if not xsec["_equations"]["pa"]
+                    else (pr_xsec_avg / rad_xsec_avg if rad_xsec_avg != 0.0 else 0.0)
+                )
                 / (grp.eavg if self.mode == "u" else 1)
             )
 

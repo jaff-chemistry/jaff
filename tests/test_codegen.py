@@ -1,10 +1,12 @@
 # ABOUTME: Tests for multi-language code generation, CSE, and ODE/Jacobian output
 # ABOUTME: Language dialect table is data-driven; numeric ODE/Jac checks use fixed fixtures
 
+import re
 from pathlib import Path
 from typing import List
 
 import pytest
+import sympy as sp
 
 from jaff import Network
 from jaff.codegen import Codegen
@@ -244,6 +246,84 @@ class TestCSE:
             stripped = line.strip()
             if stripped and not stripped.startswith("//"):
                 assert stripped.endswith(";"), f"unterminated: {line}"
+
+
+def _cse_names(code: str, prefix: str):
+    """Return (declared, used) CSE temporaries named ``<prefix><digits>``."""
+    pattern = re.compile(rf"\b{re.escape(prefix)}\d+\b")
+    declared: List[str] = []
+    used = set()
+    for line in code.splitlines():
+        if "=" not in line:
+            continue
+        lhs, rhs = line.split("=", 1)
+        target = lhs.strip().split()[-1] if lhs.strip() else ""
+        if pattern.fullmatch(target):
+            declared.append(target)
+        used.update(pattern.findall(rhs))
+    return declared, used
+
+
+_CSE_STR_APIS = {
+    "rates": lambda cg, p: cg.get_rates_str(use_cse=True, cse_var=p),
+    "odes": lambda cg, p: cg.get_ode_str(use_cse=True, cse_var=p),
+    "rhs": lambda cg, p: cg.get_rhs_str(use_cse=True, cse_var=p),
+    "jacobian": lambda cg, p: cg.get_jacobian_str(use_cse=True, cse_var=p),
+}
+
+
+class TestCSEPrefixWithDigits:
+    """CSE temporaries must be declared under the same name they are used by,
+    even when the user-supplied prefix itself contains digits."""
+
+    @pytest.mark.parametrize("prefix", ["tmp2", "stage2_cse", "x"])
+    @pytest.mark.parametrize("api", sorted(_CSE_STR_APIS))
+    def test_declared_temporaries_match_used(self, cse_network, api, prefix):
+        code = _CSE_STR_APIS[api](Codegen(cse_network, lang="python"), prefix)
+        declared, used = _cse_names(code, prefix)
+
+        assert declared, f"no CSE temporaries emitted:\n{code}"
+        assert len(declared) == len(set(declared)), f"duplicate temps:\n{code}"
+        assert used <= set(declared), (
+            f"undeclared temps {sorted(used - set(declared))}:\n{code}"
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Unknown-function derivative conversion                                       #
+# --------------------------------------------------------------------------- #
+
+_convert_derivs = Codegen._Codegen__convert_unknown_derivatives
+_x, _y, _z = sp.symbols("x y z")
+_fun = sp.Function("fun")
+
+
+def _eval_partials(expr: sp.Expr) -> sp.Expr:
+    """Evaluate ``fun_partial_k`` calls for the asymmetric ``fun(a, b) = a + 2*b``."""
+    return expr.replace(sp.Function("fun_partial_0"), sp.Lambda((_x, _y), 1)).replace(
+        sp.Function("fun_partial_1"), sp.Lambda((_x, _y), 2)
+    )
+
+
+class TestUnknownDerivatives:
+    """Partial positions must come from the original derivative, not from the
+    arguments after a ``Subs`` evaluation point made them coincide."""
+
+    def test_subs_onto_repeated_argument_keeps_position(self):
+        expr = sp.Subs(sp.Derivative(_fun(_x, _z), _z), _z, _x)
+        assert _convert_derivs(expr) == sp.Function("fun_partial_1")(_x, _x)
+
+    def test_diff_of_repeated_argument_sums_both_partials(self):
+        converted = _convert_derivs(sp.diff(_fun(_y, _y), _y))
+        assert _eval_partials(converted) == 3
+
+    def test_repeated_argument_after_cse(self):
+        jac = [sp.diff(_fun(_x * _y, _x * _y), _y)]
+        replacements, reduced = sp.cse(jac, symbols=sp.numbered_symbols("cse"))
+        defs = {str(k): v for k, v in replacements}
+        converted = _convert_derivs(reduced[0], defs)
+        subs_back = {k: v for k, v in replacements}
+        assert _eval_partials(converted).xreplace(subs_back) == 3 * _x
 
 
 # --------------------------------------------------------------------------- #

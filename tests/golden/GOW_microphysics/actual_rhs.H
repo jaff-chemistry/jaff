@@ -344,7 +344,7 @@ actual_rhs(const burn_t &state, amrex::Array1D<amrex::Real, 1, neqs> &ydot) {
   ydot(16) = -cse114 - cse117 - cse15 - cse49 + cse9;
   ydot(17) = -cse102 - cse107 - cse85;
   ydot(18) = cse49 - cse73 - cse98;
-  ydot(19) = 1.7e-24*chi*cse19*cse66*d2g*(2.25*std::pow(state.T, 0.14699999999999999) + 5.2199999999999998)/(0.049959999999999997*std::pow(cse122, 0.43099999999999999)*(0.0043*std::pow(cse122, 0.69199999999999995) + 1) + 1) + 5.6999999999999997e-11*chi*cse39*cse40*(2.5634832e-11*cse135 + 6.4087080000000003e-13)*state.xn[3] + 1.602177e-12*crate*cse144*state.xn[0] + 3.2043540000000001e-12*crate*cse144*state.xn[3] + 1.7623947000000002e-12*crate*cse144*state.xn[5]/cse58 - 7.1777529600000012e-12*cse103 - 1.3659996292638161e-10*cse119*cse121*cse62/(1.3338116951315871e-8*cse120*cse121 + 1) - 5.7927337833400002e-20*cse130*state.xn[8]/(2*cse130 + 1) - cse137*std::pow(1 - std::exp(-state.T), 1000)*state.xn[9]/(cse137*cse141 + cse139*std::pow(cse137/cse142, alpha_co_interp2d(state.T, cse140))*(-cse138*cse141*cse142 + 1) + cse139) + 3.0000000000000002e-15*cse19*d2g*(6.7291434000000005e-12*cse135 + 3.2043540000000002e-13)*state.xn[0] - 7.1777529600000012e-12*cse31 - 1.8998126555754159e-29*cse36*std::pow(state.T, 0.45350000000000001 + 2.234/cse123)*std::exp(cse123*(1.4419999999999999 - 0.050889999999999998*cse123))*state.xn[2] - 2.1789607199999999e-11*cse63 - (2.3872025442750958e-19*cse152*cse157 + 2.8023005140020001e-18*cse156*cse157)*state.xn[11] - ((((cse127 && cse158 && cse159) ? (
+  ydot(19) = 1.7e-24*chi*cse19*cse66*d2g*(2.25*std::pow(state.T, 0.14699999999999999) + 5.2199999999999998)/(0.049959999999999997*std::pow(cse122, 0.43099999999999999)*(0.0043*std::pow(cse122, 0.69199999999999995) + 1) + 1) + 5.6999999999999997e-11*chi*cse39*cse40*(2.5634832e-11*cse135 + 6.4087080000000003e-13)*state.xn[3] + 1.602177e-12*crate*cse144*state.xn[0] + 3.2043540000000001e-12*crate*cse144*state.xn[3] + 1.7623947000000002e-12*crate*cse144*state.xn[5]/cse58 - 7.1777529600000012e-12*cse103 - 1.3659996292638161e-10*cse119*cse121*cse62/(1.3338116951315871e-8*cse120*cse121 + 1) - 5.7927337833400002e-20*cse130*state.xn[8]/(2*cse130 + 1) - cse137*std::pow(1 - std::exp(-state.T), 1000)*state.xn[9]/(cse137*cse141 + cse139*std::pow(cse137/cse142, alpha_co_interp2d(state.T, cse140))*(-cse138*cse141*cse142 + 1) + cse139) + 3.0000000000000002e-15*cse19*d2g*(6.7291434000000005e-12*cse135 + 3.2043540000000002e-13)*state.xn[0] - 7.1777529600000012e-12*cse31 - 1.8998126555754159e-29*cse36*std::pow(state.T, 0.45350000000000001 + 2.234/cse123)*std::exp(cse123*(1.4419999999999999 - 0.050889999999999998*cse123))*state.xn[2] - 2.1789607199999999e-11*cse63 - (2.3872025442750958e-19*cse152*cse157 + 2.8023005140019997e-18*cse156*cse157)*state.xn[11] - ((((cse127 && cse158 && cse159) ? (
    cse160 || cse177 + cse180 < 1.0e-100
 )
 : (
@@ -1561,50 +1561,50 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(const burn_t &state,
   const amrex::Real cse834 = std::pow(cse623, 0.41899999999999998 - cse833);
   const amrex::Real cse835 = 7.1400000000000007e-11*cse834;
   const amrex::Real cse836 = cse818*cse821;
-  const amrex::Real cse837 = std::pow(state.T, -0.074999999999999997);
-  const amrex::Real cse838 = 5.1199999999999999e-10*cse837;
-  const amrex::Real cse839 = 3.5700000000000001e-10*cse834;
-  const amrex::Real cse840 = cse839*state.xn[0];
-  const amrex::Real cse841 = 0.025000000000000001*cse624;
-  const amrex::Real cse842 = 3.7250000000000001e-11*std::pow(cse623, cse841 + 0.26400000000000001);
-  const amrex::Real cse843 = 1.0274999999999999e-10*std::pow(cse623, cse813 + 0.29599999999999999);
-  const amrex::Real cse844 = cse842 + cse843;
-  const amrex::Real cse845 = cse838*state.xn[2] + cse840 + cse844*state.xn[3];
-  const amrex::Real cse846 = cse821*cse845;
-  const amrex::Real cse847 = 8.68e-11*cse810;
+  const amrex::Real cse837 = 8.68e-11*cse810;
+  const amrex::Real cse838 = std::pow(state.T, -0.074999999999999997);
+  const amrex::Real cse839 = 5.1199999999999999e-10*cse838;
+  const amrex::Real cse840 = 3.5700000000000001e-10*cse834;
+  const amrex::Real cse841 = cse840*state.xn[0];
+  const amrex::Real cse842 = 0.025000000000000001*cse624;
+  const amrex::Real cse843 = 3.7250000000000001e-11*std::pow(cse623, cse842 + 0.26400000000000001);
+  const amrex::Real cse844 = 1.0274999999999999e-10*std::pow(cse623, cse813 + 0.29599999999999999);
+  const amrex::Real cse845 = cse843 + cse844;
+  const amrex::Real cse846 = cse839*state.xn[2] + cse841 + cse845*state.xn[3];
+  const amrex::Real cse847 = cse821*cse846;
   const amrex::Real cse848 = cse819*cse831;
-  const amrex::Real cse849 = cse845 + 8.9099999999999997e-5;
-  const amrex::Real cse850 = cse821*cse849;
-  const amrex::Real cse851 = 6.3800000000000002e-11*cse806;
-  const amrex::Real cse852 = 2.1266666666666666e-11*cse806*cse820 + 2.8933333333333332e-11*cse810*cse848 + cse832*cse835 + cse835*cse836 + cse846*cse847 + cse850*cse851;
+  const amrex::Real cse849 = 6.3800000000000002e-11*cse806;
+  const amrex::Real cse850 = cse846 + 8.9099999999999997e-5;
+  const amrex::Real cse851 = cse821*cse850;
+  const amrex::Real cse852 = 2.1266666666666666e-11*cse806*cse820 + 2.8933333333333332e-11*cse810*cse848 + cse832*cse835 + cse835*cse836 + cse837*cse847 + cse849*cse851;
   const amrex::Real cse853 = cse818 + 1.7499999999999998e-5;
   const amrex::Real cse854 = cse831 + 1.34e-10;
   const amrex::Real cse855 = std::exp(-98.800000000000011*cse3);
   const amrex::Real cse856 = cse818*cse855;
   const amrex::Real cse857 = (1.0/3.0)*cse856;
-  const amrex::Real cse858 = (1.0/5.0)*cse821;
-  const amrex::Real cse859 = cse818*cse858;
-  const amrex::Real cse860 = (1.0/15.0)*cse820;
-  const amrex::Real cse861 = cse831*cse858;
-  const amrex::Real cse862 = cse831*cse860 + cse845*cse859 + cse849*cse861;
-  const amrex::Real cse863 = std::exp(-227.80000000000001*cse3);
-  const amrex::Real cse864 = cse845*cse863;
-  const amrex::Real cse865 = (3.0/5.0)*cse864;
-  const amrex::Real cse866 = cse853*cse861 + cse853*cse865 + cse854*cse865;
-  const amrex::Real cse867 = cse849*cse853 + cse849*cse854 + cse854*cse857 + cse862 + cse866;
+  const amrex::Real cse858 = std::exp(-227.80000000000001*cse3);
+  const amrex::Real cse859 = cse846*cse858;
+  const amrex::Real cse860 = (3.0/5.0)*cse859;
+  const amrex::Real cse861 = (1.0/5.0)*cse821;
+  const amrex::Real cse862 = cse831*cse861;
+  const amrex::Real cse863 = cse853*cse860 + cse853*cse862 + cse854*cse860;
+  const amrex::Real cse864 = cse818*cse861;
+  const amrex::Real cse865 = (1.0/15.0)*cse820;
+  const amrex::Real cse866 = cse831*cse865 + cse846*cse864 + cse850*cse862;
+  const amrex::Real cse867 = cse850*cse853 + cse850*cse854 + cse854*cse857 + cse863 + cse866;
   const amrex::Real cse868 = 1.0/cse867;
   const amrex::Real cse869 = 2.3872025442750958e-19*cse868;
   const amrex::Real cse870 = cse821*cse853;
   const amrex::Real cse871 = 2.1419999999999999e-10*cse834;
-  const amrex::Real cse872 = cse854*cse863;
-  const amrex::Real cse873 = cse853*cse863;
-  const amrex::Real cse874 = 1.9139999999999998e-10*cse806*cse864 + 2.604e-10*cse810*cse864 + cse832*cse847 + cse851*cse870 + cse871*cse872 + cse871*cse873;
-  const amrex::Real cse875 = 2.8023005140020001e-18*cse868;
+  const amrex::Real cse872 = cse854*cse858;
+  const amrex::Real cse873 = cse853*cse858;
+  const amrex::Real cse874 = 1.9139999999999998e-10*cse806*cse859 + 2.604e-10*cse810*cse859 + cse832*cse837 + cse849*cse870 + cse871*cse872 + cse871*cse873;
+  const amrex::Real cse875 = 2.8023005140019997e-18*cse868;
   const amrex::Real cse876 = std::pow(cse867, -2);
   const amrex::Real cse877 = cse854*cse855;
-  const amrex::Real cse878 = cse876*(-1.0633333333333333e-10*cse806*cse856 - 1.4466666666666666e-10*cse810*cse877 - cse811*cse849 - cse824*cse849 - cse839*cse853 - cse839*cse854 - cse852 - cse874);
-  const amrex::Real cse879 = 2.3872025442750958e-19*cse862;
-  const amrex::Real cse880 = 2.8023005140020001e-18*cse866;
+  const amrex::Real cse878 = cse876*(-1.0633333333333333e-10*cse806*cse856 - 1.4466666666666666e-10*cse810*cse877 - cse811*cse850 - cse824*cse850 - cse840*cse853 - cse840*cse854 - cse852 - cse874);
+  const amrex::Real cse879 = 2.3872025442750958e-19*cse866;
+  const amrex::Real cse880 = 2.8023005140019997e-18*cse863;
   const amrex::Real cse881 = 0.045999999999999999*cse624;
   const amrex::Real cse882 = std::pow(cse623, cse881 + 0.22800000000000001);
   const amrex::Real cse883 = std::pow(cse623, cse881 + 0.23100000000000001);
@@ -1755,13 +1755,13 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(const burn_t &state,
   const amrex::Real cse1013 = 0.5*cse11*cse641 - cse702*cse704;
   const amrex::Real cse1014 = cse1002*state.xn[2];
   const amrex::Real cse1015 = 9.0599999999999997e-6*cse263;
-  const amrex::Real cse1016 = 1.024e-10*cse837;
+  const amrex::Real cse1016 = 1.024e-10*cse838;
   const amrex::Real cse1017 = 2.1600000000000004e-15*cse807;
   const amrex::Real cse1018 = 9.7199999999999998e-11*cse822;
-  const amrex::Real cse1019 = cse1016*cse832 + cse1016*cse836 + cse1017*cse846 + cse1018*cse850 + 7.1999999999999997e-16*cse807*cse848 + 3.2399999999999999e-11*cse820*cse822;
-  const amrex::Real cse1020 = 3.0719999999999998e-10*cse837;
-  const amrex::Real cse1021 = cse1017*cse832 + cse1018*cse870 + cse1020*cse872 + cse1020*cse873 + 6.4799999999999996e-15*cse807*cse864 + 2.9159999999999995e-10*cse822*cse864;
-  const amrex::Real cse1022 = cse876*(-cse1019 - cse1021 - 3.6000000000000001e-15*cse807*cse877 - cse808*cse849 - 1.6199999999999998e-10*cse822*cse856 - cse823*cse849 - cse838*cse853 - cse838*cse854);
+  const amrex::Real cse1019 = cse1016*cse832 + cse1016*cse836 + cse1017*cse847 + cse1018*cse851 + 7.1999999999999997e-16*cse807*cse848 + 3.2399999999999999e-11*cse820*cse822;
+  const amrex::Real cse1020 = 3.0719999999999998e-10*cse838;
+  const amrex::Real cse1021 = cse1017*cse832 + cse1018*cse870 + cse1020*cse872 + cse1020*cse873 + 6.4799999999999996e-15*cse807*cse859 + 2.9159999999999995e-10*cse822*cse859;
+  const amrex::Real cse1022 = cse876*(-cse1019 - cse1021 - 3.6000000000000001e-15*cse807*cse877 - cse808*cse850 - 1.6199999999999998e-10*cse822*cse856 - cse823*cse850 - cse839*cse853 - cse839*cse854);
   const amrex::Real cse1023 = cse263*cse899;
   const amrex::Real cse1024 = cse263*cse941;
   const amrex::Real cse1025 = 1.4381666666666666e-5*cse1024;
@@ -1818,17 +1818,17 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(const burn_t &state,
   const amrex::Real cse1057 = cse1056*cse722;
   const amrex::Real cse1058 = -cse1056*cse664*cse726*cse727 + cse682*(cse1056*cse661*cse675*cse726*cse727 - cse1057*cse676);
   const amrex::Real cse1059 = 1.0/cse802;
-  const amrex::Real cse1060 = cse845*cse858;
+  const amrex::Real cse1060 = cse846*cse861;
   const amrex::Real cse1061 = (1.0/15.0)*cse848;
-  const amrex::Real cse1062 = cse830*cse849;
-  const amrex::Real cse1063 = cse1060*cse817 + cse1061*cse817 + cse1062*cse858 + cse830*cse860 + cse844*cse859 + cse844*cse861;
-  const amrex::Real cse1064 = cse844*cse854;
-  const amrex::Real cse1065 = (3.0/5.0)*cse863;
-  const amrex::Real cse1066 = cse844*cse853;
-  const amrex::Real cse1067 = cse853*cse858;
-  const amrex::Real cse1068 = cse1064*cse1065 + cse1065*cse1066 + cse1067*cse830 + cse817*cse861 + cse817*cse865 + cse830*cse865;
+  const amrex::Real cse1062 = cse830*cse850;
+  const amrex::Real cse1063 = cse1060*cse817 + cse1061*cse817 + cse1062*cse861 + cse830*cse865 + cse845*cse862 + cse845*cse864;
+  const amrex::Real cse1064 = cse845*cse854;
+  const amrex::Real cse1065 = (3.0/5.0)*cse858;
+  const amrex::Real cse1066 = cse845*cse853;
+  const amrex::Real cse1067 = cse853*cse861;
+  const amrex::Real cse1068 = cse1064*cse1065 + cse1065*cse1066 + cse1067*cse830 + cse817*cse860 + cse817*cse862 + cse830*cse860;
   const amrex::Real cse1069 = (1.0/3.0)*cse877;
-  const amrex::Real cse1070 = cse876*(-cse1062 - cse1063 - cse1064 - cse1066 - cse1068 - cse1069*cse817 - cse817*cse849 - cse830*cse857);
+  const amrex::Real cse1070 = cse876*(-cse1062 - cse1063 - cse1064 - cse1066 - cse1068 - cse1069*cse817 - cse817*cse850 - cse830*cse857);
   const amrex::Real cse1071 = cse944*cse961;
   const amrex::Real cse1072 = (25.0/3.0)*cse904;
   const amrex::Real cse1073 = cse911*cse951;
@@ -1961,48 +1961,50 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(const burn_t &state,
   const amrex::Real cse1123 = cse1117*cse736*cse783;
   const amrex::Real cse1124 = cse1117*cse738*cse785;
   const amrex::Real cse1125 = cse1117*cse740*cse762;
-  const amrex::Real cse1126 = 65.320000000000007*cse259;
+  const amrex::Real cse1126 = 65.320000000000007*cse832;
   const amrex::Real cse1127 = cse3*cse813;
   const amrex::Real cse1128 = 0.00042999999999999999*cse624;
-  const amrex::Real cse1129 = cse840*(cse1103*(0.0041900000000000001 - 3.0000000000000001e-5*cse624) - cse3*cse833) - 3.8399999999999998e-11*std::pow(state.T, -1.075)*state.xn[2] + state.xn[3]*(cse842*(cse1103*(0.00025000000000000001*cse624 + 0.00264) + cse3*cse841) + cse843*(cse1103*(cse1128 + 0.00296) + cse1127));
+  const amrex::Real cse1129 = cse841*(cse1103*(0.0041900000000000001 - 3.0000000000000001e-5*cse624) - cse3*cse833) - 3.8399999999999998e-11*std::pow(state.T, -1.075)*state.xn[2] + state.xn[3]*(cse843*(cse1103*(0.00025000000000000001*cse624 + 0.00264) + cse3*cse842) + cse844*(cse1103*(cse1128 + 0.00296) + cse1127));
   const amrex::Real cse1130 = cse825*(cse1103*(0.0036900000000000001 - 6.0000000000000002e-5*cse624) - cse3*cse805) - 1.2635999999999999e-11*std::pow(state.T, -1.026)*state.xn[2] + state.xn[3]*(cse827*(cse1103*(0.00041000000000000005*cse624 + 0.0020300000000000001) + cse3*cse826) + cse829*(cse1103*(0.00058*cse624 + 0.0023700000000000001) + cse3*cse828));
   const amrex::Real cse1131 = cse812*(cse1103*(0.0075500000000000003 - 0.0016000000000000001*cse624) - cse3*cse809) + 1.0000800000000001e-14*std::pow(state.T, -0.073999999999999955)*state.xn[2] + state.xn[3]*(cse814*(cse1103*(cse1128 + 0.0088900000000000003) + cse1127) + cse816*(cse1103*(0.0052500000000000003*cse624 + 0.011979999999999999) + cse3*cse815));
-  const amrex::Real cse1132 = cse1130*cse849;
-  const amrex::Real cse1133 = cse1060*cse1131 + cse1061*cse1131 + cse1126*cse818*cse846 + cse1126*cse831*cse850 + cse1129*cse859 + cse1129*cse861 + cse1130*cse860 + cse1132*cse858 + 28.360000000000003*cse259*cse820*cse831;
-  const amrex::Real cse1134 = 136.68000000000001*cse259*cse864;
-  const amrex::Real cse1135 = cse1129*cse854;
-  const amrex::Real cse1136 = cse1129*cse853;
-  const amrex::Real cse1137 = cse1065*cse1135 + cse1065*cse1136 + cse1067*cse1130 + cse1126*cse832*cse853 + cse1130*cse865 + cse1131*cse861 + cse1131*cse865 + cse1134*cse853 + cse1134*cse854;
-  const amrex::Real cse1138 = cse876*(-cse1069*cse1131 - cse1130*cse857 - cse1131*cse849 - cse1132 - cse1133 - cse1135 - cse1136 - cse1137 - 32.933333333333337*cse259*cse854*cse856);
-  const amrex::Real cse1139 = 312.30000000000001*cse259;
-  const amrex::Real cse1140 = cse3*cse881;
-  const amrex::Real cse1141 = 0.00046000000000000001*cse624;
-  const amrex::Real cse1142 = 8.6290000000000003e-7*cse1101;
-  const amrex::Real cse1143 = -cse1142*cse899 + cse885*(cse1103*(cse1141 + 0.00231) + cse1140) + cse901*((cse755) ? (
+  const amrex::Real cse1132 = cse1130*cse850;
+  const amrex::Real cse1133 = cse1060*cse1131 + cse1061*cse1131 + cse1126*cse259*cse850 + cse1129*cse862 + cse1129*cse864 + cse1130*cse865 + cse1132*cse861 + 65.320000000000007*cse259*cse818*cse847 + 28.360000000000003*cse259*cse820*cse831;
+  const amrex::Real cse1134 = 136.68000000000001*cse859;
+  const amrex::Real cse1135 = cse259*cse854;
+  const amrex::Real cse1136 = cse259*cse853;
+  const amrex::Real cse1137 = cse1129*cse854;
+  const amrex::Real cse1138 = cse1129*cse853;
+  const amrex::Real cse1139 = cse1065*cse1137 + cse1065*cse1138 + cse1067*cse1130 + cse1126*cse1136 + cse1130*cse860 + cse1131*cse860 + cse1131*cse862 + cse1134*cse1135 + cse1134*cse1136;
+  const amrex::Real cse1140 = cse876*(-cse1069*cse1131 - cse1130*cse857 - cse1131*cse850 - cse1132 - cse1133 - 32.933333333333337*cse1135*cse856 - cse1137 - cse1138 - cse1139);
+  const amrex::Real cse1141 = 312.30000000000001*cse259;
+  const amrex::Real cse1142 = cse3*cse881;
+  const amrex::Real cse1143 = 0.00046000000000000001*cse624;
+  const amrex::Real cse1144 = 8.6290000000000003e-7*cse1101;
+  const amrex::Real cse1145 = -cse1144*cse899 + cse885*(cse1103*(cse1143 + 0.00231) + cse1142) + cse901*((cse755) ? (
    cse3*cse894 + cse72*(cse3*cse893 + cse72*(cse3*cse891 + cse3*cse892))
 )
 : (
    cse3*cse898 + cse72*(cse3*cse897 + cse72*(cse3*cse895 + cse3*cse896))
 )) + state.xn[3]*(cse887*(cse1103*(0.00031*cse624 + 0.00263) + cse3*cse886) + cse889*(cse1103*(0.00064000000000000005*cse624 + 0.00071999999999999994) + cse3*cse888));
-  const amrex::Real cse1144 = -1.4381666666666666e-6*cse1101*cse941 + cse927*(cse1103*(0.00057000000000000009*cse624 + 0.00115) + cse3*cse924) + cse943*((cse755) ? (
+  const amrex::Real cse1146 = -1.4381666666666666e-6*cse1101*cse941 + cse927*(cse1103*(0.00057000000000000009*cse624 + 0.00115) + cse3*cse924) + cse943*((cse755) ? (
    cse3*cse936 + cse72*(cse3*cse935 + cse72*(-cse3*cse933 + cse3*cse934))
 )
 : (
    cse3*cse940 + cse72*(cse3*cse939 + cse72*(cse3*cse937 + cse3*cse938))
 )) + state.xn[3]*(cse929*(cse1103*(0.00048999999999999998*cse624 - 4.0000000000000003e-5) + cse3*cse928) + cse931*(cse1103*(0.0010199999999999999*cse624 - 0.00085000000000000006) + cse3*cse930));
-  const amrex::Real cse1145 = -cse1142*cse920 + cse906*(cse1103*(cse1141 + 0.0022800000000000003) + cse1140) + cse921*((cse755) ? (
+  const amrex::Real cse1147 = -cse1144*cse920 + cse906*(cse1103*(cse1143 + 0.0022800000000000003) + cse1142) + cse921*((cse755) ? (
    cse3*cse915 + cse72*(cse3*cse914 + cse72*(cse3*cse912 + cse3*cse913))
 )
 : (
    cse3*cse919 + cse72*(cse3*cse918 + cse72*(cse3*cse916 + cse3*cse917))
 )) + state.xn[3]*(cse908*(cse1103*(0.00038000000000000002*cse624 + 0.0016900000000000001) + cse3*cse907) + cse910*(cse1103*(0.00048000000000000001*cse624 - 0.0001) + cse3*cse909));
-  const amrex::Real cse1146 = cse1145*cse951;
-  const amrex::Real cse1147 = cse1071*cse1143 + cse1072*cse1145 + cse1139*cse902*cse946 + cse1139*cse922*cse952 + cse1143*cse960 + cse1144*cse962 + cse1144*cse963 + cse1146*cse961 + 844.16666666666686*cse259*cse902*cse923;
-  const amrex::Real cse1148 = 70.859999999999985*cse259*cse966;
-  const amrex::Real cse1149 = cse1144*cse956;
-  const amrex::Real cse1150 = cse1144*cse955;
-  const amrex::Real cse1151 = cse1075*cse1145 + cse1077*cse1149 + cse1077*cse1150 + cse1139*cse949*cse955 + cse1143*cse963 + cse1143*cse967 + cse1145*cse967 + cse1148*cse955 + cse1148*cse956;
-  const amrex::Real cse1152 = cse978*(-cse1080*cse1143 - cse1081*cse1145 - cse1143*cse951 - cse1146 - cse1147 - cse1149 - cse1150 - cse1151 - 64.733333333333348*cse259*cse956*cse958);
+  const amrex::Real cse1148 = cse1147*cse951;
+  const amrex::Real cse1149 = cse1071*cse1145 + cse1072*cse1147 + cse1141*cse902*cse946 + cse1141*cse922*cse952 + cse1145*cse960 + cse1146*cse962 + cse1146*cse963 + cse1148*cse961 + 844.16666666666686*cse259*cse902*cse923;
+  const amrex::Real cse1150 = 70.859999999999985*cse259*cse966;
+  const amrex::Real cse1151 = cse1146*cse956;
+  const amrex::Real cse1152 = cse1146*cse955;
+  const amrex::Real cse1153 = cse1075*cse1147 + cse1077*cse1151 + cse1077*cse1152 + cse1141*cse949*cse955 + cse1145*cse963 + cse1145*cse967 + cse1147*cse967 + cse1150*cse955 + cse1150*cse956;
+  const amrex::Real cse1154 = cse978*(-cse1080*cse1145 - cse1081*cse1147 - cse1145*cse951 - cse1148 - cse1149 - cse1151 - cse1152 - cse1153 - 64.733333333333348*cse259*cse956*cse958);
 
   jac(1, 1) = -cse1 - cse10*cse56 - cse102 + 2*cse29*state.xn[3] + 2*cse30*cse55 - cse57 + 2*cse60*state.xn[0]*state.xn[3];
   jac(1, 2) = cse115 + cse124;
@@ -2284,11 +2286,11 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(const burn_t &state,
   jac(19, 9) = -cse1042*cse691;
   jac(19, 10) = -cse664*cse686 - cse730*(cse1087*cse664*cse726*cse727 - cse682*(cse1087*cse661*cse675*cse726*cse727 - cse1088*cse676) - cse683*(cse1087*cse718*cse719 - cse1088*cse996));
   jac(19, 11) = cse997;
-  jac(19, 12) = -cse862*cse869 - cse866*cse875;
+  jac(19, 12) = -cse863*cse875 - cse866*cse869;
   jac(19, 15) = cse997;
   jac(19, 16) = cse997;
   jac(19, 17) = -5.6994379667262474e-29*cse1036 - 9.6000000000000005e-32*cse1038 - 300.0*cse1040 + 5.0999999999999995e-24*cse1083 + cse1089*cse989 + cse1089*cse990 + cse1090*cse992 + cse1090*cse993 + cse1090*cse995 - 7.1777529600000012e-12*cse247 + cse251*cse986 + cse510*cse621 - 7.1777529600000012e-12*cse511 - cse730*(cse1091*cse664*cse726*cse727 - cse682*(cse1091*cse661*cse675*cse726*cse727 - cse1092*cse676) - cse683*(cse1091*cse718*cse719 - cse1092*cse996));
-  jac(19, 19) = cse311*(1.7e-24*chi*cse10*cse1008*cse561*cse68*d2g*(-0.00012636182959999999*cse1009*cse289 - 0.018302846000000001*cse1010*cse289) + 5.6227499999999995e-25*chi*cse10*cse565*cse68*d2g*std::pow(state.T, -0.85299999999999998) + 7.8348995947646122e-14*cse1000*cse1096*cse585*cse586*cse590*state.xn[0]*state.xn[2] - cse1011*cse1098*cse590 - cse1012*(7.6502807803182096e-12*cse1000*cse1096*cse585*cse586*state.xn[2] - 0.0015792330470357991*cse1093*cse582 - 2.0007175426973804e-9*cse1097*cse587 - 1.3338116951315871e-8*cse1098*cse583) - cse1014*(-1.8989*cse1007*cse1099 + cse3*cse572) - cse1014*(-0.043256499999999996*cse1099*cse571 + 0.84999999999999998*cse1099*cse574) - cse1043*cse1104 - cse1045*cse1106 - 1.6173435610483583e-5*cse1093*cse1094*cse590 - 2.0489994438957239e-11*cse1094*cse1095*cse591 - 5.2835524837844135e-18*cse1100*cse637*state.xn[8] - cse1105*cse687 - cse1108*cse693*cse698*cse988 - cse1108*cse699*cse990 - 2.1789607199999999e-11*cse296 - 7.1777529600000012e-12*cse515 - 7.1777529600000012e-12*cse516 - cse595*cse602*psigd_coll_interp2d_partial_1(cse10, state.T) - cse599*(1.6000000000000001e-32*cse110*cse276*cse596 + cse597) - 1000*cse658*std::pow(cse659, 999)*cse685*cse729 - cse692*(-cse1046*cse1106 - 182.41999999999999*cse1100 - cse1104*cse635) - cse730*(-cse1105*cse674 + cse1109*cse1110*cse677*cse681 + cse1109*cse1110 - cse1112*cse664*cse726 - cse682*(-cse1109*cse674*cse675 - cse1112*cse661*cse675*cse726 - cse1113*cse676) - cse683*(cse719*(cse1111*cse718 + alpha_co_interp2d_partial_0(state.T, cse672)) + cse725*(cse1105*cse678 - cse1113*cse721))) - state.xn[11]*(cse1133*cse869 + cse1137*cse875 + cse1138*cse879 + cse1138*cse880) - state.xn[3]*((cse759) ? (
+  jac(19, 19) = cse311*(1.7e-24*chi*cse10*cse1008*cse561*cse68*d2g*(-0.00012636182959999999*cse1009*cse289 - 0.018302846000000001*cse1010*cse289) + 5.6227499999999995e-25*chi*cse10*cse565*cse68*d2g*std::pow(state.T, -0.85299999999999998) + 7.8348995947646122e-14*cse1000*cse1096*cse585*cse586*cse590*state.xn[0]*state.xn[2] - cse1011*cse1098*cse590 - cse1012*(7.6502807803182096e-12*cse1000*cse1096*cse585*cse586*state.xn[2] - 0.0015792330470357991*cse1093*cse582 - 2.0007175426973804e-9*cse1097*cse587 - 1.3338116951315871e-8*cse1098*cse583) - cse1014*(-1.8989*cse1007*cse1099 + cse3*cse572) - cse1014*(-0.043256499999999996*cse1099*cse571 + 0.84999999999999998*cse1099*cse574) - cse1043*cse1104 - cse1045*cse1106 - 1.6173435610483583e-5*cse1093*cse1094*cse590 - 2.0489994438957239e-11*cse1094*cse1095*cse591 - 5.2835524837844135e-18*cse1100*cse637*state.xn[8] - cse1105*cse687 - cse1108*cse693*cse698*cse988 - cse1108*cse699*cse990 - 2.1789607199999999e-11*cse296 - 7.1777529600000012e-12*cse515 - 7.1777529600000012e-12*cse516 - cse595*cse602*psigd_coll_interp2d_partial_1(cse10, state.T) - cse599*(1.6000000000000001e-32*cse110*cse276*cse596 + cse597) - 1000*cse658*std::pow(cse659, 999)*cse685*cse729 - cse692*(-cse1046*cse1106 - 182.41999999999999*cse1100 - cse1104*cse635) - cse730*(-cse1105*cse674 + cse1109*cse1110*cse677*cse681 + cse1109*cse1110 - cse1112*cse664*cse726 - cse682*(-cse1109*cse674*cse675 - cse1112*cse661*cse675*cse726 - cse1113*cse676) - cse683*(cse719*(cse1111*cse718 + alpha_co_interp2d_partial_0(state.T, cse672)) + cse725*(cse1105*cse678 - cse1113*cse721))) - state.xn[11]*(cse1133*cse869 + cse1139*cse875 + cse1140*cse879 + cse1140*cse880) - state.xn[3]*((cse759) ? (
    0
 )
 : (
@@ -2307,7 +2309,7 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(const burn_t &state,
       cse788*(4.297112944704045*cse1118 - 101.40241318979159*cse1119 - 43.540996231705549*cse1120 + 3.8689780091986448*cse1121 + 27.91190909651122*cse1122 - 117.34186576967058*cse1123 + 103.76942484394611*cse1124 + 123.18901581604325*cse1125)
    ))))
 )) - state.xn[7]*((cse983) ? (
-   cse1147*cse971 + cse1151*cse977 + cse1152*cse981 + cse1152*cse982
+   cse1149*cse971 + cse1153*cse977 + cse1154*cse981 + cse1154*cse982
 )
 : (
    0
