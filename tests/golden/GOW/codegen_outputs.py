@@ -99,7 +99,7 @@ def rates():
     k[9] = 9.1e-10*chi*math.exp(-2.12*av)
     k[10] = 2.4e-10*chi*fshield_co_interp2d(ncol_CO, ncol_H2)*math.exp(-3.88*av)
     k[11] = 3.8e-10*chi*math.exp(-2.66*av)
-    k[12] = 2.02673601114097e-18*c_hat*photden[0]
+    k[12] = 2.02678542890544e-18*c_hat*photden[0]
     k[13] = 5.7e-11*chi*(0.965/(1.4142135623731e-10*ncol_H2/vdisp + 1)**2 + 0.035*math.exp(-0.00085*x7)/x7)*math.exp(-4.18*av)
     k[14] = 3.0e-15*x4*x8
     k[15] = 1.225e-11*x15/(1.67744140517115e-5*x12**1.378*(508.7*tgas**0.01586*x13**(-1.102e-5*x14 - 0.4723) + 1) + 1)
@@ -298,7 +298,7 @@ def odes():
     cse66 = cse31 - cse36
     cse67 = cse18*cse55
     cse68 = 1.45950002907769e-10*tgas**(-0.62)*nden[13]*nden[2]
-    cse69 = 2.02673601114097e-18*c_hat*nden[12]*photden[0]
+    cse69 = 2.02678542890544e-18*c_hat*nden[12]*photden[0]
     cse70 = 2.166e-12*cse35*nden[13]/(1.53481723307147e-7*cse61**1.874*(43750.0*cse62**(-7.538e-5*cse63 - 0.8964)*tgas**1.635e-6 + 1) + 1)
     cse71 = 16800.0*crate*cse23*nden[12]
     cse72 = (1.05379343682409e-9*cse14**0.00231 + tgas**(-1.5)*(0.000151*math.exp(-8110.0*cse14) + 1.31e-7*math.exp(-26.6*cse14) + 3.4e-8*math.exp(-7.62*cse14) + 6.97e-9*math.exp(-1.38*cse14)))*nden[16]*nden[7]
@@ -362,7 +362,7 @@ def odes():
 def radodes():
     out = {}
     # $JAFF REPEAT idx, radode, cse IN radodes
-    cse0 = 2.02673601114097e-18*c_hat*nden[12]
+    cse0 = 2.02678542890544e-18*c_hat*nden[12]
 
     out[0] = -cse0*photden[0]
     out[1] = -cse0*rflux[0]
@@ -455,7 +455,7 @@ def rhs_volumetric():
     cse73 = cse32 - cse37
     cse74 = cse18*cse59
     cse75 = 1.45950002907769e-10*tgas**(-0.62)*nden[13]*nden[2]
-    cse76 = 2.02673601114097e-18*c_hat*nden[12]
+    cse76 = 2.02678542890544e-18*c_hat*nden[12]
     cse77 = cse76*photden[0]
     cse78 = -cse77
     cse79 = 2.166e-12*cse36*nden[13]/(1.53481723307147e-7*cse68**1.874*(43750.0*cse69**(-7.538e-5*cse70 - 0.8964)*tgas**1.635e-6 + 1) + 1)
@@ -697,7 +697,7 @@ def rhs_specific_mass():
     cse73 = cse32 - cse37
     cse74 = cse18*cse59
     cse75 = 1.45950002907769e-10*tgas**(-0.62)*nden[13]*nden[2]
-    cse76 = 2.02673601114097e-18*c_hat*nden[12]
+    cse76 = 2.02678542890544e-18*c_hat*nden[12]
     cse77 = cse76*photden[0]
     cse78 = -cse77
     cse79 = 2.166e-12*cse36*nden[13]/(1.53481723307147e-7*cse68**1.874*(43750.0*cse69**(-7.538e-5*cse70 - 0.8964)*tgas**1.635e-6 + 1) + 1)
@@ -940,7 +940,7 @@ def rhs_specific_number():
     cse74 = cse60 + cse63 - cse65 - cse71
     cse75 = cse18*cse59
     cse76 = 1.45950002907769e-10*tgas**(-0.62)*nden[13]*nden[2]
-    cse77 = 2.02673601114097e-18*c_hat*nden[12]
+    cse77 = 2.02678542890544e-18*c_hat*nden[12]
     cse78 = cse77*photden[0]
     cse79 = -cse78
     cse80 = 2.166e-12*cse37*nden[13]/(1.53481723307147e-7*cse68**1.874*(43750.0*cse69**(-7.538e-5*cse70 - 0.8964)*tgas**1.635e-6 + 1) + 1)
@@ -1422,7 +1422,7 @@ def jacobian_species():
     cse305 = cse304*nden[16]
     cse306 = cse182 + cse305
     cse307 = -cse306
-    cse308 = 2.02673601114097e-18*c_hat
+    cse308 = 2.02678542890544e-18*c_hat
     cse309 = cse308*photden[0]
     cse310 = cse275*nden[3] + cse309
     cse311 = cse241*cse79 + cse253*nden[2]
@@ -2189,7 +2189,7 @@ def jacobian_volumetric():
     cse481 = cse479 + cse480
     cse482 = cse284*cse352
     cse483 = cse285 + cse482
-    cse484 = 2.02673601114097e-18*c_hat
+    cse484 = 2.02678542890544e-18*c_hat
     cse485 = cse484*photden[0]
     cse486 = cse447*nden[3] + cse485
     cse487 = cse135*cse426 + cse437*nden[2]
@@ -3803,7 +3803,7 @@ def jacobian_specific_mass():
     cse490 = cse488 + cse489
     cse491 = cse295*cse353
     cse492 = cse296 + cse491
-    cse493 = 2.02673601114097e-18*c_hat
+    cse493 = 2.02678542890544e-18*c_hat
     cse494 = cse493*photden[0]
     cse495 = cse460*nden[3] + cse494
     cse496 = cse159*cse438 + cse448*nden[2]
@@ -5404,7 +5404,7 @@ def jacobian_specific_number():
     cse512 = cse509 + cse511
     cse513 = cse293*cse349
     cse514 = cse294 + cse513
-    cse515 = 2.02673601114097e-18*c_hat
+    cse515 = 2.02678542890544e-18*c_hat
     cse516 = cse515*photden[0]
     cse517 = cse466*nden[3] + cse516
     cse518 = cse139*cse435
@@ -6550,7 +6550,7 @@ def jacobian_specific_number():
     out[(18, 16)] = -cse1111*(8.46427064980205e-7*cse216*nden[2] - cse319 - cse531 - cse575 - cse646) - cse1214 + cse678*(cse1217*cse1292*nden[3] + cse1218*cse317 + cse1220*cse1293 + cse1221*cse1293 + cse1223*(26.4*cse1291*cse679*cse681*cse86*nden[0] + 2.0*cse1292*cse25*nden[3] - 3*cse833 - 6.0*cse838) - 5.69943796672625e-29*cse1253 + 5.1e-24*cse1283 + cse1284*cse1291 - 7.17775296e-12*cse313 + cse573*cse748 - 7.17775296e-12*cse574 - cse726*(6*nden[0] + 6*nden[1] + 6*nden[10] + 6*nden[14] + 6*nden[15] + 18*nden[16] + 12*nden[3] + 12*nden[4]) - cse730*(300.0*cse1256 + 300.0*cse728) - cse855*(cse1294*cse788*cse851*cse852 - cse806*(cse1294*cse785*cse799*cse851*cse852 - cse1295*cse800) - cse807*(-cse1224*cse1295 + cse1294*cse843*cse844)))
     out[(18, 17)] = 2.39999999999988e-9*cse1109*cse1110*cse142*cse95*tgas*nden[3] - cse1214
     out[(18, 18)] = cse1213
-    out[(18, 19)] = -3.04010401671131e-18*c_hat*cse1287*nden[12]
+    out[(18, 19)] = -3.04017814335801e-18*c_hat*cse1287*nden[12]
     out[(19, 12)] = -cse516
     out[(19, 19)] = cse653
     out[(20, 12)] = -cse515*rflux[0]
