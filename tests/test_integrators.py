@@ -162,14 +162,17 @@ def test_get_bounds_other_symbol_condition_falls_back():
     assert outcome(_integrators.get_bounds) == outcome(_integrators._get_bounds_solve)
 
 
-def test_get_bounds_fast_path_is_fast():
-    import time
-
+def test_get_bounds_fast_path_skips_solver(monkeypatch):
+    # Behavioural rather than wall-clock: the fast path must handle this
+    # expression without falling back to SymPy's (slow) inequality solver.
     expr = _verner_fe() * _seven_band_profile()
-    _integrators.get_bounds(expr, E)  # warm imports / sympy caches
-    start = time.perf_counter()
-    _integrators.get_bounds(expr, E)
-    assert time.perf_counter() - start < 5e-3
+    expected = _integrators._get_bounds_solve(expr, E)
+
+    def _solver_called(*args, **kwargs):
+        raise AssertionError("get_bounds fell back to _get_bounds_solve")
+
+    monkeypatch.setattr(_integrators, "_get_bounds_solve", _solver_called)
+    assert _integrators.get_bounds(expr, E) == expected
 
 
 # --------------------------------------------------------------------------

@@ -198,7 +198,7 @@ class NetworkSymbols:
 
         return self._element_sums[element]
 
-    def weighted_rate(self, weights: Sequence[Basic | float]) -> Expr:
+    def weighted_rate(self, weights: Sequence[Basic | float], rtol: float = 0.0) -> Expr:
         """Rate of ``Σ_i w_i n_i``: ``Σ_r (Σ_i w_i ν_ri) F_r``.
 
         ``ν = product_matrix − reactant_matrix`` (core species) and ``F_r`` are the
@@ -210,6 +210,11 @@ class NetworkSymbols:
         ----------
         weights : Sequence[Basic | float]
             One weight per species, in species-index order.
+        rtol : float, optional
+            Numeric weights only: a reaction coefficient ``c_r = Σ_i w_i ν_ri`` is
+            treated as zero when ``|c_r| <= rtol · Σ_i |w_i ν_ri|``, i.e. when it is a
+            floating-point rounding residue of terms that cancel exactly in
+            principle.  Default ``0.0`` keeps every non-zero coefficient.
 
         Returns
         -------
@@ -232,7 +237,11 @@ class NetworkSymbols:
         nu = net.product_matrix - net.reactant_matrix
         total = S.Zero
         for row, flux in zip(nu, net.sfluxes()):
-            coeff = sum(w * int(n) for w, n in zip(weights, row) if n)
+            terms = [w * int(n) for w, n in zip(weights, row) if n]
+            coeff = sum(terms)
+            if rtol and abs(coeff) <= rtol * sum(abs(t) for t in terms):
+                continue
+
             if coeff != 0:
                 total += coeff * flux
 
@@ -249,9 +258,13 @@ class NetworkSymbols:
 
         Never forced to zero: every reaction contributes its actual mass change,
         so the per-cell rate is kept even for reactions that pass
-        :meth:`Reaction.check_mass`.  Unset masses count as ``0``.
+        :meth:`Reaction.check_mass`.  Only floating-point rounding residues
+        (``|Δm_r| <= 1e-12 · Σ_i |m_i ν_ri|``, far below one electron mass) are
+        dropped, so the expression -- and the Jacobian sparsity -- does not depend
+        on the last bits of the species masses.  Unset masses count as ``0``.
         """
-        return self.weighted_rate([s.mass or 0.0 for s in self._net.species])
+        masses = [s.mass or 0.0 for s in self._net.species]
+        return self.weighted_rate(masses, rtol=1e-12)
 
     # The introspection caches below are filled on first access (Network.__init__,
     # after loading).  Mutating rates or thermodynamics afterwards leaves them stale.

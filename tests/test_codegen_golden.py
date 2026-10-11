@@ -14,7 +14,7 @@
 import math
 import re
 from pathlib import Path
-from typing import Any, Callable, List, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 import pytest
 
@@ -50,6 +50,21 @@ def _format_rows(rows: List[Tuple[Any, float, float]], limit: int = 20) -> str:
     if len(rows) > limit:
         lines.append(f"  ... {len(rows) - limit} more")
     return "\n".join(lines)
+
+
+def _row_scales(*tables: dict) -> Callable[[Any], float]:
+    """Largest |value| per row (first key element) across *tables*.
+
+    Scalar keys (1-D outputs) share a single scale: the largest |value| overall.
+    """
+    rows: Dict[Any, float] = {}
+    for table in tables:
+        for key, value in table.items():
+            if not math.isfinite(value):
+                continue
+            row = key[0] if isinstance(key, tuple) else None
+            rows[row] = max(rows.get(row, 0.0), abs(value))
+    return lambda key: rows.get(key[0] if isinstance(key, tuple) else None, 0.0)
 
 
 @pytest.mark.parametrize("name", list(NETWORKS))
@@ -110,22 +125,29 @@ def test_generated_matches_golden(
     expected = evaluate(load(gold_path, f"gold_{tag}"), func, inputs, render_seed)
 
     where = f"{name}/{filename}::{func}() (seed={render_seed})"
-    assert actual.keys() == expected.keys(), (
-        f"{where}: entries differ; generated-only "
-        f"{sorted(actual.keys() - expected.keys())}, golden-only "
-        f"{sorted(expected.keys() - actual.keys())}"
-    )
 
-    non_finite = [(k, actual[k], v) for k, v in expected.items() if not math.isfinite(v)]
+    non_finite = [
+        (k, actual.get(k), v) for k, v in expected.items() if not math.isfinite(v)
+    ]
     assert not non_finite, (
         f"{where}: golden is non-finite at these inputs; adjust the sampling "
         f"ranges in tests/codegen_render.py\n{_format_rows(non_finite)}"
     )
 
+    # Entries missing on one side count as 0 (codegen omits exact zeros); each
+    # entry gets an absolute tolerance scaled to its row (whole vector for 1-D
+    # outputs), so platform-dependent round-off terms that are negligible within
+    # their row do not flip the comparison, while tiny but genuine entries in a
+    # row of tiny values are still compared strictly.
+    keys = sorted(actual.keys() | expected.keys())
+    scale = _row_scales(expected, actual)
     mismatched = [
-        (k, actual[k], expected[k])
-        for k in sorted(expected)
-        if actual[k] != pytest.approx(expected[k], rel=REL_TOL, abs=ABS_TOL)
+        (k, actual.get(k, 0.0), expected.get(k, 0.0))
+        for k in keys
+        if actual.get(k, 0.0)
+        != pytest.approx(
+            expected.get(k, 0.0), rel=REL_TOL, abs=max(ABS_TOL, REL_TOL * scale(k))
+        )
     ]
     assert not mismatched, (
         f"{where}: {len(mismatched)}/{len(expected)} entries differ "

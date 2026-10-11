@@ -68,6 +68,23 @@ def test_drho_dt_equals_weighted_rate_of_masses(net):
     assert net.symbols.drho_dt == net.symbols.weighted_rate(masses)
 
 
+def test_drho_dt_drops_float_rounding_residues(make_network):
+    # H + e- -> H+ + e- + e- conserves mass; with float masses its Δm is a
+    # rounding residue (~1e-41 g), which must not leak into ρ̇.
+    net = make_network("@format:idx,R,R,P,P,P,rate\n1,H,e-,H+,e-,e-,1\n", funcfile=False)
+    h, e, hp = (net.species[s] for s in ("H", "e-", "H+"))
+    assert hp.mass + 2 * e.mass - h.mass - e.mass != 0  # residue really exists
+    assert net.symbols.drho_dt == 0
+
+
+def test_weighted_rate_rtol_only_drops_rounding(net):
+    # rtol drops a coefficient only when it is negligible against the
+    # magnitudes that cancel to produce it; real changes survive.
+    masses = [s.mass for s in net.species]
+    assert net.symbols.weighted_rate(masses, rtol=1e-12) == net.symbols.drho_dt
+    assert net.symbols.weighted_rate(masses, rtol=1e-12) != 0
+
+
 def test_drho_dt_does_not_trust_check_mass(make_network, monkeypatch):
     # H -> H+ loses one electron mass; even if the reaction were deemed
     # "conserved", the per-cell mass rate must keep its -m_e term.
