@@ -116,12 +116,11 @@ net = Network(
 | `elements`        | `Elements`        | [`Elements`](elements.md) catalogue derived from the species                                                        |
 | `reactant_matrix` | `np.ndarray`      | Integer stoichiometry, shape `(n_reactions, n_species)` — reactant counts                                           |
 | `product_matrix`  | `np.ndarray`      | Integer stoichiometry, same shape — product counts                                                                  |
-| `dEdt_chem`       | `sympy.Basic`     | Symbolic total chemical heating/cooling rate (erg cm⁻³ s⁻¹)                                                         |
-| `dEdt_other`      | `sympy.Basic`     | Extra heating/cooling from a `heatingcoolingrate` aux function (else `0`)                                           |
+| `thermodynamics`  | `Thermodynamics`  | Thermal equations: `eos`, `dEdt_chemical`, `dEdt_extra`, `dEdt_tot`, `dTdt_chemical`, `dTdt_extra`, `dTdt_tot`; see [thermodynamics](../../api/core/network/thermodynamics.md) |
 | `dRad_dt_extra`   | `sympy.Basic`     | Extra radiation-moment source terms from `@function` aux definitions (else `0`)                                     |
 | `radiation`       | `Radiation\|None` | Radiation field object; `None` when no `radiation_props` are configured                                             |
 | `mass_dict`       | `dict`            | Element mass dictionary used to build the species                                                                   |
-| `n_hnuc`          | `sympy.Expr`      | Symbolic total hydrogen-nuclei density `Σ_i H-count(i)·nden[i]` (cached); equivalent to the `n_H_nuc` grammar token |
+| `symbols`         | `NetworkSymbols`  | Canonical symbols, densities (`ndens`, `ntot`, `rho`, `n_hnuc`), introspection sets and `standardize`; see [symbols](../../api/core/network/symbols.md) |
 
 ```python
 net = Network("networks/h_photoionization/h_photo.jet")

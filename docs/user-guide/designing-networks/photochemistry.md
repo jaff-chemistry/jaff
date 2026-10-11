@@ -170,17 +170,29 @@ queries at runtime (see [Codebase Structure](../../development/codebase-structur
   `photo_absorption` flag, a `decay_type` (`"ionization"` / `"dissociation"`)
   and a `file.hdf5::<group>` pointer into the Leiden or NORAD HDF5 file.
 - `verner_cross_sections` — the Verner analytic σ(E) expression as a
-  SymPy-parseable string (symbol `E`, photon energy in erg, σ in cm²).
+  SymPy-parseable string (symbol `E`, photon energy in **eV**, σ in cm²).
 
 ### What lands on the reaction
 
-For tabulated sources, `reaction.xsecs_dict` is an `XsecsProps` dict carrying
-the `photon_energy` grid (eV) plus `photo_absorption` and the single
-`photodecay` channel (cm² arrays, or `None`); `_equations["decay_type"]`
-records whether that channel is ionization or dissociation. The radiation
-integrator reads these arrays directly and integrates them numerically over
-each band; for photoionization it falls back to the Verner analytic fit when no
-tabulated entry exists.
+Which database supplies a photoionization reaction is governed by
+[`pi_database`](../code-generation/jaffgen-toml.md#networkradiation-section)
+(`norad` by default, or `verner` / `leiden`, globally or per reaction). The
+lookup order is the chosen database, then NORAD, then Verner, then Leiden
+(duplicates skipped); any fallback is logged once as a summary after loading.
+Photodissociation always uses Leiden.
+
+For tabulated sources (Leiden / NORAD), `reaction.xsecs_dict` is an
+`XsecsProps` dict carrying the `photon_energy` grid (eV) plus `photo_absorption`
+and the single `photodecay` channel (cm² arrays, or `None`);
+`_equations["decay_type"]` records whether that channel is ionization or
+dissociation. The radiation integrator integrates these arrays numerically over
+each band.
+
+Verner fits are kept **symbolic**: the dict then carries the SymPy `Piecewise`
+in `xsecs_dict["photodecay_expr"]` (symbol `E`, eV, σ in cm²) and the arrays are
+`None`; the integrator integrates the expression analytically per band. The
+database actually used is recorded in `xsecs_dict["database"]`
+(`"norad"`, `"verner"` or `"leiden"`).
 
 <!-- prettier-ignore -->
 !!! note "Threshold energy"

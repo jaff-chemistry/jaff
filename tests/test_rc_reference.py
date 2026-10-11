@@ -16,7 +16,7 @@ def test_rc_uses_file_side_number_after_dedup(tmp_path):
     )
     net = Network(str(dat), funcfile=False)
     # rc_2 -> file reaction 2 (H + C -> CH), whose rate is 5.0
-    expr = net._standardize_symbols(sympy.Symbol("rc_2"), True)
+    expr = net.symbols.standardize(sympy.Symbol("rc_2"))
     assert expr == sympy.Float(5.0)
 
 

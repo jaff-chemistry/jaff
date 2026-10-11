@@ -22,7 +22,7 @@ import logging
 import re
 import sys
 from dataclasses import dataclass
-from functools import cached_property, lru_cache, reduce
+from functools import cached_property, lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -31,12 +31,9 @@ from sympy import (
     Basic,
     Expr,
     Float,
-    Function,
-    IndexedBase,
     parse_expr,
     symbols,
 )
-from sympy.core.function import AppliedUndef, UndefinedFunction
 
 from ...common import is_jaff_file, load_mass_dict, motd, resolve_dependencies
 from ...errors import ParserError
@@ -45,19 +42,22 @@ from ...io._io import JaffProps, from_jaff_file, to_jaff_file, write_data_table
 from ...physics import (
     Dust,
     DustProps,
+    EosProps,
     Photochemistry,
     Radiation,
     RadiationProps,
-    get_eos,
+    Thermodynamics,
     get_sfluxes,
     get_sodes,
     get_sradodes,
 )
+from ...physics.photo_reactions._radiation_props import validate_pi_database
 from ..elements import Elements
 from ..parsers import NetworkParser
 from ..reaction import RateSegment, RateSegments, Reaction, Reactions
 from ..species import Specie, Species
 from ._spec import NetworkSpec
+from ._symbols import NetworkSymbols
 
 if TYPE_CHECKING:
     from .._typing import ElementProps
@@ -70,7 +70,7 @@ def _parse_rate_expr(rate: str) -> Expr:
 
     Large networks contain many reactions with identical rate strings (≈40% of
     KIDA-2024 rates repeat), and the parsed expression depends only on the
-    string — species substitution happens later in ``_standardize_symbols`` —
+    string — species substitution happens later in ``NetworkSymbols.standardize`` —
     so results are cached across reactions and networks.  SymPy expressions are
     immutable, making the shared objects safe to reuse.
     """
@@ -160,12 +160,13 @@ class Network:
         reactant in reaction *i*.
     product_matrix : np.ndarray
         Integer stoichiometry matrix for products, same shape.
-    dEdt_chem : Basic
-        SymPy expression for the total chemical heating/cooling rate
-        (erg cm⁻³ s⁻¹), accumulated over all reactions.
-    dEdt_other : Basic
-        Additional heating/cooling rate from the ``heatingcoolingrate``
-        auxiliary function, if present.
+    thermodynamics : Thermodynamics
+        Heating/cooling terms: ``dEdt_chemical`` (accumulated over all
+        reactions) and ``dEdt_extra`` (from the ``heatingcoolingrate``
+        auxiliary function, if present), both in erg cm⁻³ s⁻¹.
+    symbols : NetworkSymbols
+        Canonical symbols, density expressions, introspection sets and symbol
+        standardization for this network.
     dRad_dt_extra : Basic
         Extra radiation moment source terms from ``@function`` definitions.
     radiation : Radiation | None
@@ -191,6 +192,7 @@ class Network:
         radiation_props: RadiationProps | None = None,
         dust_props: DustProps | None = None,
         use_proxy_photoreaction: bool = False,
+        eos_props: EosProps | None = None,
         _from_cli: bool = False,
         _metadata: dict[str, Any] = {},
     ):
@@ -248,6 +250,10 @@ class Network:
             using the proxy photo-reaction string (via
             :meth:`Reaction.normalized_proxy_reaction_str`) rather than the
             reaction's standard serialized form.  Default ``False``.
+        eos_props : EosProps | None, optional
+            Equation-of-state configuration used by
+            :attr:`Thermodynamics.eos`.  When ``None`` (default), an ideal gas
+            with the default adiabatic index (``EosProps("ideal")``) is used.
 
         Raises
         ------
@@ -285,21 +291,21 @@ class Network:
         self.mass_dict: dict[str, ElementProps] = {}
         self.species: Species = Species()
         self.reactions: Reactions = Reactions()
+        self.symbols: NetworkSymbols = NetworkSymbols(self)
         self.reactant_matrix: np.ndarray | None = None
         self.product_matrix: np.ndarray | None = None
-        self.dEdt_chem: Basic = Float(0.0)
-        self.dEdt_other: Basic = Float(0.0)
         self.dRad_dt_extra: Basic = Float(0.0)
         self.radiation: Radiation | None = (
             Radiation(self, radiation_props) if radiation_props is not None else None
+        )
+        self.eos_props: EosProps = (
+            eos_props if eos_props is not None else EosProps("ideal")
         )
         self._use_proxy_photoreaction: bool = use_proxy_photoreaction
         self.__photochemistry: None | Photochemistry = None
         self.dust: Dust | None = (
             Dust(self, dust_props) if dust_props is not None else None
         )
-        self.__element_sums: dict[str, Expr | None] = {}
-        self.__charge_reverse: dict[str, Specie] | None = None
         self.__tgas_clamp_cache: dict[tuple[float | None, float | None], Expr] = {}
 
         self.logger.info(f"Loading network from {self.spec.fname}")
@@ -313,7 +319,11 @@ class Network:
         else:
             self.__load_network_from_jaff_file(jaff_props)
 
-        self.__normalize_network_extras(expand_nuclei, loaded_from_jaff_file)
+        self.__normalize_network_extras(loaded_from_jaff_file)
+        self.thermodynamics: Thermodynamics = Thermodynamics(
+            self, jaff_props.get("dEdt_extra")
+        )
+        self.symbols.log_summary()
 
         self.check_sink_sources(errors)
         self.check_recombinations(errors)
@@ -341,9 +351,6 @@ class Network:
         """Parse the network file and build species, reactions, and auxiliary quantities."""
         specie_names = set()
         special_species: dict[str, Specie] = {}
-        free_symbols = set()
-        undef_funcs = set()
-        interp_funcs = set()
 
         n_photo = 0
         default_tcutoff: str = "clip"
@@ -463,14 +470,11 @@ class Network:
             if aux_delta_rad in aux_funcs:
                 deltaRad = aux_funcs[aux_delta_rad]["def"]
 
-            # deltae{si}: chemical energy change per reaction, accumulates into dEdt_chem
+            # deltae{si}: chemical energy change per reaction, accumulates into
+            # thermodynamics.dEdt_chemical
             deltaE: Basic = Float(0.0)
             if aux_delta_e in aux_funcs:
                 deltaE = aux_funcs[aux_delta_e]["def"]
-
-            for expr in [rate_expr, deltaE, deltaRad]:
-                free_symbols |= self.free_symbols(expr)
-                self.__detect_undefined_functions(expr, undef_funcs, interp_funcs)
 
             rea = Reaction(
                 reactants=rr,
@@ -491,11 +495,27 @@ class Network:
 
             self.reactions.add(rea)
 
+            # Per-reaction photoionization database: jaffgen.toml wins over jaff.toml.
+            pi_db = reaction_props.get(srxn, {}).get("pi_database")
+            if pi_db is None:
+                pi_db = reactions_config.get(srxn, {}).get("pi_database")
+            if pi_db is not None:
+                if rea.type != "photo":
+                    raise ParserError(
+                        f"pi_database is only valid for photo reactions: {srxn}"
+                    )
+                rea.pi_database = validate_pi_database(pi_db)
+
             if rea.type == "photo":
                 if self.__photochemistry is None:
                     self.__photochemistry = Photochemistry(self)
 
-                rea.xsecs_dict = self.__photochemistry.get_xsec(rea)
+                # A cross section is mandatory only when radiation sets the rate.
+                rea.xsecs_dict = self.__photochemistry.get_xsec(
+                    rea,
+                    required=self.radiation is not None
+                    and aux_chem_rate not in aux_funcs,
+                )
 
             if rea.type == "photo" and self.radiation is not None:
                 if aux_chem_rate not in aux_funcs:
@@ -511,28 +531,11 @@ class Network:
                         f"Please add a custom deltaRad function for reaction {si}"
                     )
 
-        if "heatingcoolingrate" in aux_funcs:
-            self.dEdt_other = aux_funcs["heatingcoolingrate"]["def"]
-            self.dEdt_other = self._standardize_symbols(
-                self.dEdt_other, self.spec.expand_nuclei
-            )
-            free_symbols |= self.free_symbols(self.dEdt_other)
-            self.__detect_undefined_functions(self.dEdt_other, undef_funcs, interp_funcs)
+        if self.__photochemistry is not None:
+            self.__photochemistry.log_fallback_summary()
 
-        self.logger.info(
-            f"Variables found: {', '.join(sorted(f'[cyan]{s}[/]' for s in free_symbols))}"
-        )
         self.logger.info(f"Loaded {self.reactions.count} reactions")
         self.logger.info(f"Loaded {n_photo} photo-chemistry reactions")
-
-        if interp_funcs:
-            self.logger.info(
-                f"Found the following interpolation functions: {', '.join([f'[cyan]{func}[/]' for func in interp_funcs])}"
-            )
-        if undef_funcs:
-            self.logger.warning(
-                f"Found undefined functions {', '.join([f'[red]{func}[/]' for func in undef_funcs])}"
-            )
 
     def __load_network_from_jaff_file(self, jaff_props: JaffProps):
         """Restore species, reactions, and radiation state from a ``.jaff`` file payload.
@@ -544,10 +547,6 @@ class Network:
             :func:`~jaff.io._io.from_jaff_file`.
         """
         self.species = jaff_props["species"]
-
-        stored_dEdt_other = jaff_props.get("dEdt_other")
-        if stored_dEdt_other is not None:
-            self.dEdt_other = stored_dEdt_other
 
         for i, reaction in enumerate(jaff_props["reactions"]):
             rea = Reaction(
@@ -564,7 +563,8 @@ class Network:
                 type=reaction.get("reaction_type", "unknown"),
                 errors=self.spec.errors,
             )
-            rea.custom_rad_rate = reaction["custom_rad_rate"]
+            rea.custom_rad_rate = bool(reaction.get("custom_rad_rate"))
+            rea.pi_database = reaction.get("pi_database")
             segments = reaction.get("rate_segments")
             if segments:
                 rea.rate_segments = RateSegments(
@@ -576,9 +576,10 @@ class Network:
             if rea.type == "photo":
                 if self.__photochemistry is None:
                     self.__photochemistry = Photochemistry(self)
-                rea.xsecs_dict = self.__photochemistry.get_xsec(rea) or reaction.get(
-                    "xsecs_dict"
-                )
+                rea.xsecs_dict = self.__photochemistry.get_xsec(
+                    rea,
+                    required=self.radiation is not None and not rea.custom_rad_rate,
+                ) or reaction.get("xsecs_dict")
 
             if rea.type == "photo" and self.radiation is not None:
                 if rea.custom_rad_rate:
@@ -587,21 +588,18 @@ class Network:
 
                 self.radiation.set_reaction_rate_coefficient(rea)
 
-    def __normalize_network_extras(
-        self, expand_nuclei: bool, loaded_from_jaff: bool = False
-    ):
+        if self.__photochemistry is not None:
+            self.__photochemistry.log_fallback_summary()
+
+    def __normalize_network_extras(self, loaded_from_jaff: bool = False):
         """Standardize convenience symbols in all rate and auxiliary expressions.
 
         Replaces shorthand symbols (``n_X``, ``n_X_nuc``, ``n_e``, ``ntot``, …) with
-        ``nden[i]`` references in every reaction rate, the chemical heating/cooling
-        sum :attr:`dEdt_chem`, and the extra radiation source term
-        :attr:`dRad_dt_extra`.
+        ``nden[i]`` references in every reaction rate and the extra radiation
+        source term :attr:`dRad_dt_extra`.
 
         Parameters
         ----------
-        expand_nuclei : bool
-            When ``True``, expand hydrogen-density shorthands to sums over
-            H-bearing species.
         loaded_from_jaff : bool, optional
             When ``True``, the network was restored from a ``.jaff`` file whose
             stored ``rate`` is already the final (piecewise-collapsed,
@@ -609,28 +607,24 @@ class Network:
             wrap the already-collapsed rate in a second piecewise, so the stored
             rate is used as-is instead.
         """
-        nden = self.ndens
+        nden = self.symbols.ndens
         for r in self.reactions:
             if loaded_from_jaff:
-                r.rate = self._standardize_symbols(r.rate, expand_nuclei)
+                r.rate = self.symbols.standardize(r.rate)
             elif r.type == "photo" and self.radiation is not None:
-                r.rate = self._standardize_symbols(r.rate, expand_nuclei)
+                r.rate = self.symbols.standardize(r.rate)
                 r.rate_segments[0].rate = r.rate
             else:
                 for seg in r.rate_segments:
-                    seg.rate = self._standardize_symbols(seg.rate, expand_nuclei)
+                    seg.rate = self.symbols.standardize(seg.rate)
                 r.rate = r.rate_segments.sort().evaluate_equivalent_rate(r)
 
             r.tmin, r.tmax = r.rate_segments[0].tmin, r.rate_segments[-1].tmax
-            dE_dt = r.dE * r.rate
             dRad_dt = r.dRad * r.rate
             for s in r.reactants.core:
-                dE_dt *= nden[self.species[s.name].index]
                 dRad_dt *= nden[self.species[s.name].index]
-            self.dEdt_chem += dE_dt
             self.dRad_dt_extra += dRad_dt
-        self.dEdt_chem = self._standardize_symbols(self.dEdt_chem, expand_nuclei)
-        self.dRad_dt_extra = self._standardize_symbols(self.dRad_dt_extra, expand_nuclei)
+        self.dRad_dt_extra = self.symbols.standardize(self.dRad_dt_extra)
 
     @staticmethod
     def __parse_rate(
@@ -673,7 +667,7 @@ class Network:
         elif rate in global_vars:
             rate_expr = symbols(rate)
         elif "photo" in rate.lower():
-            f: UndefinedFunction = Function("photorates")  # type: ignore
+            f = NetworkSymbols.photorates
             n_photo += 1
 
             match = re.match(r"(?i:photo)\((.*?)\)", rate)
@@ -723,30 +717,6 @@ class Network:
                 "jaffgen_object": self.spec._metadata["jaffgen_object"]
             }
 
-    @staticmethod
-    def __detect_undefined_functions(
-        expr: Expr | Basic, undef_funcs: set, interp_funcs: set
-    ) -> None:
-        """Scan *expr* for undefined function calls and categorise them.
-
-        Functions whose names contain ``"interp"`` are added to *interp_funcs*;
-        all others are added to *undef_funcs*.
-
-        Parameters
-        ----------
-        expr : Expr | Basic
-            SymPy expression to scan.
-        undef_funcs : set
-            Accumulator for unrecognised undefined function names.
-        interp_funcs : set
-            Accumulator for interpolation function names.
-        """
-        for f in expr.atoms(AppliedUndef):
-            if "interp" in f.func.__name__:
-                interp_funcs |= {f.func.__name__}
-                continue
-            undef_funcs |= {f.func.__name__}
-
     def to_jaff(self, filename: str | Path):
         """Serialise this network to a binary ``.jaff`` file.
 
@@ -757,25 +727,6 @@ class Network:
             not enforced.
         """
         to_jaff_file(filename, self)
-
-    @staticmethod
-    def free_symbols(expr: Basic) -> set[Basic]:
-        """Return the free symbols of *expr*, excluding ``nden`` matrix entries.
-
-        ``nden[i]`` references are excluded because they are internal index
-        variables, not user-visible physical symbols.
-
-        Parameters
-        ----------
-        expr : Basic
-            A SymPy expression.
-
-        Returns
-        -------
-        set[Basic]
-            Free symbols that do not involve ``"nden"``.
-        """
-        return {fs for fs in expr.free_symbols if "nden" not in str(fs)}
 
     def compare_reactions(self, other: Network, verbosity: int = 1):
         """Log reactions present in one network but not the other.
@@ -990,103 +941,6 @@ class Network:
 
         return report
 
-    @cached_property
-    def ndens(self) -> IndexedBase:
-        """Symbolic ``nden`` indexed base for species number densities.
-
-        A SymPy :class:`~sympy.tensor.indexed.IndexedBase` that provides
-        scalar-indexed access. Entry ``nden[i]`` is the number density of the
-        species with index ``i``.  Cached so every consumer shares one symbol.
-
-        Returns
-        -------
-        sympy.IndexedBase
-            The ``nden`` indexed base symbol.
-        """
-        return IndexedBase("nden", shape=(self.species.count,))
-
-    @cached_property
-    def ntot(self) -> Expr:
-        """Total number density ``Σ_i nden[i]`` over all species.
-
-        Returns
-        -------
-        sympy.Expr
-            Symbolic sum of every entry of :attr:`ndens`.
-        """
-        return sum(self.ndens[i] for i in range(self.species.count))
-
-    @cached_property
-    def rho(self) -> Expr:
-        """Mass density ``Σ_i m_i · nden[i]`` over all species.
-
-        Each species contributes its mass ``m_i`` times its number density.
-        Species with an unset mass (``mass is None``) contribute ``0``.
-
-        Returns
-        -------
-        sympy.Expr
-            Symbolic mass density.
-        """
-        return reduce(
-            lambda x, y: x + y,
-            [(s.mass or 0.0) * self.ndens[s.index] for s in self.species],
-        )
-
-    @cached_property
-    def n_hnuc(self) -> Expr:
-        """Total hydrogen-nuclei number density ``Σ_i n_H(i) · nden[i]``.
-
-        Each species contributes its hydrogen-atom count (``H2`` counts twice,
-        ``H+`` once, ...) times its number density, so the sum is the total H
-        nuclei density rather than a molecular count.  Equivalent to the
-        ``n_H_nuc`` grammar token; used directly by the dust radiation-moment
-        source terms (see :mod:`jaff.physics._equations`), cached so every
-        consumer shares one expression.
-
-        Returns
-        -------
-        sympy.Expr
-            Symbolic total hydrogen-nuclei number density.  ``Float(0.0)`` when
-            the network contains no H-bearing species.
-        """
-        nden = self.ndens
-        terms = [
-            count * nden[i]
-            for i, spec in enumerate(self.species)
-            if (count := spec.exploded.count("H")) > 0
-        ]
-
-        return sum(terms) if terms else Float(0.0)
-
-    def eos(
-        self, gamma: float = 1.6666666666667, specific: bool = True, norm: int = 0
-    ) -> Expr:
-        """Symbolic ideal-gas internal energy of the network.
-
-        Thin wrapper around :func:`jaff.physics.get_eos`, which builds the
-        expression from this network's :attr:`ntot` and :attr:`rho`.  Used by
-        the code generator to form the temperature column of the Jacobian via
-        the chain rule ``∂ẋ/∂e = (∂ẋ/∂T) / (∂e/∂T)``.
-
-        Parameters
-        ----------
-        gamma : float, optional
-            Adiabatic index.  Default ``5/3 ≈ 1.6̄`` (monoatomic ideal gas).
-        specific : bool, optional
-            When True (default), return a specific internal energy normalised
-            by *norm*.  When False, return volumetric internal energy (erg/cm³).
-        norm : int, optional
-            ``0`` (default) per unit mass (erg/g), ``1`` per particle.
-            Ignored when *specific* is False.
-
-        Returns
-        -------
-        sympy.Expr
-            Symbolic internal energy in CGS units.
-        """
-        return get_eos(self, gamma, specific, norm)
-
     def __generate_reaction_matrices(self) -> None:
         """Build integer stoichiometry matrices: shape (n_reactions × n_species)."""
         self.reactant_matrix = np.zeros(
@@ -1103,140 +957,6 @@ class Network:
             for product in reaction.products.core:
                 self.product_matrix[i, product.index] += 1
 
-    def _element_symbol(self, low: str) -> str | None:
-        """Canonical element symbol for a lower-cased token, or None."""
-        if not hasattr(self, "_element_lookup"):
-            self._element_lookup = {s.lower(): s for s in self.mass_dict}
-
-        return self._element_lookup.get(low)
-
-    def _standardize_symbols(self, expr: Basic, expand_nuclei: bool) -> Expr:
-        """Replace convenience symbols (``n_X``, ``n_X_nuc``, ``n_e``, ``ntot``, …)
-        with ``nden[i]`` references.
-
-        ``n_<species>`` resolves to that species' density; ``n_<element>_nuc``
-        resolves to the element-nucleus sum.  When ``expand_nuclei`` is False,
-        ``n_<element>_nuc`` stays a free symbol ``n<element>_nuc`` instead of
-        being expanded over all species.
-
-        Two further shorthands are resolved: ``rc_<int>`` is replaced by the
-        computed rate coefficient of the reaction whose file-side number
-        (``source_index``) is ``<int>``, looked up via
-        ``self.reactions.by_source_index`` (not the catalogue position, so it
-        stays dedup-safe and consistent with ``chemRateN``); and ``chi_pe`` is
-        replaced by the photoelectric field strength
-        ``self.dust.pe.chi`` (which requires both radiation and dust to be
-        enabled, otherwise a :class:`ParserError` is raised).
-        """
-        if expr == Float(0.0):
-            return Float(0.0)
-
-        nden = self.ndens
-        reps = {}
-
-        def get_element_sum(element):
-            if element not in self.__element_sums:
-                terms = []
-                for i, spec in enumerate(self.species):
-                    count = spec.exploded.count(element)
-                    if count > 0:
-                        terms.append(count * nden[i])
-                self.__element_sums[element] = sum(terms) if terms else None
-
-            return self.__element_sums[element]
-
-        for fs in expr.free_symbols:
-            name = str(fs)
-            low_name = name.lower()
-            repl = None
-
-            if low_name == "ntot":
-                repl = self.ntot
-
-            elif low_name == "chi_pe":
-                if self.radiation is None:
-                    raise ParserError(
-                        "In order to replace the 'chi_pe' symbol, radiation must be enabled"
-                    )
-
-                if self.dust is None:
-                    raise ParserError(
-                        "In order to replace the 'chi_pe' symbol, dust must be enabled"
-                    )
-
-                repl = self.dust.pe.chi
-
-            elif low_name.startswith("n_"):
-                core = name[2:]
-                core_low = core.lower()
-
-                if core_low.endswith("_nuc"):
-                    base = core_low[:-4]
-                    if base.endswith(("j", "k")):
-                        raise ParserError(
-                            f"'{name}' is invalid: a nucleus sum is per-element, "
-                            f"so a charged nucleus alias is meaningless"
-                        )
-                    element = self._element_symbol(base)
-                    if element is None:
-                        raise ParserError(
-                            f"'{name}' requests a nucleus sum for unknown element "
-                            f"'{base}'"
-                        )
-                    if expand_nuclei:
-                        total = get_element_sum(element)
-                        if total is None:
-                            raise ParserError(
-                                f"'{name}': no species in the network bears "
-                                f"element '{element}'"
-                            )
-                        repl = total
-                    else:
-                        repl = symbols(f"n{base}_nuc")
-
-                elif core == "e":
-                    if "e-" in self.species:
-                        repl = nden[self.species["e-"].index]
-
-                else:
-                    if self.__charge_reverse is None:
-                        # Assumes a collision-free network; raises ValueError on
-                        # case-distinct colliding species (e.g. CO / Co).
-                        self.__charge_reverse = self.species.charge_reverse_map()
-
-                    key = core.lower()
-                    sp = self.__charge_reverse.get(key)
-
-                    if sp is not None:
-                        repl = nden[sp.index]
-                    else:
-                        raise ParserError(
-                            f"Density symbol '{name}' does not match any "
-                            f"species in this network"
-                        )
-
-            elif low_name.startswith("rc_"):
-                try:
-                    num = int(name[3:])
-                except ValueError:
-                    self.logger.error(
-                        f"The 'rc_' keyword in {self.spec.funcfile} must be followed by an integer\n"
-                        f"denoting the reaction number. Found {name}"
-                    )
-                else:
-                    rxn = self.reactions.by_source_index(num)
-                    if rxn is None:
-                        raise ParserError(
-                            f"'{name}' references reaction {num}, which is not in the network"
-                        )
-
-                    repl = rxn.rate
-
-            if repl is not None:
-                reps[fs] = repl
-
-        return expr.xreplace(reps)
-
     def sfluxes(self) -> list[Expr]:
         """Return symbolic flux expressions for all reactions.
 
@@ -1248,7 +968,7 @@ class Network:
         list[Expr]
             One SymPy expression per reaction, in reaction-index order.
         """
-        return get_sfluxes(self.reactions, self.species, self.ndens)
+        return get_sfluxes(self.reactions, self.species, self.symbols.ndens)
 
     def sodes(self) -> list[Basic]:
         """Return symbolic ODE right-hand sides for all species.
@@ -1262,7 +982,7 @@ class Network:
         list[Basic]
             One SymPy expression per species, in species-index order.
         """
-        return get_sodes(self.reactions, self.species, self.ndens)
+        return get_sodes(self.reactions, self.species, self.symbols.ndens)
 
     def sradodes(self, order: int = 0) -> list[Expr]:
         """Return symbolic radiation moment ODE right-hand sides.
@@ -1330,7 +1050,7 @@ class Network:
             fname = Path(fname)
 
         if fname.suffix not in [".hdf5", ".hdf"]:
-            fname.with_suffix(".hdf5")
+            fname = fname.with_suffix(".hdf5")
 
         write_data_table(
             reactions=self.reactions,
@@ -1397,7 +1117,7 @@ class Network:
             fname = Path(fname)
 
         if fname.suffix != ".txt":
-            fname.with_suffix(".txt")
+            fname = fname.with_suffix(".txt")
 
         write_data_table(
             reactions=self.reactions,

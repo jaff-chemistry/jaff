@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from sympy import Symbol, lambdify
 
+from ..common._integrators import get_bounds
 from . import _units
 
 
@@ -127,3 +129,20 @@ def band_frame(
     df["mid"] = np.where((lo > 0) & np.isfinite(hi), geo, (lo + hi) / 2.0)
     df["width"] = hi - lo
     return df
+
+
+def _sampled_xsecs(xsecs: dict, n: int = 2000) -> dict:
+    """Tabulate a symbolic ``photodecay_expr`` (Verner) for plotting.
+
+    Returns *xsecs* unchanged when it already carries arrays; otherwise a copy
+    with ``photon_energy`` log-spaced over the expression's breakpoint range
+    and ``photodecay`` evaluated on it.
+    """
+    expr = xsecs.get("photodecay_expr")
+    if expr is None or xsecs.get("photon_energy") is not None:
+        return xsecs
+    E = Symbol("E")
+    pts = get_bounds(expr, E)
+    grid = np.geomspace(pts[0], pts[-1], n)
+    values = np.asarray(lambdify(E, expr, "numpy")(grid), dtype=float)
+    return {**xsecs, "photon_energy": grid, "photodecay": values}

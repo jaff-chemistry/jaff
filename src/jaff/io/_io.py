@@ -42,7 +42,6 @@ from sympy import (
     expand_log,
     lambdify,
     log,
-    symbols,
 )
 from sympy.core.function import AppliedUndef
 
@@ -186,11 +185,7 @@ def to_jaff_file(filename: str | Path, net: "Network"):
                     if isinstance(r.rate, Basic)
                     for s in r.rate.free_symbols
                 }
-                | (
-                    set(net.dEdt_other.free_symbols)
-                    if isinstance(net.dEdt_other, Basic)
-                    else set()
-                ),
+                | set(net.thermodynamics.dEdt_extra.volumetric.free_symbols),
                 key=lambda s: s.name,
             )
         ],
@@ -215,10 +210,11 @@ def to_jaff_file(filename: str | Path, net: "Network"):
                 "custom_rad_rate": r.custom_rad_rate,
                 "original_string": r.original_string,
                 "type": r.type,
+                "pi_database": r.pi_database,
             }
             for r in net.reactions
         ],
-        "dEdt_other": encode_maybe_sympy(net.dEdt_other),
+        "dEdt_extra": encode_maybe_sympy(net.thermodynamics.dEdt_extra.volumetric),
     }
 
     with gzip.open(filename, "wt", encoding="utf-8") as f:
@@ -453,6 +449,7 @@ def from_jaff_file(filename: str | Path, errors=False):
             rate_segments = [{"rate": rate, "tmin": tmin, "tmax": tmax}]
         original_string = rj.get("original_string") or ""
         reaction_type = rj.get("type") or "unknown"
+        pi_database = rj.get("pi_database")
         xsecs = rj.get("xsecs")
 
         # Cross-section arrays are JSON-serialized as plain lists; restore them
@@ -482,6 +479,7 @@ def from_jaff_file(filename: str | Path, errors=False):
                     "rate_segments": rate_segments,
                     "original_string": original_string,
                     "reaction_type": reaction_type,
+                    "pi_database": pi_database,
                     "xsecs_dict": xsecs,
                 },
             )
@@ -489,8 +487,8 @@ def from_jaff_file(filename: str | Path, errors=False):
 
     net_data["reactions"] = reactions_out
 
-    if "dEdt_other" in payload:
-        net_data["dEdt_other"] = decode_maybe_sympy(payload.get("dEdt_other"))
+    if "dEdt_extra" in payload:
+        net_data["dEdt_extra"] = decode_maybe_sympy(payload.get("dEdt_extra"))
 
     return net_data
 
@@ -602,10 +600,13 @@ def get_table(
 
     react_sympy = [r.get_sympy() for r in reactions]
 
-    trivial_subs = {symbols("av"): Float(0.0), symbols("crate"): Float(1.0)}
+    # Local import: a module-level one would cycle via jaff.core.network.
+    from ..core import NetworkSymbols
+
+    trivial_subs = {NetworkSymbols.av: Float(0.0), NetworkSymbols.crate: Float(1.0)}
     react_subst = [r.xreplace(trivial_subs) for r in react_sympy]
 
-    tgas = symbols("tgas")
+    tgas = NetworkSymbols.tgas
     react_func = []
     react_vectorizable = []
     branchy = (Piecewise, Heaviside, Min, Max)

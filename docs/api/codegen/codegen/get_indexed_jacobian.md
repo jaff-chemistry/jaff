@@ -6,14 +6,14 @@ tags:
 
 # get_indexed_jacobian
 
-`#!python get_indexed_jacobian(use_dedt=False, use_cse=True, cse_var="cse")`
+`#!python get_indexed_jacobian(thermal="none", use_cse=True, cse_var="cse")`
 
 Computes the analytical Jacobian matrix for the chemical network $\left(\dfrac{\partial f_i}{\partial y_j}\right)$ using symbolic differentiation and optional CSE.
 
 **Parameters**
 
-**use_dedt** : _bool, optional_
-: Include energy equation row. Default `False`.
+**thermal** : _str, optional_
+: Thermal row included: `"none"` (default), `"dedt"` or `"dtdt"`. Raises `ValueError` for any other value.
 
 **use_cse** : _bool, optional_
 : Apply common subexpression elimination. Default `True`.

@@ -73,6 +73,25 @@ independent of `T_cutoff`.
 
 ---
 
+## Photoionization database
+
+Photoionization reactions may override the global database:
+
+```toml
+[network.reactions."C._PHOTON__C+.e-"]
+pi_database = "verner"
+```
+
+The key is only valid on photoionization reactions (any other reaction raises a
+`ParserError`); a value from `jaffgen.toml` wins over `jaff.toml`.
+
+`jaff.toml` has no `[network.radiation]` table. The global choice lives in
+[`jaffgen.toml`](../code-generation/jaffgen-toml.md#networkradiation-section)
+(`[network.radiation] pi_database`) or, in Python, in
+`RadiationProps(bands=[...], pi_database="verner")`. The default is `norad`.
+
+---
+
 ## Resolution order
 
 The same settings can also appear in [`jaffgen.toml`](../code-generation/jaffgen-toml.md)

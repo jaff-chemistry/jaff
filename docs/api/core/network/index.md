@@ -12,7 +12,7 @@ The `Network` class is the most important class in JAFF. It reads a reaction net
 
 ## Constructor
 
-`#!python Network(fname, config=None, errors=False, label=None, funcfile=True, duplicate_policy=None, expand_nuclei=True, radiation_props=None, dust_props=None, use_proxy_photoreaction=False)`
+`#!python Network(fname, config=None, errors=False, label=None, funcfile=True, duplicate_policy=None, expand_nuclei=True, radiation_props=None, dust_props=None, use_proxy_photoreaction=False, eos_props=None)`
 
 **Parameters**
 
@@ -46,6 +46,9 @@ The `Network` class is the most important class in JAFF. It reads a reaction net
 **use_proxy_photoreaction** : _bool, optional_
 : Use proxy photo-reactions when computing cross-sections instead of bypassing them. Default `False`.
 
+**eos_props** : _EosProps or None, optional_
+: Equation-of-state configuration used by [`thermodynamics.eos`](thermodynamics.md). `None` (default) uses an ideal gas, `EosProps("ideal")` with `gamma = 1.6666666666667`.
+
 **Raises**
 
 _FileNotFoundError_
@@ -64,11 +67,7 @@ _FileNotFoundError_
 | `reactant_matrix` | `ndarray`            | Shape (n_reactions, n_species) stoichiometry matrix for reactants                                                   |
 | `product_matrix`  | `ndarray`            | Shape (n_reactions, n_species) stoichiometry matrix for products                                                    |
 | `mass_dict`       | `dict`               | Mapping from element symbol to mass properties, used for conservation checks                                        |
-| `dEdt_chem`       | `sympy.Basic`        | Total chemical heating/cooling rate (erg cm⁻³ s⁻¹), accumulated over all reactions                                  |
-| `dEdt_other`      | `sympy.Basic`        | Additional heating/cooling rate from the `heatingcoolingrate` auxiliary function, if present                        |
+| `thermodynamics`  | `Thermodynamics`     | Thermal equations: `eos`, `dEdt_chemical`, `dEdt_extra`, `dEdt_tot`, `dTdt_chemical`, `dTdt_extra`, `dTdt_tot`; see [thermodynamics](thermodynamics.md) |
 | `dRad_dt_extra`   | `sympy.Basic`        | Extra radiation moment source terms from `@function` definitions                                                    |
 | `radiation`       | `Radiation or None`  | Radiation field object; `None` when no radiation bands are specified                                                |
-| `ndens`           | `sympy.MatrixSymbol` | Symbolic `nden` column vector of species number densities, shape (n_species, 1); `nden[i]` is species `i`           |
-| `ntot`            | `sympy.Expr`         | Total number density, `Σ_i nden[i]` over all species                                                                |
-| `rho`             | `sympy.Expr`         | Mass density, `Σ_i m_i · nden[i]`; species with unset mass contribute `0`                                           |
-| `n_hnuc`          | `sympy.Expr`         | Total hydrogen-nuclei density, `Σ_i H-count(i) · nden[i]` (cached); equivalent to the `n_H_nuc` grammar token       |
+| `symbols`         | `NetworkSymbols`     | Canonical symbols, densities (`ndens`, `ntot`, `rho`, `n_hnuc`), introspection sets and `standardize`; see [symbols](symbols.md) |

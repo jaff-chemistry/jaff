@@ -121,7 +121,7 @@ net.reactions[0].rate       # photorates(1, 13.6, 1.0e+99)
 | `serialized_exploded` | `str`           | Canonical **atom-level** identity (isomer-insensitive)                    |
 | `type`                | `str`           | Reaction type concluded by the parser (verbatim): gas-phase `"photo"`/`"cosmic_ray"`/`"3_body"`/`"unknown"`, or a grain surface-mechanism type — see [Reaction types](#reaction-types) |
 | `custom_rad_rate`     | `bool`          | `True` when the radiation rate came from a `.jfunc`, not cross-sections   |
-| `xsecs_dict`          | `XsecsProps or None` | Photo cross-section data for the reaction's single decay channel: `photon_energy` (eV) plus `photo_absorption` and `photodecay` (cm²); else `None` |
+| `xsecs_dict`          | `XsecsProps or None` | Photo cross-section data for the reaction's single decay channel: `photon_energy` (eV) plus `photo_absorption` and `photodecay` (cm²), `database` (source used) and `photodecay_expr` (Verner symbolic σ(E), else `None`); else `None` |
 
 <!-- prettier-ignore -->
 !!! tip "`reactants` and `products` are `Species` Catalogues"
@@ -306,7 +306,8 @@ photo = net.reactions[0]
 
 photo.rate                              # photorates(1, 13.6, 1.0e+99)
 photo.xsecs_dict.keys()                 # units, _equations, photon_energy,
-                                        #   photo_absorption, photodecay
+                                        #   photo_absorption, photodecay,
+                                        #   database, photodecay_expr
 len(photo.xsecs_dict["photon_energy"])  # number of grid points (energies in eV)
 photo.xsecs_dict["photodecay"]          # cross sections in cm^2 (or None)
 ```
@@ -315,7 +316,9 @@ The `photon_energy` grid is in eV and each process array is in cm² (or `None`
 when that process has no data for the reaction). The `_equations` sub-dict
 carries the boolean `pa` photo-absorption flag and `decay_type`
 (`"ionization"` or `"dissociation"`), identifying the single decay channel held
-in `photodecay`.
+in `photodecay`. `xsecs_dict["database"]` names the source (`"norad"`,
+`"verner"` or `"leiden"`); for Verner, `photon_energy` / `photodecay` are
+`None` and the symbolic σ(E) (eV, cm²) is in `xsecs_dict["photodecay_expr"]`.
 
 The catalogue gives you dedicated ways to pick them out:
 

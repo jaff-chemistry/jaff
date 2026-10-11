@@ -79,19 +79,19 @@ def test_user_av_maps_to_av(make_network):
 def test_n_idx_h_is_atomic_H_density(make_network):
     # n(idx_H) -> n_H -> species H number density.
     net, rate = _rate(make_network, "n(idx_H)")
-    assert rate == net.ndens[net.species["H"].index]
+    assert rate == net.symbols.ndens[net.species["H"].index]
 
 
 def test_n_idx_h2_is_H2_density(make_network):
     net, rate = _rate(make_network, "n(idx_H2)", reactants="H2,C", product="CH2")
-    assert rate == net.ndens[net.species["H2"].index]
+    assert rate == net.symbols.ndens[net.species["H2"].index]
 
 
 def test_n_global_idx_h2_is_H2_density(make_network):
     net, rate = _rate(
         make_network, "n_global(idx_H2)", reactants="H2,C", product="CH2"
     )
-    assert rate == net.ndens[net.species["H2"].index]
+    assert rate == net.symbols.ndens[net.species["H2"].index]
 
 
 def test_get_hnuclei_is_H_nucleus_sum(make_network):
@@ -99,7 +99,7 @@ def test_get_hnuclei_is_H_nucleus_sum(make_network):
     net, rate = _rate(
         make_network, "get_hnuclei(n)", reactants="H,H", product="H2"
     )
-    nden = net.ndens
+    nden = net.symbols.ndens
     expected = nden[sympy.Idx(net.species["H"].index)] + 2 * nden[
         sympy.Idx(net.species["H2"].index)
     ]

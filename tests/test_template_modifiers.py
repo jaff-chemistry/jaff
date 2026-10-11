@@ -16,8 +16,6 @@ FALSE_SPELLINGS = ["False", "FALSE", "false"]
 
 # Boolean modifier -> REPEAT line and body exercising it.  All default to False.
 BOOL_CASES = {
-    "USE_DEDT": ("idx, expr IN jacobian", "f[$idx$, $idx$] = $expr$"),
-    "SPECIFIC_EINT": ("idx, rhs IN rhses", "f[$idx$] = $rhs$"),
     "RADIATION": ("idx, rhs IN rhses", "f[$idx$] = $rhs$"),
 }
 
@@ -52,17 +50,6 @@ def test_false_spellings_match_default(
 
 
 @pytest.mark.parametrize("spelling", TRUE_SPELLINGS)
-@pytest.mark.parametrize("modifier", ["USE_DEDT", "SPECIFIC_EINT"])
-def test_true_spellings_match_python_true(
-    dedt_net: Network, tmp_path: Path, modifier: str, spelling: str
-) -> None:
-    repeat, body = BOOL_CASES[modifier]
-    enabled = _render(dedt_net, tmp_path, repeat, body, f"{modifier} True")
-    assert enabled != _render(dedt_net, tmp_path, repeat, body, "")
-    assert _render(dedt_net, tmp_path, repeat, body, f"{modifier} {spelling}") == enabled
-
-
-@pytest.mark.parametrize("spelling", TRUE_SPELLINGS)
 def test_radiation_true_still_requires_radiation(
     dedt_net: Network, tmp_path: Path, spelling: str
 ) -> None:
@@ -81,19 +68,20 @@ def test_non_boolean_values_rejected(
         _render(dedt_net, tmp_path, repeat, body, f"{modifier} {value}")
 
 
-def test_norm_is_parsed_as_int(dedt_net: Network, tmp_path: Path) -> None:
-    repeat, body = BOOL_CASES["SPECIFIC_EINT"]
-    per_mass = _render(dedt_net, tmp_path, repeat, body, "SPECIFIC_EINT TRUE NORM 0")
-    per_particle = _render(dedt_net, tmp_path, repeat, body, "SPECIFIC_EINT TRUE NORM 1")
-    assert per_mass == _render(dedt_net, tmp_path, repeat, body, "SPECIFIC_EINT TRUE")
-    assert per_particle != per_mass
+def test_dedt_type_selects_energy_form(dedt_net: Network, tmp_path: Path) -> None:
+    repeat, body = "idx, rhs IN rhses", "f[$idx$] = $rhs$"
+    default = _render(dedt_net, tmp_path, repeat, body, "")
+    specific = _render(dedt_net, tmp_path, repeat, body, "DEDT_TYPE specific")
+    per_particle = _render(dedt_net, tmp_path, repeat, body, "DEDT_TYPE per_particle")
+    assert _render(dedt_net, tmp_path, repeat, body, "DEDT_TYPE volumetric") == default
+    assert specific != default
+    assert per_particle != specific
 
 
-@pytest.mark.parametrize("value", ["TRUE", "1.0", "one"])
-def test_non_integer_norm_rejected(dedt_net: Network, tmp_path: Path, value: str) -> None:
-    repeat, body = BOOL_CASES["SPECIFIC_EINT"]
-    with pytest.raises(ParserError, match="NORM expects an integer"):
-        _render(dedt_net, tmp_path, repeat, body, f"SPECIFIC_EINT TRUE NORM {value}")
+def test_unknown_dedt_type_rejected(dedt_net: Network, tmp_path: Path) -> None:
+    repeat, body = "idx, rhs IN rhses", "f[$idx$] = $rhs$"
+    with pytest.raises(ValueError, match="bogus"):
+        _render(dedt_net, tmp_path, repeat, body, "DEDT_TYPE bogus")
 
 
 @pytest.mark.parametrize("pos, expected", [("p", "idx_hep"), ("1", "idx_he1")])
@@ -108,3 +96,36 @@ def test_pos_neg_stay_strings(
         f"POS {pos} NEG m",
     )
     assert any(line.startswith(f"f_{expected} =") for line in lines), lines
+
+
+JAC = ("idx, expr IN jacobian", "f[$idx$, $idx$] = $expr$")
+RHS = ("idx, rhs IN rhses", "f[$idx$] = $rhs$")
+
+
+@pytest.mark.parametrize("repeat, body", [JAC, RHS])
+def test_thermal_modes_change_output(
+    dedt_net: Network, tmp_path: Path, repeat: str, body: str
+) -> None:
+    out = {
+        mode: _render(dedt_net, tmp_path, repeat, body, f"THERMAL {mode}")
+        for mode in ("none", "dedt", "dtdt")
+    }
+    assert out["none"] != out["dedt"] != out["dtdt"]
+
+
+def test_thermal_rejects_unknown_mode(dedt_net: Network, tmp_path: Path) -> None:
+    with pytest.raises(ParserError, match="THERMAL"):
+        _render(dedt_net, tmp_path, *JAC, "THERMAL bogus")
+
+
+def test_use_dedt_is_gone(dedt_net: Network, tmp_path: Path) -> None:
+    # Unknown modifiers surface as a KeyError from the modifier table lookup
+    with pytest.raises(KeyError, match="USE_DEDT"):
+        _render(dedt_net, tmp_path, *JAC, "USE_DEDT True")
+
+
+def test_dtdt_token_renders(dedt_net: Network, tmp_path: Path) -> None:
+    template = tmp_path / "t.py"
+    template.write_text("# $JAFF SUB dtdt\nx = $dtdt$\n# $JAFF END\n")
+    out = TemplateParser(dedt_net, template).parse_file()
+    assert "tgas" in out and "$dtdt$" not in out

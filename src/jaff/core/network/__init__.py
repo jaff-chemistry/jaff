@@ -1,5 +1,6 @@
 from ._args import NetworkArgs
 from ._spec import NetworkSpec
+from ._symbols import NetworkSymbols
 from .network import (
     IsomerReport,
     Network,
@@ -14,4 +15,7 @@ __all__ = [
     "NetworkSpec",
     "RecombinationReport",
     "SinkSourceReport",
+    "Network",
+    "NetworkSpec",
+    "NetworkSymbols",
 ]

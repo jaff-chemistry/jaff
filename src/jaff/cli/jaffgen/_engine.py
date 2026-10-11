@@ -45,7 +45,7 @@ from ...config import TEMPLATES_DIR, predefined_templates
 from ...drivers import Toml
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
-from ...physics import DustProps, RadiationProps
+from ...physics import DustProps, EosProps, RadiationProps
 from .._helper import DuplicatePolicy, funcfile_arg
 from ._structs import DEFAULT_OUTPUT, ResolvedPath, State
 
@@ -273,6 +273,8 @@ class JaffGen:
             # field used to scale chi_pe), so it lives in [network.radiation].
             if (v := nr.get("background_field")) is not None:
                 sn.background_field = v
+            if (v := nr.get("pi_database")) is not None:
+                sn.pi_database = v
 
         # The presence of a [network.dust] table enables the dust module
         # (photoelectric emission, ...); it is a network-level module, not a
@@ -289,6 +291,11 @@ class JaffGen:
                 sn.dust_pe_threshold_low = v
             if (v := dp.get("pe_threshold_high")) is not None:
                 sn.dust_pe_threshold_high = v
+
+        # [network.eos] keys depend on the EOS type, so the table is kept
+        # whole and validated by EosProps when the Network is built.
+        if (ep := np.get("eos")) is not None:
+            sn.eos = dict(ep)
 
     def set_template(self, template: str | None) -> None:
         """
@@ -660,6 +667,7 @@ class JaffGen:
                     mode=sn.rad_mode,
                     c=sn.c,
                     background_field=sn.background_field,
+                    pi_database=sn.pi_database,
                 )
                 if sn.rad_bands
                 else None
@@ -676,6 +684,7 @@ class JaffGen:
                 else None
             ),
             use_proxy_photoreaction=sn.use_proxy_photoreaction,
+            eos_props=EosProps(**sn.eos) if sn.eos is not None else None,
             _from_cli=sn._from_cli,
             _metadata=sn._metadata,
         )

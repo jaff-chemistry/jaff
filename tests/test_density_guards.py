@@ -14,7 +14,7 @@ def _net(tmp_path, body):
 
 def test_n_H_is_neutral_species_not_sum(tmp_path):
     net = _net(tmp_path, "@format:idx,R,R,P,rate\n1,H,H,H2,1\n2,H2,H,H,n_H\n")
-    assert net.reactions[1].rate == net.ndens[net.species["H"].index]
+    assert net.reactions[1].rate == net.symbols.ndens[net.species["H"].index]
 
 
 def test_zero_marker_no_longer_special_raises(tmp_path):

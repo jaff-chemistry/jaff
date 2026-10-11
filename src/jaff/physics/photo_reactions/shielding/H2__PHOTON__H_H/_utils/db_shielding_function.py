@@ -1,5 +1,5 @@
 import numpy as np
-from sympy import Expr, Max, Symbol, exp
+from sympy import Expr, Max, exp
 
 
 def shielding(
@@ -40,8 +40,11 @@ def shielding(
         Dimensionless self-shielding factor as a function of ``ncol_H2`` and
         ``vdisp``.
     """
-    N2 = Symbol("ncol_H2")
-    b = np.sqrt(2) * Symbol("vdisp")
+    # Local import: a module-level one would cycle via jaff.core.network.
+    from jaff.core import NetworkSymbols
+
+    N2 = NetworkSymbols.ncol("H2")
+    b = np.sqrt(2) * NetworkSymbols.vdisp
 
     x = Max(N2 / 5.0e14, min_ncol)
     b5 = Max(b / 1.0e5, min_vdisp)

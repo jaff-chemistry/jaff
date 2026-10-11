@@ -171,11 +171,16 @@ def test_network_json_roundtrip_preserves_nden_rates(tmp_path):
 
     names = set()
     for e in odes1 + odes2:
-        names |= {str(t) for t in (e.atoms(sympy.Symbol) | e.atoms(MatrixElement) | e.atoms(Indexed))}
+        names |= {
+            str(t)
+            for t in (e.atoms(sympy.Symbol) | e.atoms(MatrixElement) | e.atoms(Indexed))
+        }
     sample = {n: 2.0 + i for i, n in enumerate(sorted(names))}
 
     def evaluate(expr):
-        targets = expr.atoms(sympy.Symbol) | expr.atoms(MatrixElement) | expr.atoms(Indexed)
+        targets = (
+            expr.atoms(sympy.Symbol) | expr.atoms(MatrixElement) | expr.atoms(Indexed)
+        )
         return float(
             expr.xreplace({t: sympy.Float(sample[str(t)]) for t in targets}).evalf()
         )
@@ -185,11 +190,12 @@ def test_network_json_roundtrip_preserves_nden_rates(tmp_path):
         assert abs(v2 - v1) <= 1e-9 * max(1.0, abs(v1))
 
 
-def test_network_json_roundtrip_preserves_dEdt_other(tmp_path):
-    """The ``heatingcoolingrate`` term (``net.dEdt_other``) survives a round-trip.
+def test_network_json_roundtrip_preserves_dEdt_extra(tmp_path):
+    """The ``heatingcoolingrate`` term (``thermodynamics.dEdt_extra``) survives a
+    round-trip.
 
     Regression: ``to_jaff`` serialized only per-reaction energy terms, and the
-    ``.jaff`` load path left ``dEdt_other`` at its ``Float(0.0)`` default, so the
+    ``.jaff`` load path left the extra term at its ``Float(0.0)`` default, so the
     total thermal RHS silently lost the extra heating/cooling contribution.
     """
     net_dir = tmp_path / "heatnet"
@@ -201,17 +207,17 @@ def test_network_json_roundtrip_preserves_dEdt_other(tmp_path):
     )
 
     net = Network(str(jet))
-    assert net.dEdt_other != sympy.Float(0.0)
+    extra = net.thermodynamics.dEdt_extra.volumetric
+    assert extra != sympy.Float(0.0)
 
     json_path = str(tmp_path / "heat.jaff")
     net.to_jaff(json_path)
     net2 = Network(json_path)
 
     # Total extra thermal RHS must match, not just per-reaction dE terms.
-    diff = sympy.simplify(net2.dEdt_other - net.dEdt_other)
-    assert diff == 0, (
-        f"dEdt_other lost on round-trip: {net.dEdt_other} -> {net2.dEdt_other}"
-    )
+    extra2 = net2.thermodynamics.dEdt_extra.volumetric
+    diff = sympy.simplify(extra2 - extra)
+    assert diff == 0, f"dEdt_extra lost on round-trip: {extra} -> {extra2}"
 
 
 # --------------------------------------------------------------------------- #

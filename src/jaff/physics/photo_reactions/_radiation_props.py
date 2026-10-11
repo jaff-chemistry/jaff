@@ -7,6 +7,25 @@ from ...errors import ParserError
 from ...io import JaffLogger
 from .. import constants
 
+#: Photoionization cross-section databases, in fallback order after the user's choice.
+PI_DATABASES: tuple[str, ...] = ("norad", "verner", "leiden")
+
+
+def validate_pi_database(value: object) -> str:
+    """Validate a photoionization database name and return it lower-cased.
+
+    Raises
+    ------
+    ParserError
+        If *value* is not a string naming one of :data:`PI_DATABASES`.
+    """
+    if not isinstance(value, str) or value.lower() not in PI_DATABASES:
+        raise ParserError(
+            f"Invalid pi_database {value!r}. Valid values are: {', '.join(PI_DATABASES)}"
+        )
+
+    return value.lower()
+
 
 class RadiationProps:
     """Radiation-field configuration passed to :class:`Network` / :class:`Radiation`.
@@ -36,6 +55,8 @@ class RadiationProps:
         Validated speed of light in cm/s, or a string to become a symbol.
     background_field : str
         Validated background-field name (lower-cased).
+    pi_database : str
+        Validated photoionization database name (lower-cased).
     """
 
     # Vaiid modes
@@ -61,6 +82,7 @@ class RadiationProps:
         mode: str = "nph",  # nph or u,
         c: float | str = constants.c.cgs.value,
         background_field: str = "draine",
+        pi_database: str = "norad",
     ):
         """Validate and store the radiation-field configuration.
 
@@ -84,6 +106,12 @@ class RadiationProps:
             Background radiation field (default ``"draine"``); one of
             ``("bb_4000", "bb_10000", "bb_20000", "draine", "habing",
             "mathis", "solar", "tw_hydra")`` (case-insensitive).
+        pi_database : str, optional
+            Photoionization cross-section database (default ``"norad"``); one of
+            ``("norad", "verner", "leiden")`` (case-insensitive).  Photo-
+            dissociation always uses Leiden.  See
+            :meth:`~jaff.physics.photo_reactions._photochemistry.Photochemistry.get_xsec`
+            for the fallback order.
 
         Raises
         ------
@@ -98,6 +126,7 @@ class RadiationProps:
         self.bands: list[float | Basic] = self._validate_bands(bands)
         self.c: float | str = self._validate_c(c)
         self.background_field: str = self._validate_field(background_field)
+        self.pi_database: str = validate_pi_database(pi_database)
 
     def _validate_c(self, c) -> float | str:
         if isinstance(c, (float, int, str)):

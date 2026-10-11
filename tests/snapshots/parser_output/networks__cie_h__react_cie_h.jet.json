@@ -12,7 +12,7 @@
     ],
     null,
     null,
-    "5.85e-11*sqrt(tgas)*exp(-157809.1/tgas)",
+    "5.85e-11*sqrt(tgas)*exp(-157809.1/tgas)/(1+sqrt(tgas/1e5))",
     "unknown"
   ],
   [
@@ -26,7 +26,7 @@
     ],
     null,
     null,
-    "2.6e-13*(tgas/1e4)**(-0.8)",
+    "8.40e-11/sqrt(tgas)*(tgas/1e3)**(-0.2)/(1+(tgas/1e6)**0.7)",
     "unknown"
   ]
 ]

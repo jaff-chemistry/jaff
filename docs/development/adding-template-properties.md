@@ -84,6 +84,7 @@ The callable can be any zero-argument function — a lambda, a bound method on `
 
 # Bind a method directly (Codegen example)
 "dedt":    {"func": cg.get_dedt},
+"dtdt":    {"func": cg.get_dtdt},
 
 # Conditional value
 "nbands":  {"func": lambda: self.net.radiation.nbands if self.net.radiation else 0},

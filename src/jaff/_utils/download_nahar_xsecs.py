@@ -332,24 +332,33 @@ def combine(
     xsec_Mb : numpy.ndarray
         ``sum_i g_i sigma_i(E) / sum_i g_i`` on that grid (zero below each
         component's threshold).
+
+    Some raw files repeat a photon energy with a different cross section
+    (e.g. ``fe21``); only the first occurrence in file order is kept.
     """
     if not blocks:
         return np.array([]), np.array([])
 
+    blocks = [(g, *_dedupe_first(e, x)) for g, e, x in blocks]
+
     if len(blocks) == 1:
         _, e, x = blocks[0]
-        order = np.argsort(e)
-        return e[order], x[order]
+        return e, x
 
     grid = np.unique(np.concatenate([e for _, e, _ in blocks]))
     num = np.zeros_like(grid)
     gtot = 0.0
     for g, e, x in blocks:
-        order = np.argsort(e)
         # left/right=0 so a component contributes nothing outside its range.
-        num += g * np.interp(grid, e[order], x[order], left=0.0, right=0.0)
+        num += g * np.interp(grid, e, x, left=0.0, right=0.0)
         gtot += g
     return grid, num / gtot
+
+
+def _dedupe_first(e: np.ndarray, x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Sort by energy, keeping the first-listed point of each repeated energy."""
+    e_unique, first = np.unique(e, return_index=True)
+    return e_unique, x[first]
 
 
 #: Element symbol -> atomic number, derived from ELEMENTS.
@@ -438,7 +447,9 @@ def parse_local(raw_dir: Path, outdir: Path, logger) -> int:
             )
             f.write("# E(eV)         xsec(cm2)\n")
             for ev, cm2 in zip(energy_ev, xsec_cm2):
-                f.write(f"{ev:.6E}  {cm2:.6E}\n")
+                # 10 significant figures: resonance points sit ~1e-6 Ry apart, so
+                # 7 figures (.6E) merged neighbouring energies after the eV conversion.
+                f.write(f"{ev:.9E}  {cm2:.6E}\n")
         written += 1
         logger.info(f"{ser}.dat  <- {raw_path.name} ({fmt}, {energy_ry.size} pts)")
 

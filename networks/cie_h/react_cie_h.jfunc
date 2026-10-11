@@ -1,0 +1,41 @@
+# Thermal energy change functions for the CIE hydrogen network.
+# @function deltaEN gives the change in gas thermal energy per occurrence of
+# reaction N (counting from 0), in erg; positive = heating, negative = cooling.
+# Per-event energies are the Cen (1992) cooling coefficients divided by the
+# corresponding Cen (1992) rate coefficients.
+
+################################################################
+# Global constants
+################################################################
+
+# Note -- all quantities in CGS units
+@var kB = 1.380649e-16             # Boltzmann's constant
+@var eV = 1.602177e-12             # 1 eV in erg
+@var E_ion_H = 13.6 * eV           # H ionization potential
+
+################################################################
+# Change in thermal energy per reaction
+################################################################
+
+@function deltaE0()
+    # Reaction 0: H + e- -> H+ + e- + e-
+    # Collisional ionization removes the ionization potential from the gas.
+    # Cen (1992): Lambda = 1.27e-21 T^0.5 exp(-157809.1/T) / (1 + T5^0.5)
+    # and k = 5.85e-11 T^0.5 exp(-157809.1/T) / (1 + T5^0.5), so
+    # Lambda / k = 2.17e-11 erg = 13.55 eV per ionization (~ the 13.6 eV
+    # H ionization potential; Cen's ratio is used to stay consistent).
+
+    @return -(1.27e-21 / 5.85e-11)
+
+@function deltaE1(tgas)
+    # Reaction 1: H+ + e- -> H
+    # tgas Gas temperature in K
+    # Radiative recombination emits a photon of energy 13.6 eV + KE(e-).
+    # In the optically thin limit the photon escapes. The 13.6 eV was
+    # already removed from the gas by ionization (deltaE0), so the thermal
+    # loss here is the kinetic energy of the captured electron.
+    # Cen (1992): Lambda = 8.70e-27 T^0.5 T3^-0.2 / (1 + T6^0.7)
+    # and alpha = 8.40e-11 T^-0.5 T3^-0.2 / (1 + T6^0.7), so
+    # Lambda / alpha = 1.036e-16 T erg ~ 0.75 kB T per recombination.
+
+    @return -(8.70e-27 / 8.40e-11) * tgas

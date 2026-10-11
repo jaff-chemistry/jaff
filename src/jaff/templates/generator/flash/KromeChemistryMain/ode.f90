@@ -13,8 +13,12 @@ module ode
         real*8::t
         real*8::n(nspecs+1), dn(nspecs+1)
         real*8::y(nspecs), tgas, flux(nreactions), crate, av
+        real*8::nden(0:nspecs-1)
 
         y = n(1:nspecs)
+        ! Zero-based view of the densities: generated thermal expressions index
+        ! species as nden(i) with i = 0 .. nspecs-1.
+        nden = y
         tgas = n(idx_tgas)
 
         ! Local aliases for the cosmic-ray rate and visual extinction.
@@ -30,13 +34,12 @@ module ode
         dn($idx+1$) = $ode_expression$
         ! $JAFF END
 
-        ! Gas energy time-derivative (chemical heating/cooling). The
-        ! generated expression carries species number densities as
-        ! nden(i,1); map them onto the local y(i) vector.
-        ! $JAFF SUB dedt $[REPLACE nden\s*\(\s*(\d+)\s*,\s*1\s*\) y(\1)]$
-        dn(idx_tgas) = $dedt$
+        ! Gas-temperature time-derivative dT/dt, generated from the network's
+        ! EOS (heating/cooling plus the composition term from reactions that
+        ! change the particle number). Densities appear as nden(i) (zero-based).
+        ! $JAFF SUB dtdt
+        dn(idx_tgas) = $dtdt$
         ! $JAFF END
-        dn(idx_tgas) = dn(idx_tgas) / (1.5d0 * sum(y) * 1.380649d-16)
 
     end subroutine fex
 

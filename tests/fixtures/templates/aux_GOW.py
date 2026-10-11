@@ -8,6 +8,12 @@ def aux_functions():
     # $JAFF GET aux_func FOR kcr_h_fac
     out["kcr_h_fac"] = $aux_func$
     # $JAFF END
+    # $JAFF GET aux_func FOR qcr_h
+    out["qcr_h"] = $aux_func$
+    # $JAFF END
+    # $JAFF GET aux_func FOR qcr_h2
+    out["qcr_h2"] = $aux_func$
+    # $JAFF END
     # $JAFF GET aux_func FOR qcr
     out["qcr"] = $aux_func$
     # $JAFF END

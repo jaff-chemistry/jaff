@@ -87,7 +87,8 @@ content with $var1$, $var2$ tokens
 | `filename` | `str`  | Template file name                         |
 | `filepath` | `Path` | Full template file path                    |
 | `e_idx`    | `int`  | Index of the electron species              |
-| `dedt`     | `str`  | Language-specific internal-energy equation |
+| `dedt`     | `str`  | Language-specific total `dE/dt` expression (see `DEDT_TYPE`) |
+| `dtdt`     | `str`  | Language-specific total `dT/dt` expression |
 
 Integer tokens accept inline arithmetic with `+`, `-`, `*`, `/`:
 
@@ -231,7 +232,8 @@ Modifiers go inside `$[...]$` at the end of the command line.
 | Modifier    | Values       | Description                                     | Supported           |
 | ----------- | ------------ | ----------------------------------------------- | ------------------- |
 | `SORT`      | `TRUE/FALSE` | Sort items before expansion                     | All                 |
-| `USE_DEDT`  | `TRUE/FALSE` | Include the internal-energy row in the Jacobian | `jacobian`          |
+| `THERMAL`   | `none/dedt/dtdt` | Thermal ODE row: none, `dE/dt` or `dT/dt` (default `dedt` for `rhses`, `none` for `jacobian`) | `rhses`, `jacobian` |
+| `DEDT_TYPE` | `volumetric/specific/per_particle/molar` | Internal-energy form used when `THERMAL dedt` (default `volumetric`) | `rhses`, `jacobian` |
 | `RADIATION` | `TRUE/FALSE` | Include radiation ODE / Jacobian terms          | `rhses`, `jacobian` |
 | `REPLACE`   | `pat repl`   | Regex replacement on the output                 | All                 |
 | `POS`       | `str`        | `+` replacement string for normalized sign      | `species_with_normalized_sign` |
@@ -248,10 +250,10 @@ state.rates[$idx$] = $rate$;
 ```
 
 Modifiers chain. A realistic Jacobian directive remaps several array accessors
-and switches on radiation and the energy row at once:
+and switches on radiation and the thermal (`dE/dt`) row at once:
 
 ```cpp
-// $JAFF REPEAT idx, expr, cse IN jacobian $[REPLACE nden\[\s*(\d+)\s*\] state.xn[\1] REPLACE radeden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE photden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE rflux\[\s*(\d+)\s*\] state.rn[2*\1+1] RADIATION True USE_DEDT True]$
+// $JAFF REPEAT idx, expr, cse IN jacobian $[REPLACE nden\[\s*(\d+)\s*\] state.xn[\1] REPLACE radeden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE photden\[\s*(\d+)\s*\] state.rn[2*\1] REPLACE rflux\[\s*(\d+)\s*\] state.rn[2*\1+1] RADIATION True THERMAL dedt]$
 ```
 
 `POS` and `NEG` set the strings substituted for the `+` and `-` charge markers when

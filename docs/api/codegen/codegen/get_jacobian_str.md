@@ -6,14 +6,14 @@ tags:
 
 # get_jacobian_str
 
-`#!python get_jacobian_str(use_dedt=False, idx_offset=0, use_cse=True, cse_var="cse", jac_var="J", matrix_format="", var_prefix="", assignment_op="", line_end="")`
+`#!python get_jacobian_str(thermal="none", idx_offset=0, use_cse=True, cse_var="cse", jac_var="J", matrix_format="", var_prefix="", assignment_op="", line_end="")`
 
 Generates the complete Jacobian matrix code block. Result is cached after the first call.
 
 **Parameters**
 
-**use_dedt** : _bool, optional_
-: Include the energy equation row/column in the Jacobian. Default `False`.
+**thermal** : _str, optional_
+: Thermal row/column included in the Jacobian: `"none"` (default), `"dedt"` (total `dE/dt`, see [get_dedt](get_dedt.md)) or `"dtdt"` (total `dT/dt`, see [get_dtdt](get_dtdt.md)). Raises `ValueError` for any other value.
 
 **idx_offset** : _int, optional_
 : Base index for row and column subscripts. Default `0`. Negative values use the language default (`0` for C/C++/Python/Rust, `1` for Fortran/Julia/R).

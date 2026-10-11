@@ -12,8 +12,8 @@ This module builds SymPy symbolic expressions for:
   first-moment (energy/photon flux) equations for each frequency band, taking
   into account photoionisation/photodissociation sinks and any user-supplied
   radiation source/sink terms (``get_sradodes``).
-- **Equation of state** -- the ideal-gas specific internal energy used to
-  couple the gas temperature into the Jacobian (``get_eos``).
+
+The equation of state lives in :mod:`jaff.physics.thermodynamics.eos`.
 
 The symbolic expressions are later code-generated (via SymPy's code printers)
 into efficient numerical kernels.
@@ -21,13 +21,11 @@ into efficient numerical kernels.
 
 from __future__ import annotations
 
-from functools import cache
 from typing import TYPE_CHECKING
 
-from sympy import Basic, Expr, Float, Idx, IndexedBase, symbols
+from sympy import Basic, Expr, Float, Idx, IndexedBase
 
 from ..io._logger import jaff_progress
-from .constants import k_B
 
 if TYPE_CHECKING:
     from .. import Network, Reactions, Species
@@ -37,7 +35,7 @@ if TYPE_CHECKING:
 def get_sfluxes(
     reactions: "Reactions",
     species: Species,
-    nden: IndexedBase | None = None,
+    nden: IndexedBase,
 ) -> list[Expr]:
     """
     Build the symbolic reaction flux for every reaction in the network.
@@ -47,8 +45,7 @@ def get_sfluxes(
         flux_i = k_i * nden[idx_A] * nden[idx_B]
 
     The number densities are represented as indexed-base symbols ``nden`` that
-    support scalar indexing (``nden[i]`` for species *i*). When *nden* is None,
-    a default ``IndexedBase("nden")`` symbol is created.
+    support scalar indexing (``nden[i]`` for species *i*).
 
     Parameters
     ----------
@@ -60,9 +57,8 @@ def get_sfluxes(
     species : Species
         Collection of all species.  Used to look up the numeric index of each
         reactant via ``species[str(reactant)].index``.
-    nden : Expr, optional
-        Density symbol (typically ``IndexedBase("nden")`` or similar).
-        When None, a default ``IndexedBase("nden")`` is created.
+    nden : IndexedBase
+        The network's density base (``net.symbols.ndens``).
 
     Returns
     -------
@@ -76,11 +72,6 @@ def get_sfluxes(
     The flux is purely a *loss* term from the reactants' perspective; signs
     are applied in :func:`get_sodes`.
     """
-    from sympy import IndexedBase
-
-    if nden is None:
-        nden = IndexedBase("nden", shape=(species.count,))
-
     fluxes: list[Expr] = [Float(0.0) for _ in range(reactions.count)]
 
     for i, reaction in enumerate(reactions):
@@ -96,7 +87,7 @@ def get_sfluxes(
 def get_sodes(
     reactions: "Reactions",
     species: Species,
-    nden: IndexedBase | None = None,
+    nden: IndexedBase,
 ) -> list[Basic]:
     """
     Assemble the symbolic ODE right-hand sides for all species.
@@ -112,9 +103,8 @@ def get_sodes(
         Collection of all reactions in the network.
     species : Species
         Collection of all species, used to resolve array indices.
-    nden : Expr, optional
-        Density symbol (typically ``IndexedBase("nden")`` or similar).
-        When None, a default ``IndexedBase("nden")`` is created.
+    nden : IndexedBase
+        The network's density base (``net.symbols.ndens``).
 
     Returns
     -------
@@ -239,7 +229,7 @@ def get_sradodes(net: "Network", order: int = 0) -> list[Expr]:
         raise ValueError("Invalid order: Supported orders are 0, 1, 2, 3")
 
     rad_groups = net.radiation.groups
-    nden = net.ndens
+    nden = net.symbols.ndens
 
     rflux = IndexedBase("rflux", shape=(net.radiation.nbands,))
     # Mapping used to obtain the flux-moment equation from the density-moment
@@ -332,85 +322,23 @@ def handle_dust_reduction(
     f_reduction = net.dust.f_reduction
     if u_reduction not in (None, "none"):
         grate -= (
-            symbols("Zd")
+            net.symbols.zd
             * net.radiation.c
             * group.sym
-            * net.n_hnuc
+            * net.symbols.n_hnuc
             * net.dust.tabular.avg_cross_section_per_hnuc(
                 u_reduction, (group.lower, group.upper)
             )
         )
     if f_reduction not in (None, "none"):
         gflux -= (
-            symbols("Zd")
+            net.symbols.zd
             * net.radiation.c
             * rflux[group.index]
-            * net.n_hnuc
+            * net.symbols.n_hnuc
             * net.dust.tabular.avg_cross_section_per_hnuc(
                 f_reduction, (group.lower, group.upper)
             )
         )
 
     return grate, gflux
-
-
-@cache
-def get_eos(
-    net: "Network",
-    gamma: float = 1.6666666666667,
-    specific: bool = True,
-    norm: int = 0,
-) -> Expr:
-    """Return the symbolic ideal-gas internal energy.
-
-    Uses the ideal-gas equation of state.  The volumetric energy is::
-
-        E = n_tot · k_B · T_gas / (γ − 1)   [erg / cm³]
-
-    When *specific* is ``True`` it is normalised to match the evolved
-    energy of :meth:`Codegen.get_indexed_rhs`: by ``ρ`` for ``norm=0``
-    (erg / g) or by ``n_tot`` for ``norm=1`` (erg per particle).
-
-    where ``n_tot`` is the total number density (:attr:`Network.ntot`), ``ρ``
-    is the mass density (:attr:`Network.rho`), ``k_B`` is the Boltzmann
-    constant in CGS (erg K⁻¹) and ``tgas`` is a SymPy symbol for the gas
-    temperature in Kelvin.
-
-    This expression drives the temperature column of the Jacobian via the
-    chain rule ``∂ẋ/∂e = (∂ẋ/∂T) / (∂e/∂T)``.  The result is cached (via
-    :func:`functools.cache`) since it depends only on its arguments.
-
-    Parameters
-    ----------
-    net : Network
-        Network supplying the symbolic ``n_tot`` and ``ρ`` sums.
-    gamma : float, optional
-        Adiabatic index.  Default ``5/3 ≈ 1.6̄`` (monoatomic ideal gas).
-    specific : bool, optional
-        When True (default), return a specific internal energy normalised
-        by *norm*.  When False, return the volumetric energy (erg/cm³).
-    norm : int, optional
-        Normalisation when *specific* is True: ``0`` (default) per unit mass,
-        ``1`` per particle.  Ignored when *specific* is False.
-
-    Returns
-    -------
-    sympy.Expr
-        Symbolic internal energy in CGS units.
-
-    Raises
-    ------
-    ValueError
-        If *specific* is True and *norm* is not ``0`` or ``1``.
-    """
-    tgas = symbols("tgas")
-    e = net.ntot * k_B.cgs.value * tgas / (gamma - 1.0)
-
-    if not specific:
-        return e
-    if norm == 0:
-        return e / net.rho
-    if norm == 1:
-        return e / net.ntot
-
-    raise ValueError(f"Invalid EOS normalization {norm}; supported values are 0 and 1")

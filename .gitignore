@@ -31,9 +31,11 @@ share/python-wheels/
 MANIFEST
 
 # build folder not needed
+.superpowers/
+upload/
 builds/
 site/
-generated/
+generated*/
 __marimo__/
 
 # PyInstaller
@@ -84,9 +86,6 @@ dmypy.json
 # macOS
 .DS_Store
 
-# uv
-uv.lock
-
 # pooch-downloaded cross-section data (fetched at runtime, not committed)
 src/jaff/data/shielding/*.hdf5
 src/jaff/data/background_radiation/*.hdf5
@@ -94,4 +93,6 @@ src/jaff/data/shielding/*.csv
 src/jaff/data/xsecs/*.hdf5
 src/jaff/data/xsecs/*.csv
 src/jaff/data/dust/*.hdf5
+# compressed, hash-verified pooch downloads (installed copies live beside them)
+src/jaff/data/.downloads/
 registry.txt

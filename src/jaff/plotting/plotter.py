@@ -24,6 +24,7 @@ import numpy as np
 import seaborn.objects as so
 
 from . import _frames, _units, _xsec
+from ._frames import _sampled_xsecs
 from ._theme import (
     LOGO_PALETTE,
     apply_global_theme,
@@ -481,6 +482,7 @@ class Plotter:
         -------
         tuple[Figure, Axes | numpy.ndarray]
         """
+        xsecs = _sampled_xsecs(xsecs)
         energy = xsecs["photon_energy"]
         if energy is None:
             raise ValueError("xsecs has no 'photon_energy' data to plot.")

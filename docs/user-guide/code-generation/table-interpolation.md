@@ -83,7 +83,7 @@ with respect to — `_partial_0` is $\partial/\partial\text{arg1}$, `_partial_1`
 $\partial/\partial\text{arg1}$. The call keeps the original arguments. So alongside each interpolation function you implement, you must also provide its partials that appear in the
 Jacobian — typically the table's gradient in each direction.
 
-For the GOW network, generating the Jacobian with `USE_DEDT True` (so the
+For the GOW network, generating the Jacobian with `THERMAL dedt` (so the
 internal-energy row, where the cooling tables live, is included) emits e.g.:
 
 ```cpp

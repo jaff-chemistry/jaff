@@ -73,27 +73,40 @@
     # n_H2 Number density of H2 molecules in cm^-3
     @return 2.3 * (n_H2/n_H_nuc) + 1.5 * (n_H/n_H_nuc)
 
-@function qcr(n_H_nuc, n_e, n_H, n_H2)
-    # This is the mean energy in eV delivered to the gas per
-    # primary CR ionization. The model here follows the approach
-    # in DESPOTIC (Krumholz 2014), which involes a weighted average
-    # between the results of Dalgarno & McCray (1972) for atomic
-    # gas and Glassgold+ (2012) for molecular gas.
+@function qcr_H(n_H_nuc, n_e)
+    # Mean energy in eV delivered to the gas per primary CR ionization of
+    # an H atom (Dalgarno & McCray 1972, as in DESPOTIC). This is the atomic
+    # part of qcr, without the abundance weighting.
     # n_H_nuc Number density of H nuclei in cm^-3
     # n_e Number density of free electrons in cm^-3
-    # n_H Number densty of H0 atoms in cm^-3
-    # n_H2 Number density of H2 molecules in cm^-3
     xe = n_e / n_H_nuc
-    xH = n_H / n_H_nuc
-    xH2 = n_H2 / n_H_nuc
+    @return 6.5 + 26.4 * (xe / (xe + 0.07))**0.5
+
+@function qcr_H2(n_H_nuc)
+    # Mean energy in eV delivered to the gas per primary CR ionization of
+    # an H2 molecule (Glassgold+ 2012 fit from DESPOTIC). This is the
+    # molecular part of qcr, without the abundance weighting.
+    # n_H_nuc Number density of H nuclei in cm^-3
     logn = log(n_H_nuc, 10)
-    qcrH = 6.5 + 26.4 * (xe / (xe + 0.07))**0.5
-    qcrH2 = Piecewise((10, logn < 2), \
+    @return Piecewise((10, logn < 2), \
         (10 + 3*(logn-2)/2, (logn >=2) & (logn < 4)), \
         (13 + 4*(logn-4)/3, (logn >= 4) & (logn < 7)), \
         (17 + (logn-7)/3, (logn >= 7) & (logn < 10)), \
         (18, True))
-    @return xH * qcrH + 2.0 * xH2 * qcrH2
+
+@function qcr(n_H_nuc, n_e, n_H, n_H2)
+    # This is the mean energy in eV delivered to the gas per
+    # primary CR ionization, averaged per H nucleus. The model here
+    # follows the approach in DESPOTIC (Krumholz 2014), which involes a
+    # weighted average between the results of Dalgarno & McCray (1972)
+    # for atomic gas and Glassgold+ (2012) for molecular gas.
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_e Number density of free electrons in cm^-3
+    # n_H Number densty of H0 atoms in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+    xH = n_H / n_H_nuc
+    xH2 = n_H2 / n_H_nuc
+    @return xH * qcr_H(n_H_nuc, n_e) + 2.0 * xH2 * qcr_H2(n_H_nuc)
 
 @function ncrH2(tgas, n_H_nuc, n_H, n_H2, k_photo)
     # Critical density of excited H2
@@ -621,10 +634,12 @@
     # Note that qCR is energy change per primary ionization,
     # while our rate coefficient expressions also include secondaries,
     # so we need to divide those out to get the right energy
-    # deposition per primary.
+    # deposition per primary. The reaction rate already counts H atoms
+    # only, so the energy per event is the atomic qcr_H, not the
+    # abundance-weighted qcr (which would weight by x_H a second time).
 
     sec_per_prim = kcr_H_fac(n_H_nuc, n_H, n_H2)
-    @return qcr(n_H_nuc, n_e, n_H, n_H2) * eV / sec_per_prim
+    @return qcr_H(n_H_nuc, n_e) * eV / sec_per_prim
 
 @function deltaE1(n_H_nuc, n_H, n_H2)
     # Reaction 1: H2 + CR -> H2+ + e-
@@ -635,10 +650,12 @@
     # from Glassgold+ (2012). Note that this fit is energy
     # change per primary ionization, while our rate coefficient
     # expressions also include secondaries, so we need to divide
-    # those out to get the right energy deposition per primary.
+    # those out to get the right energy deposition per primary. The
+    # reaction rate already counts H2 molecules only, so the energy per
+    # event is the molecular qcr_H2, not the abundance-weighted qcr.
 
     sec_per_prim = kcr_H_fac(n_H_nuc, n_H, n_H2)
-    @return qcr(n_H_nuc, n_e, n_H, n_H2) * eV / sec_per_prim
+    @return qcr_H2(n_H_nuc) * eV / sec_per_prim
 
 @function deltaE2(n_H_nuc, n_H, n_H2)
     # Reaction 2: He + CR -> He+ + e-
@@ -1155,7 +1172,7 @@
     # provide in the form of either a numerical solver or a table
     # interpolation of the solution.
     psi_coll = PsiGD_coll_interp2d(n_H_nuc, tgas)
-    cool_rate_coll = psi_coll * d2g / d2g_solar
+    cool_rate_coll = psi_coll * d2g / d2g_solar * n_H_nuc
 
     # Get dust heating rate from CMB and ISRF
     heat_rate_CMB = sigma_d10 * 0.01 * c_a * TCMB**6
@@ -1165,7 +1182,7 @@
     Td_rad = ( (heat_rate_CMB + heat_rate_ISRF) / (0.01 * sigma_d10 * c_a) )**(1/6)
 
     # Get dust cooling rate assuming radiative heating sets dust temp
-    cool_rate_rad = alpha_GD * (d2g / d2g_solar) * n_H_nuc * sqrt(tgas) * (tgas - Td_rad)
+    cool_rate_rad = alpha_GD * (d2g / d2g_solar) * n_H_nuc**2 * sqrt(tgas) * (tgas - Td_rad)
 
     # @return min cooling rate
     @return Min(cool_rate_coll, cool_rate_rad)

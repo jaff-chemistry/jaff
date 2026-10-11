@@ -75,7 +75,7 @@ def rhs_volumetric():
 
 def rhs_specific_mass():
     out = {}
-    # $JAFF REPEAT idx, rhs, cse IN rhses $[RADIATION True SPECIFIC_EINT True NORM 0]$
+    # $JAFF REPEAT idx, rhs, cse IN rhses $[RADIATION True DEDT_TYPE specific]$
     cse$idx$ = $cse$
     out[$idx$] = $rhs$
     # $JAFF END
@@ -84,7 +84,7 @@ def rhs_specific_mass():
 
 def rhs_specific_number():
     out = {}
-    # $JAFF REPEAT idx, rhs, cse IN rhses $[RADIATION True SPECIFIC_EINT True NORM 1]$
+    # $JAFF REPEAT idx, rhs, cse IN rhses $[RADIATION True DEDT_TYPE per_particle]$
     cse$idx$ = $cse$
     out[$idx$] = $rhs$
     # $JAFF END
@@ -102,7 +102,7 @@ def jacobian_species():
 
 def jacobian_volumetric():
     out = {}
-    # $JAFF REPEAT idx, expr, cse IN jacobian $[RADIATION True USE_DEDT True]$
+    # $JAFF REPEAT idx, expr, cse IN jacobian $[RADIATION True THERMAL dedt]$
     cse$idx$ = $cse$
     out[($idx$, $idx$)] = $expr$
     # $JAFF END
@@ -111,7 +111,7 @@ def jacobian_volumetric():
 
 def jacobian_specific_mass():
     out = {}
-    # $JAFF REPEAT idx, expr, cse IN jacobian $[RADIATION True USE_DEDT True SPECIFIC_EINT True NORM 0]$
+    # $JAFF REPEAT idx, expr, cse IN jacobian $[RADIATION True THERMAL dedt DEDT_TYPE specific]$
     cse$idx$ = $cse$
     out[($idx$, $idx$)] = $expr$
     # $JAFF END
@@ -120,7 +120,7 @@ def jacobian_specific_mass():
 
 def jacobian_specific_number():
     out = {}
-    # $JAFF REPEAT idx, expr, cse IN jacobian $[RADIATION True USE_DEDT True SPECIFIC_EINT True NORM 1]$
+    # $JAFF REPEAT idx, expr, cse IN jacobian $[RADIATION True THERMAL dedt DEDT_TYPE per_particle]$
     cse$idx$ = $cse$
     out[($idx$, $idx$)] = $expr$
     # $JAFF END

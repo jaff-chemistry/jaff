@@ -7,19 +7,18 @@
 # Radiation columns are not checked (their state ordering is not exposed to the
 # rendered module); radiation rows are.
 
-import inspect
 from pathlib import Path
 from typing import Callable, Dict
 
 import numpy as np
 import pytest
 
-from jaff.physics import get_eos
 from jaff.physics.constants import k_B
+from jaff.physics import EosProps
 from tests.codegen_render import NETWORKS, draw_inputs, evaluate, free_names, load
 
 KB = k_B.cgs.value
-GAMMA = inspect.signature(get_eos).parameters["gamma"].default
+GAMMA = EosProps("ideal").gamma
 FD_STEP = 1e-6
 TOL = 1e-5
 

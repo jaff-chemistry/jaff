@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sympy import Basic, Expr, Piecewise, symbols
+from sympy import Basic, Expr, Piecewise
 
 from ....types import Catalogue
 from . import RateSegment
@@ -95,7 +95,10 @@ class RateSegments(Catalogue[RateSegment]):
         ValueError
             If adjacent segments have undefined bounds or overlapping ranges.
         """
-        tgas = symbols("tgas")
+        # Local import: a module-level one would cycle via jaff.core.network.
+        from ...network import NetworkSymbols
+
+        tgas = NetworkSymbols.tgas
         ls = self._list
         first = ls[0]
         last = ls[-1]

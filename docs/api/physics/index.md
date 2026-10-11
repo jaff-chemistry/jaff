@@ -41,8 +41,8 @@ Photochemistry.shielding(rxn, net)  # symbolic shielding factor (sympy)
 
 | Method                          | Returns               | Description                                                                                                              |
 | ------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `get_xsec(reaction)`            | `XsecsProps or None`  | Tabulated cross sections (Leiden / NORAD): `photon_energy` (eV) plus `photo_absorption` and `photodecay` (cm²)          |
-| `get_verner_xsec(reaction)`     | `sympy.Basic or None` | Analytic Verner (1996) σ(E) expression (symbol `E` in erg, σ in cm²)                                                     |
+| `get_xsec(reaction, required=False)` | `XsecsProps or None` | Tabulated (Leiden / NORAD: `photon_energy` in eV, `photo_absorption` / `photodecay` in cm²) or Verner symbolic (`photodecay_expr`) cross sections, per `pi_database`; carries `database` |
+| `get_verner_xsec(reaction)`     | `sympy.Basic or None` | Analytic Verner (1996) σ(E) expression (symbol `E` in eV, σ in cm²)                                                     |
 | `shielding(reaction, network)`  | `sympy.Expr`          | Dimensionless line-shielding factor; dispatches to the global/local shielding function named by the reaction metadata   |
 
 ## Unit systems

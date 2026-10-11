@@ -113,6 +113,23 @@ A per-reaction value wins over any global; within a scope, `jaffgen.toml`
 overrides `jaff.toml`. See
 [Network Configuration → Resolution order](../working-with-networks/jaff-toml.md#resolution-order).
 
+### Per-reaction `pi_database`
+
+Photoionization reactions may override the global database:
+
+```toml
+[network.reactions."C._PHOTON__C+.e-"]
+pi_database = "verner"
+```
+
+The key is only valid on photoionization reactions (any other reaction raises a
+`ParserError`); a value from `jaffgen.toml` wins over `jaff.toml`. The override
+is keyed by the reaction as written in the network (its `serialized` key), even
+when `use_proxy_photoreaction` maps it to a different database key. Per-reaction
+overrides from `jaffgen.toml` are not applied when the network is loaded from a
+`.jaff` file; the value stored in the `.jaff` is used.
+See [`pi_database`](#networkradiation-section) for the global choice.
+
 ---
 
 ## `[network.radiation]` section
@@ -129,18 +146,34 @@ mode   = "nph"            # "nph" = photon number density; "u" = energy density
 rsl              = 2.99792458e10    # speed of light (cm/s). Used to configure reduced speed of light for solvers
 background_field = "draine"         # reference field used to scale chi_pe
 use_proxy_photoreaction = false     # use proxy photo-reactions when computing cross-sections
+pi_database = "norad"               # photoionization xsecs: norad | verner | leiden
 ```
 
-| Key                       | Type             | Default                 | Description                                                                                                      |
-| ------------------------- | ---------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `bands`                   | `list`           | `[]`                    | Band boundaries in eV; omit to disable photochemistry                                                            |
-| `profile_index`           | `int`, `float` or `list` | `0`             | Spectral index for band integration; a list gives one index per band (length `len(bands) - 1`)                   |
-| `mode`                    | `str`            | `"nph"`                 | Radiation density variable type: `"nph"` (photon number density, `photden`) or `"u"` (energy density, `radeden`) |
-| `rsl`                     | `float` or `str` | `constants.c.cgs.value` | Speed of light override (maps to the `c` `RadiationProps` arg). Becomes a symbol if passed as a string           |
-| `background_field`        | `str`            | `"draine"`              | Reference radiation field (HDF5 group name) used to scale the photoelectric-band `chi_pe` symbol                 |
-| `use_proxy_photoreaction` | `bool`           | `false`                 | Whether to use proxy photo-reactions when computing cross-sections instead of bypassing them                     |
+| Key                       | Type                     | Default                 | Description                                                                                                      |
+| ------------------------- | ------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `bands`                   | `list`                   | `[]`                    | Band boundaries in eV; omit to disable photochemistry                                                            |
+| `profile_index`           | `int`, `float` or `list` | `0`                     | Spectral index for band integration; a list gives one index per band (length `len(bands) - 1`)                   |
+| `mode`                    | `str`                    | `"nph"`                 | Radiation density variable type: `"nph"` (photon number density, `photden`) or `"u"` (energy density, `radeden`) |
+| `rsl`                     | `float` or `str`         | `constants.c.cgs.value` | Speed of light override (maps to the `c` `RadiationProps` arg). Becomes a symbol if passed as a string           |
+| `background_field`        | `str`                    | `"draine"`              | Reference radiation field (HDF5 group name) used to scale the photoelectric-band `chi_pe` symbol                 |
+| `use_proxy_photoreaction` | `bool`                   | `false`                 | Whether to use proxy photo-reactions when computing cross-sections instead of bypassing them                     |
+| `pi_database`             | `str`                    | `"norad"`               | Photoionization cross-section database: `"norad"`, `"verner"` or `"leiden"` (case-insensitive)                   |
 
 `profile_index` is used to configure the weight factor of the photo-reaction cross-sections (Refer to the [Photochemistry](../designing-networks/photochemistry.md) section for more information). A scalar applies the same index to every band; a list such as `profile_index = [0, 1]` sets one index per band and must have exactly `len(bands) - 1` entries.
+
+`pi_database` selects the photoionization cross-section database:
+`norad` (default; NORAD/Nahar R-matrix ground-state cross-sections including
+resonances, with theoretical thresholds), `verner` (Verner et al. 1996 analytic
+fits, integrated symbolically), or `leiden` (Heays et al. 2017). Values are
+case-insensitive. It affects photoionization only; photodissociation and
+photoabsorption always use Leiden. When the chosen database lacks a reaction,
+jaff falls back to `norad`, then `verner`, then `leiden`; after the network
+finishes loading, a single summary warning lists every fallback
+(`requested -> used: key, ...`). If no database has the reaction, radiation is
+enabled and the reaction has no custom rate, loading fails with a `ParserError`;
+otherwise the reaction gets no cross-section and keeps its own rate. A single
+reaction can override this choice, see
+[per-reaction `pi_database`](#per-reaction-pi_database).
 
 `background_field` only matters when the [dust module](#networkdust-section) is
 enabled; it names the reference field that `chi_pe` is scaled against.
@@ -196,6 +229,29 @@ symbol (the local field scaled to the photoelectric band).
 The dust module needs radiation enabled — a `[network.radiation]` block with
 non-empty `bands` — because `chi_pe` is built from the radiation bands and the
 `background_field` reference; generation aborts otherwise.
+
+---
+
+## `[network.eos]` section
+
+Selects the equation of state used for the internal-energy equation and the
+Jacobian temperature column. The table maps to the
+`eos_props=EosProps(**table)` constructor argument; `type` picks the EOS and
+the remaining keys are that type's parameters. Without this table an ideal gas
+with `gamma = 1.6666666666667` is used.
+
+```toml
+[network.eos]
+type  = "ideal"
+gamma = 1.4
+```
+
+| `type`        | Keys                                                                         | Default                   |
+| ------------- | ---------------------------------------------------------------------------- | ------------------------- |
+| `ideal`       | `gamma` (float > 1)                                                          | `gamma = 1.6666666666667` |
+| `multi_gamma` | `default_gamma` (float > 1), `gamma_map` (table of species name → float > 1) | —                         |
+
+See [eos](../../api/core/network/thermodynamics.md#eosprops) for the full list of types.
 
 ---
 

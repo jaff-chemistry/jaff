@@ -7,7 +7,8 @@ from rich.filesize import decimal
 from rich.progress import TaskID
 
 from ..config import DATA_DIR
-from ..io._logger import jaff_progress
+from ..io._logger import JaffLogger, jaff_progress
+from ._install import file_sha256, install_file
 
 pooch.get_logger().setLevel(logging.WARNING)
 
@@ -79,6 +80,11 @@ class Pooch:
     The registry of downloadable files (names, hashes, URLs) is downloaded from
     ``registry.txt`` under ``base_url`` (fetched unverified, since its own hash
     is not known ahead of time).
+
+    Downloads (compressed, hash-verified against the registry) are cached in
+    ``<cache_path>/.downloads/``; :func:`~jaff.drivers._install.install_file`
+    then installs each one at ``<cache_path>/<filename>`` -- HDF5 files
+    uncompressed and contiguous for fast reads, other files as byte copies.
     """
 
     _registry: dict[str, "Pooch"] = {}
@@ -107,7 +113,8 @@ class Pooch:
         base_url : str
             Root URL the registered files are downloaded from.
         cache_path : Path
-            Local directory the fetched files are cached in.
+            Install root: files are installed at ``cache_path/<filename>``;
+            downloads are cached in ``cache_path/.downloads``.
 
         Notes
         -----
@@ -118,8 +125,11 @@ class Pooch:
         if getattr(self, "_initialized", False):
             return
 
+        self.logger = JaffLogger().get_logger()
+        self.install_root: Path = Path(cache_path)
+        download_dir = self.install_root / ".downloads"
         self.pooch: pooch.Pooch = pooch.create(
-            path=cache_path,
+            path=download_dir,
             base_url=base_url,
             registry=None,
         )
@@ -127,16 +137,21 @@ class Pooch:
             self._initialized = True
             return
 
-        cached_registry = Path(cache_path) / "registry.txt"
+        download_dir.mkdir(parents=True, exist_ok=True)
+        cached_registry = download_dir / "registry.txt"
+        # Registries cached by older versions live next to the installed files.
+        legacy_registry = self.install_root / "registry.txt"
+        if not cached_registry.exists() and legacy_registry.exists():
+            legacy_registry.replace(cached_registry)
 
-        (Path(cache_path) / "registry.txt.new").unlink(missing_ok=True)
+        (download_dir / "registry.txt.new").unlink(missing_ok=True)
         try:
             fresh_registry = Path(
                 pooch.retrieve(
                     url=f"{base_url}/registry.txt",
                     known_hash=None,
                     fname="registry.txt.new",
-                    path=cache_path,
+                    path=download_dir,
                 )
             )
             if fresh_registry.stat().st_size == 0:
@@ -149,17 +164,49 @@ class Pooch:
         self.pooch.load_registry(cached_registry)
         self._initialized = True
 
-    def fetch_file(self, filename: str) -> None:
-        """Download ``filename`` from the registry, rendering a progress bar.
+    def _registry_hash(self, filename: str) -> str:
+        """Registry sha256 for *filename*, without any ``algorithm:`` prefix."""
+        return self.pooch.registry[filename].split(":")[-1]
 
-        The file is fetched into the cache directory (skipped if already
-        present and hash-valid) and progress is shown on the shared JAFF Rich
-        bar via :class:`_JaffProgressBar`.
+    def _migrate(self, filename: str) -> None:
+        """Adopt a verified file left at the install path by older versions.
+
+        Older versions cached downloads directly at the install path.  If the
+        download cache lacks *filename* but the install path holds a file whose
+        hash matches the registry, move it into the cache instead of
+        downloading it again; :meth:`fetch_file` then installs a fresh copy.
+        """
+        cached = Path(self.pooch.abspath) / filename
+        installed = self.install_root / filename
+        if cached.exists() or not installed.exists():
+            return
+        if file_sha256(installed) != self._registry_hash(filename):
+            return
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        installed.replace(cached)
+
+    def fetch_file(self, filename: str) -> None:
+        """Download ``filename`` from the registry and install it locally.
+
+        The compressed download is cached (and hash-verified) under
+        ``.downloads/``, with progress shown on the shared JAFF Rich bar via
+        :class:`_JaffProgressBar`; it is then installed at the usual path by
+        :func:`~jaff.drivers._install.install_file` (HDF5 uncompressed).
+        Does nothing when ``JAFF_OFFLINE`` is set.
         """
         if os.environ.get("JAFF_OFFLINE"):
             return
+        self._migrate(filename)
+        target = self.install_root / filename
+        source_hash = self._registry_hash(filename)
+
+        def _install(fname: str, action: str, _pooch: pooch.Pooch) -> str:
+            install_file(Path(fname), target, source_hash, self.logger)
+            return fname
+
         self.pooch.fetch(
             filename,
+            processor=_install,
             progressbar=_JaffProgressBar(f"Downloading {filename}"),  # ty: ignore[invalid-argument-type]
         )
 

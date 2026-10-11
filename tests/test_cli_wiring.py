@@ -198,6 +198,31 @@ class TestRadiationProfileIndexWiring:
         assert self._from_config(tmp_path, "[2, 1.0]").rad_profile_index == [2, 1.0]
 
 
+class TestEosWiring:
+    """[network.eos] maps onto NetworkArgs.eos and from there to EosProps."""
+
+    def _from_config(self, tmp_path, block):
+        from jaff.cli.jaffgen._engine import JaffGen
+        from jaff.cli.jaffgen._structs import ResolvedPath, State
+        from jaff.drivers import Toml
+
+        cfg = tmp_path / "jaffgen.toml"
+        cfg.write_text(block)
+        jg = JaffGen.__new__(JaffGen)
+        jg.state = State()
+        jg.state.config_dir = ResolvedPath(tmp_path, tmp_path)
+        jg.state.config_raw = Toml(cfg)
+        jg.set_state_from_config()
+        return jg.state.network_args
+
+    def test_eos_table_is_stored(self, tmp_path):
+        args = self._from_config(tmp_path, '[network.eos]\ntype = "ideal"\ngamma = 1.4\n')
+        assert args.eos == {"type": "ideal", "gamma": 1.4}
+
+    def test_missing_eos_table_leaves_none(self, tmp_path):
+        assert self._from_config(tmp_path, '[network]\nlabel = "x"\n').eos is None
+
+
 class TestFuncfileWiring:
     """--funcfile false must survive set_network_options and disable aux loading."""
 

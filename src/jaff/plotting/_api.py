@@ -20,6 +20,7 @@ from sympy import Basic, lambdify
 
 from ..io import JaffLogger
 from . import _frames, _units
+from ._frames import _sampled_xsecs  # noqa: F401  (re-exported)
 from .plotter import Plotter
 
 # Valid photo cross-section process keys.
@@ -311,6 +312,7 @@ def plot_xsecs(
         if xsecs is None:
             logger.info(f"No cross sections available for: {r}")
             continue
+        xsecs = _sampled_xsecs(xsecs)
         energy = xsecs.get("photon_energy")
         if energy is None:
             continue

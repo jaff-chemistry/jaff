@@ -114,6 +114,7 @@ src/jaff/
 │   └── _parser.py              # ParserError hierarchy
 │
 ├── data/                       # Raw data assets
+│   ├── .downloads/             # Compressed, hash-verified pooch downloads + registry.txt (not bundled)
 │   ├── atom_mass.csv           # Element mass table (bundled)
 │   ├── xsecs/                  # Photo cross-section data (downloaded via drivers/pooch.py, not bundled)
 │   │   ├── leiden.hdf5         # Leiden PDR cross sections (one group per reaction)
@@ -132,8 +133,22 @@ src/jaff/
     ├── split_xsecs_photodecay.py       # Split source diss/ion datasets into the photodecay channel
     ├── generate_photo_xsecs_table.py   # Build photo_reaction_cross_sections table in jaff.db
     ├── generate_ion_xsecs_table.py     # Build verner_cross_sections table in jaff.db
+    ├── compress_hdf5.py                # Gzip local data files for the mirror + registry lines
     └── build_shielding_hdf5.py         # Collapse Leiden shielding tables into shielding/leiden.hdf5
 ```
+
+Downloaded data files are cached, compressed and hash-checked, under
+`src/jaff/data/.downloads/`. `drivers/pooch.py` then installs a copy at the path
+shown above: HDF5 files are rewritten uncompressed and contiguous so they load
+quickly (the Leiden cross sections take ≈365 MB), other files are copied. A file
+you place at an install path yourself is never overwritten; JAFF logs a warning
+instead. Set `JAFF_OFFLINE=1` to skip all downloads.
+
+To publish regenerated data, edit or rebuild the (uncompressed) files under
+`src/jaff/data/` locally, then write compressed copies plus their registry
+lines with
+`python -m jaff._utils.compress_hdf5 src/jaff/data/xsecs/leiden.hdf5 ... --outdir upload/ --registry upload/registry.txt`
+and upload the contents of `upload/` to the mirror.
 
 ## Architecture Diagram
 
@@ -227,6 +242,7 @@ SQLite lookup tables that JAFF queries at runtime.
 | `generate_photo_xsecs_table.py` | Build the `photo_reaction_cross_sections` table in `db/jaff.db` from the collapsed HDF5 files (`photo_absorption` flag, `decay_type` + `file.hdf5::<group>` pointers). |
 | `generate_ion_xsecs_table.py`   | Build the `verner_cross_sections` table in `db/jaff.db` from the Verner (1996) analytic-fit parameters in `data/xsecs/verner_1996.csv`.                                |
 | `build_shielding_hdf5.py`       | Collapse the per-species Leiden line-shielding tables into `data/shielding/leiden.hdf5` (one group per reaction).                                                      |
+| `compress_hdf5.py`              | Write gzip-compressed copies of local data files (HDF5 datasets ≥ `--min-size`; others byte-copied) under `--outdir` and print/merge their `registry.txt` lines for the mirror. |
 
 Run a script as a module from the project root, e.g.:
 

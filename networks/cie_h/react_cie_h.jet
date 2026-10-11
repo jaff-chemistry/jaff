@@ -3,9 +3,10 @@
 #   k_ion*n_H*n_e = k_rec*n_Hp*n_e  ->  x/(1-x) = k_ion(Tgas)/k_rec(Tgas)
 # n_e cancels, so equilibrium ionization fraction is a pure function of Tgas.
 # NOTE: set Tgas ~ 1e4-1e5 K, else exp(-157809/Tgas) ~ 0 and nothing ionizes.
+# Rates from Cen (1992), ApJS 78, 341, Table 1.
 
 # collisional ionization (Cen 1992)
-H + E -> H+ + E + E   []   5.85e-11*sqrt(Tgas)*exp(-157809.1/Tgas)
+H + E -> H+ + E + E   []   5.85e-11*sqrt(Tgas)*exp(-157809.1/Tgas)/(1+sqrt(Tgas/1e5))
 
-# recombination
-H+ + E -> H           []   2.6e-13*(Tgas/1e4)**(-0.8)
+# radiative recombination, case A (Cen 1992)
+H+ + E -> H           []   8.40e-11/sqrt(Tgas)*(Tgas/1e3)**(-0.2)/(1+(Tgas/1e6)**0.7)

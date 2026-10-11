@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sympy import Expr, Float, parse_expr
+from sympy import Expr, Float, Function
 
 from jaff.config import SHIELDING_DATA_DIR
 from jaff.drivers import HDF5
@@ -103,10 +103,11 @@ class Leiden(ShieldingFunction):
         )
 
         # Total factor = product of one interpolation call per shielding species.
+        from jaff.core import NetworkSymbols
+
         shielding: Expr = Float(1.0)
         for specie in sprops["shielded_by"]:
-            shielding *= parse_expr(
-                f"interp_{reaction.index}_shielding_{specie}(ncol_{species_map[specie]})"
-            )
+            interp = Function(f"interp_{reaction.index}_shielding_{specie}")
+            shielding *= interp(NetworkSymbols.ncol(species_map[specie]))
 
         return shielding

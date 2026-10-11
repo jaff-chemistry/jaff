@@ -23,7 +23,7 @@ def main(
     )
     jac = cg.get_jacobian_str(
         idx_offset=1,
-        use_dedt=True,
+        thermal="dedt",
         use_cse=True,
         var_prefix="const amrex::Real ",
         jac_var="jac",

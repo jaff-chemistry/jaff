@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 if TYPE_CHECKING:
-    from sympy import Basic
+    from sympy import Expr
 
     from ...core import Species
     from ...core._typing import ReactionProps
@@ -24,7 +24,7 @@ JaffProps = TypedDict(
         "label": NotRequired[str],
         "species": "Species",
         "reactions": NotRequired["list[ReactionProps]"],
-        "dEdt_other": NotRequired["Basic"],
+        "dEdt_extra": NotRequired["Expr"],
     },
 )
 """
@@ -41,8 +41,8 @@ species : Species
 reactions : list of ReactionProps, optional
     List of raw reaction property dicts (each suitable for passing to
     the :class:`~jaff.core.Reaction` constructor).
-dEdt_other : sympy.Basic, optional
-    The already-standardized extra heating/cooling term
-    (:attr:`~jaff.Network.dEdt_other`).  Absent in ``.jaff`` files written
-    before this field existed; the constructor then keeps its zero default.
+dEdt_extra : sympy.Basic, optional
+    The already-standardized volumetric extra heating/cooling term
+    (:attr:`~jaff.physics.thermodynamics.Thermodynamics.dEdt_extra`).  When
+    absent, the network rebuilds it from the ``heatingcoolingrate`` aux function.
 """

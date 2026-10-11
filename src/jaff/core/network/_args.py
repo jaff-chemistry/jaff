@@ -37,7 +37,9 @@ class NetworkArgs:
     dust_f_reduction: str | None = "transport"
     dust_pe_threshold_low: float = 6.0
     dust_pe_threshold_high: float = 13.6
+    eos: dict[str, Any] | None = None
     background_field: str = "draine"
     c: float = constants.c.cgs.value
+    pi_database: str = "norad"
     _from_cli: bool = True
     _metadata: dict[str, Any] = field(default_factory=dict)

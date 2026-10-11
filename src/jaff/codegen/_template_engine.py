@@ -821,7 +821,7 @@ class TemplateParser:
         if not self.cached_return:
             # Process special variables from expected_vars (starting from index 2)
             # Index 0 is "idx", index 1 is the main item variable
-            # Additional vars like "cse", "USE_DEDT" etc. may require special handling
+            # Additional vars like "cse", "THERMAL" etc. may require special handling
             for svar in expected_vars[2:]:
                 # Get kwargs generator for this special variable
                 # Passes the variable name and whether it's present in user's vars list
@@ -1341,8 +1341,10 @@ class TemplateParser:
                     "filename": {"func": lambda: self.file.name},
                     # Returns: Path - full template file path
                     "filepath": {"func": lambda: self.file},
-                    # Returns: str - language specific internal energy equation code
+                    # Returns: str - volumetric dE/dt in the target language
                     "dedt": {"func": cg.get_dedt},
+                    # Returns: str - dT/dt in the target language
+                    "dtdt": {"func": cg.get_dtdt},
                     # Returns: int - electron index in species array
                     "e_idx": {"func": self.net.species.e_idx},
                 },
@@ -1383,7 +1385,7 @@ class TemplateParser:
                         "vars": ["idx", "rhs", "cse"],
                     },
                     # Returns: IndexedReturn - Jacobian matrix elements with optional CSE
-                    # USE_DEDT TRUE/FALSE can be passed for this prop in templated syntax
+                    # THERMAL none/dedt/dtdt can be passed for this prop in templates
                     "jacobian": {
                         "func": lambda **kwargs: self.cg.get_indexed_jacobian(**kwargs),
                         "vars": ["idx", "expr", "cse"],
@@ -1704,6 +1706,21 @@ class TemplateParser:
             self.file,
         )
 
+    _THERMAL_MODES = ("none", "dedt", "dtdt")
+
+    def __thermal(self, var: str, value: str) -> str:
+        """Parse a ``THERMAL`` modifier value (``none``, ``dedt`` or ``dtdt``)."""
+        mode = value.lower()
+        if mode in self._THERMAL_MODES:
+            return mode
+
+        raise ParserError(
+            f"{var} expects one of {', '.join(self._THERMAL_MODES)}, got {value!r}",
+            self.line,
+            self.nline,
+            self.file,
+        )
+
     def __int(self, var: str, value: str) -> int:
         """Parse an integer modifier value."""
         try:
@@ -1722,7 +1739,7 @@ class TemplateParser:
         Get dictionary of special variable handlers for REPEAT commands.
 
         Returns a configuration dictionary mapping special variable names (such as
-        ``"cse"`` and ``"USE_DEDT"``) to their processing functions. Each handler
+        ``"cse"`` and ``"THERMAL"``) to their processing functions. Each handler
         has two components: ``"kwargs"`` (a callable to build kwargs for the codegen
         function call) and ``"func"`` (an optional callable to process and generate
         code for that variable).
@@ -1747,9 +1764,9 @@ class TemplateParser:
                     extras["cse"], line, repl
                 ),
             },
-            # USE_DEDT (specific internal energy derivative) handler
-            "USE_DEDT": {
-                "kwargs": lambda var, value: {"use_dedt": self.__bool(var, value)}
+            # THERMAL (none/dedt/dtdt thermal row selection) handler
+            "THERMAL": {
+                "kwargs": lambda var, value: {"thermal": self.__thermal(var, value)}
             },
             "RADIATION": {
                 "kwargs": lambda var, value: {"radiation": self.__bool(var, value)}
@@ -1757,10 +1774,7 @@ class TemplateParser:
             "RAD_ORDER": {
                 "kwargs": lambda var, value: {"rad_order": self.__int(var, value)}
             },
-            "SPECIFIC_EINT": {
-                "kwargs": lambda var, value: {"specific_eint": self.__bool(var, value)}
-            },
-            "NORM": {"kwargs": lambda var, value: {"norm": self.__int(var, value)}},
+            "DEDT_TYPE": {"kwargs": lambda var, value: {"energy": value}},
             "POS": {"kwargs": lambda var, value: {"pos": value}},
             "NEG": {"kwargs": lambda var, value: {"neg": value}},
         }

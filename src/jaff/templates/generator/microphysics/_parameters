@@ -4,13 +4,13 @@ eos_gamma_default       real          1.4
 
 # define the specie names, and their masses and gammas
 # $JAFF REPEAT idx, specie IN species
-species_$idx$_name          string        "$specie$"
+species_$idx+1$_name          string        "$specie$"
 # $JAFF END
 
 # $JAFF REPEAT idx, specie IN species
-species_$idx$_gamma         real          5./3.
+species_$idx+1$_gamma         real          5./3.
 # $JAFF END
 
 # $JAFF REPEAT idx, specie_mass IN specie_masses
-species_$idx$_mass          real          $specie_mass$
+species_$idx+1$_mass          real          $specie_mass$
 # $JAFF END

@@ -35,15 +35,21 @@ jobs:
                   uv pip install --system -e .
                   uv pip install --system nbconvert ipykernel matplotlib scipy
 
+            # pooch verifies downloads against the registry served next to the data,
+            # so key the cache on that registry: it changes exactly when the data do.
+            - name: Fetch data registry
+              run: |
+                  curl -fsSL https://www.mso.anu.edu.au/~anishs/registry.txt -o .ci-data-registry.txt
+
             - name: Cache downloaded xsec/shielding data
               uses: actions/cache@v4
               with:
                   path: |
                       src/jaff/data
                       !src/jaff/data/registry.txt
-                  key: jaff-data-v2-${{ hashFiles('src/jaff/registry.txt') }}
+                  key: jaff-data-v3-${{ hashFiles('.ci-data-registry.txt') }}
                   restore-keys: |
-                      jaff-data-v2-
+                      jaff-data-v3-
 
             - name: Find and run notebooks
               run: |
