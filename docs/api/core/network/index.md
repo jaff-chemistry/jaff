@@ -12,7 +12,7 @@ The `Network` class is the most important class in JAFF. It reads a reaction net
 
 ## Constructor
 
-`#!python Network(fname, config=None, errors=False, label=None, funcfile=True, duplicate_policy=None, expand_nuclei=True, radiation_props=None, dust_props=None, use_proxy_photoreaction=False, eos_props=None)`
+`#!python Network(fname, config=None, errors=False, label=None, funcfile=True, duplicate_policy=None, expand_nuclei=True, radiation_props=None, dust_props=None, use_proxy_photoreaction=True, eos_props=None)`
 
 **Parameters**
 
@@ -44,7 +44,7 @@ The `Network` class is the most important class in JAFF. It reads a reaction net
 : Dust-module configuration (Rv, radiation reductions, photoelectric band edges). `None` (default) disables the dust module.
 
 **use_proxy_photoreaction** : _bool, optional_
-: Use proxy photo-reactions when computing cross-sections instead of bypassing them. Default `False`.
+: Look up photo-reaction cross-sections under the proxy key from `Reaction.normalized_proxy_reaction_str()`, which strips a trailing `x` from species names, so `CHx`/`OHx` resolve to the `CH`/`OH` entries. A custom `.jfunc` rate still takes precedence over the cross-sections. Default `True`.
 
 **eos_props** : _EosProps or None, optional_
 : Equation-of-state configuration used by [`thermodynamics.eos`](thermodynamics.md). `None` (default) uses an ideal gas, `EosProps("ideal")` with `gamma = 1.6666666666667`.

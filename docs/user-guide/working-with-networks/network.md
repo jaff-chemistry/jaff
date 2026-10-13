@@ -59,7 +59,7 @@ Network(
     expand_nuclei=True,
     radiation_props=None,
     dust_props=None,
-    use_proxy_photoreaction=False,
+    use_proxy_photoreaction=True,
 )
 ```
 
@@ -74,7 +74,7 @@ Network(
 | `expand_nuclei`           | `bool`                   | `True`  | Expand `n_<element>_nuc` element-nucleus tokens into sums of `nden[i]` over the element-bearing species                            |
 | `radiation_props`         | `RadiationProps or None` | `None`  | Radiation-field configuration (bands, spectral index, mode, speed of light, background field); `None` disables radiation transport |
 | `dust_props`              | `DustProps or None`      | `None`  | Dust-module configuration (Rv, radiation reductions, photoelectric band edges); `None` disables the dust module                    |
-| `use_proxy_photoreaction` | `bool`                   | `False` | Use proxy photo-reactions when computing cross-sections instead of bypassing them                                                  |
+| `use_proxy_photoreaction` | `bool`                   | `True`  | Look up cross-sections under the proxy key (`CHx`→`CH`, `OHx`→`OH`); a custom `.jfunc` rate still wins                             |
 
 ### Examples
 

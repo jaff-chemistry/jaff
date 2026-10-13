@@ -145,7 +145,7 @@ profile_index  = 0                # spectral power-law index; or one per band, e
 mode   = "nph"            # "nph" = photon number density; "u" = energy density
 rsl              = 2.99792458e10    # speed of light (cm/s). Used to configure reduced speed of light for solvers
 background_field = "draine"         # reference field used to scale chi_pe
-use_proxy_photoreaction = false     # use proxy photo-reactions when computing cross-sections
+use_proxy_photoreaction = true      # look up xsecs under the proxy key (CHx -> CH, OHx -> OH)
 pi_database = "norad"               # photoionization xsecs: norad | verner | leiden
 ```
 
@@ -156,7 +156,7 @@ pi_database = "norad"               # photoionization xsecs: norad | verner | le
 | `mode`                    | `str`                    | `"nph"`                 | Radiation density variable type: `"nph"` (photon number density, `photden`) or `"u"` (energy density, `radeden`) |
 | `rsl`                     | `float` or `str`         | `constants.c.cgs.value` | Speed of light override (maps to the `c` `RadiationProps` arg). Becomes a symbol if passed as a string           |
 | `background_field`        | `str`                    | `"draine"`              | Reference radiation field (HDF5 group name) used to scale the photoelectric-band `chi_pe` symbol                 |
-| `use_proxy_photoreaction` | `bool`                   | `false`                 | Whether to use proxy photo-reactions when computing cross-sections instead of bypassing them                     |
+| `use_proxy_photoreaction` | `bool`                   | `true`                  | Look up cross-sections under the proxy key (`CHx`→`CH`, `OHx`→`OH`); custom `.jfunc` rate still wins             |
 | `pi_database`             | `str`                    | `"norad"`               | Photoionization cross-section database: `"norad"`, `"verner"` or `"leiden"` (case-insensitive)                   |
 
 `profile_index` is used to configure the weight factor of the photo-reaction cross-sections (Refer to the [Photochemistry](../designing-networks/photochemistry.md) section for more information). A scalar applies the same index to every band; a list such as `profile_index = [0, 1]` sets one index per band and must have exactly `len(bands) - 1` entries.

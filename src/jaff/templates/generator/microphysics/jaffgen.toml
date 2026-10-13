@@ -3,3 +3,4 @@ bands = [13.6, "inf"]
 power_law_index = 0
 energy_density = false
 rsl = "c_hat"
+use_proxy_photoreaction = true

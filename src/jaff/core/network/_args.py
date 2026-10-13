@@ -30,7 +30,7 @@ class NetworkArgs:
     rad_bands: list = field(default_factory=list)
     rad_profile_index: int | float | list[int | float] = 0
     rad_mode: str = "nph"
-    use_proxy_photoreaction: bool = False
+    use_proxy_photoreaction: bool = True
     dust: bool = False
     dust_rv: float = 3.1
     dust_u_reduction: str | None = "absorption"
