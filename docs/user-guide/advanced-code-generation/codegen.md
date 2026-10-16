@@ -6,13 +6,12 @@ tags:
 
 # Codegen
 
-Most of the time you generate code through the [normal workflow](../code-generation/index.md),
-and when you want a whole project in one call you reach for
-[`Builder`](builder.md). `Codegen` sits one level below both: it is the engine
-they are built on, and it hands you the **pieces** — the actual lines of code
-for rates, fluxes, ODEs, the Jacobian — as strings you drop into your own files.
+Most of the time you generate code through the [normal workflow](../code-generation/index.md).
+`Codegen` sits one level below it: it is the engine that workflow is built on,
+and it hands you the **pieces** — the actual lines of code for rates, fluxes,
+ODEs, the Jacobian — as strings you drop into your own files.
 
-Use it when writing `Builder`'s plugin or assembling a file your own way.
+Use it when assembling a file your own way.
 You give `Codegen` two things up front — a parsed
 [`Network`](../working-with-networks/network.md) and a **target language** — and
 from then on every `get_*_str()` call returns a ready-to-paste block in that
@@ -395,5 +394,6 @@ with open("output/network.cpp", "w") as f:
     f.write("}\n")
 ```
 
-If you find yourself writing the whole scaffold too, that's the cue to step up
-to [`Builder`](builder.md) — it does exactly this from a template.
+If you find yourself writing the whole scaffold too, that's the cue to write a
+[template](../code-generation/template-syntax.md) and run it through
+[`jaffgen`](../code-generation/jaffgen.md) instead.

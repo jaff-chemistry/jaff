@@ -110,10 +110,9 @@ built-in templates and input options.
 
 From here the [Code Generation](../user-guide/code-generation/index.md) guide
 shows how to write your own templates with the
-[directive language](../user-guide/code-generation/template-syntax.md). The
-[`Builder`](../user-guide/advanced-code-generation/builder.md) API does the same
-generation but is intended for manual code generation when the template syntax is
-insufficient.
+[directive language](../user-guide/code-generation/template-syntax.md). For
+manual code generation when the template syntax is insufficient, see the
+[`Codegen`](../user-guide/advanced-code-generation/codegen.md) API.
 
 ## Next steps
 

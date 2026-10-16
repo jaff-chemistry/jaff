@@ -21,7 +21,7 @@ This is a complete reference for all public APIs in JAFF.
 
 - :phosphor-brackets-angle:{ .sm .middle } **Codegen**
 
-    Source code generation from reaction networks: `Builder`, `Codegen`, `Preprocessor`.
+    Source code generation from reaction networks: `Codegen`, `Preprocessor`.
 
     [:octicons-arrow-right-24: jaff.codegen](codegen/index.md)
 
@@ -58,7 +58,6 @@ classDiagram
         Elements
     }
     class codegen {
-        Builder
         Codegen
         Preprocessor
     }

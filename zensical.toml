@@ -52,7 +52,6 @@ nav = [
     ] },
     { "Advanced Code Generation" = [
       "user-guide/advanced-code-generation/index.md",
-      "user-guide/advanced-code-generation/builder.md",
       "user-guide/advanced-code-generation/codegen.md"
     ] },
     { "Testing Networks" = [
@@ -180,10 +179,6 @@ nav = [
     ] },
     { "Codegen" = [
       "api/codegen/index.md",
-      { "codegen.Builder" = [
-        "api/codegen/builder/index.md",
-        "api/codegen/builder/build.md"
-      ] },
       { "codegen.Codegen" = [
         "api/codegen/codegen/index.md",
         "api/codegen/codegen/get_commons.md",
