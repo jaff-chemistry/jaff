@@ -60,6 +60,9 @@ dev = [
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.pytest.ini_options]
+addopts = "-rfEx"
+
 [tool.ruff]
 force-exclude = true
 exclude = [
@@ -121,7 +124,12 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-jaff = ["data/*.dat", "templates/**/*", "db/jaff.db", "codegen/templating/*.lark"]
+jaff = [
+  "data/*.dat",
+  "templates/**/*",
+  "db/jaff.db",
+  "codegen/templating/*.lark"
+]
 
 # astropy.constants injects its members dynamically at import, so static
 # checkers cannot resolve attributes like `astropy.constants.c`. Suppress the

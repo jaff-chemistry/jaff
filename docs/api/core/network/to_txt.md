@@ -6,7 +6,7 @@ tags:
 
 # to_txt
 
-`#!python to_txt(fname, label=None, T_min=None, T_max=None, nT=64, err_tol=0.01, rate_min=1e-30, rate_max=1e100, fast_log=False, include_all=False, verbose=False)`
+`#!python to_txt(fname, label=None, T_min=None, T_max=None, nT=64, err_tol=0.01, rate_min=1e-30, rate_max=1e100, fast_log=False, include_all=False, verbose=False, nT_max=16385)`
 
 Tabulates reaction rate coefficients on a temperature grid and writes to a quokka-compatible plain-text file. Parameters are identical to `to_hdf5`.
 
@@ -56,3 +56,6 @@ The text layout is:
 
 **verbose** : _bool, optional_
 : Print tabulation progress. Default `False`.
+
+**nT_max** : _int or None, optional_
+: Largest grid the adaptive refinement may build. When the next refinement would exceed it, refinement stops with a warning even if `err_tol` has not been reached. `None` removes the cap. Default `16385`.

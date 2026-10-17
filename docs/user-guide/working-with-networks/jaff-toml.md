@@ -68,8 +68,9 @@ over **multiple disjoint ranges** (merged into a piecewise rate — see
 [Temperature ranges and piecewise rates](reactions.md#temperature-ranges-and-piecewise-rates)),
 `T_cutoff` governs only the **outer** edges: below the first range and above the
 last, `clip` holds the boundary rate while `extrapolate` lets the end segments
-run on. Gaps *between* adjacent ranges are always linearly interpolated,
-independent of `T_cutoff`.
+run on. Gaps *between* adjacent ranges are always interpolated between the two
+boundary rates (linearly in $\log k$ when both are positive, linearly in $k$
+otherwise), independent of `T_cutoff`.
 
 ---
 

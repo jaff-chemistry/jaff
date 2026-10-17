@@ -11,8 +11,11 @@ Functions
     Return the title and sub-title strings for a given run mode.
 :func:`motd`
     Return the full MOTD string for display at startup.
+:func:`print_motd`
+    Print the MOTD, degrading characters the console cannot encode.
 """
 
+import sys
 from textwrap import dedent
 
 import numpy as np
@@ -136,3 +139,23 @@ def motd(mode: str = "default") -> str:
     title, sub_title = get_jaff_mode_dict(fword, mode)
 
     return f"{title}\n{sub_title}\n"
+
+
+def print_motd(mode: str = "default") -> None:
+    """
+    Print the JAFF banner to ``sys.stdout`` on any output encoding.
+
+    The banner's block-art characters are not representable in every encoding:
+    on Windows, a piped or redirected stdout uses the locale code page (e.g.
+    cp1252), where printing them raises :class:`UnicodeEncodeError`.  Characters
+    the stream cannot encode are replaced (``?``) instead.
+
+    Parameters
+    ----------
+    mode : {"default", "jaffgen", "jaffx"}, optional
+        Run mode passed to :func:`motd` (default ``"default"``).
+    """
+    text = motd(mode)
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+
+    print(text.encode(encoding, errors="replace").decode(encoding))

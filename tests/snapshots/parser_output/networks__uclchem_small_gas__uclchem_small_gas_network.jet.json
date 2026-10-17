@@ -7,7 +7,7 @@
     [
       "C_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -20,7 +20,7 @@
     [
       "CH_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -33,7 +33,7 @@
     [
       "CH2_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -46,7 +46,7 @@
     [
       "CH3_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -59,7 +59,7 @@
     [
       "CH4_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -72,7 +72,7 @@
     [
       "CH5_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -85,7 +85,7 @@
     [
       "CO_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -98,7 +98,7 @@
     [
       "H_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -111,7 +111,7 @@
     [
       "H2_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -124,7 +124,7 @@
     [
       "H2O_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -137,7 +137,7 @@
     [
       "H3_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -150,7 +150,7 @@
     [
       "H3O_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -163,7 +163,7 @@
     [
       "HCO_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -176,7 +176,7 @@
     [
       "He_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -189,7 +189,7 @@
     [
       "Mg_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -202,7 +202,7 @@
     [
       "O_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -215,7 +215,7 @@
     [
       "O2_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -228,7 +228,7 @@
     [
       "OH_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "bulk_swap"
@@ -812,7 +812,7 @@
     [
       "C"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -825,7 +825,7 @@
     [
       "CH"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -838,7 +838,7 @@
     [
       "CH2"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -851,7 +851,7 @@
     [
       "CH3"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -864,7 +864,7 @@
     [
       "CH4"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -877,7 +877,7 @@
     [
       "CH5"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -890,7 +890,7 @@
     [
       "CO"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -903,7 +903,7 @@
     [
       "H"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -916,7 +916,7 @@
     [
       "H2"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -929,7 +929,7 @@
     [
       "H2O"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -942,7 +942,7 @@
     [
       "H3"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -955,7 +955,7 @@
     [
       "H3O"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -968,7 +968,7 @@
     [
       "HCO"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -981,7 +981,7 @@
     [
       "He"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -994,7 +994,7 @@
     [
       "Mg"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -1007,7 +1007,7 @@
     [
       "O"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -1020,7 +1020,7 @@
     [
       "O2"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -1033,7 +1033,7 @@
     [
       "OH"
     ],
-    0.0,
+    null,
     10000.0,
     "8.24e-03 * sigmah * phi * crate",
     "desorption_cr"
@@ -1046,7 +1046,7 @@
     [
       "C"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1059,7 +1059,7 @@
     [
       "CH"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1072,7 +1072,7 @@
     [
       "CH2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1085,7 +1085,7 @@
     [
       "CH3"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1098,7 +1098,7 @@
     [
       "CH4"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1111,7 +1111,7 @@
     [
       "CH5"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1124,7 +1124,7 @@
     [
       "CO"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1137,7 +1137,7 @@
     [
       "H"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1150,7 +1150,7 @@
     [
       "H2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1163,7 +1163,7 @@
     [
       "H2O"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1176,7 +1176,7 @@
     [
       "H3"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1189,7 +1189,7 @@
     [
       "H3O"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1202,7 +1202,7 @@
     [
       "HCO"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1215,7 +1215,7 @@
     [
       "He"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1228,7 +1228,7 @@
     [
       "Mg"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1241,7 +1241,7 @@
     [
       "O"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1254,7 +1254,7 @@
     [
       "O2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1267,7 +1267,7 @@
     [
       "OH"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_h2"
@@ -1280,7 +1280,7 @@
     [
       "C"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1293,7 +1293,7 @@
     [
       "CH"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1306,7 +1306,7 @@
     [
       "CH2"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1319,7 +1319,7 @@
     [
       "CH3"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1332,7 +1332,7 @@
     [
       "CH4"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1345,7 +1345,7 @@
     [
       "CH5"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1358,7 +1358,7 @@
     [
       "CO"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1371,7 +1371,7 @@
     [
       "H"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1384,7 +1384,7 @@
     [
       "H2"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1397,7 +1397,7 @@
     [
       "H2O"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1410,7 +1410,7 @@
     [
       "H3"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1423,7 +1423,7 @@
     [
       "H3O"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1436,7 +1436,7 @@
     [
       "HCO"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1449,7 +1449,7 @@
     [
       "He"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1462,7 +1462,7 @@
     [
       "Mg"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1475,7 +1475,7 @@
     [
       "O"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1488,7 +1488,7 @@
     [
       "O2"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1501,7 +1501,7 @@
     [
       "OH"
     ],
-    0.0,
+    null,
     10000.0,
     "4.88e+03 * sigmah * uv_yield * crate * (1e0 + (chi/uvcreff)/crate * exp(-1.8 * av))",
     "desorption_uvcr"
@@ -1515,7 +1515,7 @@
     [
       "H2_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "eley_rideal"
@@ -1529,7 +1529,7 @@
     [
       "H2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "eley_rideal_desorption"
@@ -1542,7 +1542,7 @@
     [
       "C_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1555,7 +1555,7 @@
     [
       "C_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1568,7 +1568,7 @@
     [
       "CH_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1581,7 +1581,7 @@
     [
       "CH_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1594,7 +1594,7 @@
     [
       "CH2_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1607,7 +1607,7 @@
     [
       "CH2_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1620,7 +1620,7 @@
     [
       "CH3_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1633,7 +1633,7 @@
     [
       "CH3_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1646,7 +1646,7 @@
     [
       "CH4_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1659,7 +1659,7 @@
     [
       "CH4_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1672,7 +1672,7 @@
     [
       "CH5_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1685,7 +1685,7 @@
     [
       "CH5_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1698,7 +1698,7 @@
     [
       "CO_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1711,7 +1711,7 @@
     [
       "CO_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1722,7 +1722,7 @@
       "e-"
     ],
     [],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1735,7 +1735,7 @@
     [
       "H_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1748,7 +1748,7 @@
     [
       "H_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1761,7 +1761,7 @@
     [
       "H2_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1774,7 +1774,7 @@
     [
       "H2_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1787,7 +1787,7 @@
     [
       "H2O_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1800,7 +1800,7 @@
     [
       "H2O_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1813,7 +1813,7 @@
     [
       "H3_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1826,7 +1826,7 @@
     [
       "H3_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1839,7 +1839,7 @@
     [
       "H3O_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1852,7 +1852,7 @@
     [
       "H3O_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1865,7 +1865,7 @@
     [
       "HCO_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1878,7 +1878,7 @@
     [
       "HCO_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1891,7 +1891,7 @@
     [
       "He_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1904,7 +1904,7 @@
     [
       "He_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1917,7 +1917,7 @@
     [
       "Mg_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1930,7 +1930,7 @@
     [
       "Mg_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1943,7 +1943,7 @@
     [
       "O_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1956,7 +1956,7 @@
     [
       "O_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1969,7 +1969,7 @@
     [
       "O2_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1982,7 +1982,7 @@
     [
       "O2_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -1995,7 +1995,7 @@
     [
       "OH_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -2008,7 +2008,7 @@
     [
       "OH_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "(1e0 + 0.00e+00 * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
     "freeze"
@@ -2022,7 +2022,7 @@
     [
       "H2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "h2_formation"
@@ -2036,7 +2036,7 @@
     [
       "H2_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood"
@@ -2050,7 +2050,7 @@
     [
       "CH_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood"
@@ -2064,7 +2064,7 @@
     [
       "CH2_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood"
@@ -2078,7 +2078,7 @@
     [
       "CH3_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood"
@@ -2092,7 +2092,7 @@
     [
       "CH4_DUST"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood"
@@ -2106,7 +2106,7 @@
     [
       "H2_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood"
@@ -2120,7 +2120,7 @@
     [
       "CH_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood"
@@ -2134,7 +2134,7 @@
     [
       "CH2_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood"
@@ -2148,7 +2148,7 @@
     [
       "CH3_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood"
@@ -2162,7 +2162,7 @@
     [
       "CH4_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood"
@@ -2176,7 +2176,7 @@
     [
       "H2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood_desorption"
@@ -2190,7 +2190,7 @@
     [
       "CH"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood_desorption"
@@ -2204,7 +2204,7 @@
     [
       "CH2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood_desorption"
@@ -2218,7 +2218,7 @@
     [
       "CH3"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood_desorption"
@@ -2232,7 +2232,7 @@
     [
       "CH4"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood_desorption"
@@ -2246,7 +2246,7 @@
     [
       "H2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood_desorption"
@@ -2260,7 +2260,7 @@
     [
       "CH"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood_desorption"
@@ -2274,7 +2274,7 @@
     [
       "CH2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood_desorption"
@@ -2288,7 +2288,7 @@
     [
       "CH3"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood_desorption"
@@ -2302,7 +2302,7 @@
     [
       "CH4"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "langmuir_hinshelwood_desorption"
@@ -2648,7 +2648,7 @@
       "H",
       "H"
     ],
-    0.0,
+    null,
     10000.0,
     "5.88e-01 * chi * exp(-0.00 * av)",
     "photo"
@@ -2871,7 +2871,7 @@
     [
       "C_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -2884,7 +2884,7 @@
     [
       "CH_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -2897,7 +2897,7 @@
     [
       "CH2_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -2910,7 +2910,7 @@
     [
       "CH3_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -2923,7 +2923,7 @@
     [
       "CH4_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -2936,7 +2936,7 @@
     [
       "CH5_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -2949,7 +2949,7 @@
     [
       "CO_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -2962,7 +2962,7 @@
     [
       "H_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -2975,7 +2975,7 @@
     [
       "H2O_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -2988,7 +2988,7 @@
     [
       "H3_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -3001,7 +3001,7 @@
     [
       "H3O_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -3014,7 +3014,7 @@
     [
       "HCO_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -3027,7 +3027,7 @@
     [
       "He_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -3040,7 +3040,7 @@
     [
       "Mg_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -3053,7 +3053,7 @@
     [
       "O_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -3066,7 +3066,7 @@
     [
       "O2_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -3079,7 +3079,7 @@
     [
       "OH_BULK"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "surface_swap"
@@ -3092,7 +3092,7 @@
     [
       "C"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3105,7 +3105,7 @@
     [
       "CH"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3118,7 +3118,7 @@
     [
       "CH2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3131,7 +3131,7 @@
     [
       "CH3"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3144,7 +3144,7 @@
     [
       "CH4"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3157,7 +3157,7 @@
     [
       "CH5"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3170,7 +3170,7 @@
     [
       "CO"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3183,7 +3183,7 @@
     [
       "H"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3196,7 +3196,7 @@
     [
       "H2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3209,7 +3209,7 @@
     [
       "H2O"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3222,7 +3222,7 @@
     [
       "H3"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3235,7 +3235,7 @@
     [
       "H3O"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3248,7 +3248,7 @@
     [
       "HCO"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3261,7 +3261,7 @@
     [
       "He"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3274,7 +3274,7 @@
     [
       "Mg"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3287,7 +3287,7 @@
     [
       "O"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3300,7 +3300,7 @@
     [
       "O2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3313,7 +3313,7 @@
     [
       "OH"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3326,7 +3326,7 @@
     [
       "C"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3339,7 +3339,7 @@
     [
       "CH"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3352,7 +3352,7 @@
     [
       "CH2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3365,7 +3365,7 @@
     [
       "CH3"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3378,7 +3378,7 @@
     [
       "CH4"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3391,7 +3391,7 @@
     [
       "CH5"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3404,7 +3404,7 @@
     [
       "CO"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3417,7 +3417,7 @@
     [
       "H"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3430,7 +3430,7 @@
     [
       "H2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3443,7 +3443,7 @@
     [
       "H2O"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3456,7 +3456,7 @@
     [
       "H3"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3469,7 +3469,7 @@
     [
       "H3O"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3482,7 +3482,7 @@
     [
       "HCO"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3495,7 +3495,7 @@
     [
       "He"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3508,7 +3508,7 @@
     [
       "Mg"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3521,7 +3521,7 @@
     [
       "O"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3534,7 +3534,7 @@
     [
       "O2"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"
@@ -3547,7 +3547,7 @@
     [
       "OH"
     ],
-    0.0,
+    null,
     10000.0,
     "0.0",
     "desorption_thermal"

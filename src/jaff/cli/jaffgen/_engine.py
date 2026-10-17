@@ -39,7 +39,7 @@ import typer
 
 from ... import Network
 from ...codegen import TemplateParser
-from ...common import motd
+from ...common import print_motd
 from ...config import TEMPLATES_DIR, predefined_templates
 from ...drivers import Toml
 from ...errors import ParserError
@@ -122,7 +122,7 @@ class JaffGen:
         # back-reference: reaction._metadata["jaffgen"]["jaffgen_object"].
         self.jaffgen_config: dict[str, Any] = {}
 
-        print(motd("jaffgen"))
+        print_motd("jaffgen")
         self.parse_args()
         self.net: Network = self.build_network()
         self.handle_data_tables()

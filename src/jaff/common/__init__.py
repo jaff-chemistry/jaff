@@ -14,7 +14,7 @@ from ._helper import (
 )
 from ._integrators import arr_integrate, integrate, smart_integrate, sym_integrate
 from ._sympy_json import SCHEMA_VERSION, from_jsonable, to_jsonable
-from ._welcome import motd
+from ._welcome import motd, print_motd
 
 __all__ = [
     fast_log2,
@@ -38,4 +38,5 @@ __all__ = [
     FORTRAN_EXTENSIONS,
     HDF_EXTENSIONS,
     motd,
+    print_motd,
 ]

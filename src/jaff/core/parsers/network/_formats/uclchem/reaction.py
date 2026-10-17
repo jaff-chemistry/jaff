@@ -112,7 +112,9 @@ class UclchemReaction:
         tmax: float = float(local.group("tmax"))
         extrapolate: bool = local.group("extrapolate").strip().lower() == "true"
 
-        t_min: float = 3.0 if extrapolate else tmin
+        # UCLCHEM only switches a rate off below T_min, and gas temperature is
+        # never negative, so T_min <= 0 (makerates' placeholder 0.0) is unbounded.
+        t_min: float | None = 3.0 if extrapolate else (tmin if tmin > 0 else None)
         t_max: float = 1e6 if extrapolate else tmax
 
         rr: list[str] = [self._normalize_species(r) for r in reactants.split(",")]

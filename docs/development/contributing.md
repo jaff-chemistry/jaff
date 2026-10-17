@@ -135,13 +135,17 @@ GitHub will print a link to open the PR. In the PR description:
 ## 5. Pass CI
 
 Every pull request to `main` must pass all CI checks before it can be merged.
-Three workflows run automatically:
+Two workflows run automatically:
 
 | Workflow                 | What it does                                                                                   |
 | ------------------------ | ---------------------------------------------------------------------------------------------- |
 | **Tests**                | Runs `pytest` (with coverage) across Linux, macOS, and Windows on Python 3.11, 3.12, and 3.13. |
 | **Deploy Documentation** | Builds the docs with `zensical build` to catch broken builds and links.                        |
-| **Test Notebooks**       | Executes every notebook in `examples/` on Python 3.11, 3.12, and 3.13.                         |
+
+The **Tests** run includes the [example notebooks](../getting-started/examples.md):
+`tests/test_example_notebooks.py` executes each one headless and fails if it does
+not exit 0. Tests that build generated code (the Fortran and C++ solvers, and the
+notebooks that compile them) run only on Linux.
 
 Because tests run on three operating systems and three Python versions, keep
 code portable (use `pathlib` over hard-coded paths, avoid version-specific

@@ -151,7 +151,7 @@ from jaff import Network
 src/jaff/       # Main source code
 tests/          # Test files
   fixtures/     # Test data
-examples/       # Example notebooks
+examples/       # Example marimo notebooks (run by tests/test_example_notebooks.py)
 docs/           # Documentation
 ```
 

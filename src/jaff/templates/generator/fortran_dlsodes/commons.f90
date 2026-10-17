@@ -1,6 +1,9 @@
 module commons
     implicit none
-    $$JAFF REPEAT idx, specie_with_normalized_sign IN species_with_normalized_sign
+    $$JAFF REPEAT idx, specie_with_normalized_sign IN species_with_normalized_sign {
+        REPLACE { "idx_ek" -> "idx_e" }
+        SIGN { POS -> j  NEG -> k }
+    }
 
     integer,parameter::idx_$specie_with_normalized_sign$ = $idx+1$
 

@@ -5,6 +5,8 @@ from pathlib import Path
 
 from ......errors import ParserError
 
+KIDA_OPEN_TMAX = 9999.0
+
 
 class KidaReaction:
     """KIDA fixed-width reaction line handler."""
@@ -60,7 +62,9 @@ class KidaReaction:
         Extracts reactants, products, rate parameters (``ka``, ``kb``, ``kc``),
         temperature bounds, and formula index from the fixed-width KIDA column
         format.  Rate expressions are selected from a formula dictionary keyed
-        by the integer formula index (1-5).
+        by the integer formula index (1-5).  A ``Tmax`` equal to
+        :data:`KIDA_OPEN_TMAX` is returned unchanged;
+        :meth:`KidaParser.process` decides whether it is open.
 
         Raises
         ------
@@ -82,7 +86,6 @@ class KidaReaction:
         itype: int = int(local.group("itype"))
 
         t_min = tmin if tmin > 0 else None
-        t_max = tmax if tmax < 9999.0 else None
 
         rr = [r.strip() for r in reactants.split() if r != "+"]
         pp = [p.strip() for p in products.split() if p != "+"]
@@ -114,7 +117,7 @@ class KidaReaction:
             "r": rr,
             "p": pp,
             "tmin": t_min,
-            "tmax": t_max,
+            "tmax": tmax,
             "rate": rate,
             "type": rtype,
             "string": line.strip(),

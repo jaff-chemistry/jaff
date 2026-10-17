@@ -278,16 +278,29 @@ temperature span — JAFF keeps each range as a `RateSegment` and merges them in
 a single **piecewise** rate expression on `net.reactions[i].rate`:
 
 - each range contributes its own rate over that range;
-- the gap between two adjacent ranges is bridged by **linear interpolation** of
-  the two bounding rates;
+- the gap between two adjacent ranges is bridged by interpolating between the
+  two boundary rates: **linearly in $\log k$** (geometrically) when both are
+  positive, so rates spanning several decades stay smooth, and linearly in $k$
+  otherwise (e.g. a zero, negative, or symbolic boundary rate);
 - behaviour past the outermost bounds follows the reaction's
   [`T_cutoff`](jaff-toml.md#temperature-cutoffs) (`clip` holds the boundary
   value; `extrapolate` lets the end segments run on).
 
 The individual pieces live on `rxn.rate_segments`; `rxn.tmin` / `rxn.tmax` span
-the full merged range. Two rows for the *same* reaction, same `type`, over the
-*same or overlapping* range is a genuine conflict and raises a `ParserError` —
-deduplicate the source network.
+the full merged range. A bound of `None` means the range is open on that side
+(each format parser maps its "no limit" convention to `None`; see
+[Network Formats](../designing-networks/network-formats.md)). The ranges of one
+reaction must form a well-ordered sequence:
+
+- only the **lowest** range may be open below (`tmin` is `None`) and only the
+  **highest** may be open above (`tmax` is `None`); an open bound anywhere else
+  raises a `ValueError`;
+- ranges must not **overlap**; overlapping ranges raise a `ValueError` when the
+  network is loaded — deduplicate the source network;
+- two rows with exactly the **same** range are duplicates rather than separate
+  ranges, and are resolved by the network's
+  [`duplicate_policy`](jaff-toml.md#duplicate-policy) (`preserve-first` by default, with a
+  warning; `error` makes it fatal).
 
 !!! note "Different mechanisms are different reactions"
     Two file rows with the same species but a different `type` (e.g. thermal vs

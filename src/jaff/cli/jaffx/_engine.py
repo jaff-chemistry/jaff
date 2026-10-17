@@ -41,7 +41,7 @@ from typing import Optional
 import typer
 
 from ... import Network, NetworkArgs
-from ...common import motd
+from ...common import print_motd
 from ...io import JaffLogger
 from .._helper import DuplicatePolicy, funcfile_arg
 
@@ -55,7 +55,7 @@ class JaffX:
     """
 
     def __init__(self):
-        print(motd("jaffx"))
+        print_motd("jaffx")
         self.logger: logging.Logger = JaffLogger().get_logger()
 
     def get_network(self, args: SimpleNamespace) -> Network:

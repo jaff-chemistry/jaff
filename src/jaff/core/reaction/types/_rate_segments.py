@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sympy import Basic, Expr, Piecewise
+from sympy import Basic, Expr, Piecewise, sympify
 
 from ....types import Catalogue
 from . import RateSegment
@@ -72,8 +72,9 @@ class RateSegments(Catalogue[RateSegment]):
 
         Segments must be sorted by ascending temperature (call :meth:`sort`
         first).  Each range contributes its own rate; the gap between two
-        adjacent ranges is bridged by linear interpolation of the two bounding
-        rates.  Out-of-range behaviour follows :attr:`mode` (``"clip"`` holds
+        adjacent ranges is bridged by interpolating between the two bounding
+        rates: geometrically (linear in ``log k``) when both are positive,
+        linearly otherwise (e.g. negative or symbolic boundary rates).  Out-of-range behaviour follows :attr:`mode` (``"clip"`` holds
         the boundary value, otherwise the end segments extend unbounded).
 
         A lone segment with a temperature-independent rate, or one that is fully
@@ -137,9 +138,18 @@ class RateSegments(Catalogue[RateSegment]):
             a = prev.tmax  # left boundary
             b = seg.tmin  # right boundary
             if a != b:
-                left = prev.rate.xreplace({tgas: a})
-                right = seg.rate.xreplace({tgas: b})
-                interp = (left * (b - tgas) + right * (tgas - a)) / (b - a)
+                left = sympify(prev.rate.xreplace({tgas: a}))
+                right = sympify(seg.rate.xreplace({tgas: b}))
+                w = (tgas - a) / (b - a)
+                if left.is_positive and right.is_positive:
+                    # Geometric: rates spanning decades stay smooth in log
+                    # space instead of dipping toward zero near the larger end.
+                    # Written as one power so no huge constant is factored out
+                    # (exp(a + b*T) gets split into exp(a)*exp(b*T), and
+                    # exp(a) overflows a double for steep gaps).
+                    interp = left * (right / left) ** w
+                else:
+                    interp = left * (1 - w) + right * w
                 segs.append((interp, tgas < seg.tmin))
 
             # Always emit this range's own body (touching ranges have no gap).
@@ -157,11 +167,33 @@ class RateSegments(Catalogue[RateSegment]):
     def sort(self) -> "RateSegments":
         """Sort the segments in place by ascending lower temperature bound.
 
+        A segment with no lower bound (``tmin`` is ``None``) is open toward
+        low temperatures, so it sorts first.  Only the lowest range may be open
+        below and only the highest may be open above.
+
         Returns
         -------
         RateSegments
             ``self``, to allow chaining (e.g. ``segs.sort().evaluate_...()``).
+
+        Raises
+        ------
+        ValueError
+            If a range other than the lowest has no ``tmin``, or a range other
+            than the highest has no ``tmax``.
         """
-        self._list = sorted(self._list, key=lambda s: s.tmin)
+        self._list = sorted(self._list, key=lambda s: (s.tmin is not None, s.tmin))
+
+        ranges = [(s.tmin, s.tmax) for s in self._list]
+        for i, (tmin, tmax) in enumerate(ranges):
+            if tmin is None and i > 0:
+                raise ValueError(
+                    f"Only the lowest temperature range may be open below; got {ranges}"
+                )
+
+            if tmax is None and i < len(ranges) - 1:
+                raise ValueError(
+                    f"Only the highest temperature range may be open above; got {ranges}"
+                )
 
         return self

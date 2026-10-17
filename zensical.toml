@@ -22,7 +22,8 @@ nav = [
   { "Getting Started" = [
     "getting-started/installation.md",
     "getting-started/quickstart.md",
-    "getting-started/concepts.md"
+    "getting-started/concepts.md",
+    "getting-started/examples.md"
   ] },
   { "User Guide" = [
     { "Designing Networks" = [

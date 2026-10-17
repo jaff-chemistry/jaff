@@ -51,11 +51,10 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  $$JAFF SUB nspec
+  $$JAFF SUB nreact
   std::cout << "Solving Chemistry ODE System (header-only integrators)\n";
   std::cout << "Number of species: " << mySys.neqs << "\n";
-  std::cout << "Number of reactions: " << std::cout
-            << "Number of reactions: " << $nspec$ << "\n";
+  std::cout << "Number of reactions: " << $nreact$ << "\n";
   std::cout << "Time interval: [" << t_start << ", " << t_end << "] seconds\n";
   $$JAFF END
 
@@ -141,12 +140,12 @@ int main(int argc, char *argv[]) {
   //   species_charge[ChemistryODE::neqs] (int),
   //   elem_matrix[n_elements][ChemistryODE::neqs] (int counts per species)
   // If not provided, we skip this report gracefully.
-#define JAFF_HAS_CONSERVERATION_METADATA 1
+#define JAFF_HAS_CONSERVATION_METADATA 1
   $$JAFF SUB nelem
   constexpr int n_elements = $nelem$;
   $$JAFF END
   $$JAFF REPEAT element IN elements
-  constexpr char* element_names[n_elements] = {"$element$", };
+  constexpr const char* element_names[n_elements] = {"$element$", };
   $$JAFF END
   $$JAFF REPEAT specie_charge IN specie_charges
   constexpr int species_charge[ChemistryODE::neqs] = {$specie_charge$, };

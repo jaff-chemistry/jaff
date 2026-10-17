@@ -119,7 +119,7 @@ src/jaff/
 ├── plugins/                    # Named solver plugins
 │   ├── python_solve_ivp/       # SciPy solve_ivp wrapper
 │   ├── fortran_dlsodes/        # Fortran DLSODES solver
-│   ├── kokkos_ode/             # Kokkos GPU ODE solver
+│   ├── kokkos_ode/             # C++ VODE solver (header-only-integrators)
 │   └── microphysics/           # AMReX microphysics driver
 │
 ├── templates/                  # Source templates consumed by plugins

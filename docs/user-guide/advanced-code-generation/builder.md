@@ -116,11 +116,18 @@ set of files it emits.
 | ------------------ | ------------ | --------------------------- | ---------------------------------------------------------- |
 | `python_solve_ivp` | Python       | `scipy.integrate.solve_ivp` | `commons.py`, `rates.py`, `fluxes.py`, `ode.py`, `main.py` |
 | `fortran_dlsodes`  | Fortran 90   | DLSODES (ODEPACK)           | Fortran source + driver                                    |
-| `kokkos_ode`       | C++ / Kokkos | Kokkos ODE                  | Kokkos-compatible headers + driver                         |
+| `kokkos_ode`       | C++17        | VODE (header-only-integrators) | `chemistry_ode.hpp` (RHS + Jacobian), driver, `CMakeLists.txt` |
 | `microphysics`     | C++          | AMReX Microphysics          | AMReX-compatible RHS + Jacobian                            |
 
 `python_solve_ivp` is the default and the quickest way to _see_ a network
 integrate — no compiler needed, just `python main.py`.
+
+Despite its name, `kokkos_ode` does not use Kokkos: it integrates with the VODE
+(BDF) solver from the
+[header-only-integrators](https://github.com/BenWibking/header-only-integrators)
+library, which its `CMakeLists.txt` downloads on first configure. Build it with
+clang (`cmake -S . -B build -DCMAKE_CXX_COMPILER=clang++`); the library
+currently uses a C++ construct that recent GCC versions reject.
 
 ---
 

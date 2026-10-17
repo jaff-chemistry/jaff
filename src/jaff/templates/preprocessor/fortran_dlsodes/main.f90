@@ -39,5 +39,15 @@ program main
                 ITOL, RTOL, ATOL, ITASK, ISTATE, IOPT, RWORK, LRW, IWORK, &
                 LIW, JES, MF)
 
+    ! A negative istate means DLSODES failed; stop with a nonzero exit code.
+    if (istate < 0) then
+        print *, "DLSODES failed with istate = ", istate
+        error stop 1
+    end if
+
+    print '(a, es12.5)', "t    = ", tloc
+    print '(a, es12.5)', "tgas = ", n(idx_tgas)
+    print '(a)', "species number densities (by index):"
+    print '(es12.5)', n(1:nspecs)
 
 end program main

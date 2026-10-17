@@ -120,7 +120,8 @@ insufficient.
 1. **Concepts** — [Basic Concepts](concepts.md) explains chemical networks and the JAFF model.
 2. **Working with Networks** — [inspect, filter, and export](../user-guide/working-with-networks/index.md) loaded networks.
 3. **Code Generation** — the [template directive language](../user-guide/code-generation/template-syntax.md) and the [`jaffgen`](../user-guide/code-generation/jaffgen.md) CLI.
-4. **API Reference** — the complete [API documentation](../api/index.md).
+4. **Examples** — step-by-step [example notebooks](examples.md) from loading a network to running generated solvers.
+5. **API Reference** — the complete [API documentation](../api/index.md).
 
 ## Example networks
 

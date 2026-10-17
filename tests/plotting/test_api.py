@@ -157,11 +157,11 @@ def uclchem():
 
 
 class TestRealNetworks:
-    def test_uclchem_zero_tmin_plots(self, uclchem):
-        # The first catalogue entries have tmin = 0 and k = 0 (desorption):
-        # sampled fine, but nothing survives on a log y axis.
+    def test_uclchem_unbounded_tmin_plots(self, uclchem):
+        # The first catalogue entries have no tmin (UCLCHEM's placeholder 0) and
+        # k = 0 (desorption): sampled fine, but nothing survives on a log y axis.
         zeros = list(uclchem.reactions)[:5]
-        assert all(r.tmin == 0 for r in zeros)
+        assert all(r.tmin is None for r in zeros)
         assert plot_rates(zeros, yscale="linear", show=False) is not None
         assert zeros[0].plot_rate_coefficient(yscale="linear", show=False) is not None
         assert plot_rates(zeros, show=False) is None

@@ -81,6 +81,18 @@ H2         CR                     H2+        e-        0.000e+00  0.000e+00  0.0
 He         CR                     He+        e-        1.100e+00  0.000e+00  0.000e+00 2.00e+00 0.00e+00 logn  1  -9999   9999  1     3 1  1
 ```
 
+### Temperature bounds
+
+KIDA writes `-9999` and `9999` for "no limit". JAFF maps them to an open bound
+(`None`):
+
+- a `Tmin` of zero or below (e.g. `-9999`) means no lower bound;
+- a `Tmax` of exactly `9999` means no upper bound, **unless** another range of
+  the same reaction starts above this row's `Tmin`: then `9999` is a real bound
+  (e.g. `3000–9999` followed by `10000–20000`);
+- every other `Tmax`, including values above `9999` (`15000`, `30000`), is a
+  real bound.
+
 ---
 
 ## UDFA Format
@@ -103,6 +115,9 @@ ID:type:R1:R2:P1:P2:P3:P4:α:β:γ:Tmin:Tmax:...
 | `P1–P4`     | Products (empty if fewer than 4)                  |
 | `α β γ`     | Arrhenius parameters                              |
 | `Tmin Tmax` | Valid temperature range (K)                       |
+
+A `Tmin` of zero or below means no lower bound, and a `Tmax` of `41000` K or
+above (UMIST's upper limit) means no upper bound; both become `None`.
 
 ### Example
 
@@ -223,6 +238,12 @@ R1,R2,R3,P1,P2,P3,P4,α,β,γ,Tmin,Tmax,reduced_mass,extrapolate
 | `reduced_mass` | Reduced mass of the reactants                          |
 | `extrapolate`  | `True`/`False` — allow rate use outside `[Tmin, Tmax]` |
 
+UCLCHEM switches a rate off only when the gas temperature falls outside
+`[Tmin, Tmax]`, and gives the reactions it generates itself (freeze-out,
+desorption, ice swaps, …) the placeholder range `0`–`10000` K. A `Tmin` of zero or
+below therefore never applies, and JAFF treats it as no lower bound (`None`).
+Rows with `extrapolate = True` are given the range `3`–`10⁶` K.
+
 ### Example
 
 A comprehensive example can be found at `networks/uclchem_small_gas/uclchem_small_gas_network.jet`
@@ -264,8 +285,9 @@ references, and the free symbols each rate expects are documented in the parser'
     several disjoint `[Tmin, Tmax]` ranges, JAFF merges the rows into one
     reaction with a piecewise rate — see
     [Temperature ranges and piecewise rates](../working-with-networks/reactions.md#temperature-ranges-and-piecewise-rates).
-    The same reaction repeated over the same/overlapping range is a conflict and
-    raises a `ParserError`.
+    Overlapping ranges raise a `ValueError`; the same reaction repeated over the
+    exact same range is a duplicate, resolved by the
+    [duplicate policy](../working-with-networks/jaff-toml.md#duplicate-policy).
 
 ---
 
