@@ -191,7 +191,7 @@ class Network:
         expand_nuclei: bool = True,
         radiation_props: RadiationProps | None = None,
         dust_props: DustProps | None = None,
-        use_proxy_photoreaction: bool = False,
+        use_proxy_photoreaction: bool = True,
         eos_props: EosProps | None = None,
         _from_cli: bool = False,
         _metadata: dict[str, Any] = {},
@@ -249,7 +249,10 @@ class Network:
             When ``True``, cross-sections for photo-reactions are looked up
             using the proxy photo-reaction string (via
             :meth:`Reaction.normalized_proxy_reaction_str`) rather than the
-            reaction's standard serialized form.  Default ``False``.
+            reaction's standard serialized form, so proxy species such as
+            ``CHx``/``OHx`` resolve to the ``CH``/``OH`` entries.  A custom
+            ``.jfunc`` rate still takes precedence over the cross-sections.
+            Default ``True``.
         eos_props : EosProps | None, optional
             Equation-of-state configuration used by
             :attr:`Thermodynamics.eos`.  When ``None`` (default), an ideal gas
