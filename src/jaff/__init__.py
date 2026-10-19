@@ -5,7 +5,6 @@ Astrochemical reaction network parser supporting KROME, PRIZMO, UDFA, KIDA, and 
 
 __version__ = "0.1.5"
 
-from .codegen.builder import Builder
 from .codegen.codegen import Codegen
 from .codegen.preprocessor import Preprocessor
 from .core.elements import Element, Elements
@@ -23,7 +22,6 @@ __all__ = [
     Reactions,
     Specie,
     Species,
-    Builder,
     Codegen,
     Preprocessor,
 ]

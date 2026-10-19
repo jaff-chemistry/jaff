@@ -19,8 +19,7 @@ So a template is your real source code, with small generated regions created
 by directives. The directive lines themselves are written to the output as
 comments (see [Echo](#echo)).
 
-Templates are processed by the [`jaffgen`](jaffgen.md) CLI or the
-[builder API](../advanced-code-generation/builder.md).
+Templates are processed by the [`jaffgen`](jaffgen.md) CLI.
 
 ---
 
