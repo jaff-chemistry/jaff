@@ -39,7 +39,6 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 from rich.text import Text
-from rich.traceback import install
 
 
 def _is_jupyter() -> bool:
@@ -325,7 +324,6 @@ class JaffProgress(Progress):
 
 
 jaff_console = Console(force_jupyter=IN_JUPYTER)
-install(console=jaff_console, show_locals=False)
 
 jaff_progress = JaffProgress(
     *_make_progress_columns(), console=jaff_console, **_PROGRESS_KWARGS

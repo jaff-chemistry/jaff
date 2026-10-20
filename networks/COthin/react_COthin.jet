@@ -172,7 +172,8 @@
 89,C,OH,H,CO,1d1,NONE,2.25d-11*(T32)**(-.339)*exp(-.108d0*invT)
 
 #KIDA, recomended
-90,O,OH,H,O2,NONE,NONE,2.4d-11*exp(-110.d0*invT)
+#superseded by the piecewise fit below (91-93), which covers all T
+#90,O,OH,H,O2,NONE,NONE,2.4d-11*exp(-110.d0*invT)
 
 #KIDA, recomended, below 200K and above 350K constant
 91,O,OH,H,O2,NONE,2d2,2.42d-12
@@ -422,7 +423,8 @@
 207,O-,C,CO,E,NONE,NONE,5d-10
 
 #KIDA, including additional channel
-208,H2,H+,H,H2+,NONE,NONE,6.4d-10*exp(-21300d0*invT)
+#superseded by reaction 22 (held at its 3480 K value below that)
+#208,H2,H+,H,H2+,NONE,NONE,6.4d-10*exp(-21300d0*invT)
 @format:idx,R,R,P,P,P,Tmin,Tmax,rate
 209,H2,H+,H,H,H+,NONE,NONE,3d-11*T32**(.5)*exp(-52000d0*invT)
 

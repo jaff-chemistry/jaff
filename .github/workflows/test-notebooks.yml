@@ -81,7 +81,7 @@ jobs:
                       --ExecutePreprocessor.startup_timeout=120 \
                       --ExecutePreprocessor.allow_errors=True \
                       "$notebook" || exit 1
-                    python -c 'import json,sys; path=sys.argv[1]; nb=json.load(open(path,"r",encoding="utf-8")); has_err=any(out.get("output_type")=="error" for cell in nb.get("cells", []) for out in cell.get("outputs", [])); sys.exit(1 if has_err else 0)' "$exec_path" || errors=1
+                    python .github/scripts/check_notebook_errors.py "$exec_path" || errors=1
                   done
 
                   if [ "$errors" -ne 0 ]; then

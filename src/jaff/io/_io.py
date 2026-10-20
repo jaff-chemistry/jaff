@@ -504,6 +504,7 @@ def get_table(
     rate_max=1e100,
     fast_log=False,
     verbose=False,
+    nT_max=16385,
 ):
     """
     Build a temperature-indexed rate-coefficient lookup table for a reaction list.
@@ -560,6 +561,12 @@ def get_table(
         If ``True``, log the current grid size, worst-case error, and the
         offending reaction and temperature after each refinement step
         (default ``False``).
+    nT_max : int or None, optional
+        Upper limit on the grid size reached by adaptive refinement (default
+        ``16385``).  Refinement stops with a warning before the grid would
+        exceed it, even if ``err_tol`` is not yet met, so a rate that cannot be
+        resolved (e.g. a near-discontinuity) cannot refine forever.  ``None``
+        removes the limit.
 
     Returns
     -------
@@ -666,8 +673,17 @@ def get_table(
 
     # Fifth step: do adaptive growth of table
     if err_tol is not None:
+        max_err = np.nan
         with jaff_progress.indeterminate("Refining rate table"):
             while True:
+                if nT_max is not None and 2 * nTemp - 1 > nT_max:
+                    logger.warning(
+                        f"Rate table refinement stopped at nTemp = {nTemp} "
+                        f"(nT_max = {nT_max}) without reaching err_tol = "
+                        f"{err_tol}; last max_err = {max_err}"
+                    )
+                    break
+
                 # Compute estimates at half-way points
                 nTemp = 2 * nTemp - 1
                 temp_grow = np.zeros(nTemp)
@@ -710,7 +726,7 @@ def get_table(
                     idx_max = np.unravel_index(np.nanargmax(rel_err), rel_err.shape)
                     logger.info(
                         f"nTemp = {nTemp}, max_err = {max_err} in reaction "
-                        f"{reactions[idx_max[0]].get_verbatim()} at T = {temp[idx_max[1]]}"
+                        f"{reactions[idx_max[0]].get_verbatim()} at T = {temp[2 * idx_max[1] + 1]}"
                     )
 
                 if max_err < err_tol:
@@ -734,6 +750,7 @@ def write_data_table(
     format="auto",
     include_all=False,
     verbose=False,
+    nT_max=16385,
 ):
     """
     Build a rate-coefficient table and write it to a text or HDF5 file.
@@ -797,6 +814,8 @@ def write_data_table(
         ``NaN`` values or have a constant rate.  Default ``False``.
     verbose : bool, optional
         Forward to :func:`get_table` for per-refinement-step logging.
+    nT_max : int or None, optional
+        Maximum refined grid size.  See :func:`get_table`.
 
     Raises
     ------
@@ -845,6 +864,7 @@ def write_data_table(
         rate_max=rate_max,
         fast_log=fast_log,
         verbose=verbose,
+        nT_max=nT_max,
     )
 
     if include_all:
