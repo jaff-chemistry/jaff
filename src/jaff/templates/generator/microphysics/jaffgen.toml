@@ -1,6 +1,6 @@
 [network.radiation]
 bands = [13.6, "inf"]
-power_law_index = 0
-energy_density = false
+profile_index = 0
+mode = "nph"
 rsl = "c_hat"
 use_proxy_photoreaction = true
