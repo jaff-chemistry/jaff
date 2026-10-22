@@ -497,15 +497,11 @@ class Radiation:
         profile = self.get_photden_profile(E) if isinstance(E, np.ndarray) else None
         xsec_tot: float = self.get_total_average_cross_section(decay, E, profile)
 
-        # Shielding factor, the same for every band: a user-fixed "value", or
-        # the shielding model evaluated once (it may write per-reaction tables).
-        shielding: sp.Expr | float | None = None
+        # Shielding factor, the same for every band: the shielding model
+        # evaluated once (it may write per-reaction tables).
+        shielding: sp.Expr | None = None
         if photo.shielding is not None:
-            shielding = (
-                photo.shielding.props["value"]
-                if "value" in photo.shielding.props
-                else Photochemistry.shielding(reaction, self.network)
-            )
+            shielding = Photochemistry.shielding(reaction, self.network)
 
         # Reset any back-references from a previous run before repopulating.
         grouped: List[GroupedPhotoReactionProps] = []

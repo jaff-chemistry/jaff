@@ -362,8 +362,7 @@ class Photochemistry:
         instance's ``get_shielding(reaction, network)`` produces the factor.
 
         The result is not cached: ``photo.shielding.props`` holds only the
-        user's settings (a ``value`` entry there fixes the factor instead), so
-        callers evaluate it once per reaction.
+        user's settings, so callers evaluate it once per reaction.
 
         Parameters
         ----------
