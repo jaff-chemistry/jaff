@@ -216,7 +216,13 @@ To add a setting, follow `docs/development/adding-configuration.md`. In short:
    `CONFIG_MODULES` (`tests/config/test_config_modules.py`) and one in
    `CONFIG_MODULES` of `src/jaff/_utils/api_docs.py`.
 3. The class doing the work takes its own section (`Thing(network, config)`), never
-   the whole config. Checks against the network raise `ParserError` with the key path.
+   the whole config, keeps it read-only as `self.config`, passes `config.<child>` to
+   the components it builds, and holds only computed state otherwise: no copies of
+   settings, no reads of another component's settings from `net.config`. Reactions
+   do the same: `reaction.config` is the resolved `ReactionConfig`
+   (`ReactionsConfig.resolve`; `.own()` for keys set on the reaction itself) and
+   `reaction.photo` holds only computed photo state. Checks against the network
+   raise `ParserError` with the key path.
 4. `Network`'s keyword arguments are exactly the `[network]` keys: a new top-level
    field of `NetworkConfig` needs a keyword of the same name (a test enforces it);
    nothing else maps keywords. Optional CLI shortcut: an entry in `CLI_KEYS`

@@ -427,7 +427,7 @@ class Network:
         self.__set_emissivity(jaff_props.get("emissivity"))
         self.__set_absorption_coefficient(jaff_props.get("absorption_coefficient"))
         self.thermodynamics: Thermodynamics = Thermodynamics(
-            self, jaff_props.get("dEdt_extra")
+            self, self.config.thermodynamics, jaff_props.get("dEdt_extra")
         )
         self.symbols.log_summary()
 

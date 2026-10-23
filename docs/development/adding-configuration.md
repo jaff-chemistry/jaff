@@ -103,14 +103,30 @@ modules.
 
 ## Use it
 
-The class that does the work takes its own section, never the whole config:
+Every configured component follows the same pattern:
+
+1. **It takes its own section**: `Thing(network, config)`, where `config` is the
+   resolved model of its table, never the whole config.
+2. **It keeps it as `self.config`**, read-only, and reads its settings from there.
+3. **It passes `config.<child>` down** to the components it builds (as `Dust`
+   does with `config.pe` for `PhotoelectricEmission`).
+4. **Its other attributes are computed state** only: what it derives from the
+   settings, never a copy of them, and it never reads another component's
+   settings out of `net.config`.
 
 ```python
 class CosmicRays:
-    def __init__(self, network: Network, config: CosmicRaysConfig): ...
+    def __init__(self, network: Network, config: CosmicRaysConfig):
+        self.network = network
+        self.config = config  # read-only settings
+        self.rate = self._build_rate()  # computed from them
+
+    def _build_rate(self) -> Expr:
+        return self.config.ionisation_rate * ...
 ```
 
-and `Network` builds it from `self.config` (as it does `Radiation` and `Dust`):
+`Network` builds it from its own config, as it does `Radiation`, `Dust` and
+`Thermodynamics`:
 
 ```python
 self.cosmic_rays = (
@@ -119,6 +135,16 @@ self.cosmic_rays = (
     else None
 )
 ```
+
+Per-reaction settings work the same way: every `Reaction` holds
+`reaction.config`, its resolved `ReactionConfig` (the global
+`[network.reactions]` table with its own `reaction."<serialized>"` entry applied
+over it; see `ReactionsConfig.resolve`), and `reaction.photo` holds only computed
+photo state (cross sections, band data, shielding tables). To tell a key set on
+the reaction itself from the global value, use `ReactionsConfig.own(serialized)`.
+
+Some older components still copy fields onto themselves (e.g. `Dust.rv`); new
+code reads `self.config`.
 
 ## Where each check belongs
 
@@ -183,7 +209,8 @@ building the docs.
 - [x] Field added to the parent model (and documented there)
 - [x] Module has `__all__` and is listed in both `CONFIG_MODULES`
       (`tests/config/test_config_modules.py`, `src/jaff/_utils/api_docs.py`)
-- [x] The consuming class takes `(network, config)`; `Network` builds it
+- [x] The consuming class takes `(network, config)`, keeps it as `self.config`
+      and stores only computed state; `Network` builds it
 - [x] A new top-level `[network]` key has a same-named `Network` keyword
 - [x] Checks placed by kind (type / validator / network build)
 - [x] Type-selected tables: `_atomic`, one model per type, discriminated union

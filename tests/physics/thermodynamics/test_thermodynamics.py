@@ -4,6 +4,7 @@
 import pytest
 import sympy as sp
 
+from jaff.physics.thermodynamics.config import ThermodynamicsConfig
 from jaff.physics.thermodynamics.eos.config import IdealEosConfig
 from jaff.physics.constants import N_A, k_B
 from jaff.physics.thermodynamics import InternalEnergy, Thermodynamics
@@ -165,7 +166,7 @@ def _numerically_equal(a: sp.Expr, b: sp.Expr) -> bool:
 @pytest.fixture
 def thermo_with_extra(net):
     """Thermodynamics with a non-zero heating/cooling rate ``Lambda``."""
-    return Thermodynamics(net, dEdt_extra=sp.Symbol("Lambda"))
+    return Thermodynamics(net, net.config.thermodynamics, dEdt_extra=sp.Symbol("Lambda"))
 
 
 def test_dtdt_extra_has_no_composition_term(net, thermo_with_extra):
@@ -200,6 +201,20 @@ def test_dtdt_parts_sum_to_total(thermo_with_extra):
     ],
 )
 def test_rates_are_lazy_and_cached(net, name):
-    th = Thermodynamics(net)
+    th = Thermodynamics(net, net.config.thermodynamics)
     assert name not in vars(th)
     assert getattr(th, name) is getattr(th, name)
+
+
+class TestConfig:
+    """Thermodynamics takes its own section, like every configured component."""
+
+    def test_network_passes_its_section(self, net):
+        assert net.thermodynamics.config is net.config.thermodynamics
+
+    def test_eos_comes_from_the_section_given(self, net):
+        th = Thermodynamics(net, ThermodynamicsConfig(eos=IdealEosConfig(gamma=1.4)))
+        sym = net.symbols
+        expected = sym.ntot * k_B.cgs.value * sym.tgas / (1.4 - 1.0)
+
+        assert sp.simplify(th.eos.volumetric - expected) == 0

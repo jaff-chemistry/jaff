@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from sympy import Expr, Float, diff
 
+from .config import ThermodynamicsConfig
 from .eos import EosFactory
 from .internal_energy import DEDt, InternalEnergy
 
@@ -24,10 +25,11 @@ class Thermodynamics:
 
     Attributes
     ----------
+    config : ThermodynamicsConfig
+        The ``[network.thermodynamics]`` settings it was built with (read-only).
     eos : InternalEnergy
-        Internal energy for the configured equation of state
-        (``net.config.thermodynamics.eos``; an ideal gas with
-        ``gamma = 1.6666666666667`` by default).
+        Internal energy for the configured equation of state (``config.eos``;
+        an ideal gas with ``gamma = 1.6666666666667`` by default).
     dEdt_chemical : DEDt
         Chemical heating/cooling rate ``Σ_r dE_r F_r`` [erg cm⁻³ s⁻¹].
     dEdt_extra : DEDt
@@ -88,19 +90,28 @@ class Thermodynamics:
     3.4516225e-16*tgas
     """
 
-    def __init__(self, net: Network, dEdt_extra: Expr | None = None):
-        """Bind the thermodynamics to a network.
+    def __init__(
+        self,
+        net: Network,
+        config: ThermodynamicsConfig,
+        dEdt_extra: Expr | None = None,
+    ):
+        """Bind the thermodynamics to a network and its settings.
 
         Parameters
         ----------
         net : Network
-            Network whose reactions, symbols and EOS properties are used.
+            Network whose reactions and symbols are used.
+        config : ThermodynamicsConfig
+            The ``[network.thermodynamics]`` table; :class:`~jaff.core.Network`
+            passes ``net.config.thermodynamics``.
         dEdt_extra : sympy.Expr, optional
             Stored volumetric non-reactive heating/cooling rate (e.g. restored from a
             ``.jaff`` file). When ``None`` it is built from the ``heatingcoolingrate``
             auxiliary function.
         """
         self.net: Network = net
+        self.config: ThermodynamicsConfig = config
         # Stored volumetric heating/cooling rate (e.g. restored from a .jaff file);
         # when None, dEdt_extra is built from the heatingcoolingrate aux function.
         self._stored_dEdt_extra: Expr | None = dEdt_extra
@@ -130,9 +141,9 @@ class Thermodynamics:
         Returns
         -------
         InternalEnergy
-            Built by :class:`EosFactory` from ``net.config.thermodynamics.eos``.
+            Built by :class:`EosFactory` from ``config.eos``.
         """
-        return EosFactory(self.net, self.net.config.thermodynamics.eos).generate()
+        return EosFactory(self.net, self.config.eos).generate()
 
     @cached_property
     def _dE_dT(self) -> Expr:
