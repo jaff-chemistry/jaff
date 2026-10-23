@@ -75,8 +75,6 @@ class PhotoReaction:
         self,
         reaction: Reaction,
         config: PhotoConfig,
-        xsec: XsecProps | None = None,
-        custom_rad_rate: bool = False,
     ):
         """Store the component's state; :meth:`compute` fills the rest.
 
@@ -86,16 +84,11 @@ class PhotoReaction:
             The photo reaction.
         config : PhotoConfig
             Its resolved photo settings (``reaction.config.photo``).
-        xsec : XsecProps or None, optional
-            Cross sections already known (restored from a ``.jaff`` file).
-        custom_rad_rate : bool, optional
-            Whether the rate comes from a ``chemRate<N>`` (restored from a
-            ``.jaff`` file).
         """
         self.reaction: Reaction = reaction
         self.config: PhotoConfig = config
-        self.xsec: XsecProps | None = xsec
-        self.custom_rad_rate: bool = custom_rad_rate
+        self.xsec: XsecProps | None = None
+        self.custom_rad_rate: bool = False
         self.rgrouped: List[GroupedPhotoReactionProps] | None = None
         self.shielding_tables: Dict[str, Any] = {}
 
@@ -171,17 +164,10 @@ class PhotoReaction:
             )
             return
 
-        # A .jaff reload has no aux functions but carries the custom cross section.
-        if self.xsec is not None and self.xsec.database == "custom":
-            return
-
         # A cross section is mandatory only when radiation sets the rate.
-        self.xsec = (
-            net._photochemistry.get_xsec(
-                reaction,
-                required=net.radiation is not None and not self.custom_rad_rate,
-            )
-            or self.xsec
+        self.xsec = net._photochemistry.get_xsec(
+            reaction,
+            required=net.radiation is not None and not self.custom_rad_rate,
         )
 
     def _set_band_rates(self) -> Expr | None:

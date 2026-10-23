@@ -7,7 +7,6 @@ import pytest
 from pydantic import ValidationError
 import sympy as sp
 
-from jaff import Network
 from jaff.cli import JaffGen
 from jaff.physics.photo_reactions.config import RadiationConfig
 
@@ -173,21 +172,3 @@ def test_jaffgen_flag_reaches_radiation(tmp_path):
 
     assert gen.net.radiation is not None
     assert gen.net.radiation.config.absorption_attenuates_flux is False
-
-
-def test_jaff_round_trip_keeps_coefficient(absorbing_network, tmp_path):
-    net = absorbing_network(radiation=RadiationConfig(bands=BANDS))
-    net.to_jaff(tmp_path / "a.jaff")
-
-    back = Network(
-        str(tmp_path / "a.jaff"),
-        funcfile=False,
-        radiation=RadiationConfig(bands=BANDS),
-    )
-
-    assert back.radiation is not None
-    assert back.radiation.absorption_coefficient is not None
-    assert float(back.radiation.absorption_coefficient) == pytest.approx(
-        1e-3, rel=1e-6, abs=0
-    )
-    assert _means(back.radiation) == pytest.approx(_means(net.radiation), rel=1e-6, abs=0)

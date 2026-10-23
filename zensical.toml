@@ -203,9 +203,6 @@ nav = [
       { "core.ElementProps" = [
         "reference/core/elementprops/index.md",
       ] },
-      { "core.ReactionProps" = [
-        "reference/core/reactionprops/index.md",
-      ] },
       { "core.NetworkSymbols" = [
         "reference/core/networksymbols/index.md",
         "reference/core/networksymbols/ncol.md",
@@ -229,6 +226,11 @@ nav = [
         "reference/core/photoreaction/compute.md",
         "reference/core/photoreaction/band_xsecs.md",
         "reference/core/photoreaction/plot_xsecs.md",
+      ] },
+      { "core.ReactionRadiation" = [
+        "reference/core/reactionradiation/index.md",
+        "reference/core/reactionradiation/spectral_yield.md",
+        "reference/core/reactionradiation/compute.md",
       ] },
     ] },
     { "Physics" = [

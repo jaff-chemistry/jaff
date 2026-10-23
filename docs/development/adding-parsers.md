@@ -130,7 +130,7 @@ The usual pattern is a **placeholder**. The handler writes an undefined function
 2. `PrizmoParser.post_process` numbers every reaction in `network.reactions.with_type("photo")` from 1 and replaces `prizmo_photo(lo, hi)` with `photorates(n, lo, hi)` in its segments and rate coefficient.
 3. It then raises `ParserError` if any `prizmo_photo` is left in its own reactions (`with_format(self.name)`).
 
-Give the placeholder a name unique to your format (KROME uses `krome_photo`), so formats never rewrite each other's placeholders. A `.jaff` file is loaded without running any hooks: its stored rates are already final.
+Give the placeholder a name unique to your format (KROME uses `krome_photo`), so formats never rewrite each other's placeholders.
 
 ---
 

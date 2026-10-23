@@ -5,8 +5,6 @@ import logging
 
 import pytest
 
-from jaff import Network
-from jaff.io._io import to_jaff_file
 
 # H <-> H2 conserves every species (no sink/source), but each reaction breaks
 # mass conservation (1 H vs 2 H).  This isolates the per-reaction check from the
@@ -36,15 +34,6 @@ class TestReactionCheck:
         net = make_network(_MASS_VIOLATION, strict=False)
 
         assert net.reactions[0].check(strict=False) is None
-
-
-class TestStrictJaffLoading:
-    def test_mass_violation_exits(self, make_network, tmp_path):
-        net = make_network(_MASS_VIOLATION, strict=False)
-        jaff_path = tmp_path / "violation.jaff"
-        to_jaff_file(str(jaff_path), net)
-        with pytest.raises(SystemExit):
-            Network(str(jaff_path), strict=True, funcfile=False)
 
 
 class TestWarningNamesReaction:

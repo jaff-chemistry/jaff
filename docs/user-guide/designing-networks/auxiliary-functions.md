@@ -287,7 +287,7 @@ A `photoCrossSection<N>` function replaces the database cross section of photo r
 
 The reaction stores it as `photo.xsec` with `database = "custom"` and no photo-absorption cross section. With radiation enabled it is averaged over each band and over the whole spectrum exactly like a Verner fit, and the band averages set the photo rate. A reaction cannot have both a `chemRate<N>` and a `photoCrossSection<N>` (`ParserError`), nor a per-reaction `pi_database` while its custom cross section is in use.
 
-Setting [`override_custom_cross_section`](../configuration/reference.md#networkreactionsphoto) `= true` (for every photo reaction in `[network.reactions.photo]`, or for one in its own `photo` table) ignores the function and uses the database cross section instead. A per-reaction value applies with or without radiation. A `.jaff` file stores the custom cross section, so it survives a reload without the `.jfunc`.
+Setting [`override_custom_cross_section`](../configuration/reference.md#networkreactionsphoto) `= true` (for every photo reaction in `[network.reactions.photo]`, or for one in its own `photo` table) ignores the function and uses the database cross section instead. Like the global flag, a per-reaction value has an effect only with radiation.
 
 ### Spectral yield — `spectralYield<N>`
 
@@ -306,7 +306,7 @@ With radiation transport enabled, JAFF integrates the yield over each radiation 
 | `"u"`                 | $\int_\text{group} Y(E)\,dE$                  | erg    |
 | `"nph"` (default)     | $\int_\text{group} Y(E)\,/\,E\;dE$ (`E` in erg) | photons |
 
-Each group yield times the reaction rate is added to that group's **density** equation only; isotropic emission carries no net flux, so the flux equations are unchanged. The yield may use other symbols (e.g. `tgas`); such a yield is integrated analytically, so those symbols stay in the generated equations, and it must have a closed-form integral over every group (else `ValueError`). The same holds for a `photoCrossSection<N>`. Energy emitted outside the group range is dropped. Without radiation the yield is stored on `rxn.rad.spectral_yield` but has no effect. A `.jaff` file stores the yield.
+Each group yield times the reaction rate is added to that group's **density** equation only; isotropic emission carries no net flux, so the flux equations are unchanged. The yield may use other symbols (e.g. `tgas`); such a yield is integrated analytically, so those symbols stay in the generated equations, and it must have a closed-form integral over every group (else `ValueError`). The same holds for a `photoCrossSection<N>`. Energy emitted outside the group range is dropped. Without radiation the yield is stored on `rxn.rad.spectral_yield` but has no effect.
 
 ### Heating / cooling function
 
@@ -352,7 +352,7 @@ The `globalEmissivity` function is the network-wide counterpart of `spectralYiel
     @return 6.8e-38 * 2.418e14 * n_e * n_Hj * tgas**-0.5 * exp(-ph_E / (8.617e-5 * tgas))
 ```
 
-With radiation transport enabled, JAFF integrates it over each radiation group, with the same units rule as the spectral yield (erg cm⁻³ s⁻¹ in `"u"` mode, photons cm⁻³ s⁻¹ in `"nph"` mode), and adds each group's value to that group's **density** equation only. The spectrum is stored on `net.radiation.emissivity`, the group values on `group.emissivity` (with `n_X` symbols resolved to the species densities), and their sum on `net.radiation.total_emissivity`. Other symbols such as `tgas` stay symbolic, which needs a closed-form integral over every group (else `ValueError`). Without radiation it has no effect. A `.jaff` file stores it.
+With radiation transport enabled, JAFF integrates it over each radiation group, with the same units rule as the spectral yield (erg cm⁻³ s⁻¹ in `"u"` mode, photons cm⁻³ s⁻¹ in `"nph"` mode), and adds each group's value to that group's **density** equation only. The spectrum is stored on `net.radiation.emissivity`, the group values on `group.emissivity` (with `n_X` symbols resolved to the species densities), and their sum on `net.radiation.total_emissivity`. Other symbols such as `tgas` stay symbolic, which needs a closed-form integral over every group (else `ValueError`). Without radiation it has no effect.
 
 ### Global absorption coefficient — `globalAbsorptionCoefficient`
 
@@ -382,7 +382,7 @@ $$
 \langle\alpha\rangle_i = \frac{\int_\text{group} \alpha(E)\, w(E)\, dE}{\int_\text{group} w(E)\, dE}
 $$
 
-with $w(E) = E\,n(E)$ in `"u"` mode (the energy density loses each photon's energy) and $w(E) = n(E)$ in `"nph"` mode (the photon density loses photons). The averages are stored on `group.absorption_coefficient` (with `n_X` symbols resolved to the species densities) and the spectrum on `net.radiation.absorption_coefficient`. Absorption removes radiation from every direction in proportion to the intensity, so it also attenuates the flux $F_i$ (`rflux[i]`), with the same $\langle\alpha\rangle_i$. Set `absorption_attenuates_flux = false` (in [`[network.radiation]`](../configuration/reference.md#networkradiation), or `radiation={..., "absorption_attenuates_flux": False}` from Python) to apply it to the density equations only. Other symbols such as `tgas` stay symbolic, which needs a closed-form integral over every group (else `ValueError`). Without radiation it has no effect. A `.jaff` file stores it.
+with $w(E) = E\,n(E)$ in `"u"` mode (the energy density loses each photon's energy) and $w(E) = n(E)$ in `"nph"` mode (the photon density loses photons). The averages are stored on `group.absorption_coefficient` (with `n_X` symbols resolved to the species densities) and the spectrum on `net.radiation.absorption_coefficient`. Absorption removes radiation from every direction in proportion to the intensity, so it also attenuates the flux $F_i$ (`rflux[i]`), with the same $\langle\alpha\rangle_i$. Set `absorption_attenuates_flux = false` (in [`[network.radiation]`](../configuration/reference.md#networkradiation), or `radiation={..., "absorption_attenuates_flux": False}` from Python) to apply it to the density equations only. Other symbols such as `tgas` stay symbolic, which needs a closed-form integral over every group (else `ValueError`). Without radiation it has no effect.
 
 <!-- prettier-ignore -->
 !!! warning "Dust module"

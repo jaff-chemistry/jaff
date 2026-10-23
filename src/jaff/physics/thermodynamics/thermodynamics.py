@@ -94,7 +94,6 @@ class Thermodynamics:
         self,
         net: Network,
         config: ThermodynamicsConfig,
-        dEdt_extra: Expr | None = None,
     ):
         """Bind the thermodynamics to a network and its settings.
 
@@ -105,16 +104,9 @@ class Thermodynamics:
         config : ThermodynamicsConfig
             The ``[network.thermodynamics]`` table; :class:`~jaff.core.Network`
             passes ``net.config.thermodynamics``.
-        dEdt_extra : sympy.Expr, optional
-            Stored volumetric non-reactive heating/cooling rate (e.g. restored from a
-            ``.jaff`` file). When ``None`` it is built from the ``heatingcoolingrate``
-            auxiliary function.
         """
         self.net: Network = net
         self.config: ThermodynamicsConfig = config
-        # Stored volumetric heating/cooling rate (e.g. restored from a .jaff file);
-        # when None, dEdt_extra is built from the heatingcoolingrate aux function.
-        self._stored_dEdt_extra: Expr | None = dEdt_extra
 
     @cached_property
     def dEdt_chemical(self) -> DEDt:
@@ -124,9 +116,6 @@ class Thermodynamics:
     @cached_property
     def dEdt_extra(self) -> DEDt:
         """Non-reactive heating/cooling rate (``heatingcoolingrate``) [erg cm⁻³ s⁻¹]."""
-        if self._stored_dEdt_extra is not None:
-            return DEDt(self._stored_dEdt_extra, self.net)
-
         return self._get_dEdt_extra()
 
     @cached_property

@@ -513,8 +513,7 @@ class Reactions(Catalogue[Reaction]):
         format : str
             Parser name, e.g. ``"prizmo"``, ``"krome"``, ``"kida"``,
             ``"udfa"``, ``"uclchem"``; compared against the reaction's private
-            ``_format`` field.  Reactions loaded from a ``.jaff`` file written
-            before the format was stored have no format and never match.
+            ``_format`` field.
 
         Returns
         -------

@@ -6,7 +6,6 @@ from types import SimpleNamespace
 import pytest
 import sympy as sp
 
-from jaff import Network
 from jaff.cli import JaffGen
 from jaff.core.parsers import AuxiliaryFunctionProps
 from jaff.core.reaction.reaction_props import AuxFunctions
@@ -120,21 +119,6 @@ class TestCustomCrossSection:
             exprs += [band.k, band.xsec]
         assert not any(sp.sympify(e).has(raw) for e in exprs)
         assert all(band.k.has(nden) for band in rxn.photo.rgrouped)
-
-    def test_jaff_reload_keeps_custom_xsec(self, xsec_network, tmp_path):
-        """A ``.jaff`` reload without the ``.jfunc`` keeps the stored custom σ."""
-        net = xsec_network(radiation=RadiationConfig(bands=BANDS))
-        net.to_jaff(tmp_path / "p.jaff")
-
-        back = Network(
-            str(tmp_path / "p.jaff"),
-            funcfile=False,
-            radiation=RadiationConfig(bands=BANDS),
-        )
-
-        rxn = _photo(back)
-        assert rxn.photo.xsec.database == "custom"
-        assert float(rxn.photo.xsec.total) == pytest.approx(1e-18, rel=1e-6, abs=0)
 
     def test_per_reaction_pi_database_raises(self, xsec_network, tmp_path):
         with pytest.raises(ParserError, match="pi_database"):

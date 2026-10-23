@@ -163,21 +163,33 @@ def _numerically_equal(a: sp.Expr, b: sp.Expr) -> bool:
     return abs(a_val - b_val) <= 1e-12 * max(abs(a_val), abs(b_val))
 
 
+LAMBDA = sp.Symbol("lam")
+
+
 @pytest.fixture
-def thermo_with_extra(net):
-    """Thermodynamics with a non-zero heating/cooling rate ``Lambda``."""
-    return Thermodynamics(net, net.config.thermodynamics, dEdt_extra=sp.Symbol("Lambda"))
+def thermo_with_extra(make_network, tmp_path):
+    """Thermodynamics with a non-zero heating/cooling rate ``lam`` (a .jfunc)."""
+    (tmp_path / "heated.jfunc").write_text(
+        "@function heatingCoolingRate()\n@return lam\n"
+    )
+    net = make_network(
+        TWO_SPECIES,
+        name="heated.dat",
+        thermodynamics={"eos": IdealEosConfig(gamma=GAMMA)},
+    )
+
+    return net.thermodynamics
 
 
-def test_dtdt_extra_has_no_composition_term(net, thermo_with_extra):
+def test_dtdt_extra_has_no_composition_term(thermo_with_extra):
     # Heating/cooling does not change particle number: Ṫ_extra = Λ / (∂E/∂T)
     cv = k_B.cgs.value / (GAMMA - 1.0)
-    expected = sp.Symbol("Lambda") / (cv * net.symbols.ntot)
+    expected = LAMBDA / (cv * thermo_with_extra.net.symbols.ntot)
     assert _numerically_equal(thermo_with_extra.dTdt_extra, expected)
 
 
-def test_dtdt_chemical_carries_composition_term(net, thermo_with_extra):
-    th, sym = thermo_with_extra, net.symbols
+def test_dtdt_chemical_carries_composition_term(thermo_with_extra):
+    th, sym = thermo_with_extra, thermo_with_extra.net.symbols
     cv = k_B.cgs.value / (GAMMA - 1.0)
     edot_chem = th.dEdt_chemical.volumetric
     expected = (edot_chem - cv * sym.tgas * sym.dntot_dt) / (cv * sym.ntot)

@@ -1,10 +1,10 @@
-# ABOUTME: Per-reaction data split out of Reaction: per-band photo data, radiation
-# ABOUTME: coupling (energy added to the field) and the reaction's aux functions
+# ABOUTME: Per-reaction data split out of Reaction: per-band photo data and the
+# ABOUTME: reaction's auxiliary functions
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 from sympy import Expr
 
@@ -65,34 +65,6 @@ class GroupedPhotoReactionProps:
         self.k: Expr = k
         self.xsec: float | Expr | None = xsec
         self.xsec_frac: float = xsec_frac
-
-
-class ReactionRadiationProps:
-    """Radiation emitted by any reaction, held as ``Reaction.rad``.
-
-    Attributes
-    ----------
-    spectral_yield : Expr or None
-        Radiation energy the reaction adds to the field per event per unit
-        photon energy (erg/eV), integrated over solid angle, as an expression in
-        ``ph_E`` (eV); from a ``.jfunc`` ``spectralYield`` function.  ``None``
-        when the reaction emits nothing.
-    group_yields : list[Expr] or None
-        ``spectral_yield`` integrated over each radiation group, in
-        ``net.radiation.groups`` order, in the units of the group density per
-        event (erg in ``"u"`` mode, photons in ``"nph"`` mode); see
-        :meth:`Radiation.integrate_over_groups`.  ``None`` without radiation or
-        without a yield.
-    """
-
-    def __init__(
-        self,
-        spectral_yield: Expr | None = None,
-        group_yields: List[Expr] | None = None,
-    ):
-        """Store the emission; see the class attributes."""
-        self.spectral_yield: Expr | None = spectral_yield
-        self.group_yields: List[Expr] | None = group_yields
 
 
 @dataclass

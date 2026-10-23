@@ -149,9 +149,7 @@ sampling off: `--err-tol` always falls back to 0.01.
 ### `export jaff`
 
 Serialize the entire parsed network to a gzip-compressed JSON `.jaff` file —
-exactly [`Network.to_jaff`](network.md#jaff-serialized-format). Re-loading it with
-`Network("...jaff")` skips parsing and the expensive SymPy assembly, so this is
-the recommended cache for large networks.
+exactly [`Network.to_jaff`](network.md#jaff-serialized-format). Loading `.jaff` files is not supported at the moment: `Network("x.jaff")` raises `ParserError`.
 
 ```bash
 jaffx export jaff \

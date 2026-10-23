@@ -7,7 +7,6 @@ import astropy.units as u
 import pytest
 import sympy as sp
 
-from jaff import Network
 from jaff.physics.photo_reactions.config import RadiationConfig
 
 EV2ERG = u.eV.to(u.erg)
@@ -113,21 +112,3 @@ def test_enters_density_equations_only(emissive_network):
     for i, group in enumerate(net.radiation.groups):
         assert sp.simplify(odes[i] - group.emissivity) == 0
         assert odes[nb + i].is_zero
-
-
-def test_jaff_round_trip_keeps_emissivity(emissive_network, tmp_path):
-    net = emissive_network(radiation=RadiationConfig(bands=BANDS))
-    net.to_jaff(tmp_path / "e.jaff")
-
-    back = Network(
-        str(tmp_path / "e.jaff"),
-        funcfile=False,
-        radiation=RadiationConfig(bands=BANDS),
-    )
-
-    assert back.radiation is not None
-    assert back.radiation.emissivity is not None
-    assert float(back.radiation.emissivity) == pytest.approx(1e-20, rel=1e-6, abs=0)
-    assert _floats(g.emissivity for g in back.radiation.groups) == pytest.approx(
-        _floats(g.emissivity for g in net.radiation.groups), rel=1e-6, abs=0
-    )

@@ -7,7 +7,6 @@ import astropy.units as u
 import pytest
 import sympy as sp
 
-from jaff import Network
 from jaff.core.network import NetworkSymbols
 from jaff.physics.photo_reactions.config import RadiationConfig
 
@@ -125,21 +124,3 @@ def test_yield_enters_density_equations_only(yield_network):
     for i in range(nb):
         assert sp.simplify(odes[i] - rxn.rad.group_yields[i] * rxn.rate) == 0
         assert odes[nb + i].is_zero
-
-
-def test_jaff_round_trip_keeps_yield(yield_network, tmp_path):
-    net = yield_network(radiation=RadiationConfig(bands=BANDS))
-    net.to_jaff(tmp_path / "y.jaff")
-
-    back = Network(
-        str(tmp_path / "y.jaff"),
-        funcfile=False,
-        radiation=RadiationConfig(bands=BANDS),
-    )
-
-    rxn = back.reactions[0]
-    assert rxn.rad.spectral_yield is not None
-    assert float(rxn.rad.spectral_yield) == pytest.approx(1e-12, rel=1e-6, abs=0)
-    assert _floats(rxn.rad.group_yields) == pytest.approx(
-        _floats(net.reactions[0].rad.group_yields), rel=1e-6, abs=0
-    )

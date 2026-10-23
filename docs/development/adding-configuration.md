@@ -147,7 +147,10 @@ entries that name no reaction. A photo reaction's `reaction.photo` is
 itself a component, `PhotoReaction(reaction, reaction.config.photo)`: it keeps
 the photo section as `photo.config`, computes the cross sections, band data and
 shielding tables (`photo.compute()`), and offers `band_xsecs` and
-`plot_xsecs()`. To tell a key set on
+`plot_xsecs()`. Likewise every reaction's `reaction.rad` is a
+`ReactionRadiation(reaction)` component: it reads the reaction's `.jfunc`
+spectral yield (no copy) and computes its per-group integrals
+(`rad.compute()`); it has no config section. To tell a key set on
 the reaction itself from the global value, use `net.reactions.config.own(serialized)`.
 
 ## Where each check belongs

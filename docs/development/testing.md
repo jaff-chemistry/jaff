@@ -66,8 +66,6 @@ environment variables instead:
 | `JAFF_UPDATE_GOLDEN=1`              | Rewrite the committed generated code in `tests/golden/` from the current templates.                      |
 | `JAFF_UPDATE_SNAPSHOTS=1`           | Record the snapshots (parser output in `tests/snapshots/parser_output/`, template-engine output in `tests/snapshots/template_engine/`) instead of comparing against them. |
 | `JAFF_GOLDEN_SEED=<seed>`           | Fix the random input seed of the rendered-code tests, to reproduce a failure (the seed is in the failure message). |
-| `JAFF_TEST_REPO_NETWORKS=1`         | Run the slow tests that load and round-trip every bundled network (skipped otherwise).                   |
-| `JAFF_TEST_REPO_NETWORKS_STRICT=1`  | With the above, fail on bundled networks that do not parse instead of only reporting them.               |
 | `JAFF_OFFLINE=1`                    | Do not contact the data server: no registry fetch and no downloads, so only already-installed data tables are available. |
 
 After refreshing golden code or snapshots, review the diff before keeping it.
@@ -327,15 +325,12 @@ For a one-off network, prefer the `make_network` fixture over a new fixture file
 Use pytest's `tmp_path` fixture for files a test writes and reads back.
 
 ```python
-def test_network_save_load(tmp_path, sample_network):
-    """Test saving and loading a network."""
-    # Save to a temporary .jaff file
+def test_network_save(tmp_path, sample_network):
+    """Test saving a network."""
     output_file = tmp_path / "test.jaff"
     sample_network.to_jaff(output_file)
 
-    # Load and verify
-    net2 = Network(str(output_file))
-    assert len(net2.species) == len(sample_network.species)
+    assert output_file.read_bytes()[:2] == b"\x1f\x8b"  # gzip
 ```
 
 ## Mocking

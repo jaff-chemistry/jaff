@@ -19,8 +19,8 @@ src/jaff/
 │   │   └── config.py           # NetworkConfig ([network]), JaffTomlConfig, load_network_config
 │   ├── reaction/               # reaction.py (Reaction) · reactions.py (Reactions)
 │   │   ├── photo_reaction.py   # PhotoReaction — a photo reaction's component (rxn.photo)
-│   │   ├── reaction_props.py   # GroupedPhotoReactionProps, ReactionRadiationProps,
-│   │   │                       #   AuxFunctions
+│   │   ├── reaction_radiation.py # ReactionRadiation — every reaction's radiation component (rxn.rad)
+│   │   ├── reaction_props.py   # GroupedPhotoReactionProps, AuxFunctions
 │   │   ├── config.py           # [network.reactions] models (ReactionConfig, PhotoConfig, ...)
 │   │   ├── _helper.py          # to_float_or_none
 │   │   └── types/              # RateSegment / RateSegments (rate per temperature range)
@@ -42,7 +42,7 @@ src/jaff/
 │   │   └── auxiliary_func/     # .jfunc auxiliary function parser
 │   │       ├── _engine.py      # AuxiliaryFunctionParser
 │   │       └── function_props.py # AuxiliaryFunctionProps (one parsed function)
-│   └── _typing/                # Shared core TypedDicts (ElementProps, ReactionProps)
+│   └── _typing/                # Shared core TypedDicts (ElementProps)
 │
 ├── physics/                    # Symbolic ODE/flux generation + physics helpers
 │   ├── _equations.py           # get_sfluxes, get_sodes, get_sradodes
@@ -115,9 +115,8 @@ src/jaff/
 │           └── end/            # END: closes a directive body
 │
 ├── io/                         # Serialization and logging
-│   ├── _io.py                  # .jaff gzip-JSON read/write; data table export
-│   ├── _logger.py              # JaffLogger + progress bars
-│   └── _typing/                # JaffProps (the dict from_jaff_file returns)
+│   ├── _io.py                  # .jaff gzip-JSON writing (loading unsupported); data table export
+│   └── _logger.py              # JaffLogger + progress bars
 │
 ├── config/                     # Path constants + the config machinery
 │   ├── _config.py              # SRC_DIR, DATA_DIR, XSECS/SHIELDING dirs, ...
@@ -171,7 +170,7 @@ src/jaff/
 │   └── _welcome.py             # MOTD / version banner
 │
 ├── errors/                     # Public exceptions (re-exported by jaff.errors)
-│   ├── _parser.py              # ParserError, NotJaffFileError, SympyJsonError
+│   ├── _parser.py              # ParserError, SympyJsonError
 │   ├── _language.py            # InvalidLanguageError
 │   └── _shielding.py           # RegistrationError (shielding registry)
 │
@@ -223,7 +222,7 @@ and upload the contents of `upload/` to the mirror.
 %%{init: {"flowchart": {"useMaxWidth": false}}}%%
 flowchart TD
     subgraph input_sg ["Input"]
-        NF["Network file\nKROME · PRIZMO · UDFA\nKIDA · UCLChem · .jaff"]
+        NF["Network file\nKROME · PRIZMO · UDFA\nKIDA · UCLChem"]
         JF[".jfunc\nauxiliary functions"]
         CFG["jaff.toml · jaffgen.toml · CLI\nconfig layers → validated config"]
     end
@@ -292,8 +291,8 @@ All rate expressions, fluxes, and ODEs live as SymPy objects inside `Network`. C
 **`Catalogue[T]` for all domain collections.**
 `Species`, `Reactions`, and `Elements` all inherit from `Catalogue`, giving O(1) lookup by integer index, slice, string name, _and_ serialized canonical name. The serialized form (e.g. `"+/H/H/O"` for H₂O⁺) enables duplicate detection that is independent of input name formatting.
 
-**`.jaff` binary format.**
-Networks can be saved as gzip-compressed JSON (`.jaff` files) via `io/_io.py`. On load, SymPy expressions are reconstructed from the versioned compact encoding in `common/_sympy_json.py`. This avoids re-parsing large networks on repeated runs.
+**`.jaff` format.**
+Networks can be saved as gzip-compressed JSON (`.jaff` files) via `io/_io.py`, with SymPy expressions in the versioned compact encoding of `common/_sympy_json.py`. Loading `.jaff` files is not supported at the moment.
 
 ## Utility Scripts
 

@@ -186,8 +186,6 @@ schema and reference machinery. Every folder has an `__init__.py`.
   `sample_network`; an autouse fixture silences the banner and logging.
 - **Regenerating references**: `JAFF_UPDATE_GOLDEN=1` (golden code in `tests/golden/`),
   `JAFF_UPDATE_SNAPSHOTS=1` (snapshots); review the diff before keeping it.
-- **Opt-in slow tests**: `JAFF_TEST_REPO_NETWORKS=1` (round-trip every bundled network;
-  add `JAFF_TEST_REPO_NETWORKS_STRICT=1` to fail on networks that do not parse).
 - **Reproducing a rendered-code failure**: `JAFF_GOLDEN_SEED=<seed>` (the seed is in
   the failure message).
 
@@ -225,7 +223,9 @@ To add a setting, follow `docs/development/adding-configuration.md`. In short:
    `check_config()` checks per-reaction entries), and a
    photo reaction's `reaction.photo` is a `PhotoReaction(reaction, config.photo)`
    component holding its photo settings, computed photo state and the photo logic
-   (`compute()`, `band_xsecs`, `plot_xsecs()`). Checks against the network
+   (`compute()`, `band_xsecs`, `plot_xsecs()`); every reaction's `reaction.rad` is a
+   `ReactionRadiation(reaction)` component (its `.jfunc` spectral yield, read not
+   copied, and the computed `group_yields`). Checks against the network
    raise `ParserError` with the key path.
 4. `Network`'s keyword arguments are exactly the `[network]` keys: a new top-level
    field of `NetworkConfig` needs a keyword of the same name (a test enforces it);

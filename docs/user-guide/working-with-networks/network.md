@@ -26,9 +26,8 @@ net = Network("networks/h_photoionization/h_photo.jet")
 A single `Network(...)` call runs a fixed pipeline. Knowing the phases explains
 where every attribute comes from:
 
-1. **Read** — the file is resolved and, if it is a `.jaff` file (gzip-compressed
-   JSON), deserialized directly; otherwise the text parser auto-detects the format (KROME, PRIZMO,
-   UDFA, KIDA, UCLChem, …).
+1. **Read** — the file is resolved and the text parser auto-detects the format
+   (KROME, PRIZMO, UDFA, KIDA, UCLChem, …).
 2. **Parse & assemble** — reactions are read one by one. Each new species name
    becomes a [`Specie`](species.md) appended to `net.species` (pseudo-species
    such as `_PHOTON` are kept out of it); each line becomes
@@ -77,7 +76,7 @@ replaces it whole). The validated result is `net.config`.
 
 | Parameter                 | Type                                 | Description                                                                                                                         |
 | ------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `fname`                   | `str or Path`                        | Path to the network file (required), or a predefined network name; `.jaff` files are loaded as serialized networks                 |
+| `fname`                   | `str or Path`                        | Path to the network file (required), or a predefined network name; `.jaff` files cannot be loaded at the moment                     |
 | `config`                  | path, `dict`, `JaffTomlConfig`, or a list of them | Config layers over the network's `jaff.toml`; a `dict` is shaped like a `jaff.toml` (`{"network": {...}}`)            |
 | `strict`                  | `bool`                               | Treat validation problems (conservation, sinks/sources, ...) as fatal (`network.strict`; default `False`)                          |
 | `label`                   | `str`                                | Human-readable network name (`network.label`; default the file stem)                                                               |
@@ -352,15 +351,11 @@ grid). See [`to_hdf5`](../../reference/core/network/to_hdf5.md) and
 ### JAFF serialized format
 
 `to_jaff` serializes an already-loaded network to a gzip-compressed JSON file
-(conventional extension `.jaff`). Re-loading skips parsing and the expensive
-SymPy assembly, so it is the recommended cache for large networks:
+(conventional extension `.jaff`). Loading `.jaff` files is not supported at the moment: `Network("x.jaff")` raises `ParserError`.
 
 ```python
 net = Network("uclchem_small_gas")
 net.to_jaff("uclchem.jaff")        # save
-
-net2 = Network("uclchem.jaff")     # reload — same species, reactions, and ODEs
-net2.species.count, net2.reactions.count   # (73, 562)
 ```
 
 <!-- prettier-ignore -->
@@ -368,7 +363,7 @@ net2.species.count, net2.reactions.count   # (73, 562)
     If any rate contains an undefined SymPy function — most commonly an
     unresolved `photorates(...)` (a photo-reaction loaded without radiation)
     or a custom `interp(...)` — `to_jaff` raises `ValueError`, because such
-    expressions cannot be round-tripped through the JSON schema (GOW, for
+    expressions cannot be encoded in the JSON schema (GOW, for
     example, fails this way). Resolve the radiation/interpolation first, or keep
     those networks in their text form. Some other SymPy nodes are not supported
     by the encoder either: `COthin`, for instance, currently fails with

@@ -5,7 +5,7 @@
 
 A ``Network`` is the main entry point for users of the JAFF library.  It
 reads a reaction network file in any supported format (KROME, PRIZMO, UDFA,
-KIDA, UCLChem, or the gzip-compressed JSON ``.jaff`` serialisation), builds typed
+KIDA, UCLChem), builds typed
 ``Species`` and ``Reactions`` catalogues, validates the network, and exposes
 symbolic ODE and flux expressions for downstream code generation.
 
@@ -37,11 +37,11 @@ from sympy import (
 )
 
 from ...common import is_jaff_file, load_mass_dict, print_motd, resolve_dependencies
-from ...config.base import ConfigModel, overlay
+from ...config.base import ConfigModel
 from ...drivers import HDF5
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
-from ...io._io import JaffProps, from_jaff_file, to_jaff_file, write_data_table
+from ...io._io import to_jaff_file, write_data_table
 from ...physics import (
     Dust,
     Photochemistry,
@@ -59,12 +59,10 @@ from ..parsers import NetworkParser
 from ..reaction import (
     PhotoReaction,
     RateSegment,
-    RateSegments,
     Reaction,
-    ReactionRadiationProps,
     Reactions,
 )
-from ..reaction.config import ReactionConfig, ReactionsConfig
+from ..reaction.config import ReactionsConfig
 from ..species import Specie, Species
 from ._spec import NetworkSpec
 from ._symbols import NetworkSymbols
@@ -72,7 +70,6 @@ from .config import ConfigLayer, NetworkConfig, load_network_config
 
 if TYPE_CHECKING:
     from .._typing import ElementProps
-    from .._typing._reaction import ReactionProps
     from ..parsers.auxiliary_func import AuxiliaryFunctionProps
     from ..parsers.network._formats import Parser
 
@@ -290,8 +287,8 @@ class Network:
             single ``.jet`` file).  A predefined network name wins over a
             same-named path on disk.  Supported formats: any text format
             auto-detected by ``NetworkParser`` (KIDA, UDFA, PRIZMO, KROME,
-            UCLCHEM), plus ``.jaff`` / ``.jaff.gz`` files written by
-            :meth:`to_jaff`.
+            UCLCHEM).  ``.jaff`` files written by :meth:`to_jaff` cannot be
+            loaded at the moment (``ParserError``).
         config : ConfigLayer or sequence of them, optional
             Config layers stacked over the ``jaff.toml`` next to the network
             file: a TOML file path, a ``dict`` shaped like a ``jaff.toml``
@@ -345,8 +342,8 @@ class Network:
             If *fname* is neither an existing file nor a predefined network
             name, or a predefined network directory has no ``.jet`` file.
         ParserError
-            If a predefined network directory has more than one ``.jet`` file,
-            the config is invalid (including a per-reaction config entry that
+            If *fname* is a ``.jaff`` file, a predefined network directory has
+            more than one ``.jet`` file, the config is invalid (including a per-reaction config entry that
             names no reaction of the network, or photo settings on a non-photo
             reaction), a duplicate rate is found under ``duplicate_policy =
             "error"``, or the network or ``.jfunc`` file is
@@ -378,13 +375,11 @@ class Network:
         )
         self.spec: NetworkSpec = NetworkSpec(fname, self.config.funcfile)
 
-        jaff_props: JaffProps = {}  # type: ignore
-        loaded_from_jaff_file = is_jaff_file(self.spec.fname)
-        if loaded_from_jaff_file:
-            jaff_props = from_jaff_file(self.spec.fname)
-            self.spec.fname = jaff_props.get("file_name", self.spec.fname)
-        # Without a configured label: the .jaff file's, else the file stem.
-        self.__default_label: str = jaff_props.get("label") or self.spec.fname.stem
+        if is_jaff_file(self.spec.fname):
+            raise ParserError(
+                f"{self.spec.fname}: loading .jaff files is not supported; "
+                "load the original network file"
+            )
         if not _from_cli:
             print_motd()
 
@@ -411,20 +406,16 @@ class Network:
         self.mass_dict: dict[str, ElementProps] = load_mass_dict()
         Species.configure(self.mass_dict)
 
-        parsers: list[Parser] = []
-        if not loaded_from_jaff_file:
-            parsers = self.__load_network()
-        else:
-            self.__load_network_from_jaff_file(jaff_props)
+        parsers = self.__load_network()
 
         self.reactions.check_config()
         self.elements: Elements = Elements(self.species._list)
         self.__post_process(parsers)
-        self.__normalize_network_extras(loaded_from_jaff_file)
-        self.__set_emissivity(jaff_props.get("emissivity"))
-        self.__set_absorption_coefficient(jaff_props.get("absorption_coefficient"))
+        self.__normalize_network_extras()
+        self.__set_emissivity()
+        self.__set_absorption_coefficient()
         self.thermodynamics: Thermodynamics = Thermodynamics(
-            self, self.config.thermodynamics, jaff_props.get("dEdt_extra")
+            self, self.config.thermodynamics
         )
         self.symbols.log_summary()
 
@@ -444,7 +435,7 @@ class Network:
     @property
     def label(self) -> str:
         """Human-readable label: the ``label`` setting, else the file stem."""
-        return self.config.label or self.__default_label
+        return self.config.label or self.spec.fname.stem
 
     def __load_network(self) -> list[Parser]:
         """Parse the network file and build species, reactions, and auxiliary quantities.
@@ -545,71 +536,6 @@ class Network:
 
         return parsers
 
-    def __load_network_from_jaff_file(self, jaff_props: JaffProps):
-        """Restore species and reactions from a ``.jaff`` file payload.
-
-        Parameters
-        ----------
-        jaff_props : JaffProps
-            Deserialised property dictionary returned by
-            :func:`~jaff.io._io.from_jaff_file`.
-        """
-        self.species = jaff_props["species"]
-
-        for i, reaction in enumerate(jaff_props["reactions"]):
-            rtype = reaction.get("reaction_type", "unknown")
-
-            rea = Reaction(
-                self,
-                reactants=reaction["reactants"],
-                products=reaction["products"],
-                rate_coefficient=reaction["rate"],
-                dE=reaction["dE"],
-                tmin=reaction["tmin"],
-                tmax=reaction["tmax"],
-                config=self.__jaff_reaction_config(reaction),
-                original_string=reaction["original_string"],
-                index=reaction.get("index", i),
-                type=rtype,
-                format=reaction.get("format"),
-                xsec=reaction.get("xsec_props"),
-                custom_rad_rate=bool(reaction.get("custom_rad_rate")),
-                rad=ReactionRadiationProps(spectral_yield=reaction.get("spectral_yield")),
-            )
-
-            segments = reaction.get("rate_segments")
-            if segments:
-                rea.rate_segments = RateSegments(
-                    [RateSegment(s["rate"], s["tmin"], s["tmax"]) for s in segments],
-                    rea.rate_segments.mode,
-                )
-            self.reactions.add(rea)
-
-        if self._photochemistry is not None:
-            self._photochemistry.log_fallback_summary()
-
-    def __jaff_reaction_config(self, reaction: ReactionProps) -> ReactionConfig:
-        """Return a ``.jaff`` reaction's settings: the network's, with the stored ones.
-
-        The settings stored in the file (``t_cutoff``, ``pi_database``,
-        ``shielding``) are applied over the reaction's resolved config, as its
-        own entry would be.
-        """
-        rr, pp = reaction["reactants"], reaction["products"]
-        resolved = self.reactions.config.resolve(Reaction.serialize(rr, pp))
-        photo: Dict[str, Any] = {}
-        if reaction.get("pi_database") is not None:
-            photo["pi_database"] = reaction["pi_database"]
-        shielding = reaction.get("shielding")
-        if shielding:
-            photo["shielding"] = {"type": shielding["type"], **shielding["props"]}
-
-        stored: Dict[str, Any] = {"photo": photo} if photo else {}
-        if reaction.get("t_cutoff") is not None:
-            stored["t_cutoff"] = reaction["t_cutoff"]
-
-        return overlay(resolved, ReactionConfig.model_validate(stored))
-
     def __post_process(self, parsers: list[Parser]) -> None:
         """Freeze the catalogues and run each parser's ``post_process`` hook.
 
@@ -621,7 +547,7 @@ class Network:
         Parameters
         ----------
         parsers : list[Parser]
-            Parsers that produced reactions; empty for a ``.jaff`` network.
+            Parsers that produced reactions.
         """
         self.reactions._freeze()
         self.species._freeze()
@@ -629,27 +555,16 @@ class Network:
         for parser in parsers:
             parser.post_process(self)
 
-    def __normalize_network_extras(self, loaded_from_jaff: bool = False):
+    def __normalize_network_extras(self):
         """Standardize convenience symbols in all rate and auxiliary expressions.
 
         Replaces shorthand symbols (``n_X``, ``n_e``, ``ntot``, …, and ``n_X_nuc``
         when ``expand_nuclei`` is enabled) with ``nden[i]`` references in every
         reaction rate, in each reaction's radiation group yields, and in a photo
         reaction's band data (cross sections and band rates).
-
-        Parameters
-        ----------
-        loaded_from_jaff : bool, optional
-            When ``True``, the network was restored from a ``.jaff`` file whose
-            stored ``rate`` is already the final (piecewise-collapsed,
-            standardized) expression.  Re-evaluating the rate segments would
-            wrap the already-collapsed rate in a second piecewise, so the stored
-            rate is used as-is instead.
         """
         for r in self.reactions:
-            if loaded_from_jaff:
-                r.rate_coefficient = self.symbols.standardize(r.rate_coefficient)
-            elif r.type == "photo" and self.radiation is not None:
+            if r.type == "photo" and self.radiation is not None:
                 r.rate_coefficient = self.symbols.standardize(r.rate_coefficient)
                 r.rate_segments[0].rate = r.rate_coefficient
             else:
@@ -680,21 +595,18 @@ class Network:
             if isinstance(band.xsec, Basic):
                 band.xsec = self.symbols.standardize(band.xsec)
 
-    def __set_emissivity(self, stored: Expr | None) -> None:
+    def __set_emissivity(self) -> None:
         """Integrate the ``globalEmissivity`` over the radiation groups.
 
         Stores the spectrum on ``radiation.emissivity`` and its standardized
-        per-group integrals on each ``group.emissivity``.  The ``.jfunc``
-        ``globalEmissivity`` function wins over the expression *stored* in a ``.jaff``
-        file.  Does nothing without radiation or without an emissivity.
+        per-group integrals on each ``group.emissivity``.  Does nothing without
+        radiation or without a ``globalEmissivity`` function.
         """
-        if self.radiation is None:
+        aux = self.spec.aux_funcs.get("globalemissivity")
+        if self.radiation is None or aux is None:
             return
 
-        aux = self.spec.aux_funcs.get("globalemissivity")
-        emissivity = cast(Expr, aux.expr) if aux is not None else stored
-        if emissivity is None:
-            return
+        emissivity = cast(Expr, aux.expr)
 
         self.radiation.emissivity = emissivity
         groups = self.radiation.groups
@@ -703,21 +615,19 @@ class Network:
         ):
             group.emissivity = self.symbols.standardize(value)
 
-    def __set_absorption_coefficient(self, stored: Expr | None) -> None:
+    def __set_absorption_coefficient(self) -> None:
         """Average the ``globalAbsorptionCoefficient`` over the radiation groups.
 
         Stores the spectrum on ``radiation.absorption_coefficient`` and its
         standardized per-group averages on each ``group.absorption_coefficient``.
-        The ``.jfunc`` function wins over the expression *stored* in a ``.jaff``
-        file.  Does nothing without radiation or without a coefficient.
+        Does nothing without radiation or without a
+        ``globalAbsorptionCoefficient`` function.
         """
-        if self.radiation is None:
+        aux = self.spec.aux_funcs.get("globalabsorptioncoefficient")
+        if self.radiation is None or aux is None:
             return
 
-        aux = self.spec.aux_funcs.get("globalabsorptioncoefficient")
-        coefficient = cast(Expr, aux.expr) if aux is not None else stored
-        if coefficient is None:
-            return
+        coefficient = cast(Expr, aux.expr)
 
         self.radiation.absorption_coefficient = coefficient
         groups = self.radiation.groups
@@ -801,8 +711,9 @@ class Network:
     def to_jaff(self, filename: str | Path):
         """Serialise this network to a gzip-compressed ``.jaff`` JSON file.
 
-        The file reloads fast with ``Network(filename)``.  It uses the
-        ``jaff.network_json`` format marker and ``schema_version = 1``.
+        It uses the ``jaff.network_json`` format marker and
+        ``schema_version = 1``.  Loading ``.jaff`` files is not supported at
+        the moment.
 
         Parameters
         ----------

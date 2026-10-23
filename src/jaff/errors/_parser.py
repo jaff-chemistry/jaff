@@ -1,4 +1,4 @@
-# ABOUTME: Exceptions for network-file parsing, .jaff file I/O and SymPy JSON
+# ABOUTME: Exceptions for network-file parsing and SymPy JSON
 # ABOUTME: ParserError carries file/line/function context in its message
 
 """
@@ -9,9 +9,6 @@ Classes
 :class:`ParserError`
     Rich contextual error raised when the JAFF network file parser encounters
     a malformed input (bad syntax, cyclic dependencies, unknown symbols, …).
-:class:`NotJaffFileError`
-    Raised when a file is supplied to a JAFF I/O function but does not have
-    a recognised ``.jaff`` or ``.jaff.gz`` extension.
 :class:`SympyJsonError`
     Raised by the :mod:`~jaff.common._sympy_json` module when a SymPy
     expression cannot be serialized or deserialized.
@@ -116,34 +113,6 @@ class ParserError(Exception):
         error_str += self.message
 
         return error_str
-
-
-class NotJaffFileError(Exception):
-    """
-    Raised when a path does not resolve to a valid JAFF network file.
-
-    Parameters
-    ----------
-    message : str
-        Human-readable description of the problem.
-    file : pathlib.Path or None, optional
-        The offending file path, appended to *message* when provided.
-    """
-
-    def __init__(self, message: str, file: Path | None = None):
-        """Construct the error with an optional file path appended to the message.
-
-        Parameters
-        ----------
-        message : str
-            Human-readable description of the problem.
-        file : Path or None, optional
-            The offending file path, appended to *message* when provided.
-        """
-        if file is not None:
-            message = f"{message}\nFile: {file}"
-
-        super().__init__(message)
 
 
 class SympyJsonError(ValueError):

@@ -9,7 +9,6 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from jaff import Network
 from jaff.core.network.config import NetworkConfig
 from jaff.cli import JaffGen
 from jaff.common._integrators import get_bounds
@@ -380,25 +379,6 @@ class TestJaffgenWiring:
         (rxn,) = [r for r in gen.net.reactions if r.type == "photo"]
         assert rxn.config.photo.pi_database == "leiden"
         assert rxn.photo.xsec.database == "leiden"
-
-
-class TestJaffRoundTrip:
-    def test_override_survives_round_trip(self, make_network, tmp_path):
-        cfg = tmp_path / "jaff.toml"
-        cfg.write_text(
-            '[network.reactions.reaction."C._PHOTON__C+.e-".photo]\npi_database = "verner"\n'
-        )
-        props = RadiationConfig(bands=BANDS)
-        net = make_network(
-            PHOTO_JET, name="t.jet", config=str(cfg), radiation=props
-        )
-        out = tmp_path / "t.jaff"
-        net.to_jaff(out)
-        back = Network(str(out), radiation=props)
-        rxn = _by_key(back)["C._PHOTON__C+.e-"]
-        assert rxn.config.photo.pi_database == "verner"
-        assert rxn.photo.xsec.database == "verner"
-        assert _by_key(back)["Ca+++++._PHOTON__Ca++++++.e-"].config.photo.pi_database == "norad"
 
 
 class TestPlotSampling:

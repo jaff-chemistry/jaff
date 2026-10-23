@@ -36,14 +36,13 @@ Elements can also be built directly from a list of species names:
 [[1, 0], [0, 2], [1, 1]]
 """
 
-from jaff.core._typing._reaction import ReactionProps
-
 from . import elements, network, reaction, species
 from ._typing import ElementProps
 from .elements import Element, Elements
 from .network import Network, NetworkSpec, NetworkSymbols
 from .reaction import (
     PhotoReaction,
+    ReactionRadiation,
     Reaction,
     Reactions,
 )
@@ -63,7 +62,7 @@ __all__ = [
     "Specie",
     "Species",
     "ElementProps",
-    "ReactionProps",
     "NetworkSymbols",
     "PhotoReaction",
+    "ReactionRadiation",
 ]

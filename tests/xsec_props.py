@@ -62,4 +62,7 @@ def stub_photo(
     photo = config if config is not None else default_reaction_config().photo
     assert photo is not None
 
-    return PhotoReaction(None, photo, xsec=xsec)  # type: ignore[arg-type]
+    stub = PhotoReaction(None, photo)  # type: ignore[arg-type]
+    stub.xsec = xsec
+
+    return stub

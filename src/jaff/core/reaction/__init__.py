@@ -2,7 +2,7 @@
 # ABOUTME: Re-exports the public reaction classes
 
 from .photo_reaction import PhotoReaction
-from .reaction_props import ReactionRadiationProps
+from .reaction_radiation import ReactionRadiation
 from .reaction import Reaction
 from .reactions import Reactions
 from .types import RateSegment, RateSegments
@@ -13,5 +13,5 @@ __all__ = [
     "RateSegment",
     "RateSegments",
     "PhotoReaction",
-    "ReactionRadiationProps",
+    "ReactionRadiation",
 ]

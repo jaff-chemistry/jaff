@@ -67,17 +67,14 @@ from ..elements import Elements
 from ..species import Specie, Species
 from .config import PhotoConfig, ReactionConfig
 from .photo_reaction import PhotoReaction
-from .reaction_props import (
-    AuxFunctions,
-    ReactionRadiationProps,
-)
+from .reaction_props import AuxFunctions
+from .reaction_radiation import ReactionRadiation
 from .types import RateSegment, RateSegments
 
 if TYPE_CHECKING:
     import matplotlib.pyplot as plt
 
     from ...core import Network
-    from ...physics import XsecProps
 
 
 class Reaction:
@@ -170,12 +167,13 @@ class Reaction:
         ``config.photo``), cross sections (``photo.xsec``), per-band data
         (``photo.rgrouped``, ``photo.band_xsecs``), ``custom_rad_rate`` and
         ``shielding_tables``.  See :class:`PhotoReaction`.
-    rad : ReactionRadiationProps
-        Radiation the reaction emits: ``spectral_yield`` (from a ``.jfunc``
-        ``spectralYield<N>`` function, erg eV⁻¹ per event as a function of
-        ``ph_E``, or ``None``) and its per-group integrals ``group_yields``
-        (set when a radiation field is configured).  Any reaction type can
-        emit, not only photo reactions.
+    rad : ReactionRadiation
+        The reaction's radiation component: the radiation it emits
+        (``rad.spectral_yield``, its ``.jfunc`` ``spectralYield<N>``
+        function, erg eV⁻¹ per event as a function of ``ph_E``, or ``None``)
+        and its per-group integrals (``rad.group_yields``, set when a
+        radiation field is configured).  Any reaction type can emit, not only
+        photo reactions.  See :class:`ReactionRadiation`.
 
     Notes
     -----
@@ -218,9 +216,6 @@ class Reaction:
         dE: Expr | None = None,
         config: ReactionConfig | None = None,
         type: str = "unknown",
-        xsec: XsecProps | None = None,
-        custom_rad_rate: bool = False,
-        rad: ReactionRadiationProps | None = None,
         format: str | None = None,
         metadata: dict | None = None,
     ):
@@ -261,15 +256,6 @@ class Reaction:
             ``"photo"``, ``"cosmic_ray"``, ``"3_body"``, ``"unknown"``, or a
             grain surface-mechanism type).  Stored verbatim on the ``type``
             attribute; defaults to ``"unknown"``.
-        xsec : XsecProps or None, optional
-            Cross sections of a photo reaction restored from a ``.jaff`` file;
-            ``None`` (default) looks them up.
-        custom_rad_rate : bool, optional
-            Whether a photo reaction restored from a ``.jaff`` file takes its
-            rate from a ``chemRate<N>`` (default ``False``).
-        rad : ReactionRadiationProps or None, optional
-            Emitted radiation.  ``None`` (default) builds one from the
-            ``.jfunc`` ``spectralYield<N>`` function, if any.
         format : str or None, optional
             Name of the network-format parser that produced the reaction
             (e.g. ``"prizmo"``); ``None`` (default) when unknown.
@@ -311,15 +297,7 @@ class Reaction:
             if self.aux_funcs.deltae is not None
             else (dE if dE is not None else Float(0.0))
         )
-        self.rad: ReactionRadiationProps = (
-            rad
-            if rad is not None
-            else ReactionRadiationProps(
-                spectral_yield=cast(Expr, self.aux_funcs.spectralyield.expr)
-                if self.aux_funcs.spectralyield is not None
-                else None
-            )
-        )
+        self.rad: ReactionRadiation = ReactionRadiation(self)
         self.original_string = original_string
         # verbatim is the "R1 + R2 -> P1 + P2" form built from the species
         # names; original_string keeps the raw source line
@@ -333,21 +311,14 @@ class Reaction:
         self.type: str = type
 
         self.photo: PhotoReaction | None = (
-            PhotoReaction(
-                self, self.__photo_config(), xsec=xsec, custom_rad_rate=custom_rad_rate
-            )
-            if type == "photo"
-            else None
+            PhotoReaction(self, self.__photo_config()) if type == "photo" else None
         )
         if self.photo is not None:
             band_rate = self.photo.compute()
             if band_rate is not None:
                 self.rate_coefficient = band_rate
 
-        if self.net.radiation is not None and self.rad.spectral_yield is not None:
-            self.rad.group_yields = self.net.radiation.integrate_over_groups(
-                self.rad.spectral_yield
-            )
+        self.rad.compute()
 
     def __repr__(self):
         """Return detailed string representation of this reaction.
