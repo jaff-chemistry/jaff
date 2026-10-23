@@ -56,7 +56,7 @@ class RadiationConfig(ConfigModel):
     bands: List[float | Literal["inf"]]
     profile_index: float | List[float] = 0.0
     mode: RadiationMode = "nph"
-    c: float | str = _ac.c.cgs.value  # ty: ignore[unresolved-attribute]
+    c: float | str = float(_ac.c.cgs.value)  # ty: ignore[unresolved-attribute]
     background_field: BackgroundField = "draine"
     absorption_attenuates_flux: bool = True
 

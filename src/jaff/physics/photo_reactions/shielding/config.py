@@ -7,9 +7,11 @@ that plugin's settings, checked by the plugin's ``config_model()`` (a
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Dict
+from typing import Any, ClassVar, Dict, List
 
-from pydantic import ValidationError, model_validator
+from pydantic import GetJsonSchemaHandler, ValidationError, model_validator
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import CoreSchema
 
 from ....config.base import (
     ConfigModel,
@@ -63,6 +65,55 @@ class ShieldingConfig(ConfigModel):
         params = {k: v for k, v in data.items() if k != "type"}
 
         return {"type": data.get("type", "leiden"), "params": params}
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, core_schema: CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        """Describe the flat TOML table: one alternative per shielding plugin.
+
+        Each alternative fixes ``type`` to the plugin's name (required, but for
+        the default type) and holds the plugin's ``config_model()`` keys.
+        Whether a reaction-bound plugin fits the reaction is checked on load.
+        """
+        # Imported here: the plugin registry imports this module.
+        from . import _REGISTER, _discover_shielding
+
+        _discover_shielding()
+        default = cls.model_fields["type"].default
+        branches: List[JsonSchemaValue] = []
+        for (name, reaction), plugin in sorted(
+            _REGISTER.items(), key=lambda item: (item[0][0], item[0][1] or "")
+        ):
+            params = plugin.config_model().model_json_schema()
+            if "$defs" in params:
+                raise NotImplementedError(
+                    f"shielding {name}: nested models in its settings are not supported"
+                )
+
+            only = f" (only for {reaction})" if reaction is not None else ""
+            branches.append(
+                {
+                    "type": "object",
+                    "title": f"{name} shielding{only}",
+                    "properties": {
+                        "type": {"const": name},
+                        **params.get("properties", {}),
+                    },
+                    "required": [
+                        *params.get("required", []),
+                        *(["type"] if name != default else []),
+                    ],
+                    "additionalProperties": False,
+                }
+            )
+
+        return {
+            "title": "Shielding",
+            "description": "Line shielding of a photo reaction; `type` selects the "
+            f"model (default {default!r}) and its keys.",
+            "anyOf": branches,
+        }
 
 
 def check_shielding(shielding: ShieldingConfig | None, reaction: str | None) -> None:

@@ -129,7 +129,8 @@ jaff = [
   "data/*.dat",
   "templates/**/*",
   "db/jaff.db",
-  "codegen/templating/*.lark"
+  "codegen/templating/*.lark",
+  "config/schemas/*.json"
 ]
 
 # astropy.constants injects its members dynamically at import, so static
@@ -140,3 +141,13 @@ include = ["src/jaff/physics/constants.py"]
 
 [tool.ty.overrides.rules]
 unresolved-attribute = "ignore"
+
+# Editor linting of the jaff config files against their JSON Schemas (Tombi;
+# Taplo reads .taplo.toml).  Regenerate with `python -m jaff.config.json_schema`.
+[[tool.tombi.schemas]]
+path = "src/jaff/config/schemas/jaff.schema.json"
+include = ["**/jaff.toml"]
+
+[[tool.tombi.schemas]]
+path = "src/jaff/config/schemas/jaffgen.schema.json"
+include = ["**/jaffgen.toml"]
