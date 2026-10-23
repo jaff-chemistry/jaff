@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from jaff.cli._helper import cli_layer
+from jaff.cli._helper import cli_layer, command_line_layer, parse_set
 from jaff.cli.jaffgen.config import load_jaffgen_config
 from jaff.errors import ParserError
 from jaff.physics.thermodynamics.eos.config import IdealEosConfig
@@ -358,3 +358,101 @@ class TestDataTables:
 
         assert result.exit_code == 0, result.output
         assert (out / "out.csv").exists()
+
+
+class TestParseSet:
+    """--set key.path=value: key path and value written as in TOML."""
+
+    @pytest.mark.parametrize(
+        "item, expected",
+        [
+            ("network.strict=true", {"network": {"strict": True}}),
+            (
+                "network.radiation.bands=[6, 13.6]",
+                {"network": {"radiation": {"bands": [6, 13.6]}}},
+            ),
+            ('network.label="gow"', {"network": {"label": "gow"}}),
+            ("network.label=gow", {"network": {"label": "gow"}}),
+            ("network.label=a=b", {"network": {"label": "a=b"}}),
+            (
+                'network.reactions.reaction."H2._PHOTON__H.H".t_cutoff=clip',
+                {
+                    "network": {
+                        "reactions": {
+                            "reaction": {"H2._PHOTON__H.H": {"t_cutoff": "clip"}}
+                        }
+                    }
+                },
+            ),
+        ],
+    )
+    def test_item(self, item, expected):
+        assert parse_set([item]) == expected
+
+    def test_items_merge_later_wins(self):
+        items = ["network.label=a", "network.strict=true", "network.label=b"]
+
+        assert parse_set(items) == {"network": {"label": "b", "strict": True}}
+
+    @pytest.mark.parametrize("item", ["network.label", "=1", "network..x=1"])
+    def test_invalid_item(self, item):
+        with pytest.raises(ParserError, match="--set"):
+            parse_set([item])
+
+
+class TestCommandLineLayer:
+    def test_set_beats_named_option(self):
+        args = SimpleNamespace(label="flag", set=["network.label=set"])
+
+        assert command_line_layer(args) == {"network": {"label": "set"}}
+
+    def test_without_set(self):
+        assert command_line_layer(SimpleNamespace(label="flag")) == {
+            "network": {"label": "flag"}
+        }
+
+
+class TestSetEndToEnd:
+    def test_jaffgen_set_disables_funcfile(self, tmp_path):
+        out = TestFuncfileWiring()
+        (tmp_path / "net.jfunc").write_text(out.JFUNC)
+
+        assert "k[0] = 1" in out._generate(tmp_path, "--set", "network.funcfile=false")
+
+    def test_jaffx_set_applies(self):
+        from jaff.cli.jaffx._engine import JaffX
+
+        args = SimpleNamespace(
+            network=DUP,
+            funcfile=False,
+            label=None,
+            expand_nuclei=None,
+            duplicate_policy=None,
+            set=['network.reactions.duplicate_policy="preserve-last"'],
+        )
+
+        net = JaffX.__new__(JaffX).get_network(args)
+
+        assert net.spec.duplicate_policy == "preserve-last"
+
+    def test_jaffx_rejects_jaffgen_keys(self):
+        from jaff.cli.jaffx._engine import JaffX
+
+        args = SimpleNamespace(
+            network=DUP,
+            funcfile=False,
+            label=None,
+            expand_nuclei=None,
+            duplicate_policy=None,
+            set=["jaffgen.echo=false"],
+        )
+
+        with pytest.raises(ParserError, match="jaffgen"):
+            JaffX.__new__(JaffX).get_network(args)
+
+    def test_typer_collects_repeated_set(self):
+        args = TestTyperFlags()._args(
+            "--set", "network.label=a", "--set", "network.strict=true"
+        )
+
+        assert args.set == ["network.label=a", "network.strict=true"]

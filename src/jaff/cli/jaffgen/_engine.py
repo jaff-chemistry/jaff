@@ -11,7 +11,8 @@ Configuration comes from three layers, lowest precedence first (see
 
 1. The network's ``jaff.toml`` (or ``[jaffgen] network_config``).
 2. A ``jaffgen.toml`` config file (``--config``, or bundled in the template).
-3. Command-line options (:data:`~jaff.cli._helper.CLI_KEYS`).
+3. Command-line options (:data:`~jaff.cli._helper.CLI_KEYS`), then ``--set``
+   ``key.path=value`` items.
 
 Template lookup
 ---------------
@@ -32,7 +33,7 @@ Usage
 import logging
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 import typer
 
@@ -43,7 +44,7 @@ from ...config import TEMPLATES_DIR, predefined_templates
 from ...core.network.config import JaffTomlConfig
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
-from .._helper import DuplicatePolicy, cli_layer, funcfile_arg
+from .._helper import DuplicatePolicy, command_line_layer, funcfile_arg
 from ._structs import DEFAULT_OUTPUT, ResolvedPath, State
 from .config import load_jaffgen_config
 
@@ -132,7 +133,7 @@ class JaffGen:
         RuntimeError
             If no input file/folder/template resolved.
         """
-        cli = cli_layer(self.args)
+        cli = command_line_layer(self.args)
         config_file = self._config_file(getattr(self.args, "config", None))
         self.load_config(config_file, cli)
 
@@ -242,7 +243,9 @@ class JaffGen:
         """
         matches = [f for f in files if f.abspath.name == "jaffgen.toml"]
         if len(matches) > 1:
-            raise ParserError("More than one jaffgen.toml file found in template directory")
+            raise ParserError(
+                "More than one jaffgen.toml file found in template directory"
+            )
 
         return matches[0].abspath if matches else None
 
@@ -527,6 +530,14 @@ def generate(
         help="Echo $$JAFF directives as comments in the output (default: on; "
         "overrides echo in jaffgen.toml)",
     ),
+    set_: Optional[List[str]] = typer.Option(
+        None,
+        "--set",
+        metavar="KEY=VALUE",
+        help="Set any config key, e.g. --set network.reactions.t_cutoff=clip "
+        "(repeatable; the value is TOML, a bare word is a string). Wins over "
+        "the other options and the config files",
+    ),
 ):
     """
     Generate code for chemical reaction networks in multiple programming
@@ -571,6 +582,7 @@ def generate(
         files=file_list,
         template=template,
         echo=echo,
+        set=set_,
     )
     JaffGen(args)
 

@@ -36,14 +36,14 @@ Examples
 import logging
 from inspect import signature
 from types import SimpleNamespace
-from typing import Optional
+from typing import List, Optional
 
 import typer
 
 from ... import Network
 from ...common import print_motd
 from ...io import JaffLogger
-from .._helper import DuplicatePolicy, funcfile_arg
+from .._helper import NETWORK_KEYS, DuplicatePolicy, command_line_layer, funcfile_arg
 
 
 class JaffX:
@@ -66,10 +66,7 @@ class JaffX:
         """
         return Network(
             args.network,
-            label=args.label,
-            funcfile=args.funcfile,
-            duplicate_policy=args.duplicate_policy,
-            expand_nuclei=args.expand_nuclei,
+            config=command_line_layer(args, NETWORK_KEYS),
             _from_cli=True,
         )
 
@@ -138,6 +135,7 @@ def _make_args(
     fast_log: Optional[bool] = None,
     include_all: Optional[bool] = None,
     verbose: Optional[bool] = None,
+    set_: Optional[List[str]] = None,
 ) -> SimpleNamespace:
     """Bundle Typer option values into the namespace the handlers expect."""
     return SimpleNamespace(
@@ -157,6 +155,7 @@ def _make_args(
         fast_log=fast_log,
         include_all=include_all,
         verbose=verbose,
+        set=set_,
     )
 
 
@@ -202,6 +201,13 @@ _DUP_POLICY = typer.Option(
     "jaff.toml; defaults to preserve-first",
 )
 _FILE = typer.Option(..., "-f", "--file", metavar="FILE", help="Output file path/name")
+_SET = typer.Option(
+    None,
+    "--set",
+    metavar="KEY=VALUE",
+    help="Set any network config key, e.g. --set network.reactions.t_cutoff=clip "
+    "(repeatable; the value is TOML, a bare word is a string)",
+)
 
 
 def _export_table_command(
@@ -221,6 +227,7 @@ def _export_table_command(
     fast_log: Optional[bool],
     include_all: Optional[bool],
     verbose: Optional[bool],
+    set_: Optional[List[str]],
 ) -> None:
     JaffX().export_table(
         _make_args(
@@ -239,6 +246,7 @@ def _export_table_command(
             fast_log=fast_log,
             include_all=include_all,
             verbose=verbose,
+            set_=set_,
         ),
         fmt,
     )
@@ -252,6 +260,7 @@ def export_txt(
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
     duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    set_: Optional[List[str]] = _SET,
     tmin: Optional[float] = typer.Option(
         None,
         "--tmin",
@@ -323,6 +332,7 @@ def export_txt(
         fast_log,
         include_all,
         verbose,
+        set_,
     )
 
 
@@ -334,6 +344,7 @@ def export_hdf5(
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
     duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    set_: Optional[List[str]] = _SET,
     tmin: Optional[float] = typer.Option(
         None,
         "--tmin",
@@ -405,6 +416,7 @@ def export_hdf5(
         fast_log,
         include_all,
         verbose,
+        set_,
     )
 
 
@@ -416,6 +428,7 @@ def export_jaff(
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
     duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    set_: Optional[List[str]] = _SET,
 ):
     """Export the network to a .jaff file (gzip-compressed JSON payload)."""
     JaffX().export_jaff(
@@ -428,6 +441,7 @@ def export_jaff(
             duplicate_policy=duplicate_policy.value
             if duplicate_policy is not None
             else None,
+            set_=set_,
         )
     )
 
@@ -439,6 +453,7 @@ def get_num_species(
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
     duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    set_: Optional[List[str]] = _SET,
 ):
     """Print the number of species."""
     JaffX().get_nspec(
@@ -450,6 +465,7 @@ def get_num_species(
             duplicate_policy=duplicate_policy.value
             if duplicate_policy is not None
             else None,
+            set_=set_,
         )
     )
 
@@ -461,6 +477,7 @@ def get_num_reactions(
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
     duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    set_: Optional[List[str]] = _SET,
 ):
     """Print the number of reactions."""
     JaffX().get_nreact(
@@ -472,6 +489,7 @@ def get_num_reactions(
             duplicate_policy=duplicate_policy.value
             if duplicate_policy is not None
             else None,
+            set_=set_,
         )
     )
 

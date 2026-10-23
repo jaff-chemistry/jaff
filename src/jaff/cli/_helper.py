@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import tomllib
 from enum import Enum
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
+
+from ..config.loader import deep_merge
+from ..errors import ParserError
 
 #: Command-line option (its ``args`` attribute) → config key path it sets.
 CLI_KEYS: Dict[str, Tuple[str, ...]] = {
@@ -19,6 +24,11 @@ CLI_KEYS: Dict[str, Tuple[str, ...]] = {
     "expand_nuclei": ("network", "expand_nuclei"),
     "strict": ("network", "strict"),
     "duplicate_policy": ("network", "reactions", "duplicate_policy"),
+}
+
+#: The :data:`CLI_KEYS` setting ``[network]`` keys (all a network tool takes).
+NETWORK_KEYS: Dict[str, Tuple[str, ...]] = {
+    option: path for option, path in CLI_KEYS.items() if path[0] == "network"
 }
 
 
@@ -97,3 +107,66 @@ def cli_layer(args: Any, keys: Dict[str, Tuple[str, ...]] = CLI_KEYS) -> Dict[st
         table[path[-1]] = value
 
     return layer
+
+
+def parse_set(items: List[str]) -> Dict[str, Any]:
+    """Return the config layer of ``--set key.path=value`` items, later ones winning.
+
+    The key path and the value are written as in TOML (a reaction key is
+    quoted: ``network.reactions.reaction."H2._PHOTON__H.H".t_cutoff=clip``); a
+    value that is not a TOML value is taken as a string, so ``label=gow``
+    needs no quotes.
+
+    Parameters
+    ----------
+    items : list of str
+        The ``--set`` values, in command-line order.
+
+    Returns
+    -------
+    dict
+        The layer, shaped like a config file.
+
+    Raises
+    ------
+    ParserError
+        If an item has no ``=`` or its key path is not a TOML dotted key.
+    """
+    return deep_merge(*(_set_item(item) for item in items))
+
+
+def _set_item(item: str) -> Dict[str, Any]:
+    """Return the config layer of one ``--set`` item; see :func:`parse_set`."""
+    key, sep, value = item.partition("=")
+    if not sep or not key.strip():
+        raise ParserError(f"Invalid --set {item!r}: expected key.path=value")
+
+    # The value as TOML, else as a plain string.
+    for text in (f"{key} = {value}", f"{key} = {json.dumps(value)}"):
+        try:
+            return tomllib.loads(text)
+        except tomllib.TOMLDecodeError:
+            continue
+
+    raise ParserError(f"Invalid --set {item!r}: {key!r} is not a valid key path")
+
+
+def command_line_layer(
+    args: Any, keys: Dict[str, Tuple[str, ...]] = CLI_KEYS
+) -> Dict[str, Any]:
+    """Return the config layer of a command line: its options, then ``--set``.
+
+    Parameters
+    ----------
+    args : Any
+        Parsed command-line options; ``args.set`` (if any) holds the
+        ``--set`` items, which win over the named options.
+    keys : dict, optional
+        Option name → config key path (default :data:`CLI_KEYS`).
+
+    Returns
+    -------
+    dict
+        The layer, shaped like a config file.
+    """
+    return deep_merge(cli_layer(args, keys), parse_set(getattr(args, "set", None) or []))
