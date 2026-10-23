@@ -15,6 +15,7 @@ names; a per-reaction table may name a plugin bound to that reaction.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated, Any, ClassVar, Dict, List, Literal, Self, TypeVar, Union
 
 import astropy.constants as _ac
@@ -39,6 +40,15 @@ def _lower(value: Any) -> Any:
 
 
 LowerStr = Annotated[str, BeforeValidator(_lower)]
+
+
+def _to_path(value: Any) -> Any:
+    """Turn a string into a :class:`~pathlib.Path`; leave anything else as is."""
+    return Path(value) if isinstance(value, str) else value
+
+
+#: A path written as a string; relative paths are resolved by the loader.
+PathLike = Annotated[Path, BeforeValidator(_to_path)]
 TCutoff = Annotated[Literal["clip", "extrapolate"], BeforeValidator(_lower)]
 DuplicatePolicy = Annotated[
     Literal["preserve-first", "preserve-last", "error"], BeforeValidator(_lower)
@@ -476,3 +486,37 @@ class ThermodynamicsConfig(_Config):
     """
 
     eos: EosConfig = IdealEosConfig()
+
+
+class NetworkConfig(_Config):
+    """Network (``[network]``).
+
+    Attributes
+    ----------
+    label : str or None
+        Human-readable network name; ``None`` uses the network file stem.
+    strict : bool
+        Treat validation problems (conservation, sinks/sources, ...) as fatal.
+    funcfile : bool or Path
+        ``.jfunc`` auxiliary file: ``True`` looks next to the network file,
+        ``False`` loads none, a path names it.
+    expand_nuclei : bool
+        Expand ``n_<element>_nuc`` into the element-nucleus sum.
+    reactions : ReactionsConfig
+        Settings of the reactions.
+    radiation : RadiationConfig or None
+        Radiation field; ``None`` disables radiation.
+    dust : DustConfig or None
+        Dust; ``None`` disables the dust module.
+    thermodynamics : ThermodynamicsConfig
+        Thermodynamics.
+    """
+
+    label: str | None = None
+    strict: bool = False
+    funcfile: bool | PathLike = True
+    expand_nuclei: bool = True
+    reactions: ReactionsConfig = ReactionsConfig()
+    radiation: RadiationConfig | None = None
+    dust: DustConfig | None = None
+    thermodynamics: ThermodynamicsConfig = ThermodynamicsConfig()
