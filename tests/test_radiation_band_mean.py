@@ -10,7 +10,7 @@ import pytest
 import sympy as sp
 
 from jaff.core.reaction import PhotoReactionProps
-from jaff.physics import RadiationProps
+from jaff.physics.photo_reactions.config import RadiationConfig
 from jaff.physics.photo_reactions._radiation import Radiation
 from tests.xsec_props import make_xsec_props
 
@@ -20,7 +20,7 @@ EV2ERG = u.eV.to(u.erg)
 def _radiation(bands, profile_index, mode="u"):
     """Build a Radiation with the background field mocked out."""
     with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
-        props = RadiationProps(
+        props = RadiationConfig(
             bands=list(bands),
             profile_index=profile_index,
             mode=mode,
@@ -121,9 +121,7 @@ def test_photden_tot_independent_of_band_count():
 def test_photden_tot_is_sum_of_band_integrals_for_per_band_index():
     """Per-band indices: photden_tot = sum of each band's own integral."""
     with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
-        props = RadiationProps(bands=[1.0, 2.0, 4.0], profile_index=2, c=1.0)
-        # Bypass RadiationProps list validation; only Radiation is under test.
-        props.profile_index = [2.0, 1.0]
+        props = RadiationConfig(bands=[1.0, 2.0, 4.0], profile_index=[2.0, 1.0], c=1.0)
         rad = Radiation(None, props)
     # ∫_1^2 E^0 dE + ∫_2^4 E^-1 dE = 1 + ln 2
     assert float(rad.photden_tot) == pytest.approx(1.0 + math.log(2.0))
@@ -132,8 +130,7 @@ def test_photden_tot_is_sum_of_band_integrals_for_per_band_index():
 def test_eden_profile_uses_per_band_index():
     """get_eden_profile = E * get_photden_profile, piecewise by band index."""
     with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
-        props = RadiationProps(bands=[1.0, 2.0, 4.0], profile_index=2, c=1.0)
-        props.profile_index = [2.0, 1.0]
+        props = RadiationConfig(bands=[1.0, 2.0, 4.0], profile_index=[2.0, 1.0], c=1.0)
         rad = Radiation(None, props)
     E = np.array([1.5, 3.0])
     # band 0: E^(2-1) = 1.5; band 1: E^(1-1) = 1

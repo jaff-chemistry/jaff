@@ -17,31 +17,12 @@ from jaff.common._integrators import get_bounds
 from jaff.core.network import NetworkSymbols
 from jaff.core.reaction import PhotoReactionProps
 from jaff.errors import ParserError
-from jaff.physics import RadiationProps
+from jaff.physics.photo_reactions.config import RadiationConfig
 from jaff.physics.photo_reactions._photochemistry import Photochemistry, XsecProcess
 from jaff.physics.photo_reactions._radiation import Radiation
 from jaff.plotting.adapters.xsecs import _sampled_xsecs
 
 BANDS = [6.0, 13.6, 100.0, 1000.0]
-
-
-class TestRadiationPropsPiDatabase:
-    def test_default_is_norad(self):
-        assert RadiationProps(bands=BANDS).pi_database == "norad"
-
-    @pytest.mark.parametrize("value", ["norad", "Leiden", "VERNER"])
-    def test_valid_values_lowercased(self, value):
-        assert RadiationProps(bands=BANDS, pi_database=value).pi_database == value.lower()
-
-    @pytest.mark.parametrize("value", ["topbase", "", 3, None])
-    def test_invalid_values_rejected(self, value):
-        with pytest.raises(ParserError, match="pi_database"):
-            RadiationProps(bands=BANDS, pi_database=value)
-
-    def test_radiation_stores_pi_database(self):
-        with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
-            rad = Radiation(None, RadiationProps(bands=BANDS, pi_database="verner"))
-        assert rad.pi_database == "verner"
 
 
 class TestReactionAttribute:
@@ -178,7 +159,7 @@ class TestVernerIntegration:
         with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
             return Radiation(
                 None,
-                RadiationProps(bands=list(bands), profile_index=[2.0, 1.0, 0.5], c=1.0),
+                RadiationConfig(bands=list(bands), profile_index=[2.0, 1.0, 0.5], c=1.0),
             )
 
     @staticmethod
@@ -222,12 +203,18 @@ def _by_key(net):
     return {r.serialized: r for r in net.reactions}
 
 
+def _global_photo(**photo):
+    """Config layer setting the global photo settings ([network.reactions.photo])."""
+    return {"network": {"reactions": {"photo": photo}}}
+
+
 class TestNetworkWiring:
     def test_global_choice_reaches_reactions(self, make_network):
         net = make_network(
             PHOTO_JET,
             name="t.jet",
-            radiation_props=RadiationProps(bands=BANDS, pi_database="verner"),
+            radiation_props=RadiationConfig(bands=BANDS),
+            config=_global_photo(pi_database="verner"),
         )
         r = _by_key(net)
         assert r["C._PHOTON__C+.e-"].photo.xsec.database == "verner"
@@ -242,7 +229,7 @@ class TestNetworkWiring:
             PHOTO_JET,
             name="t.jet",
             config=str(cfg),
-            radiation_props=RadiationProps(bands=BANDS),
+            radiation_props=RadiationConfig(bands=BANDS),
         )
         rxn = _by_key(net)["C._PHOTON__C+.e-"]
         assert rxn.photo.pi_database == "leiden"
@@ -282,7 +269,7 @@ class TestNetworkWiring:
             name="p.jet",
             config=str(cfg),
             use_proxy_photoreaction=True,
-            radiation_props=RadiationProps(bands=BANDS),
+            radiation_props=RadiationConfig(bands=BANDS),
         )
         rxn = _by_key(net)["Cx._PHOTON__C+.e-"]
         assert rxn.photo.xsec.database == "verner"
@@ -292,7 +279,7 @@ class TestNetworkWiring:
         net = make_network(line, name="a.jet")  # no radiation: fine
         assert _by_key(net)["C9H9._PHOTON__C9H9+.e-"].photo.xsec is None
         with pytest.raises(ParserError, match="C9H9"):
-            make_network(line, name="b.jet", radiation_props=RadiationProps(bands=BANDS))
+            make_network(line, name="b.jet", radiation_props=RadiationConfig(bands=BANDS))
 
 
 class TestFallbackSummary:
@@ -329,7 +316,9 @@ class TestFallbackSummary:
             patch.object(logger, "warning") as warn,
         ):
             jl.return_value.get_logger.return_value = logger
-            make_network(lines, name="t.jet", radiation_props=RadiationProps(bands=BANDS))
+            make_network(
+                lines, name="t.jet", radiation_props=RadiationConfig(bands=BANDS)
+            )
         warn.assert_called_once()
         msg = warn.call_args.args[0]
         assert "CO._PHOTON__CO+.e-" in msg and "Ca+++++._PHOTON__Ca++++++.e-" in msg
@@ -365,7 +354,7 @@ class TestJaffgenWiring:
 
     def test_global_pi_database(self, tmp_path):
         gen = _jaffgen(tmp_path, self.RAD + 'pi_database = "verner"\n')
-        assert gen.net.radiation.pi_database == "verner"
+        assert gen.net.config.reactions.photo.pi_database == "verner"
         (rxn,) = [r for r in gen.net.reactions if r.type == "photo"]
         assert rxn.photo.xsec.database == "verner"
 
@@ -386,7 +375,7 @@ class TestJaffRoundTrip:
         cfg.write_text(
             '[network.reactions.reaction."C._PHOTON__C+.e-".photo]\npi_database = "verner"\n'
         )
-        props = RadiationProps(bands=BANDS)
+        props = RadiationConfig(bands=BANDS)
         net = make_network(
             PHOTO_JET, name="t.jet", config=str(cfg), radiation_props=props
         )

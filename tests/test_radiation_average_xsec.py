@@ -9,7 +9,7 @@ import pytest
 import sympy as sp
 
 from jaff.core.reaction import PhotoReactionProps
-from jaff.physics import RadiationProps
+from jaff.physics.photo_reactions.config import RadiationConfig
 from jaff.physics.photo_reactions._radiation import Radiation
 from tests.xsec_props import make_xsec_props
 
@@ -19,7 +19,9 @@ BANDS = [1.0, 2.0, 3.0]
 def _radiation(profile_index=2, mode="nph"):
     """Radiation over BANDS with the background field mocked out."""
     with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
-        props = RadiationProps(bands=BANDS, profile_index=profile_index, c=1.0, mode=mode)
+        props = RadiationConfig(
+            bands=BANDS, profile_index=profile_index, c=1.0, mode=mode
+        )
         return Radiation(None, props)
 
 

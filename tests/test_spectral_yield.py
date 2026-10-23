@@ -9,7 +9,7 @@ import sympy as sp
 
 from jaff import Network
 from jaff.core.network import NetworkSymbols
-from jaff.physics import RadiationProps
+from jaff.physics.photo_reactions.config import RadiationConfig
 
 EV2ERG = u.eV.to(u.erg)
 BANDS = [6.0, 13.6, 100.0]
@@ -63,7 +63,7 @@ def test_no_radiation_no_group_yields(yield_network):
 
 
 def test_energy_mode_integrates_yield(yield_network):
-    props = RadiationProps(bands=BANDS, mode="u", profile_index=0.5)
+    props = RadiationConfig(bands=BANDS, mode="u", profile_index=0.5)
     rxn = yield_network(radiation_props=props).reactions[0]
 
     expected = [1e-12 * (13.6 - 6.0), 1e-12 * (100.0 - 13.6)]
@@ -71,7 +71,7 @@ def test_energy_mode_integrates_yield(yield_network):
 
 
 def test_photon_mode_counts_photons(yield_network):
-    rxn = yield_network(radiation_props=RadiationProps(bands=BANDS)).reactions[0]
+    rxn = yield_network(radiation_props=RadiationConfig(bands=BANDS)).reactions[0]
 
     expected = [
         1e-12 * math.log(13.6 / 6.0) / EV2ERG,
@@ -85,7 +85,7 @@ def test_line_lands_in_its_group_only(yield_network):
         "@function spectralYield0()\n"
         "@return Piecewise((1e-12, (ph_E >= 20) & (ph_E <= 21)), (0, True))\n"
     )
-    props = RadiationProps(bands=BANDS, mode="u", profile_index=0.5)
+    props = RadiationConfig(bands=BANDS, mode="u", profile_index=0.5)
     rxn = yield_network(jfunc=jfunc, radiation_props=props).reactions[0]
 
     # abs: far below the 1e-12 yield, above numerical noise in the zero group.
@@ -96,7 +96,7 @@ def test_line_lands_in_its_group_only(yield_network):
 
 def test_extra_symbols_stay_symbolic(yield_network):
     jfunc = "@function spectralYield0(tgas)\n@return 1e-16*tgas\n"
-    props = RadiationProps(bands=BANDS, mode="u", profile_index=0.5)
+    props = RadiationConfig(bands=BANDS, mode="u", profile_index=0.5)
     rxn = yield_network(jfunc=jfunc, radiation_props=props).reactions[0]
 
     assert all(g.has(NetworkSymbols.tgas) for g in rxn.rad.group_yields)
@@ -104,20 +104,20 @@ def test_extra_symbols_stay_symbolic(yield_network):
 
 def test_yield_symbols_reported_in_network_variables(yield_network):
     jfunc = "@function spectralYield0(tgas)\n@return 1e-16*tgas\n"
-    net = yield_network(jfunc=jfunc, radiation_props=RadiationProps(bands=BANDS))
+    net = yield_network(jfunc=jfunc, radiation_props=RadiationConfig(bands=BANDS))
 
     assert NetworkSymbols.tgas in net.symbols.variables
 
 
 def test_symbolic_yield_without_closed_form_raises(yield_network):
     jfunc = "@function spectralYield0(tgas)\n@return exp(-tgas*ph_E)/(ph_E + log(ph_E))\n"
-    props = RadiationProps(bands=BANDS, mode="u", profile_index=0.5)
+    props = RadiationConfig(bands=BANDS, mode="u", profile_index=0.5)
     with pytest.raises(ValueError, match="closed-form"):
         yield_network(jfunc=jfunc, radiation_props=props)
 
 
 def test_yield_enters_density_equations_only(yield_network):
-    net = yield_network(radiation_props=RadiationProps(bands=BANDS))
+    net = yield_network(radiation_props=RadiationConfig(bands=BANDS))
     rxn = net.reactions[0]
     odes = net.sradodes(order=2)
     nb = net.radiation.nbands
@@ -128,13 +128,13 @@ def test_yield_enters_density_equations_only(yield_network):
 
 
 def test_jaff_round_trip_keeps_yield(yield_network, tmp_path):
-    net = yield_network(radiation_props=RadiationProps(bands=BANDS))
+    net = yield_network(radiation_props=RadiationConfig(bands=BANDS))
     net.to_jaff(tmp_path / "y.jaff")
 
     back = Network(
         str(tmp_path / "y.jaff"),
         funcfile=False,
-        radiation_props=RadiationProps(bands=BANDS),
+        radiation_props=RadiationConfig(bands=BANDS),
     )
 
     rxn = back.reactions[0]

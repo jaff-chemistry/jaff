@@ -9,7 +9,7 @@ from sympy import Float
 
 from jaff.physics.photo_reactions.shielding.config import ShieldingParams
 from jaff.errors import ParserError
-from jaff.physics import RadiationProps
+from jaff.physics.photo_reactions.config import RadiationConfig
 from jaff.physics.photo_reactions.shielding import ShieldingFunction
 from jaff.physics.photo_reactions.shielding.global_.leiden import Leiden
 from jaff.physics.photo_reactions.shielding.H2__PHOTON__H_H.db1996 import DB1996
@@ -30,7 +30,7 @@ def shielded_network(make_network):
                 H2_PHOTO,
                 name="h2.jet",
                 funcfile=False,
-                radiation_props=RadiationProps(bands=[6.0, 13.6]),
+                radiation_props=RadiationConfig(bands=[6.0, 13.6]),
                 _metadata=meta,
             )
 

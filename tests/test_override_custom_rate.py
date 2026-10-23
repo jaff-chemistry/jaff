@@ -2,14 +2,12 @@
 # ABOUTME: its cross sections instead of its .jfunc chemRate (global + per-reaction)
 
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
 
 from jaff.cli import JaffGen
 from jaff.errors import ParserError
-from jaff.physics import RadiationProps
-from jaff.physics.photo_reactions._radiation import Radiation
+from jaff.physics.photo_reactions.config import RadiationConfig
 
 BANDS = [6.0, 13.6, 100.0]
 PHOTO = "C -> C+ + E  []  PHOTO, 11.3\n"
@@ -32,30 +30,19 @@ def custom_network(make_network, tmp_path):
     return _make
 
 
-class TestRadiationProps:
-    def test_default_is_false(self):
-        assert RadiationProps(bands=BANDS).override_custom_rate is False
-
-    def test_accepts_true(self):
-        props = RadiationProps(bands=BANDS, override_custom_rate=True)
-        assert props.override_custom_rate is True
-
-    @pytest.mark.parametrize("value", ["true", 1, None])
-    def test_non_bool_rejected(self, value):
-        with pytest.raises(ParserError, match="override_custom_rate"):
-            RadiationProps(bands=BANDS, override_custom_rate=value)
-
-    def test_radiation_stores_flag(self):
-        props = RadiationProps(bands=BANDS, override_custom_rate=True)
-        with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
-            rad = Radiation(None, props)
-        assert rad.override_custom_rate is True
+def _global_photo(**photo):
+    """Config layer setting the global photo settings ([network.reactions.photo])."""
+    return {"network": {"reactions": {"photo": photo}}}
 
 
 class TestGlobalFlag:
     def test_override_recomputes_rate_from_xsecs(self, custom_network):
-        props = RadiationProps(bands=BANDS, override_custom_rate=True)
-        rxn = _photo(custom_network(radiation_props=props))
+        rxn = _photo(
+            custom_network(
+                radiation_props=RadiationConfig(bands=BANDS),
+                config=_global_photo(override_custom_rate=True),
+            )
+        )
 
         assert rxn.photo.custom_rad_rate is False
         assert rxn.rate_coefficient.has(rxn.net.radiation.den[0])
@@ -82,7 +69,7 @@ class TestPerReaction:
             f'[network.reactions.reaction."{KEY}".photo]\noverride_custom_rate = true\n'
         )
         rxn = _photo(
-            custom_network(config=str(cfg), radiation_props=RadiationProps(bands=BANDS))
+            custom_network(config=str(cfg), radiation_props=RadiationConfig(bands=BANDS))
         )
 
         assert rxn.photo.override_custom_rate is True
@@ -138,4 +125,4 @@ def test_jaffgen_global_flag_reaches_radiation(tmp_path):
     )
 
     assert gen.net.radiation is not None
-    assert gen.net.radiation.override_custom_rate is True
+    assert gen.net.config.reactions.photo.override_custom_rate is True

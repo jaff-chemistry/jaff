@@ -9,7 +9,7 @@ import pytest
 import sympy as sp
 
 from jaff.core.reaction import PhotoReactionProps
-from jaff.physics import RadiationProps
+from jaff.physics.photo_reactions.config import RadiationConfig
 from jaff.physics.photo_reactions._radiation import Radiation
 from tests.xsec_props import make_xsec_props
 
@@ -31,7 +31,7 @@ class _Reaction:
 
 def _radiation(bands, profile_index, mode="nph"):
     with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
-        props = RadiationProps(
+        props = RadiationConfig(
             bands=list(bands),
             profile_index=profile_index,
             mode=mode,

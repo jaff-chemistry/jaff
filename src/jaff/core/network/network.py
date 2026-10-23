@@ -44,7 +44,6 @@ from ...physics import (
     EosProps,
     Photochemistry,
     Radiation,
-    RadiationProps,
     Thermodynamics,
     get_sfluxes,
     get_sodes,
@@ -64,6 +63,8 @@ from ..reaction import (
 from ...physics.photo_reactions.shielding.config import ShieldingConfig
 from ..species import Specie, Species
 from ._spec import NetworkSpec
+from ...config.base import ConfigModel
+from ...physics.photo_reactions.config import RadiationConfig
 from .config import ConfigLayer, NetworkConfig, load_network_config
 from ._symbols import NetworkSymbols
 
@@ -108,24 +109,18 @@ def _keyword_layer(**kwargs: Any) -> Dict[str, Any]:
     if reactions:
         network["reactions"] = reactions
 
+    if "radiation" in given:
+        network["radiation"] = _section(given["radiation"])
+
     return {"network": network} if network else {}
 
 
-def _radiation_photo_layer(props: RadiationProps | None) -> Dict[str, Any]:
-    """Return the global photo settings still held by *props* as a config layer.
+def _section(value: Mapping[str, Any] | ConfigModel) -> Dict[str, Any]:
+    """Return a config section given as a dict or a model (its explicitly set keys)."""
+    if isinstance(value, ConfigModel):
+        return value.model_dump(exclude_unset=True)
 
-    Transitional: the bottom layer until :class:`RadiationProps` drops them.
-    """
-    if props is None:
-        return {}
-
-    photo = {
-        "pi_database": props.pi_database,
-        "override_custom_rate": props.override_custom_rate,
-        "override_custom_cross_section": props.override_custom_cross_section,
-    }
-
-    return {"network": {"reactions": {"photo": photo}}}
+    return dict(value)
 
 
 def _jaffgen_metadata_layer(metadata: Mapping[str, Any]) -> Dict[str, Any]:
@@ -281,7 +276,7 @@ class Network:
         funcfile: bool | str | Path | None = None,
         duplicate_policy: str | None = None,  # preserve-first, preserve-last, error
         expand_nuclei: bool | None = None,
-        radiation_props: RadiationProps | None = None,
+        radiation_props: RadiationConfig | Mapping[str, Any] | None = None,
         dust_props: DustProps | None = None,
         use_proxy_photoreaction: bool | None = None,
         eos_props: EosProps | None = None,
@@ -329,11 +324,11 @@ class Network:
             bearing that element.  Set to ``False`` to keep it as a free symbol
             ``n<element>_nuc`` (e.g. ``nh_nuc``).  (Plain ``n_X`` always resolves
             to species ``X``; only ``n_X_nuc`` is affected by this flag.)
-        radiation_props : RadiationProps | None, optional
-            Radiation configuration used to construct the network's
-            :class:`Radiation` object and enable photochemistry.  When
-            ``None`` (default), no radiation field is built and photochemistry
-            is disabled.
+        radiation_props : RadiationConfig | dict | None, optional
+            Radiation field (``network.radiation``): enables the network's
+            :class:`Radiation` and photochemistry.  Its keys override those of
+            a ``[network.radiation]`` table in the config.  Without either, no
+            radiation field is built and photochemistry is disabled.
         dust_props : DustProps | None, optional
             Dust configuration used to construct the network's :class:`Dust`
             object.  When ``None`` (default), the dust module is disabled.
@@ -373,6 +368,7 @@ class Network:
                 duplicate_policy=duplicate_policy,
                 expand_nuclei=expand_nuclei,
                 use_proxy_photoreaction=use_proxy_photoreaction,
+                radiation=radiation_props,
             ),
         )
         self.config: NetworkConfig = load_network_config(
@@ -380,7 +376,6 @@ class Network:
             config,
             use_jaff_toml=use_jaff_toml,
             overrides=overrides,
-            defaults=_radiation_photo_layer(radiation_props),
         )
         self.spec: NetworkSpec = NetworkSpec(fname, self.config, _from_cli, _metadata)
 
@@ -404,7 +399,9 @@ class Network:
         self.reactant_matrix: np.ndarray | None = None
         self.product_matrix: np.ndarray | None = None
         self.radiation: Radiation | None = (
-            Radiation(self, radiation_props) if radiation_props is not None else None
+            Radiation(self, self.config.radiation)
+            if self.config.radiation is not None
+            else None
         )
         self.eos_props: EosProps = (
             eos_props if eos_props is not None else EosProps("ideal")

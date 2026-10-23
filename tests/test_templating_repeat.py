@@ -9,7 +9,7 @@ from jaff import Network
 from jaff.codegen.codegen import Codegen
 from jaff.codegen.templating import TemplateParser
 from jaff.errors import ParserError
-from jaff.physics.photo_reactions._radiation_props import RadiationProps
+from jaff.physics.photo_reactions.config import RadiationConfig
 
 FIXTURES = Path(__file__).parent / "fixtures"
 REPO = Path(__file__).resolve().parent.parent
@@ -171,7 +171,7 @@ def test_sign_options_reach_normalized_names(net, tmp_path):
 def test_radodes_takes_the_radiation_order(tmp_path):
     photo = Network(
         str(REPO / "networks" / "h_photoionization" / "h_photo.jet"),
-        radiation_props=RadiationProps(
+        radiation_props=RadiationConfig(
             bands=[13.6, float("inf")], profile_index=0, mode="nph"
         ),
     )

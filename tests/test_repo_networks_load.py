@@ -7,7 +7,8 @@ from typing import Any, Dict, List
 import pytest
 
 from jaff import Network
-from jaff.physics import DustProps, RadiationProps
+from jaff.physics import DustProps
+from jaff.physics.photo_reactions.config import RadiationConfig
 
 NETWORKS_DIR = Path(__file__).resolve().parent.parent / "networks"
 
@@ -18,7 +19,7 @@ NETWORK_FILES: List[str] = sorted(
 # Networks that need constructor arguments to load (see the docs for each).
 LOAD_KWARGS: Dict[str, Dict[str, Any]] = {
     "GOW++/GOW++.jet": {
-        "radiation_props": RadiationProps(bands=[6.0, 11.2, 13.6]),
+        "radiation_props": RadiationConfig(bands=[6.0, 11.2, 13.6]),
         "dust_props": DustProps(rv=3.1),
     },
 }

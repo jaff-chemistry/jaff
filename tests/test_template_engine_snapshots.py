@@ -23,7 +23,7 @@ import pytest
 
 from jaff import Network
 from jaff.codegen import TemplateParser
-from jaff.physics.photo_reactions._radiation_props import RadiationProps
+from jaff.physics.photo_reactions.config import RadiationConfig
 
 REPO = Path(__file__).resolve().parent.parent
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -59,7 +59,7 @@ NETWORKS: Dict[str, Callable[[], Network]] = {
     # photoionisation with one radiation band
     "h_photo": lambda: Network(
         str(REPO / "networks" / "h_photoionization" / "h_photo.jet"),
-        radiation_props=RadiationProps(
+        radiation_props=RadiationConfig(
             bands=[13.6, float("inf")], profile_index=0, mode="nph"
         ),
     ),

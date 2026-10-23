@@ -17,7 +17,7 @@ The photon number spectrum is assumed to follow a power law in photon energy::
     n(E) ∝ E^(α - 2)
 
 where ``α`` is the spectral index ``profile_idx`` (from
-``RadiationProps.profile_index``).  ``α`` may be a single global value or one
+``RadiationConfig.profile_index``).  ``α`` may be a single global value or one
 value per band, in which case the spectrum is a piecewise power law (a
 histogram, intentionally discontinuous at band edges): each band ``i`` uses its
 own ``α_i`` and is normalised independently.  The energy-integrated version
@@ -75,6 +75,7 @@ import sympy as sp
 from astropy import units as u
 
 from ...common._integrators import smart_integrate
+from ...io import JaffLogger
 from ...core.reaction.reaction_props import GroupedPhotoReactionProps
 from ._photochemistry import Photochemistry, XsecProps
 from .background_field import BackgroundField
@@ -82,7 +83,7 @@ from .background_field import BackgroundField
 if TYPE_CHECKING:
     from ...core.network import Network
     from ...core.reaction import Reaction
-    from ...physics import RadiationProps
+    from .config import RadiationConfig
 
 
 class RadiationGroup:
@@ -256,18 +257,17 @@ class Radiation:
     network : Network
         The network the radiation field belongs to; retained on
         ``self.network`` and forwarded to shielding look-ups.
-    props : RadiationProps
-        Radiation configuration object supplying the band edges, spectral
-        index, mode, speed of light, and background field (see
-        :class:`~jaff.physics.RadiationProps`).
+    config : RadiationConfig
+        The ``[network.radiation]`` config: band edges, spectral index, mode,
+        speed of light, background field and absorption flag.
 
     Attributes
     ----------
     network : Network
         The network passed to the constructor.
     bands : list of (int, float, or sympy.Basic)
-        Band-edge list from ``props.bands`` (``"inf"`` already replaced by
-        ``sympy.oo`` by :class:`RadiationProps`).
+        Band-edge list from ``config.bands``, ``"inf"`` replaced by
+        ``sympy.oo``.
     mode : str
         ``"nph"`` -- field tracked as photon number density (cm⁻³) -- or
         ``"u"`` -- field tracked as energy density (erg cm⁻³).  Controls the
@@ -275,10 +275,10 @@ class Radiation:
         and the normalisation of rate coefficients.
     c : float or sympy.Symbol
         Speed of light in cm/s (CGS), used in rate-coefficient expressions as
-        ``k = c * den * <σ>``.  A string value in ``props.c`` (e.g. ``"c_hat"``
+        ``k = c * den * <σ>``.  A string value in ``config.c`` (e.g. ``"c_hat"``
         for a reduced speed of light) becomes a SymPy symbol.
     background_field : BackgroundField
-        Background radiation field built from ``props.background_field``.
+        Background radiation field built from ``config.background_field``.
     nbands : int
         Number of bands (``len(bands) - 1``).
     den : sympy.IndexedBase
@@ -287,7 +287,7 @@ class Radiation:
     groups : list of RadiationGroup
         One :class:`RadiationGroup` per band, in ascending energy order.  Each
         carries its own spectral index *α_i* (``grp.profile_idx``, from
-        ``props.profile_index``; a scalar applies to every band).  Typical
+        ``config.profile_index``; a scalar applies to every band).  Typical
         values: 1 (flat energy spectrum), 2 (flat photon spectrum).
     ph_E : sympy.Symbol
         The photon-energy symbol (eV), :attr:`NetworkSymbols.ph_E`, used in the
@@ -318,7 +318,7 @@ class Radiation:
     def __init__(
         self,
         network: Network,
-        props: RadiationProps,
+        config: RadiationConfig,
     ):
         """Parse band edges and construct one :class:`RadiationGroup` per band.
 
@@ -327,30 +327,35 @@ class Radiation:
         network : Network
             The network the radiation field belongs to; stored on
             ``self.network`` and used for shielding look-ups.
-        props : RadiationProps
-            Radiation configuration supplying ``bands`` (photon-energy band
-            edges in eV, ``"inf"`` already replaced by ``sympy.oo``),
-            ``profile_index`` (spectral index *α* for ``n(E) ∝ E^(α-2)``; a
-            scalar or one value per band),
+        config : RadiationConfig
+            The ``[network.radiation]`` config: ``bands`` (photon-energy band
+            edges in eV, ``"inf"`` allowed last), ``profile_index`` (spectral
+            index *α* for ``n(E) ∝ E^(α-2)``; a scalar or one value per band),
             ``mode`` (``"nph"`` photon number density or ``"u"`` energy
             density), ``c`` (speed of light in cm/s, or a string converted to a
-            symbol), and ``background_field``.
-        """
+            symbol), ``background_field`` and ``absorption_attenuates_flux``.
 
+        Raises
+        ------
+        RuntimeError
+            If the band-averaged photon energy diverges at an open band edge
+            (energy-density mode).
+        """
+        self.logger = JaffLogger().get_logger()
         self.network: Network = network
-        self.bands: list[int | float | sp.Basic] = props.bands
-        self.mode: str = props.mode
+        self.mode: str = config.mode
+        profile_indices = self._profile_indices(config)
+        self.bands: list[int | float | sp.Basic] = [
+            sp.oo if edge == "inf" else edge for edge in config.bands
+        ]
+        self._check_convergence(profile_indices)
         # Speed of light (cm/s) for k = c * σ * n(E) expressions
         self.c: float | sp.Symbol = (
-            sp.symbols(props.c) if isinstance(props.c, str) else props.c
+            sp.symbols(config.c) if isinstance(config.c, str) else config.c
         )
-        self.background_field = BackgroundField(props.background_field)
-        # Global photoionization database; reactions may override it.
-        self.pi_database: str = props.pi_database
-        self.override_custom_rate: bool = props.override_custom_rate
-        self.override_custom_cross_section: bool = props.override_custom_cross_section
+        self.background_field = BackgroundField(config.background_field)
         # Whether the global absorption coefficient also attenuates the flux.
-        self.absorption_attenuates_flux: bool = props.absorption_attenuates_flux
+        self.absorption_attenuates_flux: bool = config.absorption_attenuates_flux
 
         self.nbands: int = len(self.bands) - 1
         # Symbolic radiation density variable: energy density (erg/cm³) or
@@ -364,9 +369,7 @@ class Radiation:
                 upper=self.bands[i + 1],
                 index=i,
                 sym=self.den[i],
-                profile_idx=props.profile_index
-                if not isinstance(props.profile_index, list)
-                else props.profile_index[i],
+                profile_idx=profile_indices[i],
             )
             for i, lower in enumerate(self.bands[:-1])
         ]
@@ -380,6 +383,64 @@ class Radiation:
         # Set by the network once the species are known.
         self.emissivity: sp.Expr | None = None
         self.absorption_coefficient: sp.Expr | None = None
+
+    @staticmethod
+    def _profile_indices(config: RadiationConfig) -> list[float]:
+        """Return the spectral index *α_i* of each band (a scalar applies to all)."""
+        nbands = len(config.bands) - 1
+        if isinstance(config.profile_index, list):
+            return [float(alpha) for alpha in config.profile_index]
+
+        return [float(config.profile_index)] * nbands
+
+    def _check_convergence(self, alphas: list[float]) -> None:
+        """Check the band-averaged photon energy converges at the open band edges.
+
+        Only the first band reaches ``E → 0`` and only the last reaches
+        ``E → ∞``, so each edge is checked against its own band's index.
+
+        Raises
+        ------
+        RuntimeError
+            In energy-density mode, if ``<E>`` diverges at a zero lower edge or
+            an infinite upper edge.
+        """
+        bands = self.bands
+        alpha_lo, alpha_hi = alphas[0], alphas[-1]
+        starts_at_zero = isinstance(bands[0], (float, int)) and float(bands[0]) == 0.0
+        ends_at_inf = bands[-1] == sp.oo
+
+        if self.mode == "u":
+            # The average-energy integral uses the *energy-density* spectrum
+            # u(E) ∝ E^(α-1), so the integral ∫ E · u(E) dE ∝ ∫ E^α dE.
+            # The effective power-law index for the ∫ E·n(E) dE integral is
+            # pl_index = (α-2) + 1 = α - 1.
+            # pl_index + 1 = α: α < 0 diverges at E → 0, α > 0 diverges at
+            # E → ∞, and α == 0 (pl_index == -1) log-diverges at both ends.
+            if starts_at_zero and alpha_lo <= 0.0:
+                raise RuntimeError(
+                    f"The integral for average energy will diverge since the radiation band starts from bands[0]: {bands[0]}\n"
+                    "Please try a non-zero value"
+                )
+            if ends_at_inf and alpha_hi >= 0.0:
+                raise RuntimeError(
+                    f'The integral for average energy will diverge since the radiation band ends at bands[{len(bands) - 1}]: "inf"\n'
+                    "Please try a non-infinite value or change the profile_index"
+                )
+
+        if (
+            alpha_lo <= 1.0
+            and isinstance(bands[0], (float, int))
+            and float(bands[0]) < 1.0
+        ):
+            self.logger.warning(
+                f"Radiation band starts at bands[0]={bands[0]} eV with "
+                f"profile_index={alpha_lo} (first band): the photon-number "
+                "normalisation integral ∫E^(α-2)dE is lower-edge divergent "
+                "(exponent ≤ -1) and near E→0 becomes ill-conditioned, which "
+                "can yield a negative/garbage photon density. Use a non-zero "
+                "bands[0] ≳ 1 eV or a larger profile_index."
+            )
 
     def _piecewise_profile(self, attr: str) -> sp.Expr:
         """Join the per-band profiles ``grp.<attr>`` into one ``sympy.Piecewise``.

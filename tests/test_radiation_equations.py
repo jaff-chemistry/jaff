@@ -5,7 +5,7 @@ import pytest
 import sympy as sp
 
 from jaff.core.network import NetworkSymbols
-from jaff.physics import RadiationProps
+from jaff.physics.photo_reactions.config import RadiationConfig
 
 BANDS = [6.0, 13.6, 100.0]
 PHOTO = "C -> C+ + E  []  PHOTO, 11.3\nCO -> C + O  []  PHOTO, 11\n"
@@ -15,7 +15,9 @@ NON_PHOTO = "H + H -> H2  []  1e-17\n"
 @pytest.fixture
 def radiation_network(make_network):
     def _make(lines=PHOTO, name="rad.jet"):
-        return make_network(lines, name=name, radiation_props=RadiationProps(bands=BANDS))
+        return make_network(
+            lines, name=name, radiation_props=RadiationConfig(bands=BANDS)
+        )
 
     return _make
 

@@ -2,7 +2,6 @@
 # ABOUTME: cross section unless overridden (global + per-reaction override_custom_cross_section)
 
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
 import sympy as sp
@@ -12,8 +11,7 @@ from jaff.cli import JaffGen
 from jaff.core.parsers import AuxiliaryFunctionProps
 from jaff.core.reaction.reaction_props import AuxFunctions
 from jaff.errors import ParserError
-from jaff.physics import RadiationProps
-from jaff.physics.photo_reactions._radiation import Radiation
+from jaff.physics.photo_reactions.config import RadiationConfig
 
 BANDS = [6.0, 13.6, 100.0]
 PHOTO = "C -> C+ + E  []  PHOTO, 11.3\n"
@@ -77,7 +75,7 @@ class TestCustomCrossSection:
         assert rxn.photo.xsec.process.decay_type == "dissociation"
 
     def test_band_and_total_averages_use_it(self, xsec_network):
-        props = RadiationProps(bands=BANDS)
+        props = RadiationConfig(bands=BANDS)
         rxn = _photo(xsec_network(radiation_props=props))
 
         assert float(rxn.photo.xsec.total) == pytest.approx(1e-18, rel=1e-6, abs=0)
@@ -91,7 +89,7 @@ class TestCustomCrossSection:
             "@function photoCrossSection0()\n"
             "@return Piecewise((1e-18, ph_E >= 13.6), (0, True))\n"
         )
-        net = xsec_network(jfunc=jfunc, radiation_props=RadiationProps(bands=BANDS))
+        net = xsec_network(jfunc=jfunc, radiation_props=RadiationConfig(bands=BANDS))
         rxn = _photo(net)
 
         assert rxn.photo.xsec.photodecay_expr.free_symbols == {net.radiation.ph_E}
@@ -101,7 +99,7 @@ class TestCustomCrossSection:
 
     def test_extra_symbols_stay_symbolic(self, xsec_network):
         jfunc = "@function photoCrossSection0(tgas)\n@return 1e-18*tgas\n"
-        net = xsec_network(jfunc=jfunc, radiation_props=RadiationProps(bands=BANDS))
+        net = xsec_network(jfunc=jfunc, radiation_props=RadiationConfig(bands=BANDS))
         rxn = _photo(net)
         tgas = net.symbols.tgas
 
@@ -112,7 +110,7 @@ class TestCustomCrossSection:
     def test_density_symbols_are_standardized(self, xsec_network):
         """A density in a custom σ reaches the band data and equations as nden."""
         jfunc = "@function photoCrossSection0(n_C)\n@return 1e-18*n_C\n"
-        net = xsec_network(jfunc=jfunc, radiation_props=RadiationProps(bands=BANDS))
+        net = xsec_network(jfunc=jfunc, radiation_props=RadiationConfig(bands=BANDS))
         rxn = _photo(net)
         raw = sp.Symbol("n_C")
         nden = net.symbols.ndens[net.species["C"].index]
@@ -125,13 +123,13 @@ class TestCustomCrossSection:
 
     def test_jaff_reload_keeps_custom_xsec(self, xsec_network, tmp_path):
         """A ``.jaff`` reload without the ``.jfunc`` keeps the stored custom σ."""
-        net = xsec_network(radiation_props=RadiationProps(bands=BANDS))
+        net = xsec_network(radiation_props=RadiationConfig(bands=BANDS))
         net.to_jaff(tmp_path / "p.jaff")
 
         back = Network(
             str(tmp_path / "p.jaff"),
             funcfile=False,
-            radiation_props=RadiationProps(bands=BANDS),
+            radiation_props=RadiationConfig(bands=BANDS),
         )
 
         rxn = _photo(back)
@@ -143,10 +141,19 @@ class TestCustomCrossSection:
             xsec_network(config=_toml(tmp_path, 'pi_database = "verner"'))
 
 
+def _global_photo(**photo):
+    """Config layer setting the global photo settings ([network.reactions.photo])."""
+    return {"network": {"reactions": {"photo": photo}}}
+
+
 class TestOverride:
     def test_global_flag_uses_database(self, xsec_network):
-        props = RadiationProps(bands=BANDS, override_custom_cross_section=True)
-        rxn = _photo(xsec_network(radiation_props=props))
+        rxn = _photo(
+            xsec_network(
+                radiation_props=RadiationConfig(bands=BANDS),
+                config=_global_photo(override_custom_cross_section=True),
+            )
+        )
 
         assert rxn.photo.xsec.database != "custom"
 
@@ -159,8 +166,12 @@ class TestOverride:
 
     def test_per_reaction_flag_beats_global(self, xsec_network, tmp_path):
         cfg = _toml(tmp_path, "override_custom_cross_section = false")
-        props = RadiationProps(bands=BANDS, override_custom_cross_section=True)
-        rxn = _photo(xsec_network(config=cfg, radiation_props=props))
+        rxn = _photo(
+            xsec_network(
+                config=[_global_photo(override_custom_cross_section=True), cfg],
+                radiation_props=RadiationConfig(bands=BANDS),
+            )
+        )
 
         assert rxn.photo.xsec.database == "custom"
 
@@ -181,22 +192,6 @@ class TestOverride:
     def test_non_bool_raises(self, xsec_network, tmp_path):
         with pytest.raises(ParserError, match="override_custom_cross_section"):
             xsec_network(config=_toml(tmp_path, 'override_custom_cross_section = "yes"'))
-
-
-class TestRadiationProps:
-    def test_default_is_false(self):
-        assert RadiationProps(bands=BANDS).override_custom_cross_section is False
-
-    @pytest.mark.parametrize("value", ["true", 1, None])
-    def test_non_bool_rejected(self, value):
-        with pytest.raises(ParserError, match="override_custom_cross_section"):
-            RadiationProps(bands=BANDS, override_custom_cross_section=value)
-
-    def test_radiation_stores_flag(self):
-        props = RadiationProps(bands=BANDS, override_custom_cross_section=True)
-        with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
-            rad = Radiation(None, props)
-        assert rad.override_custom_cross_section is True
 
 
 def test_jaffgen_global_flag_reaches_radiation(tmp_path):
@@ -223,4 +218,4 @@ def test_jaffgen_global_flag_reaches_radiation(tmp_path):
     )
 
     assert gen.net.radiation is not None
-    assert gen.net.radiation.override_custom_cross_section is True
+    assert gen.net.config.reactions.photo.override_custom_cross_section is True

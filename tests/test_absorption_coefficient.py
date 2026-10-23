@@ -4,12 +4,12 @@
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 import sympy as sp
 
 from jaff import Network
 from jaff.cli import JaffGen
-from jaff.errors import ParserError
-from jaff.physics import RadiationProps
+from jaff.physics.photo_reactions.config import RadiationConfig
 
 BANDS = [6.0, 13.6, 100.0]
 NET = "H + H -> H2  []  1e-17\n"
@@ -50,7 +50,7 @@ def test_without_radiation_ignored(absorbing_network):
 
 def test_without_function_is_none(absorbing_network):
     rad = absorbing_network(
-        jfunc="", radiation_props=RadiationProps(bands=BANDS)
+        jfunc="", radiation_props=RadiationConfig(bands=BANDS)
     ).radiation
 
     assert rad.absorption_coefficient is None
@@ -58,21 +58,21 @@ def test_without_function_is_none(absorbing_network):
 
 
 def test_spectral_expression_stored(absorbing_network):
-    rad = absorbing_network(radiation_props=RadiationProps(bands=BANDS)).radiation
+    rad = absorbing_network(radiation_props=RadiationConfig(bands=BANDS)).radiation
 
     assert float(rad.absorption_coefficient) == pytest.approx(1e-3, rel=1e-6, abs=0)
 
 
 @pytest.mark.parametrize("mode", ["nph", "u"])
 def test_flat_coefficient_averages_to_itself(absorbing_network, mode):
-    props = RadiationProps(bands=BANDS, mode=mode, profile_index=0.5)
+    props = RadiationConfig(bands=BANDS, mode=mode, profile_index=0.5)
     rad = absorbing_network(radiation_props=props).radiation
 
     assert _means(rad) == pytest.approx([1e-3, 1e-3], rel=1e-6, abs=0)
 
 
 def test_photon_mode_is_photon_weighted(absorbing_network):
-    props = RadiationProps(bands=BANDS, mode="nph", **FLAT_PHOTONS)
+    props = RadiationConfig(bands=BANDS, mode="nph", **FLAT_PHOTONS)
     rad = absorbing_network(jfunc=LINEAR, radiation_props=props).radiation
 
     expected = [_photon_mean(6.0, 13.6), _photon_mean(13.6, 100.0)]
@@ -80,7 +80,7 @@ def test_photon_mode_is_photon_weighted(absorbing_network):
 
 
 def test_energy_mode_is_energy_weighted(absorbing_network):
-    props = RadiationProps(bands=BANDS, mode="u", **FLAT_PHOTONS)
+    props = RadiationConfig(bands=BANDS, mode="u", **FLAT_PHOTONS)
     rad = absorbing_network(jfunc=LINEAR, radiation_props=props).radiation
 
     expected = [_energy_mean(6.0, 13.6), _energy_mean(13.6, 100.0)]
@@ -89,7 +89,7 @@ def test_energy_mode_is_energy_weighted(absorbing_network):
 
 def test_density_symbols_are_standardized(absorbing_network):
     jfunc = "@function globalAbsorptionCoefficient(n_H)\n@return 1e-21*n_H\n"
-    net = absorbing_network(jfunc=jfunc, radiation_props=RadiationProps(bands=BANDS))
+    net = absorbing_network(jfunc=jfunc, radiation_props=RadiationConfig(bands=BANDS))
 
     nden = net.symbols.ndens[net.species["H"].index]
     for group in net.radiation.groups:
@@ -99,7 +99,7 @@ def test_density_symbols_are_standardized(absorbing_network):
 
 def test_symbols_reported_in_network_variables(absorbing_network):
     jfunc = "@function globalAbsorptionCoefficient(tgas)\n@return 1e-6*tgas\n"
-    net = absorbing_network(jfunc=jfunc, radiation_props=RadiationProps(bands=BANDS))
+    net = absorbing_network(jfunc=jfunc, radiation_props=RadiationConfig(bands=BANDS))
 
     assert net.symbols.tgas in net.symbols.variables
 
@@ -119,7 +119,7 @@ def _absorption_losses(net):
 
 
 def test_absorbs_from_density_and_flux_by_default(absorbing_network):
-    net = absorbing_network(radiation_props=RadiationProps(bands=BANDS))
+    net = absorbing_network(radiation_props=RadiationConfig(bands=BANDS))
     assert net.radiation.absorption_attenuates_flux is True
     odes = net.sradodes(order=2)
     nb = net.radiation.nbands
@@ -131,7 +131,7 @@ def test_absorbs_from_density_and_flux_by_default(absorbing_network):
 
 
 def test_flag_off_leaves_flux_unchanged(absorbing_network):
-    props = RadiationProps(bands=BANDS, absorption_attenuates_flux=False)
+    props = RadiationConfig(bands=BANDS, absorption_attenuates_flux=False)
     net = absorbing_network(radiation_props=props)
     odes = net.sradodes(order=2)
     nb = net.radiation.nbands
@@ -144,8 +144,8 @@ def test_flag_off_leaves_flux_unchanged(absorbing_network):
 
 @pytest.mark.parametrize("value", ["false", 0, None])
 def test_flag_must_be_bool(value):
-    with pytest.raises(ParserError, match="absorption_attenuates_flux"):
-        RadiationProps(bands=BANDS, absorption_attenuates_flux=value)
+    with pytest.raises(ValidationError, match="absorption_attenuates_flux"):
+        RadiationConfig(bands=BANDS, absorption_attenuates_flux=value)
 
 
 def test_jaffgen_flag_reaches_radiation(tmp_path):
@@ -176,13 +176,13 @@ def test_jaffgen_flag_reaches_radiation(tmp_path):
 
 
 def test_jaff_round_trip_keeps_coefficient(absorbing_network, tmp_path):
-    net = absorbing_network(radiation_props=RadiationProps(bands=BANDS))
+    net = absorbing_network(radiation_props=RadiationConfig(bands=BANDS))
     net.to_jaff(tmp_path / "a.jaff")
 
     back = Network(
         str(tmp_path / "a.jaff"),
         funcfile=False,
-        radiation_props=RadiationProps(bands=BANDS),
+        radiation_props=RadiationConfig(bands=BANDS),
     )
 
     assert back.radiation is not None

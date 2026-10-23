@@ -33,12 +33,15 @@ from ...drivers.pooch import (
 )
 from ...errors import ParserError
 from ...io import JaffLogger
-from ._radiation_props import PI_DATABASES
 from .shielding import _get_shielding_function
 
 if TYPE_CHECKING:
     from ...core import Reaction
     from ...core.network import Network
+
+
+#: Photoionization cross-section databases, in fallback order after the user's choice.
+PI_DATABASES: tuple[str, ...] = ("norad", "verner", "leiden")
 
 
 @dataclass

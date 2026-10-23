@@ -44,7 +44,7 @@ from ...config import TEMPLATES_DIR, predefined_templates
 from ...drivers import Toml
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
-from ...physics import DustProps, EosProps, RadiationProps
+from ...physics import DustProps, EosProps
 from .._helper import DuplicatePolicy, funcfile_arg
 from ._structs import DEFAULT_OUTPUT, ResolvedPath, State
 
@@ -265,7 +265,7 @@ class JaffGen:
         if nr:
             sn.rad_bands = nr.get("bands") or sn.rad_bands
             # Scalar (all bands) or a list with one index per band; the
-            # type and list length are validated by RadiationProps.
+            # type and list length are validated by RadiationConfig.
             if (v := nr.get("profile_index")) is not None:
                 sn.rad_profile_index = v
             if (v := nr.get("mode")) is not None:
@@ -662,11 +662,24 @@ class JaffGen:
             The parsed and validated reaction network.
         """
         sn = self.state.network_args
+        # [network.radiation]'s global photo settings, now under
+        # [network.reactions.photo]; only those given.
+        photo = {
+            key: value
+            for key, value in (
+                ("pi_database", sn.pi_database),
+                ("override_custom_rate", sn.override_custom_rate),
+                ("override_custom_cross_section", sn.override_custom_cross_section),
+            )
+            if value is not None
+        }
+        photo_layer = {"network": {"reactions": {"photo": photo}}} if photo else {}
+
         return Network(
             fname=sn.fname,
             # --network-config / [network].config replaces the jaff.toml next to
             # the network rather than stacking over it.
-            config=sn.config,
+            config=[*([sn.config] if sn.config is not None else []), photo_layer],
             use_jaff_toml=sn.config is None,
             strict=sn.strict,
             label=sn.label,
@@ -674,17 +687,14 @@ class JaffGen:
             duplicate_policy=sn.duplicate_policy,
             expand_nuclei=sn.expand_nuclei,
             radiation_props=(
-                RadiationProps(
-                    bands=sn.rad_bands,
-                    profile_index=sn.rad_profile_index,
-                    mode=sn.rad_mode,
-                    c=sn.c,
-                    background_field=sn.background_field,
-                    pi_database=sn.pi_database,
-                    override_custom_rate=sn.override_custom_rate,
-                    override_custom_cross_section=sn.override_custom_cross_section,
-                    absorption_attenuates_flux=sn.absorption_attenuates_flux,
-                )
+                {
+                    "bands": sn.rad_bands,
+                    "profile_index": sn.rad_profile_index,
+                    "mode": sn.rad_mode,
+                    "c": sn.c,
+                    "background_field": sn.background_field,
+                    "absorption_attenuates_flux": sn.absorption_attenuates_flux,
+                }
                 if sn.rad_bands
                 else None
             ),
