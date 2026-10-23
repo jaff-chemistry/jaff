@@ -15,14 +15,16 @@ names; a per-reaction table may name a plugin bound to that reaction.
 
 from __future__ import annotations
 
-from typing import Annotated, Any, ClassVar, Dict, List, Literal, Self, TypeVar
+from typing import Annotated, Any, ClassVar, Dict, List, Literal, Self, TypeVar, Union
 
 import astropy.constants as _ac
 from pydantic import (
     BaseModel,
     BeforeValidator,
     ConfigDict,
+    Discriminator,
     Field,
+    Tag,
     ValidationError,
     field_validator,
     model_validator,
@@ -390,3 +392,87 @@ class DustConfig(_Config):
             raise ValueError(f"no dust model for R_V = {rv}; choose one of {DUST_RV}")
 
         return rv
+
+
+#: Adiabatic index; must exceed one.
+AdiabaticIndex = Annotated[float, Field(gt=1.0)]
+
+
+class IdealEosConfig(_Config):
+    """Ideal-gas EOS (``type = "ideal"``).
+
+    Attributes
+    ----------
+    gamma : float
+        Adiabatic index, > 1.
+    """
+
+    type: Annotated[Literal["ideal"], BeforeValidator(_lower)] = "ideal"
+    gamma: AdiabaticIndex = 1.6666666666667
+
+
+class MultiGammaEosConfig(_Config):
+    """Ideal gas with a per-species adiabatic index (``type = "multi_gamma"``).
+
+    Attributes
+    ----------
+    default_gamma : float
+        Adiabatic index of species absent from ``gamma_map``, > 1.
+    gamma_map : dict[str, float]
+        Adiabatic index per species name, each > 1.
+    """
+
+    type: Annotated[Literal["multi_gamma"], BeforeValidator(_lower)] = "multi_gamma"
+    default_gamma: AdiabaticIndex
+    gamma_map: Dict[str, AdiabaticIndex]
+
+
+class FermiDegenerateEosConfig(_Config):
+    """Non-relativistic degenerate Fermi gas (``type = "fermi_degenerate"``)."""
+
+    type: Annotated[Literal["fermi_degenerate"], BeforeValidator(_lower)] = (
+        "fermi_degenerate"
+    )
+
+
+class RelativisticFermiDegenerateEosConfig(_Config):
+    """Relativistic degenerate Fermi gas (``type = "relativistic_fermi_degenerate"``)."""
+
+    type: Annotated[Literal["relativistic_fermi_degenerate"], BeforeValidator(_lower)] = (
+        "relativistic_fermi_degenerate"
+    )
+
+
+def _eos_type(value: Any) -> Any:
+    """Return the EOS ``type`` of *value*, lower-cased; ``"ideal"`` when omitted."""
+    if isinstance(value, dict):
+        eos_type = value.get("type", "ideal")
+
+        return eos_type.lower() if isinstance(eos_type, str) else eos_type
+
+    return getattr(value, "type", None)
+
+
+EosConfig = Annotated[
+    Union[
+        Annotated[IdealEosConfig, Tag("ideal")],
+        Annotated[MultiGammaEosConfig, Tag("multi_gamma")],
+        Annotated[FermiDegenerateEosConfig, Tag("fermi_degenerate")],
+        Annotated[
+            RelativisticFermiDegenerateEosConfig, Tag("relativistic_fermi_degenerate")
+        ],
+    ],
+    Discriminator(_eos_type),
+]
+
+
+class ThermodynamicsConfig(_Config):
+    """Thermodynamics (``[network.thermodynamics]``).
+
+    Attributes
+    ----------
+    eos : EosConfig
+        Equation of state; its ``type`` selects the model and its keys.
+    """
+
+    eos: EosConfig = IdealEosConfig()

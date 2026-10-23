@@ -5,13 +5,18 @@ import pytest
 from pydantic import ValidationError
 
 from jaff.config.schema import (
+    FermiDegenerateEosConfig,
+    IdealEosConfig,
+    MultiGammaEosConfig,
     DustConfig,
     PhotoConfig,
     PhotoelectricEmissionConfig,
     ReactionConfig,
     RadiationConfig,
+    RelativisticFermiDegenerateEosConfig,
     ReactionsConfig,
     ShieldingConfig,
+    ThermodynamicsConfig,
 )
 
 H2_KEY = "H2._PHOTON__H.H"
@@ -353,3 +358,75 @@ class TestDustConfig:
     def test_rejects_old_flat_keys(self, key):
         with pytest.raises(ValidationError, match=key):
             DustConfig.model_validate({key: 6.0})
+
+
+class TestThermodynamicsConfig:
+    def test_default_eos_is_ideal(self):
+        eos = ThermodynamicsConfig().eos
+
+        assert isinstance(eos, IdealEosConfig)
+        assert eos.gamma == pytest.approx(5.0 / 3.0)
+
+    def test_type_defaults_to_ideal(self):
+        eos = ThermodynamicsConfig.model_validate({"eos": {"gamma": 1.4}}).eos
+
+        assert isinstance(eos, IdealEosConfig)
+        assert eos.gamma == pytest.approx(1.4)
+
+    @pytest.mark.parametrize(
+        "table, cls",
+        [
+            ({"type": "Ideal"}, IdealEosConfig),
+            (
+                {"type": "multi_gamma", "default_gamma": 1.4, "gamma_map": {"H2": 1.4}},
+                MultiGammaEosConfig,
+            ),
+            ({"type": "fermi_degenerate"}, FermiDegenerateEosConfig),
+            (
+                {"type": "relativistic_fermi_degenerate"},
+                RelativisticFermiDegenerateEosConfig,
+            ),
+        ],
+    )
+    def test_type_selects_model(self, table, cls):
+        assert isinstance(ThermodynamicsConfig.model_validate({"eos": table}).eos, cls)
+
+    def test_rejects_unknown_type(self):
+        with pytest.raises(ValidationError, match="polytrope"):
+            ThermodynamicsConfig.model_validate({"eos": {"type": "polytrope"}})
+
+    @pytest.mark.parametrize("missing", ["default_gamma", "gamma_map"])
+    def test_multi_gamma_requires_both_keys(self, missing):
+        table = {"type": "multi_gamma", "default_gamma": 1.4, "gamma_map": {"H2": 1.4}}
+        del table[missing]
+
+        with pytest.raises(ValidationError, match=missing):
+            ThermodynamicsConfig.model_validate({"eos": table})
+
+    @pytest.mark.parametrize(
+        "table, key",
+        [
+            ({"type": "ideal", "gamma": 1.0}, "gamma"),
+            (
+                {"type": "multi_gamma", "default_gamma": 0.9, "gamma_map": {}},
+                "default_gamma",
+            ),
+            (
+                {"type": "multi_gamma", "default_gamma": 1.4, "gamma_map": {"H2": 1.0}},
+                "gamma_map",
+            ),
+        ],
+    )
+    def test_adiabatic_index_must_exceed_one(self, table, key):
+        with pytest.raises(ValidationError, match=key):
+            ThermodynamicsConfig.model_validate({"eos": table})
+
+    def test_rejects_key_of_another_type(self):
+        with pytest.raises(ValidationError, match="gamma"):
+            ThermodynamicsConfig.model_validate(
+                {"eos": {"type": "fermi_degenerate", "gamma": 1.4}}
+            )
+
+    def test_rejects_bool_gamma(self):
+        with pytest.raises(ValidationError, match="gamma"):
+            ThermodynamicsConfig.model_validate({"eos": {"gamma": True}})
