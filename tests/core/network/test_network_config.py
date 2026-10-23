@@ -209,7 +209,7 @@ class TestNetworkUsesConfig:
         net = self._net(make_network)
 
         assert net.config.expand_nuclei is False
-        assert net.spec.expand_nuclei is False
+        assert net.config.expand_nuclei is False
 
     def test_use_jaff_toml_false_skips_it(self, make_network, tmp_path):
         (tmp_path / "jaff.toml").write_text('[network]\nlabel = "from_toml"\n')
@@ -370,3 +370,33 @@ class TestNetworkKeywordSections:
     def test_old_keywords_are_gone(self, make_network, old):
         with pytest.raises(TypeError, match=old):
             self._net(make_network, **{old: None})
+
+
+class TestNetworkSpec:
+    """NetworkSpec holds facts about the network file, never copies of settings."""
+
+    NET = "H + H -> H2 [10,1000] 1e-10\nH2 -> H + H [10,1000] 1e-10\n"
+
+    @pytest.mark.parametrize(
+        "name",
+        ["config", "strict", "label", "funcfile", "duplicate_policy", "expand_nuclei"],
+    )
+    def test_settings_are_not_copied(self, make_network, name):
+        net = make_network(self.NET, name="n.dat", funcfile=False)
+
+        assert not hasattr(net.spec, name)
+
+    def test_jfunc_path_is_the_file_found(self, make_network, tmp_path):
+        (tmp_path / "n.jfunc").write_text("@function f(x)\n@return x\n")
+
+        net = make_network(self.NET, name="n.dat")
+
+        assert net.spec.jfunc_path == tmp_path / "n.jfunc"
+        assert "f" in net.spec.aux_funcs
+
+    def test_jfunc_path_none_without_one(self, make_network):
+        assert make_network(self.NET, name="n.dat").spec.jfunc_path is None
+
+    def test_label_is_the_setting_else_the_file_stem(self, make_network):
+        assert make_network(self.NET, name="n.dat").label == "n"
+        assert make_network(self.NET, name="n.dat", label="mine").label == "mine"

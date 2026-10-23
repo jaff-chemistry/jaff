@@ -1,119 +1,88 @@
-# ABOUTME: NetworkSpec: a Network's resolved file path, settings and .jfunc functions
+# ABOUTME: NetworkSpec: a Network's resolved file path and its .jfunc functions
 # ABOUTME: Resolves predefined network names and auxiliary .jfunc files
 
-"""The :class:`NetworkSpec` normalized parameters of a :class:`~jaff.Network`."""
+"""The :class:`NetworkSpec` source-file facts of a :class:`~jaff.Network`."""
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
-
 from ...config import NETWORKS_DIR, predefined_networks
 from ...errors import ParserError
 from ..parsers import AuxiliaryFunctionParser
 from ..parsers.auxiliary_func import AuxiliaryFunctionProps
 
-if TYPE_CHECKING:
-    from .config import NetworkConfig
-
 
 class NetworkSpec:
-    """Normalized construction parameters of a :class:`~jaff.Network`.
+    """Facts about a :class:`~jaff.Network`'s source files.
 
-    ``Network`` bundles its validated :class:`~jaff.core.network.config.NetworkConfig`
-    and the network file into one of these (exposed as :attr:`Network.spec`):
-
-    * ``fname`` is resolved to an absolute path (a filesystem path or a
-      predefined network name; see :meth:`_resolve_network_path`);
-    * ``funcfile`` is resolved to the actual ``.jfunc`` file (scanning next to
-      the network file when ``True``) and its contents are parsed into
-      :attr:`aux_funcs`.
+    ``Network`` builds one from its file name and its ``funcfile`` setting
+    (exposed as :attr:`Network.spec`).  It holds what was found on disk, not
+    settings: those are :attr:`Network.config`.
 
     Attributes
     ----------
     fname : Path
-        Resolved, absolute path to the network file.
-    config : NetworkConfig
-        The network's validated config (also :attr:`Network.config`).
-    strict : bool
-        If ``True``, conservation violations and validation problems are fatal.
-    label : str or None
-        Optional human-readable label for the network.
-    funcfile : bool | Path
-        ``True`` to scan the network directory, ``False`` to skip, or the
-        resolved path of the ``.jfunc`` file actually used.
+        Resolved, absolute path to the network file (a filesystem path or a
+        predefined network name; see :meth:`_resolve_network_path`).
+    jfunc_path : Path or None
+        The auxiliary ``.jfunc`` file actually used: the ``funcfile`` setting
+        when it is a path, else the file found next to the network file
+        (``<file name>.jfunc``, then ``<stem>.jfunc``); ``None`` when there is
+        none or ``funcfile`` is ``False``.
     aux_funcs : dict[str, AuxiliaryFunctionProps]
-        Parsed auxiliary functions from the ``.jfunc`` file, keyed by lower-cased
-        name (``{}`` when none).
-        Exposed for inspection/debugging.
-    duplicate_policy : str
-        Global policy for two rate coefficients sharing a reaction, mechanism,
-        and temperature range (``config.reactions.duplicate_policy``), kept for
-        reference only: the loader reads each reaction's resolved policy from
-        ``config.reactions`` instead, where a reaction's own policy may
-        override the global one.
-    expand_nuclei : bool
-        Whether ``n_<element>_nuc`` symbols expand into element-nucleus sums.
-    _from_cli : bool
-        Internal flag marking construction from the command-line interface.
+        The functions of :attr:`jfunc_path`, keyed by lower-cased name (``{}``
+        when none).
     """
 
-    def __init__(
-        self,
-        fname: str | Path,
-        config: NetworkConfig,
-        _from_cli: bool,
-    ):
-        self.fname: Path = self._resolve_network_path(fname)
-        self.config: NetworkConfig = config
-        self.strict: bool = config.strict
-        self.label: str | None = config.label
-        self.funcfile: bool | Path = config.funcfile
-        self.duplicate_policy: str = config.reactions.duplicate_policy
-        # Resolves funcfile to the actual .jfunc path (when True) and parses it.
-        self.aux_funcs: dict[str, AuxiliaryFunctionProps] = self._load_aux_funcs()
-        self.expand_nuclei: bool = config.expand_nuclei
-        self._from_cli: bool = _from_cli
+    def __init__(self, fname: str | Path, funcfile: bool | Path):
+        """Resolve the network file and load its auxiliary functions.
 
-    def _load_aux_funcs(self) -> dict[str, AuxiliaryFunctionProps]:
-        """Detect and parse the auxiliary ``.jfunc`` file into a dict.
-
-        When :attr:`funcfile` is ``True``, looks next to the network file for
-        ``<file name>.jfunc`` (e.g. ``net.dat.jfunc``) and then for the network
-        file with its suffix replaced by ``.jfunc`` (e.g. ``net.jfunc``), and
-        rewrites :attr:`funcfile` to the first one found.  ``False`` skips
-        loading.
-
-        Returns
-        -------
-        dict[str, AuxiliaryFunctionProps]
-            Parsed auxiliary functions, or ``{}`` when there is no ``.jfunc``.
+        Parameters
+        ----------
+        fname : str | Path
+            Network file path or predefined network name.
+        funcfile : bool | Path
+            The ``network.funcfile`` setting: a ``.jfunc`` path, ``True`` to
+            look next to the network file, or ``False`` for none.
 
         Raises
         ------
         FileNotFoundError
-            If :attr:`funcfile` is an explicit path that does not exist.
+            If the network file, or an explicit ``.jfunc`` path, does not exist.
+        ParserError
+            If a predefined network directory has more than one ``.jet`` file.
         """
-        if self.funcfile is False:
+        self.fname: Path = self._resolve_network_path(fname)
+        self.jfunc_path: Path | None = self._find_jfunc(funcfile)
+        self.aux_funcs: dict[str, AuxiliaryFunctionProps] = self._load_aux_funcs()
+
+    def _find_jfunc(self, funcfile: bool | Path) -> Path | None:
+        """Return the ``.jfunc`` file *funcfile* selects, or ``None``.
+
+        Raises
+        ------
+        FileNotFoundError
+            If *funcfile* is an explicit path that does not exist.
+        """
+        if funcfile is False:
+            return None
+
+        if funcfile is True:
+            candidates = [Path(f"{self.fname}.jfunc"), self.fname.with_suffix(".jfunc")]
+
+            return next((c for c in candidates if c.exists()), None)
+
+        if not funcfile.exists():
+            raise FileNotFoundError(funcfile)
+
+        return funcfile
+
+    def _load_aux_funcs(self) -> dict[str, AuxiliaryFunctionProps]:
+        """Parse :attr:`jfunc_path` into a dict (``{}`` without one)."""
+        if self.jfunc_path is None:
             return {}
 
-        if self.funcfile is True:
-            candidates = [
-                Path(f"{self.fname}.jfunc"),
-                self.fname.with_suffix(".jfunc"),
-            ]
-            for candidate in candidates:
-                if candidate.exists():
-                    self.funcfile = candidate
-                    break
-            else:
-                return {}
-
-        assert isinstance(self.funcfile, Path)
-        if not self.funcfile.exists():
-            raise FileNotFoundError(self.funcfile)
-
-        with AuxiliaryFunctionParser(self.funcfile) as afp:
+        with AuxiliaryFunctionParser(self.jfunc_path) as afp:
             return afp.get_dict()
 
     @staticmethod

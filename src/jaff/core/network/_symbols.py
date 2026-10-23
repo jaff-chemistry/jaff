@@ -434,7 +434,7 @@ class NetworkSymbols:
                 num = int(name[3:])
             except ValueError:
                 net.logger.error(
-                    f"The 'rc_' keyword in {net.spec.funcfile} must be followed by "
+                    f"The 'rc_' keyword in {net.spec.jfunc_path} must be followed by "
                     f"an integer\ndenoting the reaction number. Found {name}"
                 )
                 return None
@@ -473,7 +473,7 @@ class NetworkSymbols:
                 raise ParserError(
                     f"'{name}' requests a nucleus sum for unknown element '{base}'"
                 )
-            if not net.spec.expand_nuclei:
+            if not net.config.expand_nuclei:
                 return Symbol(f"n{base}_nuc")
 
             total = self.element_sum(element)

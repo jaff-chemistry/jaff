@@ -233,8 +233,8 @@ class Network:
         Element mass dictionary used during species construction and the
         conservation checks.
     spec : NetworkSpec
-        The normalized construction parameters this network was built from
-        (resolved ``fname``, ``funcfile``, parsed ``aux_funcs``, ...).
+        Facts about the source files (not settings): the resolved ``fname``,
+        the ``.jfunc`` file used (``jfunc_path``) and its parsed ``aux_funcs``.
     config : NetworkConfig
         The validated config: the ``jaff.toml`` next to the network, the
         ``config`` layers, then the keyword arguments.
@@ -376,18 +376,15 @@ class Network:
             use_jaff_toml=use_jaff_toml,
             overrides=overrides,
         )
-        self.spec: NetworkSpec = NetworkSpec(fname, self.config, _from_cli)
+        self.spec: NetworkSpec = NetworkSpec(fname, self.config.funcfile)
 
         jaff_props: JaffProps = {}  # type: ignore
         loaded_from_jaff_file = is_jaff_file(self.spec.fname)
         if loaded_from_jaff_file:
             jaff_props = from_jaff_file(self.spec.fname)
             self.spec.fname = jaff_props.get("file_name", self.spec.fname)
-        # Finalize the label: a ``.jaff`` payload label wins, else the
-        # configured label, else the file stem.
-        self.spec.label = jaff_props.get(
-            "label", self.config.label or self.spec.fname.stem
-        )
+        # Without a configured label: the .jaff file's, else the file stem.
+        self.__default_label: str = jaff_props.get("label") or self.spec.fname.stem
         if not _from_cli:
             print_motd()
 
@@ -431,9 +428,9 @@ class Network:
         )
         self.symbols.log_summary()
 
-        self.check_sink_sources(self.spec.strict)
-        self.check_recombinations(self.spec.strict)
-        self.check_isomers(self.spec.strict)
+        self.check_sink_sources(self.config.strict)
+        self.check_recombinations(self.config.strict)
+        self.check_isomers(self.config.strict)
 
         self.__generate_reaction_matrices()
 
@@ -446,10 +443,8 @@ class Network:
 
     @property
     def label(self) -> str:
-        """Human-readable label for this network (from :attr:`spec`)."""
-        # Finalized to a non-None value in __init__ (label or file stem).
-        assert self.spec.label is not None
-        return self.spec.label
+        """Human-readable label: the ``label`` setting, else the file stem."""
+        return self.config.label or self.__default_label
 
     def __load_network(self) -> list[Parser]:
         """Parse the network file and build species, reactions, and auxiliary quantities.

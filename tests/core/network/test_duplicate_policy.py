@@ -37,11 +37,11 @@ class TestPolicyResolution:
     """duplicate_policy resolution on NetworkSpec."""
 
     def test_default_is_preserve_first(self):
-        assert _load().spec.duplicate_policy == "preserve-first"
+        assert _load().config.reactions.duplicate_policy == "preserve-first"
 
     @pytest.mark.parametrize("policy", ["preserve-first", "preserve-last", "error"])
     def test_explicit_arg(self, policy):
-        assert _load(duplicate_policy=policy).spec.duplicate_policy == policy
+        assert _load(duplicate_policy=policy).config.reactions.duplicate_policy == policy
 
     def test_invalid_arg_raises(self):
         with pytest.raises(ParserError, match="duplicate_policy"):
@@ -51,14 +51,15 @@ class TestPolicyResolution:
         cfg = _write_toml(
             tmp_path, '[network.reactions]\nduplicate_policy = "preserve-last"\n'
         )
-        assert _load(config=cfg).spec.duplicate_policy == "preserve-last"
+        assert _load(config=cfg).config.reactions.duplicate_policy == "preserve-last"
 
     def test_arg_beats_jafftoml(self, tmp_path):
         cfg = _write_toml(
             tmp_path, '[network.reactions]\nduplicate_policy = "preserve-last"\n'
         )
         assert (
-            _load(config=cfg, duplicate_policy="error").spec.duplicate_policy == "error"
+            _load(config=cfg, duplicate_policy="error").config.reactions.duplicate_policy
+            == "error"
         )
 
     def test_invalid_jafftoml_value_raises(self, tmp_path):

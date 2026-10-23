@@ -97,7 +97,7 @@ class Reaction:
     net : Network
         Network the reaction belongs to.  Supplies the ``.jfunc`` auxiliary
         functions, the radiation field, the cross-section lookup and the
-        conservation-check mode (``net.spec.strict``).
+        conservation-check mode (``net.config.strict``).
     original_string : str
         The raw network-file line that produced this reaction.
     reactants : Species
@@ -280,7 +280,7 @@ class Reaction:
         Raises
         ------
         SystemExit
-            When ``net.spec.strict`` is set and mass or charge is not conserved.
+            When ``net.config.strict`` is set and mass or charge is not conserved.
         ParserError
             For invalid photo-reaction or shielding configuration (e.g. a
             ``pi_database`` set on a reaction whose cross section comes from
@@ -326,7 +326,7 @@ class Reaction:
         self.verbatim: str = self.get_verbatim()
         self.catalogue_index: int = -1
 
-        self.check(self.net.spec.strict)
+        self.check(self.net.config.strict)
         self.serialized_exploded: str = self.serialize_exploded()
         # The reaction type is concluded by the parser and supplied here, not
         # inferred from the rate expression.
@@ -643,7 +643,7 @@ class Reaction:
         those of the products (see :meth:`check_mass` and
         :meth:`check_charge`).  Violations are logged; with *strict* the
         first one is fatal.  The constructor runs it with
-        ``net.spec.strict``.
+        ``net.config.strict``.
 
         Parameters
         ----------

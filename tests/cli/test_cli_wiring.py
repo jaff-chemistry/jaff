@@ -160,14 +160,14 @@ class TestJaffxWiring:
 
         jx = JaffX.__new__(JaffX)
         net = jx.get_network(self._args("preserve-last"))
-        assert net.spec.duplicate_policy == "preserve-last"
+        assert net.config.reactions.duplicate_policy == "preserve-last"
 
     def test_none_uses_default(self):
         from jaff.cli.jaffx._engine import JaffX
 
         jx = JaffX.__new__(JaffX)
         net = jx.get_network(self._args(None))
-        assert net.spec.duplicate_policy == "preserve-first"
+        assert net.config.reactions.duplicate_policy == "preserve-first"
 
 
 class TestFuncfileWiring:
@@ -434,7 +434,7 @@ class TestSetEndToEnd:
 
         net = JaffX.__new__(JaffX).get_network(args)
 
-        assert net.spec.duplicate_policy == "preserve-last"
+        assert net.config.reactions.duplicate_policy == "preserve-last"
 
     def test_jaffx_rejects_jaffgen_keys(self):
         from jaff.cli.jaffx._engine import JaffX
