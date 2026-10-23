@@ -9,9 +9,10 @@ number or a bool) and is frozen once validated.
 
 from __future__ import annotations
 
+import inspect
 import re
 from pathlib import Path
-from typing import Annotated, Any, ClassVar, List, Tuple, TypeVar
+from typing import Annotated, Any, ClassVar, Dict, List, Tuple, TypeVar
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, ValidationError
 
@@ -42,11 +43,24 @@ class ConfigModel(BaseModel):
     A model whose keys depend on its ``type`` sets ``_atomic = True``: a table of
     it is replaced whole, never merged with another (see :func:`overlay` and
     :func:`~jaff.config.loader.atomic_tables`).
+
+    Its JSON schema describes each key with the matching entry of the
+    docstring's numpydoc ``Attributes`` section (see
+    :func:`attribute_descriptions`), so editors show it on hover/completion.
     """
 
     _atomic: ClassVar[bool] = False
 
-    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        strict=True,
+        frozen=True,
+        json_schema_extra=lambda schema, cls: _document_schema(schema, cls),
+    )
+
+    @classmethod
+    def _extend_json_schema(cls, schema: Dict[str, Any]) -> None:
+        """Adjust this model's JSON schema further; nothing by default."""
 
 
 def overlay(base: _ModelT, over: BaseModel | None) -> _ModelT:
@@ -127,3 +141,74 @@ def format_validation_errors(
         lines.extend(f"{path}: {line}" if path else line for line in message.splitlines())
 
     return lines
+
+
+#: A Sphinx cross-reference role, e.g. ``:class:`~pkg.mod.Name```.
+_ROLE = re.compile(r":\w+:`~?(?:[\w.]+\.)?(\w+)`")
+_LITERAL = re.compile(r"``(.+?)``")
+
+
+def _markdown(text: str) -> str:
+    """Turn the reST markup used in docstrings into the markdown editors render."""
+    return _LITERAL.sub(r"`\1`", _ROLE.sub(r"`\1`", text))
+
+
+def attribute_descriptions(doc: str | None) -> Tuple[str, Dict[str, str]]:
+    """Split a numpydoc docstring into its summary and ``Attributes`` entries.
+
+    Parameters
+    ----------
+    doc : str or None
+        The docstring.
+
+    Returns
+    -------
+    tuple of (str, dict[str, str])
+        The text before the first section, and each attribute's description
+        joined into one line, both with reST markup turned into markdown.
+    """
+    lines = inspect.cleandoc(doc or "").splitlines()
+    # A section header is a line underlined with dashes.
+    headers = [
+        i
+        for i in range(len(lines) - 1)
+        if lines[i].strip() and re.fullmatch(r"-{3,}", lines[i + 1].strip())
+    ]
+    summary = "\n".join(lines[: headers[0] if headers else len(lines)]).strip()
+
+    fields: Dict[str, List[str]] = {}
+    start = next((i for i in headers if lines[i].strip() == "Attributes"), None)
+    if start is not None:
+        end = next((i for i in headers if i > start), len(lines))
+        name = None
+
+        for line in lines[start + 2 : end]:
+            if line and not line[0].isspace():
+                match = re.match(r"(\w+)\s*:", line)
+                name = match.group(1) if match else None
+                if name is not None:
+                    fields[name] = []
+            elif name is not None and line.strip():
+                fields[name].append(line.strip())
+
+    return _markdown(summary), {
+        name: _markdown(" ".join(text)) for name, text in fields.items()
+    }
+
+
+def _document_schema(schema: Dict[str, Any], cls: type) -> None:
+    """Describe a config model's JSON schema from its docstring.
+
+    The table gets the docstring's summary and each key its ``Attributes``
+    entry; then the model's own :meth:`ConfigModel._extend_json_schema` runs.
+    """
+    summary, fields = attribute_descriptions(cls.__doc__)
+    if summary:
+        schema["description"] = summary
+
+    for name, prop in schema.get("properties", {}).items():
+        if name in fields:
+            prop["description"] = fields[name]
+
+    if issubclass(cls, ConfigModel):
+        cls._extend_json_schema(schema)

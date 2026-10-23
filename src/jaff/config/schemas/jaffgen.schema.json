@@ -3,10 +3,11 @@
   "$defs": {
     "DustConfig": {
       "additionalProperties": false,
-      "description": "Dust (``[network.dust]``); the table enables the dust module.\n\nAttributes\n----------\nrv : float\n    Total-to-selective extinction ratio R_V selecting the tabulated dust\n    model: ``3.1``, ``4.0`` or ``5.5``.\nu_reduction : str\n    Dust cross-section attenuating the radiation density: ``\"extinction\"``,\n    ``\"absorption\"``, ``\"scattering\"``, ``\"transport\"`` or ``\"none\"``.\nf_reduction : str\n    Dust cross-section attenuating the radiation flux (same choices).\npe : PhotoelectricEmissionConfig\n    Photoelectric emission settings.",
+      "description": "Dust (`[network.dust]`); the table enables the dust module.",
       "properties": {
         "rv": {
           "default": 3.1,
+          "description": "Total-to-selective extinction ratio R_V selecting the tabulated dust model: `3.1`, `4.0` or `5.5`.",
           "enum": [
             3.1,
             4.0,
@@ -17,6 +18,7 @@
         },
         "u_reduction": {
           "default": "absorption",
+          "description": "Dust cross-section attenuating the radiation density: `\"extinction\"`, `\"absorption\"`, `\"scattering\"`, `\"transport\"` or `\"none\"`.",
           "enum": [
             "extinction",
             "absorption",
@@ -29,6 +31,7 @@
         },
         "f_reduction": {
           "default": "transport",
+          "description": "Dust cross-section attenuating the radiation flux (same choices).",
           "enum": [
             "extinction",
             "absorption",
@@ -44,7 +47,8 @@
           "default": {
             "threshold_low": 6.0,
             "threshold_high": 13.6
-          }
+          },
+          "description": "Photoelectric emission settings."
         }
       },
       "title": "DustConfig",
@@ -52,7 +56,7 @@
     },
     "FermiDegenerateEosConfig": {
       "additionalProperties": false,
-      "description": "Non-relativistic degenerate Fermi gas (``type = \"fermi_degenerate\"``).",
+      "description": "Non-relativistic degenerate Fermi gas (`type = \"fermi_degenerate\"`).",
       "properties": {
         "type": {
           "const": "fermi_degenerate",
@@ -69,7 +73,7 @@
     },
     "IdealEosConfig": {
       "additionalProperties": false,
-      "description": "Ideal-gas EOS (``type = \"ideal\"``).\n\nAttributes\n----------\ngamma : float\n    Adiabatic index, > 1.",
+      "description": "Ideal-gas EOS (`type = \"ideal\"`).",
       "properties": {
         "type": {
           "const": "ideal",
@@ -79,6 +83,7 @@
         },
         "gamma": {
           "default": 1.6666666666667,
+          "description": "Adiabatic index, > 1.",
           "exclusiveMinimum": 1.0,
           "title": "Gamma",
           "type": "number"
@@ -89,7 +94,7 @@
     },
     "JaffgenConfig": {
       "additionalProperties": false,
-      "description": "Code-generation run (``[jaffgen]``, ``jaffgen.toml`` only).\n\nAttributes\n----------\ntemplate : str or None\n    Built-in template collection.\ninput_dir : Path or None\n    Directory of template files to process.\ninput_files : list of Path\n    Individual template files.\noutput_dir : Path or None\n    Output directory; ``None`` uses the default output directory.\nnetwork_file : Path or None\n    Network file, or the name of a predefined network.\nnetwork_config : Path or None\n    ``jaff.toml`` to load instead of the one next to the network file.\necho : bool\n    Echo the template directives as comments in the output.\ntable : list of dict\n    ``[[jaffgen.table]]`` data-table conversions, passed on unchecked.",
+      "description": "Code-generation run (`[jaffgen]`, `jaffgen.toml` only).",
       "properties": {
         "template": {
           "anyOf": [
@@ -101,6 +106,7 @@
             }
           ],
           "default": null,
+          "description": "Built-in template collection.",
           "title": "Template"
         },
         "input_dir": {
@@ -114,10 +120,12 @@
             }
           ],
           "default": null,
+          "description": "Directory of template files to process.",
           "title": "Input Dir"
         },
         "input_files": {
           "default": [],
+          "description": "Individual template files.",
           "items": {
             "format": "path",
             "type": "string"
@@ -136,6 +144,7 @@
             }
           ],
           "default": null,
+          "description": "Output directory; `None` uses the default output directory.",
           "title": "Output Dir"
         },
         "network_file": {
@@ -149,6 +158,7 @@
             }
           ],
           "default": null,
+          "description": "Network file, or the name of a predefined network.",
           "title": "Network File"
         },
         "network_config": {
@@ -162,15 +172,18 @@
             }
           ],
           "default": null,
+          "description": "`jaff.toml` to load instead of the one next to the network file.",
           "title": "Network Config"
         },
         "echo": {
           "default": true,
+          "description": "Echo the template directives as comments in the output.",
           "title": "Echo",
           "type": "boolean"
         },
         "table": {
           "default": [],
+          "description": "`[[jaffgen.table]]` data-table conversions, passed on unchecked.",
           "items": {
             "additionalProperties": true,
             "type": "object"
@@ -184,7 +197,7 @@
     },
     "MultiGammaEosConfig": {
       "additionalProperties": false,
-      "description": "Ideal gas with a per-species adiabatic index (``type = \"multi_gamma\"``).\n\nAttributes\n----------\ndefault_gamma : float\n    Adiabatic index of species absent from ``gamma_map``, > 1.\ngamma_map : dict[str, float]\n    Adiabatic index per species name, each > 1.",
+      "description": "Ideal gas with a per-species adiabatic index (`type = \"multi_gamma\"`).",
       "properties": {
         "type": {
           "const": "multi_gamma",
@@ -193,6 +206,7 @@
           "type": "string"
         },
         "default_gamma": {
+          "description": "Adiabatic index of species absent from `gamma_map`, > 1.",
           "exclusiveMinimum": 1.0,
           "title": "Default Gamma",
           "type": "number"
@@ -202,6 +216,7 @@
             "exclusiveMinimum": 1.0,
             "type": "number"
           },
+          "description": "Adiabatic index per species name, each > 1.",
           "title": "Gamma Map",
           "type": "object"
         }
@@ -216,7 +231,7 @@
     },
     "NetworkConfig": {
       "additionalProperties": false,
-      "description": "Network (``[network]``).\n\nAttributes\n----------\nlabel : str or None\n    Human-readable network name; ``None`` uses the network file stem.\nstrict : bool\n    Treat validation problems (conservation, sinks/sources, ...) as fatal.\nfuncfile : bool or Path\n    ``.jfunc`` auxiliary file: ``True`` looks next to the network file,\n    ``False`` loads none, a path names it.\nexpand_nuclei : bool\n    Expand ``n_<element>_nuc`` into the element-nucleus sum.\nreactions : ReactionsConfig\n    Settings of the reactions.\nradiation : RadiationConfig or None\n    Radiation field; ``None`` disables radiation.\ndust : DustConfig or None\n    Dust; ``None`` disables the dust module.\nthermodynamics : ThermodynamicsConfig\n    Thermodynamics.",
+      "description": "Network (`[network]`).",
       "properties": {
         "label": {
           "anyOf": [
@@ -228,10 +243,12 @@
             }
           ],
           "default": null,
+          "description": "Human-readable network name; `None` uses the network file stem.",
           "title": "Label"
         },
         "strict": {
           "default": false,
+          "description": "Treat validation problems (conservation, sinks/sources, ...) as fatal.",
           "title": "Strict",
           "type": "boolean"
         },
@@ -246,10 +263,12 @@
             }
           ],
           "default": true,
+          "description": "`.jfunc` auxiliary file: `True` looks next to the network file, `False` loads none, a path names it.",
           "title": "Funcfile"
         },
         "expand_nuclei": {
           "default": true,
+          "description": "Expand `n_<element>_nuc` into the element-nucleus sum.",
           "title": "Expand Nuclei",
           "type": "boolean"
         },
@@ -266,7 +285,8 @@
               "use_proxy_photoreaction": true
             },
             "reaction": {}
-          }
+          },
+          "description": "Settings of the reactions."
         },
         "radiation": {
           "anyOf": [
@@ -277,7 +297,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Radiation field; `None` disables radiation."
         },
         "dust": {
           "anyOf": [
@@ -288,7 +309,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Dust; `None` disables the dust module."
         },
         "thermodynamics": {
           "$ref": "#/$defs/ThermodynamicsConfig",
@@ -297,7 +319,8 @@
               "gamma": 1.6666666666667,
               "type": "ideal"
             }
-          }
+          },
+          "description": "Thermodynamics."
         }
       },
       "title": "NetworkConfig",
@@ -305,7 +328,7 @@
     },
     "PhotoConfig": {
       "additionalProperties": false,
-      "description": "Photo-reaction settings (``[network.reactions.photo]``).\n\nAttributes\n----------\npi_database : str or None\n    Photoionisation cross-section database: ``\"norad\"``, ``\"verner\"`` or\n    ``\"leiden\"``.\noverride_custom_rate : bool or None\n    Recompute a ``.jfunc`` ``chemRate<N>`` rate from the cross sections.\noverride_custom_cross_section : bool or None\n    Ignore ``.jfunc`` ``photoCrossSection<N>`` and use the database.\nuse_proxy_photoreaction : bool or None\n    Look cross sections up under the proxy reaction (``CHx`` → ``CH``).\nshielding : ShieldingConfig or None\n    Line shielding of the rate; ``None`` globally means no shielding.\n\n``None`` means unset: the value comes from the global settings.",
+      "description": "Photo-reaction settings (`[network.reactions.photo]`).",
       "properties": {
         "pi_database": {
           "anyOf": [
@@ -322,6 +345,7 @@
             }
           ],
           "default": null,
+          "description": "Photoionisation cross-section database: `\"norad\"`, `\"verner\"` or `\"leiden\"`.",
           "title": "Pi Database"
         },
         "override_custom_rate": {
@@ -334,6 +358,7 @@
             }
           ],
           "default": null,
+          "description": "Recompute a `.jfunc` `chemRate<N>` rate from the cross sections.",
           "title": "Override Custom Rate"
         },
         "override_custom_cross_section": {
@@ -346,6 +371,7 @@
             }
           ],
           "default": null,
+          "description": "Ignore `.jfunc` `photoCrossSection<N>` and use the database.",
           "title": "Override Custom Cross Section"
         },
         "use_proxy_photoreaction": {
@@ -358,6 +384,7 @@
             }
           ],
           "default": null,
+          "description": "Look cross sections up under the proxy reaction (`CHx` → `CH`).",
           "title": "Use Proxy Photoreaction"
         },
         "shielding": {
@@ -369,7 +396,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Line shielding of the rate; `None` globally means no shielding."
         }
       },
       "title": "PhotoConfig",
@@ -377,15 +405,17 @@
     },
     "PhotoelectricEmissionConfig": {
       "additionalProperties": false,
-      "description": "Photoelectric emission of the dust (``[network.dust.pe]``).\n\nAttributes\n----------\nthreshold_low : float\n    Lower edge of the photoelectric band in eV (grain work function).\nthreshold_high : float\n    Upper edge of the photoelectric band in eV.",
+      "description": "Photoelectric emission of the dust (`[network.dust.pe]`).",
       "properties": {
         "threshold_low": {
           "default": 6.0,
+          "description": "Lower edge of the photoelectric band in eV (grain work function).",
           "title": "Threshold Low",
           "type": "number"
         },
         "threshold_high": {
           "default": 13.6,
+          "description": "Upper edge of the photoelectric band in eV.",
           "title": "Threshold High",
           "type": "number"
         }
@@ -395,9 +425,10 @@
     },
     "RadiationConfig": {
       "additionalProperties": false,
-      "description": "Radiation field (``[network.radiation]``); the table enables radiation.\n\nOnly the shape of the settings is checked here; whether the band-averaged\nspectrum converges is checked by the radiation field itself.\n\nAttributes\n----------\nbands : list of (float or \"inf\")\n    Ordered photon-energy band edges in eV, at least two; ``\"inf\"`` is\n    allowed as the last edge only.\nprofile_index : float or list of float\n    Spectral index *α* of the photon-number spectrum ``n(E) ∝ E^(α-2)``:\n    one for every band, or a list with one per band.\nmode : str\n    Tracked quantity: ``\"nph\"`` (photon number density) or ``\"u\"``\n    (energy density).\nc : float or str\n    Speed of light in cm/s, or a symbol name (e.g. ``\"c_hat\"``) for a\n    reduced speed of light.\nbackground_field : str\n    Reference radiation field used to scale ``chi_pe``.\nabsorption_attenuates_flux : bool\n    Whether the ``globalAbsorptionCoefficient`` also attenuates the flux\n    equations, not only the density equations.",
+      "description": "Radiation field (`[network.radiation]`); the table enables radiation.\n\nOnly the shape of the settings is checked here; whether the band-averaged\nspectrum converges is checked by the radiation field itself.",
       "properties": {
         "bands": {
+          "description": "Ordered photon-energy band edges in eV, at least two; `\"inf\"` is allowed as the last edge only.",
           "items": {
             "anyOf": [
               {
@@ -425,10 +456,12 @@
             }
           ],
           "default": 0.0,
+          "description": "Spectral index *α* of the photon-number spectrum `n(E) ∝ E^(α-2)`: one for every band, or a list with one per band.",
           "title": "Profile Index"
         },
         "mode": {
           "default": "nph",
+          "description": "Tracked quantity: `\"nph\"` (photon number density) or `\"u\"` (energy density).",
           "enum": [
             "nph",
             "u"
@@ -446,10 +479,12 @@
             }
           ],
           "default": 29979245800.0,
+          "description": "Speed of light in cm/s, or a symbol name (e.g. `\"c_hat\"`) for a reduced speed of light.",
           "title": "C"
         },
         "background_field": {
           "default": "draine",
+          "description": "Reference radiation field used to scale `chi_pe`.",
           "enum": [
             "bb_4000",
             "bb_10000",
@@ -465,6 +500,7 @@
         },
         "absorption_attenuates_flux": {
           "default": true,
+          "description": "Whether the `globalAbsorptionCoefficient` also attenuates the flux equations, not only the density equations.",
           "title": "Absorption Attenuates Flux",
           "type": "boolean"
         }
@@ -477,7 +513,7 @@
     },
     "ReactionConfig": {
       "additionalProperties": false,
-      "description": "Settings of one reaction (``[network.reactions.reaction.\"<serialized>\"]``).\n\nAttributes\n----------\nduplicate_policy : str or None\n    How two rate coefficients over the same temperature range are\n    resolved: ``\"preserve-first\"``, ``\"preserve-last\"`` or ``\"error\"``.\nt_cutoff : str or None\n    Rate behaviour outside the temperature range: ``\"clip\"`` or\n    ``\"extrapolate\"``.\nphoto : PhotoConfig or None\n    Photo-reaction settings.\n\n``None`` means unset: the value comes from the global settings.",
+      "description": "Settings of one reaction (`[network.reactions.reaction.\"<serialized>\"]`).",
       "properties": {
         "duplicate_policy": {
           "anyOf": [
@@ -494,6 +530,7 @@
             }
           ],
           "default": null,
+          "description": "How two rate coefficients over the same temperature range are resolved: `\"preserve-first\"`, `\"preserve-last\"` or `\"error\"`.",
           "title": "Duplicate Policy"
         },
         "t_cutoff": {
@@ -510,6 +547,7 @@
             }
           ],
           "default": null,
+          "description": "Rate behaviour outside the temperature range: `\"clip\"` or `\"extrapolate\"`.",
           "title": "T Cutoff"
         },
         "photo": {
@@ -521,7 +559,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Photo-reaction settings."
         }
       },
       "title": "ReactionConfig",
@@ -529,7 +568,7 @@
     },
     "ReactionsConfig": {
       "additionalProperties": false,
-      "description": "Settings of every reaction (``[network.reactions]``).\n\nHolds the same keys as :class:`ReactionConfig`, with concrete defaults,\nplus the per-reaction entries.\n\nAttributes\n----------\nreaction : dict[str, ReactionConfig]\n    Per-reaction settings keyed by serialized reaction; a key set here\n    wins over the global one (see :meth:`resolve`).",
+      "description": "Settings of every reaction (`[network.reactions]`).\n\nHolds the same keys as `ReactionConfig`, with concrete defaults,\nplus the per-reaction entries.",
       "properties": {
         "duplicate_policy": {
           "default": "preserve-first",
@@ -565,6 +604,7 @@
             "$ref": "#/$defs/ReactionConfig"
           },
           "default": {},
+          "description": "Per-reaction settings keyed by serialized reaction; a key set here wins over the global one (see `resolve`).",
           "title": "Reaction",
           "type": "object"
         }
@@ -574,7 +614,7 @@
     },
     "RelativisticFermiDegenerateEosConfig": {
       "additionalProperties": false,
-      "description": "Relativistic degenerate Fermi gas (``type = \"relativistic_fermi_degenerate\"``).",
+      "description": "Relativistic degenerate Fermi gas (`type = \"relativistic_fermi_degenerate\"`).",
       "properties": {
         "type": {
           "const": "relativistic_fermi_degenerate",
@@ -599,11 +639,13 @@
             },
             "min_ncol": {
               "default": 1e-50,
+              "description": "Lower floor on the H2 column density (cm^-2).",
               "title": "Min Ncol",
               "type": "number"
             },
             "min_vdisp": {
               "default": 1e-50,
+              "description": "Lower floor on the velocity dispersion (cm/s).",
               "title": "Min Vdisp",
               "type": "number"
             }
@@ -622,11 +664,13 @@
             },
             "min_ncol": {
               "default": 1e-50,
+              "description": "Lower floor on the H2 column density (cm^-2).",
               "title": "Min Ncol",
               "type": "number"
             },
             "min_vdisp": {
               "default": 1e-50,
+              "description": "Lower floor on the velocity dispersion (cm/s).",
               "title": "Min Vdisp",
               "type": "number"
             }
@@ -644,6 +688,7 @@
               "const": "leiden"
             },
             "shielded_by": {
+              "description": "Shielding species (`LeidenSpecies`); their factors multiply.",
               "items": {
                 "enum": [
                   "H2",
@@ -660,6 +705,7 @@
             },
             "radiation": {
               "default": "isrf",
+              "description": "Radiation-field subgroup of the Leiden table, lower-cased.",
               "title": "Radiation",
               "type": "string"
             }
@@ -676,13 +722,14 @@
     },
     "ThermodynamicsConfig": {
       "additionalProperties": false,
-      "description": "Thermodynamics (``[network.thermodynamics]``).\n\nAttributes\n----------\neos : EosConfig\n    Equation of state; its ``type`` selects the model and its keys.",
+      "description": "Thermodynamics (`[network.thermodynamics]`).",
       "properties": {
         "eos": {
           "default": {
             "type": "ideal",
             "gamma": 1.6666666666667
           },
+          "description": "Equation of state; its `type` selects the model and its keys.",
           "oneOf": [
             {
               "$ref": "#/$defs/IdealEosConfig"
@@ -705,7 +752,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "A ``jaffgen.toml`` file: a code-generation run and its network settings.",
+  "description": "A `jaffgen.toml` file: a code-generation run and its network settings.",
   "properties": {
     "network": {
       "$ref": "#/$defs/NetworkConfig",

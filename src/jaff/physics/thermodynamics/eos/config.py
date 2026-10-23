@@ -8,18 +8,13 @@ from __future__ import annotations
 
 from typing import Annotated, Any, ClassVar, Dict, Literal, Union
 
-from pydantic import BeforeValidator, ConfigDict, Discriminator, Field, Tag
+from pydantic import BeforeValidator, Discriminator, Field, Tag
 
 from ....config.base import ConfigModel, lower
 
 
 #: Adiabatic index; must exceed one.
 AdiabaticIndex = Annotated[float, Field(gt=1.0)]
-
-
-def _require_type(schema: Dict[str, Any]) -> None:
-    """Mark ``type`` required in a JSON schema: only the ideal EOS may omit it."""
-    schema["required"] = [*schema.get("required", []), "type"]
 
 
 class IdealEosConfig(ConfigModel):
@@ -49,7 +44,11 @@ class MultiGammaEosConfig(ConfigModel):
     """
 
     _atomic: ClassVar[bool] = True
-    model_config = ConfigDict(json_schema_extra=_require_type)
+
+    @classmethod
+    def _extend_json_schema(cls, schema: Dict[str, Any]) -> None:
+        """Mark ``type`` required: only the ideal EOS may omit it."""
+        schema["required"] = [*schema.get("required", []), "type"]
 
     type: Annotated[Literal["multi_gamma"], BeforeValidator(lower)] = "multi_gamma"
     default_gamma: AdiabaticIndex
@@ -60,7 +59,11 @@ class FermiDegenerateEosConfig(ConfigModel):
     """Non-relativistic degenerate Fermi gas (``type = "fermi_degenerate"``)."""
 
     _atomic: ClassVar[bool] = True
-    model_config = ConfigDict(json_schema_extra=_require_type)
+
+    @classmethod
+    def _extend_json_schema(cls, schema: Dict[str, Any]) -> None:
+        """Mark ``type`` required: only the ideal EOS may omit it."""
+        schema["required"] = [*schema.get("required", []), "type"]
 
     type: Annotated[Literal["fermi_degenerate"], BeforeValidator(lower)] = (
         "fermi_degenerate"
@@ -71,7 +74,11 @@ class RelativisticFermiDegenerateEosConfig(ConfigModel):
     """Relativistic degenerate Fermi gas (``type = "relativistic_fermi_degenerate"``)."""
 
     _atomic: ClassVar[bool] = True
-    model_config = ConfigDict(json_schema_extra=_require_type)
+
+    @classmethod
+    def _extend_json_schema(cls, schema: Dict[str, Any]) -> None:
+        """Mark ``type`` required: only the ideal EOS may omit it."""
+        schema["required"] = [*schema.get("required", []), "type"]
 
     type: Annotated[Literal["relativistic_fermi_degenerate"], BeforeValidator(lower)] = (
         "relativistic_fermi_degenerate"

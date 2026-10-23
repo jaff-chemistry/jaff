@@ -7,6 +7,7 @@ import tomllib
 import pytest
 from jsonschema import Draft202012Validator
 
+from jaff.config.base import attribute_descriptions
 from jaff.config.json_schema import SCHEMA_DIR, schema_files
 
 
@@ -100,3 +101,75 @@ def test_committed_schema_matches_models(name):
     assert committed == schema_files()[name], (
         "Run `python -m jaff.config.json_schema` to regenerate the schemas"
     )
+
+
+@pytest.fixture(scope="module")
+def defs():
+    return schema_files()["jaff"]["$defs"]
+
+
+class TestDescriptions:
+    """Keys carry their numpydoc Attributes entry as description (hover/completion)."""
+
+    def test_key_description_from_attributes(self, defs):
+        description = defs["RadiationConfig"]["properties"]["bands"]["description"]
+
+        assert "band edges" in description
+
+    def test_table_description_is_the_summary(self, defs):
+        description = defs["RadiationConfig"]["description"]
+
+        assert "Attributes" not in description
+        assert description.startswith("Radiation field")
+
+    def test_reference_to_a_table_is_described(self, defs):
+        assert (
+            "Radiation field"
+            in defs["NetworkConfig"]["properties"]["radiation"]["description"]
+        )
+
+    def test_rst_markup_becomes_markdown(self, defs):
+        description = defs["ReactionsConfig"]["properties"]["reaction"]["description"]
+
+        assert "``" not in description
+        assert ":meth:" not in description
+
+    def test_shielding_plugin_keys_are_described(self, defs):
+        branches = defs["ShieldingConfig"]["anyOf"]
+        leiden = next(b for b in branches if b["properties"]["type"]["const"] == "leiden")
+
+        assert "Shielding species" in leiden["properties"]["shielded_by"]["description"]
+
+    def test_eos_still_requires_type(self, defs):
+        assert "type" in defs["MultiGammaEosConfig"]["required"]
+
+
+class TestAttributeDescriptions:
+    def test_parses_multi_line_entries(self):
+        doc = """Summary line.
+
+        More text.
+
+        Attributes
+        ----------
+        alpha : float
+            First line
+            continues here.
+        beta : str or None
+            Uses ``code`` and :class:`~jaff.Thing`.
+
+        Notes
+        -----
+        Not an attribute.
+        """
+
+        summary, fields = attribute_descriptions(doc)
+
+        assert summary == "Summary line.\n\nMore text."
+        assert fields == {
+            "alpha": "First line continues here.",
+            "beta": "Uses `code` and `Thing`.",
+        }
+
+    def test_without_attributes_section(self):
+        assert attribute_descriptions("Just a summary.") == ("Just a summary.", {})
