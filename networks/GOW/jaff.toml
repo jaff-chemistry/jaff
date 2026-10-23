@@ -1,2 +1,2 @@
-[network.rates]
-T_cutoff = "extrapolate"
+[network.reactions]
+t_cutoff = "extrapolate"

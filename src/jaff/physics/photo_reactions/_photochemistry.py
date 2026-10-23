@@ -11,7 +11,7 @@ Three databases are used:
 
 Photodissociation always comes from Leiden.  Photoionisation follows the
 reaction's ``pi_database`` override, then the global
-:attr:`RadiationProps.pi_database`, then the remaining databases (see
+``network.reactions.photo.pi_database``, then the remaining databases (see
 :meth:`Photochemistry.get_xsec`).  All look-ups are keyed by
 ``reaction.serialized`` (or the normalised proxy string).
 """
@@ -95,8 +95,9 @@ class Photochemistry:
         download_shielding()
 
     def _lookup_key(self, reaction: Reaction) -> str:
-        """Database key: the proxy string when proxy photoreactions are enabled."""
-        if self.net._use_proxy_photoreaction:
+        """Database key: the proxy string when the reaction uses proxy lookups."""
+        photo = self.net.config.reactions.resolve(reaction.serialized).photo
+        if photo is not None and photo.use_proxy_photoreaction:
             return reaction.normalized_proxy_reaction_str()
 
         return reaction.serialized
@@ -164,9 +165,10 @@ class Photochemistry:
 
     def _pi_order(self, reaction: Reaction) -> list[str]:
         """Databases to try: the chosen one, then :data:`PI_DATABASES` order."""
-        rad = self.net.radiation
-        chosen = self._pi_override(reaction) or (
-            rad.pi_database if rad is not None else "norad"
+        chosen = (
+            self._pi_override(reaction)
+            or self.net.config.reactions.photo.pi_database
+            or "norad"
         )
 
         return list(dict.fromkeys([chosen, *PI_DATABASES]))
@@ -261,13 +263,13 @@ class Photochemistry:
 
         Photodissociation comes from Leiden.  Photoionisation tries, in order,
         ``reaction.photo.pi_database`` (or the global
-        :attr:`RadiationProps.pi_database`, ``"norad"`` without radiation),
+        ``network.reactions.photo.pi_database``, ``"norad"`` by default),
         then ``norad``, ``verner``, ``leiden`` (duplicates removed).  Fallbacks to
         a later database are recorded and reported once by
         :meth:`log_fallback_summary`.
 
         The look-up key is ``reaction.normalized_proxy_reaction_str()`` when
-        ``self.net._use_proxy_photoreaction`` is set, otherwise
+        the reaction's ``use_proxy_photoreaction`` setting is on, otherwise
         ``reaction.serialized``.
 
         Parameters

@@ -142,7 +142,7 @@ class TestNetworkValidation:
         try:
             with patch("builtins.print"):
                 with patch("sys.exit") as mock_exit:
-                    network = Network(temp_file, errors=True)
+                    network = Network(temp_file, strict=True)
                     assert mock_exit.called
         finally:
             os.unlink(temp_file)
@@ -208,7 +208,7 @@ class TestNetworkValidation:
         try:
             with patch("builtins.print"):
                 with patch("sys.exit") as mock_exit:
-                    network = Network(temp_file, errors=True)
+                    network = Network(temp_file, strict=True)
                     # Should call sys.exit due to missing recombination
                     # May be called multiple times for different validation errors
                     assert mock_exit.called
@@ -277,7 +277,7 @@ class TestNetworkValidation:
         try:
             with patch("builtins.print"):
                 with patch("sys.exit") as mock_exit:
-                    network = Network(temp_file, errors=True)
+                    network = Network(temp_file, strict=True)
                     # May or may not call sys.exit depending on isomer detection
                     # This tests the error handling path exists
                     assert True
@@ -359,7 +359,7 @@ class TestNetworkValidation:
             with patch.object(Network, "check_sink_sources") as mock_sink:
                 with patch.object(Network, "check_recombinations") as mock_recomb:
                     with patch.object(Network, "check_isomers") as mock_isomers:
-                        network = Network(sample_file, errors=False)
+                        network = Network(sample_file, strict=False)
 
         # Verify all validation methods were called
         mock_sink.assert_called_once_with(False)

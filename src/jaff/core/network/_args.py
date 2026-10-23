@@ -15,22 +15,22 @@ class NetworkArgs:
     and ``jaffgen.toml`` values, then forward the fields to
     :class:`~jaff.Network` (which parses them into its own
     :class:`~jaff.NetworkSpec`).  Unlike ``NetworkSpec`` this performs no
-    validation or normalization — it is pure CLI state.  Field defaults mirror
-    the ``Network`` constructor, except ``_from_cli`` (``True``: the CLI prints
-    its own MOTD banner).
+    validation or normalization — it is pure CLI state.  Network settings
+    default to ``None`` (not given), so they never override a ``jaff.toml``;
+    ``_from_cli`` defaults to ``True`` (the CLI prints its own MOTD banner).
     """
 
     fname: str | Path = Path()
     config: str | Path | None = None
-    errors: bool = False
+    strict: bool | None = None
     label: str | None = None
-    funcfile: bool | str | Path = True
+    funcfile: bool | str | Path | None = None
     duplicate_policy: str | None = None
-    expand_nuclei: bool = True
+    expand_nuclei: bool | None = None
     rad_bands: list = field(default_factory=list)
     rad_profile_index: int | float | list[int | float] = 0
     rad_mode: str = "nph"
-    use_proxy_photoreaction: bool = True
+    use_proxy_photoreaction: bool | None = None
     dust: bool = False
     dust_rv: float = 3.1
     dust_u_reduction: str | None = "absorption"

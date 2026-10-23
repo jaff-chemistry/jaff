@@ -6,8 +6,9 @@ OHX_PHOTO = "OHx -> H + O  []  PHOTO, 6\n"
 
 
 class TestUseProxyPhotoreaction:
-    def test_network_args_default_is_true(self):
-        assert NetworkArgs().use_proxy_photoreaction is True
+    def test_network_args_default_is_unset(self):
+        # None: not given on the command line, so the config's value applies.
+        assert NetworkArgs().use_proxy_photoreaction is None
 
     def test_network_default_resolves_proxy_xsecs(self, make_network):
         net = make_network(OHX_PHOTO, name="proxy.jet")
@@ -19,3 +20,20 @@ class TestUseProxyPhotoreaction:
         net = make_network(OHX_PHOTO, name="noproxy.jet", use_proxy_photoreaction=False)
         rxn = next(iter(net.reactions))
         assert rxn.photo.xsec is None
+
+    def test_per_reaction_setting_beats_global(self, make_network):
+        own = {"photo": {"use_proxy_photoreaction": True}}
+        config = {
+            "network": {
+                "reactions": {
+                    "photo": {"use_proxy_photoreaction": False},
+                    "reaction": {"OHx._PHOTON__H.O": own},
+                }
+            }
+        }
+
+        net = make_network(OHX_PHOTO, name="own.jet", config=config)
+
+        rxn = next(iter(net.reactions))
+        assert rxn.serialized == "OHx._PHOTON__H.O"
+        assert rxn.photo.xsec is not None

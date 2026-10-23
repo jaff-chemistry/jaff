@@ -58,7 +58,7 @@ class TestNetworkConfigArg:
     def test_relative_path_resolves_against_cwd(self, tmp_path, monkeypatch):
         (tmp_path / "networks").mkdir()
         rel = Path("networks") / "jaff.toml"
-        (tmp_path / rel).write_text('[network.rates]\nT_cutoff = "clip"\n')
+        (tmp_path / rel).write_text('[network.reactions]\nt_cutoff = "clip"\n')
         monkeypatch.chdir(tmp_path)
 
         jg = _bare_jaffgen(network_config=str(rel))
@@ -300,7 +300,7 @@ class TestConfigRelativeNetworkPaths:
         (cfg_dir / "net.dat").write_text(self.NETWORK)
         (cfg_dir / "rates.py").write_text(self.TEMPLATE)
         (cfg_dir / "net.jfunc").write_text(self._jfunc(9))
-        (cfg_dir / "jaff.toml").write_text('[network.rates]\nT_cutoff = "clip"\n')
+        (cfg_dir / "jaff.toml").write_text('[network.reactions]\nt_cutoff = "clip"\n')
         (cwd / "net.jfunc").write_text(self._jfunc(5))
         (cwd / "jaff.toml").write_text("this is [not valid toml\n")
         monkeypatch.chdir(cwd)

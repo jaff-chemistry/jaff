@@ -1,43 +1,39 @@
 """The :class:`NetworkSpec` normalized parameters of a :class:`~jaff.Network`."""
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ...config import NETWORKS_DIR, predefined_networks
-from ...drivers import Toml
 from ...errors import ParserError
 from ..parsers import AuxiliaryFunctionParser
 from ..parsers.auxiliary_func import AuxiliaryFunctionProps
+
+if TYPE_CHECKING:
+    from .config import NetworkConfig
 
 
 class NetworkSpec:
     """Normalized construction parameters of a :class:`~jaff.Network`.
 
-    ``Network`` bundles its constructor arguments into one of these (exposed as
-    :attr:`Network.spec`) and reads them back from it.  Construction parses
-    the raw arguments into their canonical forms:
+    ``Network`` bundles its validated :class:`~jaff.core.network.config.NetworkConfig`
+    and the network file into one of these (exposed as :attr:`Network.spec`):
 
     * ``fname`` is resolved to an absolute path (a filesystem path or a
       predefined network name; see :meth:`resolve_network_path`);
-    * ``config`` (a ``jaff.toml`` path, or auto-detected next to the network
-      file) is loaded into its parsed ``[network]`` section — a dict, since
-      that is what the network actually consumes.
-    * ``funcfile`` is coerced to ``bool`` / :class:`~pathlib.Path`, then
-      resolved to the actual ``.jfunc`` file (scanning next to the network
-      file when ``True``) and its contents are parsed into :attr:`aux_funcs`.
-
-    Every field is required — ``Network`` always supplies all of them, so the
-    library defaults live in one place (the ``Network`` constructor signature).
+    * ``funcfile`` is resolved to the actual ``.jfunc`` file (scanning next to
+      the network file when ``True``) and its contents are parsed into
+      :attr:`aux_funcs`.
 
     Attributes
     ----------
     fname : Path
         Resolved, absolute path to the network file.
-    config : dict
-        Parsed ``[network]`` section of the ``jaff.toml`` config (``{}`` when
-        none is supplied or auto-detected).
-    errors : bool
-        If ``True``, conservation violations and duplicate reactions are fatal.
+    config : NetworkConfig
+        The network's validated config (also :attr:`Network.config`).
+    strict : bool
+        If ``True``, conservation violations and validation problems are fatal.
     label : str or None
         Optional human-readable label for the network.
     funcfile : bool | Path
@@ -48,64 +44,33 @@ class NetworkSpec:
         name (``{}`` when none).
         Exposed for inspection/debugging.
     duplicate_policy : str
-        How to resolve two rate coefficients sharing a reaction, mechanism, and
-        temperature range: ``"preserve-first"`` (keep the first, drop later
-        ones), ``"preserve-last"`` (keep the last), or ``"error"`` (raise).
-        Resolved from the constructor argument, else the network ``jaff.toml``
-        ``[network].duplicate_policy`` key, else ``"preserve-first"``.
+        Global policy for two rate coefficients sharing a reaction, mechanism,
+        and temperature range (``config.reactions.duplicate_policy``); a
+        reaction's own policy may override it.
     expand_nuclei : bool
-        Whether density symbols are rewritten in terms of ``nH``.
-    rad_bands : list
-        Radiation-field band definitions.
-    rad_powerlaw_index : int | float
-        Spectral power-law index of the radiation field.
-    rad_energy_density : bool
-        Whether the radiation field is given as an energy density.
-    c : float or str
-        Speed of light in the unit system used by the network.
+        Whether ``n_<element>_nuc`` symbols expand into element-nucleus sums.
     _from_cli : bool
         Internal flag marking construction from the command-line interface.
     _metadata : dict
         Internal per-reaction/network metadata carried through construction.
     """
 
-    DUPLICATE_POLICIES = ["preserve-first", "preserve-last", "error"]
-
     def __init__(
         self,
         fname: str | Path,
-        config: str | Path | None,
-        errors: bool,
-        label: str | None,
-        funcfile: bool | str | Path,
-        duplicate_policy: str | None,
-        expand_nuclei: bool,
+        config: NetworkConfig,
         _from_cli: bool,
         _metadata: dict[str, Any],
     ):
         self.fname: Path = self._resolve_network_path(fname)
-        self.config: dict[str, Any] = self._load_config(config, self.fname)
-        self.errors: bool = errors
-        self.label: str | None = label
-
-        if not isinstance(funcfile, (bool, str, Path)):
-            raise ParserError(f"funcfile accepts True/False/str/Path, got {funcfile!r}")
-        # True: scan the network directory.  False: skip.  Path: use as given.
-        self.funcfile: bool | Path = (
-            funcfile if isinstance(funcfile, bool) else Path(funcfile)
-        )
-        resolved_policy = (
-            duplicate_policy or self.config.get("duplicate_policy") or "preserve-first"
-        )
-        if resolved_policy not in self.DUPLICATE_POLICIES:
-            raise ValueError(
-                f"Invalid duplicate policy: {resolved_policy}\n"
-                f"Valid duplicate policies are {', '.join(self.DUPLICATE_POLICIES)}"
-            )
-        self.duplicate_policy: str = resolved_policy
+        self.config: NetworkConfig = config
+        self.strict: bool = config.strict
+        self.label: str | None = config.label
+        self.funcfile: bool | Path = config.funcfile
+        self.duplicate_policy: str = config.reactions.duplicate_policy
         # Resolves funcfile to the actual .jfunc path (when True) and parses it.
         self.aux_funcs: dict[str, AuxiliaryFunctionProps] = self._load_aux_funcs()
-        self.expand_nuclei: bool = expand_nuclei
+        self.expand_nuclei: bool = config.expand_nuclei
         self._from_cli: bool = _from_cli
         self._metadata: dict[str, Any] = _metadata
 
@@ -147,34 +112,6 @@ class NetworkSpec:
 
         with AuxiliaryFunctionParser(self.funcfile) as afp:
             return afp.get_dict()
-
-    @staticmethod
-    def _load_config(config: str | Path | None, fname: Path) -> dict[str, Any]:
-        """Locate and parse a ``jaff.toml`` config, returning its ``[network]`` section.
-
-        When *config* is ``None``, auto-detects ``<network_dir>/jaff.toml`` next
-        to the (resolved) network file *fname*.
-
-        Parameters
-        ----------
-        config : str | Path | None
-            Explicit path to a ``jaff.toml`` config file, or ``None`` to
-            auto-detect.
-        fname : Path
-            Resolved network file path, used to auto-detect a sibling config.
-
-        Returns
-        -------
-        dict
-            The parsed ``[network]`` section, or ``{}`` when no config exists.
-        """
-        if config is None:
-            candidate = fname.parent / "jaff.toml"
-            if not candidate.exists():
-                return {}
-            config = candidate
-
-        return Toml(Path(config).resolve()).get_key("network") or {}
 
     @staticmethod
     def _resolve_network_path(fname: str | Path) -> Path:

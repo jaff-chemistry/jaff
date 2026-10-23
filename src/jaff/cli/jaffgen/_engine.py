@@ -249,7 +249,7 @@ class JaffGen:
         sn = ss.network_args
         sn.label = np.get("label") or sn.label
         if (v := np.get("errors")) is not None:
-            sn.errors = v
+            sn.strict = v
         # Path-valued [network] options are config-relative, like [jaffgen] paths.
         if v := np.get("config"):
             sn.config = self.resolve_path(v, cdir).abspath
@@ -525,7 +525,7 @@ class JaffGen:
         if a.expand_nuclei is not None:
             sn.expand_nuclei = a.expand_nuclei
         if a.errors is not None:
-            sn.errors = a.errors
+            sn.strict = a.errors
         if a.duplicate_policy is not None:
             sn.duplicate_policy = a.duplicate_policy
         if a.network_config is not None:
@@ -664,8 +664,11 @@ class JaffGen:
         sn = self.state.network_args
         return Network(
             fname=sn.fname,
+            # --network-config / [network].config replaces the jaff.toml next to
+            # the network rather than stacking over it.
             config=sn.config,
-            errors=sn.errors,
+            use_jaff_toml=sn.config is None,
+            strict=sn.strict,
             label=sn.label,
             funcfile=sn.funcfile,
             duplicate_policy=sn.duplicate_policy,

@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, List, Tuple
 import pytest
 
 from jaff.core.network._spec import NetworkSpec
+from jaff.core.network.config import NetworkConfig
 from tests.codegen_render import (
     GOLDEN,
     NETWORKS,
@@ -76,17 +77,7 @@ def test_golden_file_set_matches(name: str, rendered: Callable[[str], Path]) -> 
 
 @pytest.mark.parametrize("name", list(NETWORKS))
 def test_aux_template_covers_every_aux_function(name: str) -> None:
-    spec = NetworkSpec(
-        NETWORKS[name],
-        config=None,
-        errors=False,
-        label=None,
-        funcfile=True,
-        duplicate_policy=None,
-        expand_nuclei=True,
-        _from_cli=False,
-        _metadata={},
-    )
+    spec = NetworkSpec(NETWORKS[name], NetworkConfig(), _from_cli=False, _metadata={})
     template = (TEMPLATES / f"aux_{name}.py").read_text()
     covered = set(re.findall(r"GET aux_func IN (\w+)", template))
     assert covered == set(spec.aux_funcs), (

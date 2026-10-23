@@ -42,22 +42,26 @@ class TestPolicyResolution:
         assert _load(duplicate_policy=policy).spec.duplicate_policy == policy
 
     def test_invalid_arg_raises(self):
-        with pytest.raises(ValueError, match="Invalid duplicate policy"):
+        with pytest.raises(ParserError, match="duplicate_policy"):
             _load(duplicate_policy="bogus")
 
     def test_jafftoml_source(self, tmp_path):
-        cfg = _write_toml(tmp_path, '[network]\nduplicate_policy = "preserve-last"\n')
+        cfg = _write_toml(
+            tmp_path, '[network.reactions]\nduplicate_policy = "preserve-last"\n'
+        )
         assert _load(config=cfg).spec.duplicate_policy == "preserve-last"
 
     def test_arg_beats_jafftoml(self, tmp_path):
-        cfg = _write_toml(tmp_path, '[network]\nduplicate_policy = "preserve-last"\n')
+        cfg = _write_toml(
+            tmp_path, '[network.reactions]\nduplicate_policy = "preserve-last"\n'
+        )
         assert (
             _load(config=cfg, duplicate_policy="error").spec.duplicate_policy == "error"
         )
 
     def test_invalid_jafftoml_value_raises(self, tmp_path):
-        cfg = _write_toml(tmp_path, '[network]\nduplicate_policy = "bogus"\n')
-        with pytest.raises(ValueError, match="Invalid duplicate policy"):
+        cfg = _write_toml(tmp_path, '[network.reactions]\nduplicate_policy = "bogus"\n')
+        with pytest.raises(ParserError, match="duplicate_policy"):
             _load(config=cfg)
 
 
@@ -114,3 +118,21 @@ class TestSameRangeDuplicateInline:
         )
         assert net.reactions.count == 1
         assert net.reactions[0].rate_segments.count == 2
+
+
+class TestPerReactionPolicy:
+    """A per-reaction duplicate_policy wins over the global one."""
+
+    def test_per_reaction_policy_applies(self):
+        config = {
+            "network": {
+                "reactions": {
+                    "duplicate_policy": "error",
+                    "reaction": {DUP_RXN: {"duplicate_policy": "preserve-last"}},
+                }
+            }
+        }
+
+        rea = _load(DUP, config=config).reactions[DUP_RXN]
+
+        assert "9.99000000000000e-13" in str(rea.rate_coefficient)

@@ -14,6 +14,7 @@ from jaff import Reactions, Species
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from jaff import Network
+from jaff.core.network.config import NetworkConfig
 
 
 class TestNetworkInitialization:
@@ -77,7 +78,10 @@ class TestNetworkInitialization:
             patch("pathlib.Path.exists", return_value=True),
         ):
             with (
-                patch("jaff.core.network._spec.NetworkSpec._load_config", return_value={}),
+                patch(
+                    "jaff.core.network.network.load_network_config",
+                    return_value=NetworkConfig(),
+                ),
                 patch("jaff.core.network._spec.NetworkSpec._load_aux_funcs", return_value={}),
                 patch.object(Network, "_Network__load_network", MagicMock()),
             ):
@@ -111,7 +115,7 @@ class TestNetworkInitialization:
         with patch("builtins.print"):
             # Mock sys.exit to prevent test from exiting
             with patch("sys.exit") as mock_exit:
-                network = Network(str(valid_file), errors=True)
+                network = Network(str(valid_file), strict=True)
 
                 # If there are any validation errors, sys.exit should be called
                 # In our valid sample file, we don't expect errors, so it shouldn't exit
@@ -120,7 +124,7 @@ class TestNetworkInitialization:
     def test_errors_parameter_false(self, sample_kida_file):
         """Test initialization with errors=False parameter (default)."""
         with patch("builtins.print"):
-            network = Network(sample_kida_file, errors=False)
+            network = Network(sample_kida_file, strict=False)
 
         # Should complete without raising exceptions
         assert network is not None
@@ -135,7 +139,7 @@ class TestNetworkInitialization:
                             with patch.object(
                                 Network, "_Network__generate_reaction_matrices"
                             ) as mock_matrices:
-                                network = Network(sample_kida_file, errors=True)
+                                network = Network(sample_kida_file, strict=True)
 
         # Verify all methods were called
         mock_load.assert_called_once_with()

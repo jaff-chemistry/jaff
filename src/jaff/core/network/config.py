@@ -91,8 +91,9 @@ def load_network_config(
     use_jaff_toml: bool = True,
     overrides: Mapping[str, Any] | None = None,
     cwd: Path | None = None,
+    defaults: Mapping[str, Any] | None = None,
 ) -> NetworkConfig:
-    """Load a network's config: its jaff.toml < *config* layers < *overrides*.
+    """Load a network's config: *defaults* < jaff.toml < *config* layers < *overrides*.
 
     Parameters
     ----------
@@ -110,6 +111,8 @@ def load_network_config(
         Top layer, shaped like a ``jaff.toml``.
     cwd : Path or None, optional
         Working directory; defaults to the current one.
+    defaults : Mapping or None, optional
+        Bottom layer, below the ``jaff.toml``, shaped like a ``jaff.toml``.
 
     Returns
     -------
@@ -124,7 +127,7 @@ def load_network_config(
         If a file is not valid TOML or the config is invalid.
     """
     cwd = cwd or Path.cwd()
-    layers: List[Dict[str, Any]] = []
+    layers: List[Dict[str, Any]] = [resolve_paths(defaults or {}, JaffTomlConfig, cwd)]
 
     jaff_toml = jaff_toml_for(network_file)
     if use_jaff_toml and jaff_toml.exists():

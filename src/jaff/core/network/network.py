@@ -23,7 +23,7 @@ import sys
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Sequence, cast
 
 import numpy as np
 from sympy import (
@@ -34,6 +34,7 @@ from sympy import (
 )
 
 from ...common import is_jaff_file, load_mass_dict, print_motd, resolve_dependencies
+from ...config.loader import deep_merge
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
 from ...io._io import JaffProps, from_jaff_file, to_jaff_file, write_data_table
@@ -49,11 +50,6 @@ from ...physics import (
     get_sodes,
     get_sradodes,
 )
-from ...physics.photo_reactions._radiation_props import (
-    validate_override_custom_cross_section,
-    validate_override_custom_rate,
-    validate_pi_database,
-)
 from ..elements import Elements
 from ..parsers import NetworkParser
 from ..reaction import (
@@ -65,8 +61,10 @@ from ..reaction import (
     Reactions,
     ShieldingProps,
 )
+from ...physics.photo_reactions.shielding.config import ShieldingConfig
 from ..species import Specie, Species
 from ._spec import NetworkSpec
+from .config import ConfigLayer, NetworkConfig, load_network_config
 from ._symbols import NetworkSymbols
 
 if TYPE_CHECKING:
@@ -86,6 +84,91 @@ def _parse_rate_expr(rate: str) -> Expr:
     immutable, making the shared objects safe to reuse.
     """
     return parse_expr(rate, evaluate=False)
+
+
+def _keyword_layer(**kwargs: Any) -> Dict[str, Any]:
+    """Return the config layer of :class:`Network`'s keyword arguments.
+
+    Only the arguments given (not ``None``) are set, so an omitted one never
+    overrides the ``jaff.toml`` or the ``config`` layers.
+    """
+    given = {key: value for key, value in kwargs.items() if value is not None}
+    network = {
+        k: given[k]
+        for k in ("strict", "label", "funcfile", "expand_nuclei")
+        if k in given
+    }
+    reactions: Dict[str, Any] = {}
+    if "duplicate_policy" in given:
+        reactions["duplicate_policy"] = given["duplicate_policy"]
+
+    if "use_proxy_photoreaction" in given:
+        reactions["photo"] = {"use_proxy_photoreaction": given["use_proxy_photoreaction"]}
+
+    if reactions:
+        network["reactions"] = reactions
+
+    return {"network": network} if network else {}
+
+
+def _radiation_photo_layer(props: RadiationProps | None) -> Dict[str, Any]:
+    """Return the global photo settings still held by *props* as a config layer.
+
+    Transitional: the bottom layer until :class:`RadiationProps` drops them.
+    """
+    if props is None:
+        return {}
+
+    photo = {
+        "pi_database": props.pi_database,
+        "override_custom_rate": props.override_custom_rate,
+        "override_custom_cross_section": props.override_custom_cross_section,
+    }
+
+    return {"network": {"reactions": {"photo": photo}}}
+
+
+def _jaffgen_metadata_layer(metadata: Mapping[str, Any]) -> Dict[str, Any]:
+    """Return jaffgen's old-format reaction settings as a config layer.
+
+    Transitional: jaffgen still passes its ``[network.reactions]`` /
+    ``[network.rates]`` tables in the old format through ``_metadata``.
+    """
+    reactions: Dict[str, Any] = {}
+    global_cutoff = metadata.get("rate_props", {}).get("T_cutoff")
+    if global_cutoff is not None:
+        reactions["t_cutoff"] = global_cutoff
+
+    entries: Dict[str, Any] = {}
+    for serialized, props in metadata.get("reaction_props", {}).items():
+        entry: Dict[str, Any] = {}
+        if "T_cutoff" in props:
+            entry["t_cutoff"] = props["T_cutoff"]
+
+        photo_keys = (
+            "pi_database",
+            "override_custom_rate",
+            "override_custom_cross_section",
+            "shielding",
+        )
+        photo = {key: props[key] for key in photo_keys if key in props}
+        if photo:
+            entry["photo"] = photo
+
+        entries[serialized] = entry
+
+    if entries:
+        reactions["reaction"] = entries
+
+    return {"network": {"reactions": reactions}} if reactions else {}
+
+
+def _shielding_props(shielding: ShieldingConfig | None) -> ShieldingProps | None:
+    """Return the reaction's :class:`ShieldingProps` from its shielding config."""
+    if shielding is None:
+        return None
+
+    return ShieldingProps(type=shielding.type, props=dict(shielding.params))
 
 
 @dataclass(frozen=True)
@@ -184,24 +267,25 @@ class Network:
         Element mass dictionary used during species construction.
     spec : NetworkSpec
         The normalized construction parameters this network was built from.
+    config : NetworkConfig
+        The validated config: the ``jaff.toml`` next to the network, the
+        ``config`` layers, then the keyword arguments.
     """
-
-    #: Valid temperature cutoff behaviours for rate expressions.
-    _valid_tcutoffs: list[str] = ["clip", "extrapolate"]
 
     def __init__(
         self,
         fname: str | Path,
-        config: str | Path | None = None,
-        errors: bool = False,
+        config: ConfigLayer | Sequence[ConfigLayer] | None = None,
+        strict: bool | None = None,
         label: str | None = None,
-        funcfile: bool | str | Path = True,
+        funcfile: bool | str | Path | None = None,
         duplicate_policy: str | None = None,  # preserve-first, preserve-last, error
-        expand_nuclei: bool = True,
+        expand_nuclei: bool | None = None,
         radiation_props: RadiationProps | None = None,
         dust_props: DustProps | None = None,
-        use_proxy_photoreaction: bool = True,
+        use_proxy_photoreaction: bool | None = None,
         eos_props: EosProps | None = None,
+        use_jaff_toml: bool = True,
         _from_cli: bool = False,
         _metadata: dict[str, Any] = {},
     ):
@@ -215,31 +299,30 @@ class Network:
             single ``.jet`` file).  A predefined network name wins over a
             same-named path on disk.  Supported extensions: any text format
             auto-detected by ``NetworkParser``, plus ``.jaff`` binary files.
-        errors : bool, optional
-            If ``True``, treat conservation violations and duplicate reactions
-            as fatal errors (process exits).  Default ``False`` (warnings
-            only).
-        config : str | Path | None, optional
-            Path to a ``jaff.toml`` network config file.  When ``None``
-            (default), JAFF looks for ``jaff.toml`` in the network file's
-            directory.  Only the ``[network.rates]`` global and
-            ``[network.reactions."<serialized>"].T_cutoff`` per-reaction
-            temperature-cutoff keys are read from it.
+        config : ConfigLayer or sequence of them, optional
+            Config layers stacked over the ``jaff.toml`` next to the network
+            file: a TOML file path, a ``dict`` shaped like a ``jaff.toml``
+            (``{"network": {...}}``) or a ``JaffTomlConfig``; see
+            :func:`~jaff.core.network.config.load_network_config`.  The keyword
+            arguments below override them when given (not ``None``).
+        strict : bool | None, optional
+            If ``True``, treat conservation violations and validation problems
+            as fatal errors (process exits).  Default (``network.strict``):
+            ``False`` (warnings only).
         label : str | None, optional
             Human-readable name for this network.  Defaults to the file stem.
-        funcfile : bool | str | Path, optional
-            Path to a ``.jfunc`` auxiliary function file.  When ``True``
-            (default), JAFF scans the network's directory for
-            ``<network>.jfunc``.  Pass ``False`` to skip auxiliary-function
-            loading entirely.
+        funcfile : bool | str | Path | None, optional
+            Path to a ``.jfunc`` auxiliary function file.  ``True`` (the
+            default) scans the network's directory for ``<network>.jfunc``;
+            ``False`` skips auxiliary-function loading entirely.
         duplicate_policy : str | None, optional
             How to resolve two rate coefficients sharing a reaction, mechanism,
             and temperature range: ``"preserve-first"`` (keep the first, drop
-            later duplicates), ``"preserve-last"`` (keep the last), or
-            ``"error"`` (raise a ``ParserError``).  When ``None`` (default),
-            JAFF reads the network ``jaff.toml`` ``[network].duplicate_policy``
-            key, falling back to ``"preserve-first"``.
-        expand_nuclei : bool, optional
+            later duplicates; the default), ``"preserve-last"`` (keep the last),
+            or ``"error"`` (raise a ``ParserError``).  Sets
+            ``network.reactions.duplicate_policy``; a reaction's own policy in
+            the config still wins.
+        expand_nuclei : bool | None, optional
             When ``True`` (default), an ``n_<element>_nuc`` symbol (e.g.
             ``n_H_nuc``, ``n_He_nuc``) in rate expressions is expanded to the
             element-nucleus sum — ``Σ atom-count · nden[i]`` over all species
@@ -254,18 +337,21 @@ class Network:
         dust_props : DustProps | None, optional
             Dust configuration used to construct the network's :class:`Dust`
             object.  When ``None`` (default), the dust module is disabled.
-        use_proxy_photoreaction : bool, optional
-            When ``True``, cross-sections for photo-reactions are looked up
+        use_proxy_photoreaction : bool | None, optional
+            When ``True`` (default), cross-sections for photo-reactions are looked up
             using the proxy photo-reaction string (via
             :meth:`Reaction.normalized_proxy_reaction_str`) rather than the
             reaction's standard serialized form, so proxy species such as
             ``CHx``/``OHx`` resolve to the ``CH``/``OH`` entries.  A custom
             ``.jfunc`` rate still takes precedence over the cross-sections.
-            Default ``True``.
+            Sets ``network.reactions.photo.use_proxy_photoreaction``.
         eos_props : EosProps | None, optional
             Equation-of-state configuration used by
             :attr:`Thermodynamics.eos`.  When ``None`` (default), an ideal gas
             with the default adiabatic index (``EosProps("ideal")``) is used.
+        use_jaff_toml : bool, optional
+            Stack the ``jaff.toml`` next to the network file, if any, under the
+            ``config`` layers (default ``True``).
 
         Raises
         ------
@@ -273,30 +359,41 @@ class Network:
             If *fname* is neither an existing file nor a predefined network
             name, or a predefined network directory has no ``.jet`` file.
         ParserError
-            If a predefined network directory has more than one ``.jet`` file.
+            If a predefined network directory has more than one ``.jet`` file,
+            or the config is invalid.
         """
         self.logger: logging.Logger = JaffLogger().get_logger()
 
-        self.spec: NetworkSpec = NetworkSpec(
-            fname,
-            config,
-            errors,
-            label,
-            funcfile,
-            duplicate_policy,
-            expand_nuclei,
-            _from_cli,
-            _metadata,
+        overrides = deep_merge(
+            _jaffgen_metadata_layer(_metadata),
+            _keyword_layer(
+                strict=strict,
+                label=label,
+                funcfile=funcfile,
+                duplicate_policy=duplicate_policy,
+                expand_nuclei=expand_nuclei,
+                use_proxy_photoreaction=use_proxy_photoreaction,
+            ),
         )
+        self.config: NetworkConfig = load_network_config(
+            Path(fname),
+            config,
+            use_jaff_toml=use_jaff_toml,
+            overrides=overrides,
+            defaults=_radiation_photo_layer(radiation_props),
+        )
+        self.spec: NetworkSpec = NetworkSpec(fname, self.config, _from_cli, _metadata)
 
         jaff_props: JaffProps = {}  # type: ignore
         loaded_from_jaff_file = is_jaff_file(self.spec.fname)
         if loaded_from_jaff_file:
-            jaff_props = from_jaff_file(self.spec.fname, errors)
+            jaff_props = from_jaff_file(self.spec.fname, self.spec.strict)
             self.spec.fname = jaff_props.get("file_name", self.spec.fname)
-        # Finalize the label: a ``.jaff`` payload label wins, else the supplied
-        # label, else the file stem.
-        self.spec.label = jaff_props.get("label", label or self.spec.fname.stem)
+        # Finalize the label: a ``.jaff`` payload label wins, else the
+        # configured label, else the file stem.
+        self.spec.label = jaff_props.get(
+            "label", self.config.label or self.spec.fname.stem
+        )
         if not _from_cli:
             print_motd()
 
@@ -312,7 +409,6 @@ class Network:
         self.eos_props: EosProps = (
             eos_props if eos_props is not None else EosProps("ideal")
         )
-        self._use_proxy_photoreaction: bool = use_proxy_photoreaction
         self._photochemistry: None | Photochemistry = None
         self.dust: Dust | None = (
             Dust(self, dust_props) if dust_props is not None else None
@@ -341,9 +437,9 @@ class Network:
         )
         self.symbols.log_summary()
 
-        self.check_sink_sources(errors)
-        self.check_recombinations(errors)
-        self.check_isomers(errors)
+        self.check_sink_sources(self.spec.strict)
+        self.check_recombinations(self.spec.strict)
+        self.check_isomers(self.spec.strict)
 
         self.__generate_reaction_matrices()
 
@@ -371,13 +467,7 @@ class Network:
         """
         specie_names = set()
         special_species: dict[str, Specie] = {}
-
-        default_tcutoff: str = "clip"
-        config = self.spec.config
-        reactions_config: dict = config.get("reactions", {})
-        reaction_props: dict = self.spec._metadata.get("reaction_props", {})
-        jaff_global_tcutoff = config.get("rates", {}).get("T_cutoff")
-        jaffgen_global_tcutoff = self.spec._metadata.get("rate_props", {}).get("T_cutoff")
+        reactions_config = self.config.reactions
 
         with NetworkParser(self.spec.fname, self.logger) as netp:
             reactions_list, global_vars = netp.get_parsed()
@@ -427,18 +517,9 @@ class Network:
 
             local_subs_dict = {**subs_dict}
             srxn = Reaction.serialize(rr, pp)
-            local_tcutoff: str = (
-                reaction_props.get(srxn, {}).get("T_cutoff")
-                or reactions_config.get(srxn, {}).get("T_cutoff")
-                or jaffgen_global_tcutoff
-                or jaff_global_tcutoff
-                or default_tcutoff
-            ).lower()
-            if local_tcutoff not in self._valid_tcutoffs:
-                raise ParserError(
-                    f"Invalid temperature cutoff for reaction: {srxn}\n"
-                    f"valid cutoffs are: {','.join(self._valid_tcutoffs)}"
-                )
+            # The global reaction settings with this reaction's own applied.
+            settings = reactions_config.resolve(srxn)
+            assert settings.t_cutoff is not None and settings.photo is not None
 
             rate_expr = self.__parse_rate(aux_chem_rate, rate, aux_funcs, global_vars)
             rate_expr = resolve_dependencies(rate_expr, local_subs_dict, aux_funcs)
@@ -450,7 +531,8 @@ class Network:
                     # Same reaction, mechanism, and temperature range with a
                     # second rate coefficient — resolved per duplicate_policy.
                     existing = rea.rate_segments._by_prop[(tmin, tmax)]
-                    if self.spec.duplicate_policy == "error":
+                    policy = settings.duplicate_policy
+                    if policy == "error":
                         raise ParserError(
                             f"Duplicate reaction: {rea.verbatim} [type={rtype}] "
                             f"has two rate coefficients over the same temperature "
@@ -464,54 +546,29 @@ class Network:
 
                     kept, dropped = (
                         (existing.rate, rate_expr)
-                        if self.spec.duplicate_policy == "preserve-first"
+                        if policy == "preserve-first"
                         else (rate_expr, existing.rate)
                     )
                     self.logger.warning(
                         f"Duplicate rate for [cyan]{rea.verbatim}[/] "
                         f"[type={rtype}] over T=({tmin}, {tmax}) resolved by "
-                        f"policy '{self.spec.duplicate_policy}': kept {kept}, "
+                        f"policy '{policy}': kept {kept}, "
                         f"dropped {dropped}"
                     )
-                    if self.spec.duplicate_policy == "preserve-first":
+                    if policy == "preserve-first":
                         continue
                     # "preserve-last": fall through; add() replaces the segment.
 
                 rea.rate_segments.add(RateSegment(rate_expr, tmin, tmax))
                 continue
 
-            # Per-reaction photoionization database: jaffgen.toml wins over jaff.toml.
-            pi_db = reaction_props.get(srxn, {}).get("pi_database")
-            if pi_db is None:
-                pi_db = reactions_config.get(srxn, {}).get("pi_database")
-
-            if pi_db is not None:
-                if rtype != "photo":
-                    raise ParserError(
-                        f"pi_database is only valid for photo reactions: {srxn}"
-                    )
-
-                pi_db = validate_pi_database(pi_db)
-
-            # Per-reaction override flags: jaffgen.toml wins over jaff.toml.
-            overrides: dict[str, bool | None] = {}
-            for key, validate in (
-                ("override_custom_rate", validate_override_custom_rate),
-                ("override_custom_cross_section", validate_override_custom_cross_section),
-            ):
-                value = reaction_props.get(srxn, {}).get(key)
-                if value is None:
-                    value = reactions_config.get(srxn, {}).get(key)
-
-                if value is not None:
-                    if rtype != "photo":
-                        raise ParserError(
-                            f"{key} is only valid for photo reactions: {srxn}"
-                        )
-
-                    value = validate(value)
-
-                overrides[key] = value
+            # The reaction's own photo settings; unset ones fall back to the
+            # global ones where they are used.
+            entry = reactions_config.reaction.get(srxn)
+            own_photo = entry.photo if entry is not None else None
+            if own_photo is not None and rtype != "photo":
+                keys = ", ".join(sorted(own_photo.model_fields_set))
+                raise ParserError(f"{keys} is only valid for photo reactions: {srxn}")
 
             rea = Reaction(
                 self,
@@ -523,13 +580,16 @@ class Network:
                 original_string=reaction["string"],
                 index=si,
                 type=rtype,
-                t_cutoff=local_tcutoff,
+                t_cutoff=settings.t_cutoff,
                 photo=PhotoReactionProps(
-                    pi_database=pi_db,
-                    override_custom_rate=overrides["override_custom_rate"],
-                    override_custom_cross_section=overrides[
-                        "override_custom_cross_section"
-                    ],
+                    pi_database=own_photo.pi_database if own_photo else None,
+                    override_custom_rate=(
+                        own_photo.override_custom_rate if own_photo else None
+                    ),
+                    override_custom_cross_section=(
+                        own_photo.override_custom_cross_section if own_photo else None
+                    ),
+                    shielding=_shielding_props(settings.photo.shielding),
                 )
                 if rtype == "photo"
                 else None,

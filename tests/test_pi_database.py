@@ -11,6 +11,7 @@ import pytest
 import sympy as sp
 
 from jaff import Network
+from jaff.core.network.config import NetworkConfig
 from jaff.cli import JaffGen
 from jaff.common._integrators import get_bounds
 from jaff.core.network import NetworkSymbols
@@ -54,9 +55,14 @@ class TestReactionAttribute:
 
 
 def _net(pi_database=None):
-    """Minimal network stand-in: proxy flag + optional radiation."""
-    rad = None if pi_database is None else SimpleNamespace(pi_database=pi_database)
-    return SimpleNamespace(_use_proxy_photoreaction=False, radiation=rad)
+    """Minimal network stand-in: config (no proxy lookups, global pi_database)."""
+    photo = {"use_proxy_photoreaction": False}
+    if pi_database is not None:
+        photo["pi_database"] = pi_database
+
+    config = NetworkConfig.model_validate({"reactions": {"photo": photo}})
+
+    return SimpleNamespace(config=config, radiation=None)
 
 
 def _rxn(key, pi_database=None):
@@ -229,7 +235,9 @@ class TestNetworkWiring:
 
     def test_jaff_toml_per_reaction_override(self, make_network, tmp_path):
         cfg = tmp_path / "jaff.toml"
-        cfg.write_text('[network.reactions."C._PHOTON__C+.e-"]\npi_database = "Leiden"\n')
+        cfg.write_text(
+            '[network.reactions.reaction."C._PHOTON__C+.e-".photo]\npi_database = "Leiden"\n'
+        )
         net = make_network(
             PHOTO_JET,
             name="t.jet",
@@ -242,26 +250,32 @@ class TestNetworkWiring:
 
     def test_override_on_non_photo_reaction_raises(self, make_network, tmp_path):
         cfg = tmp_path / "jaff.toml"
-        cfg.write_text('[network.reactions."H.H__H2"]\npi_database = "verner"\n')
+        cfg.write_text(
+            '[network.reactions.reaction."H.H__H2".photo]\npi_database = "verner"\n'
+        )
         with pytest.raises(ParserError, match="photo"):
             make_network("H + H -> H2  []  1e-10\n", name="t.jet", config=str(cfg))
 
     def test_invalid_override_value_raises(self, make_network, tmp_path):
         cfg = tmp_path / "jaff.toml"
-        cfg.write_text('[network.reactions."C._PHOTON__C+.e-"]\npi_database = "x"\n')
+        cfg.write_text(
+            '[network.reactions.reaction."C._PHOTON__C+.e-".photo]\npi_database = "x"\n'
+        )
         with pytest.raises(ParserError, match="pi_database"):
             make_network(PHOTO_JET, name="t.jet", config=str(cfg))
 
     def test_empty_override_value_raises(self, make_network, tmp_path):
         cfg = tmp_path / "jaff.toml"
-        cfg.write_text('[network.reactions."C._PHOTON__C+.e-"]\npi_database = ""\n')
+        cfg.write_text(
+            '[network.reactions.reaction."C._PHOTON__C+.e-".photo]\npi_database = ""\n'
+        )
         with pytest.raises(ParserError, match="pi_database"):
             make_network(PHOTO_JET, name="t.jet", config=str(cfg))
 
     def test_override_keyed_by_written_reaction_under_proxy(self, make_network, tmp_path):
         cfg = tmp_path / "jaff.toml"
         cfg.write_text(
-            '[network.reactions."Cx._PHOTON__C+.e-"]\npi_database = "verner"\n'
+            '[network.reactions.reaction."Cx._PHOTON__C+.e-".photo]\npi_database = "verner"\n'
         )
         net = make_network(
             "Cx -> C+ + E  []  PHOTO, 11.3\n",
@@ -369,7 +383,9 @@ class TestJaffgenWiring:
 class TestJaffRoundTrip:
     def test_override_survives_round_trip(self, make_network, tmp_path):
         cfg = tmp_path / "jaff.toml"
-        cfg.write_text('[network.reactions."C._PHOTON__C+.e-"]\npi_database = "verner"\n')
+        cfg.write_text(
+            '[network.reactions.reaction."C._PHOTON__C+.e-".photo]\npi_database = "verner"\n'
+        )
         props = RadiationProps(bands=BANDS)
         net = make_network(
             PHOTO_JET, name="t.jet", config=str(cfg), radiation_props=props

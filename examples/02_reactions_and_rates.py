@@ -367,7 +367,7 @@ def _(load_network):
         "H + H -> H2  [10, 100]    1e-17*(Tgas/1e2)**0.5\n"
         "H + H -> H2  [200, 1000]  3e-17*(Tgas/3e2)\n"
     )
-    EXTRAPOLATE_TOML = '[network.rates]\nT_cutoff = "extrapolate"\n'
+    EXTRAPOLATE_TOML = '[network.reactions]\nt_cutoff = "extrapolate"\n'
 
     scratch = tempfile.TemporaryDirectory()
     two_range = {}

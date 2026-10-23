@@ -77,7 +77,7 @@ class JaffX:
         return Network(
             fname=net_args.fname,
             config=net_args.config,
-            errors=net_args.errors,
+            strict=net_args.strict,
             label=net_args.label,
             funcfile=net_args.funcfile,
             duplicate_policy=net_args.duplicate_policy,

@@ -17,21 +17,21 @@ _MASS_VIOLATION = ["H -> H2 [10,1000] 1", "H2 -> H [10,1000] 1"]
 class TestStrictTextLoading:
     def test_mass_violation_exits(self, make_network):
         with pytest.raises(SystemExit):
-            make_network(_MASS_VIOLATION, errors=True)
+            make_network(_MASS_VIOLATION, strict=True)
 
     def test_non_strict_loads(self, make_network):
         # errors=False must not abort on a conservation failure.
-        net = make_network(_MASS_VIOLATION, errors=False)
+        net = make_network(_MASS_VIOLATION, strict=False)
         assert net.reactions.count == 2
 
 
 class TestStrictJaffLoading:
     def test_mass_violation_exits(self, make_network, tmp_path):
-        net = make_network(_MASS_VIOLATION, errors=False)
+        net = make_network(_MASS_VIOLATION, strict=False)
         jaff_path = tmp_path / "violation.jaff"
         to_jaff_file(str(jaff_path), net)
         with pytest.raises(SystemExit):
-            Network(str(jaff_path), errors=True, funcfile=False)
+            Network(str(jaff_path), strict=True, funcfile=False)
 
 
 class TestWarningNamesReaction:
@@ -40,7 +40,7 @@ class TestWarningNamesReaction:
         logging.disable(logging.NOTSET)  # conftest globally disables logging
         try:
             with caplog.at_level(logging.WARNING, logger="JAFF"):
-                make_network(_MASS_VIOLATION, errors=False)
+                make_network(_MASS_VIOLATION, strict=False)
         finally:
             logging.disable(logging.CRITICAL)
 

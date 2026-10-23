@@ -109,8 +109,8 @@ def resolve_paths(
 ) -> Dict[str, Any]:
     """Return a copy of *layer* with its relative paths resolved against *base_dir*.
 
-    A path is a string under a key the *model* types as a path (a ``PathLike``
-    field, or a list of them).  Anything else -- including unknown keys and
+    A path is a string (or :class:`~pathlib.Path`) under a key the *model*
+    types as a path (a ``PathLike`` field, or a list of them).  Anything else -- including unknown keys and
     values of the wrong type, left for validation to report -- is copied as is.
 
     Parameters
@@ -146,7 +146,7 @@ def _resolve(value: Any, types: List[Any], base_dir: Path) -> Any:
 
         return [_resolve(item, items, base_dir) for item in value]
 
-    if isinstance(value, str) and Path in types:
+    if isinstance(value, (str, Path)) and Path in types:
         path = Path(value)
 
         return path if path.is_absolute() else (base_dir / path).resolve()

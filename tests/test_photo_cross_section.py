@@ -27,7 +27,7 @@ def _photo(net):
 
 def _toml(tmp_path, body):
     cfg = tmp_path / "jaff.toml"
-    cfg.write_text(f'[network.reactions."{KEY}"]\n{body}\n')
+    cfg.write_text(f'[network.reactions.reaction."{KEY}".photo]\n{body}\n')
 
     return str(cfg)
 
@@ -173,7 +173,7 @@ class TestOverride:
     def test_non_photo_reaction_raises(self, make_network, tmp_path):
         cfg = tmp_path / "jaff.toml"
         cfg.write_text(
-            '[network.reactions."H.H__H2"]\noverride_custom_cross_section = true\n'
+            '[network.reactions.reaction."H.H__H2".photo]\noverride_custom_cross_section = true\n'
         )
         with pytest.raises(ParserError, match="photo"):
             make_network("H + H -> H2  []  1e-10\n", name="t.jet", config=str(cfg))

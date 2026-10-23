@@ -63,7 +63,6 @@ from .reaction_props import (
     AuxFunctions,
     PhotoReactionProps,
     ReactionRadiationProps,
-    ShieldingProps,
 )
 from .types import RateSegment, RateSegments
 
@@ -210,7 +209,7 @@ class Reaction:
         Raises
         ------
         SystemExit
-            When ``net.spec.errors`` is set and mass or charge is not conserved.
+            When ``net.spec.strict`` is set and mass or charge is not conserved.
         ParserError
             For invalid photo-reaction or shielding configuration.
         """
@@ -249,17 +248,12 @@ class Reaction:
         self.verbatim: str = self.get_verbatim()
         self.catalogue_index: int = -1
 
-        self.check(self.net.spec.errors)
+        self.check(self.net.spec.strict)
         self.serialized_exploded: str = self.serialize_exploded()
         self.serialized: str = self.serialize(self.reactants, self.products)
         # The reaction type is concluded by the parser and supplied here, not
         # inferred from the rate expression.
         self.type: str = type
-
-        # Looked up for every reaction so a non-photo entry is rejected.
-        shielding = self.__get_shielding()
-        if self.photo is not None and self.photo.shielding is None:
-            self.photo.shielding = shielding
 
         if self.photo is not None:
             if self.aux_funcs.chemrate is not None:
@@ -366,8 +360,9 @@ class Reaction:
         """Whether radiation recomputes this photo reaction's ``chemRate`` rate.
 
         The reaction's own ``override_custom_rate`` wins over the global
-        :attr:`RadiationProps.override_custom_rate`; without radiation there is
-        no cross-section rate to use, so the ``chemRate`` is always kept.
+        ``network.reactions.photo.override_custom_rate``; without radiation
+        there is no cross-section rate to use, so the ``chemRate`` is always
+        kept.
         """
         assert self.photo is not None
 
@@ -378,52 +373,24 @@ class Reaction:
         if self.photo.override_custom_rate is not None:
             return self.photo.override_custom_rate
 
-        return rad.override_custom_rate
+        return bool(self.net.config.reactions.photo.override_custom_rate)
 
     def __overrides_custom_cross_section(self) -> bool:
         """Whether this photo reaction ignores its ``photoCrossSection``.
 
         The reaction's own ``override_custom_cross_section`` wins over the
-        global :attr:`RadiationProps.override_custom_cross_section` (``False``
-        without radiation).
+        global ``network.reactions.photo.override_custom_cross_section``
+        (``False`` without radiation).
         """
         assert self.photo is not None
 
         if self.photo.override_custom_cross_section is not None:
             return self.photo.override_custom_cross_section
 
-        rad = self.net.radiation
+        if self.net.radiation is None:
+            return False
 
-        return rad.override_custom_cross_section if rad is not None else False
-
-    def __get_shielding(self) -> ShieldingProps | None:
-        """Shielding model and settings from the jaffgen ``[reactions]`` table.
-
-        Returns
-        -------
-        ShieldingProps or None
-            The model (``type`` defaulting to ``"leiden"``) and its settings,
-            with string values lower-cased, or ``None`` when the reaction has
-            no shielding entry.
-
-        Raises
-        ------
-        ParserError
-            If shielding is configured for a non-photo reaction.
-        """
-        rprops = self.net.spec._metadata.get("reaction_props", {})
-        shielding = rprops.get(self.serialized, {}).get("shielding")
-        if shielding is None:
-            return None
-
-        if self.type != "photo":
-            raise ParserError(f"{self} is not a photo reaction")
-
-        props = {
-            k: (v.lower() if isinstance(v, str) else v) for k, v in shielding.items()
-        }
-
-        return ShieldingProps(type=props.pop("type", "leiden"), props=props)
+        return bool(self.net.config.reactions.photo.override_custom_cross_section)
 
     def __set_xsec_props(self):
         from ...physics import Photochemistry

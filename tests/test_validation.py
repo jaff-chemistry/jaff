@@ -58,7 +58,7 @@ class TestSinkSources:
     def test_errors_true_exits(self, make_network):
         # He=sink, Ne=source: with errors=True the loader aborts.
         with pytest.raises(SystemExit):
-            make_network(["He -> Ne [10,1000] 1e-10"], errors=True)
+            make_network(["He -> Ne [10,1000] 1e-10"], strict=True)
 
 
 class TestRecombinations:
@@ -137,4 +137,4 @@ class TestValidationRunsDuringLoad:
         from jaff import Network
 
         # sample_kida_valid.dat is balanced; errors=True must not exit.
-        Network(str(fixtures_dir / "sample_kida_valid.dat"), errors=True)
+        Network(str(fixtures_dir / "sample_kida_valid.dat"), strict=True)

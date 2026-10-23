@@ -179,3 +179,65 @@ class TestLoadNetworkConfig:
 
         with pytest.raises(ParserError, match=r"network\.rates: unknown key"):
             load_network_config(net, {"network": {"rates": {}}})
+
+
+class TestNetworkUsesConfig:
+    """Network builds net.config: jaff.toml < config layers < keyword arguments."""
+
+    NET = "H + H -> H2 [10,1000] 1e-10\nH2 -> H + H [10,1000] 1e-10\n"
+
+    def _net(self, make_network, **kwargs):
+        return make_network(self.NET, name="n.dat", funcfile=False, **kwargs)
+
+    def test_net_config_comes_from_jaff_toml(self, make_network, tmp_path):
+        (tmp_path / "jaff.toml").write_text('[network]\nlabel = "from_toml"\n')
+
+        net = self._net(make_network)
+
+        assert isinstance(net.config, NetworkConfig)
+        assert net.config.label == "from_toml"
+        assert net.label == "from_toml"
+
+    def test_keyword_beats_jaff_toml(self, make_network, tmp_path):
+        (tmp_path / "jaff.toml").write_text('[network]\nlabel = "from_toml"\n')
+
+        assert self._net(make_network, label="kw").label == "kw"
+
+    def test_unset_keyword_keeps_jaff_toml(self, make_network, tmp_path):
+        (tmp_path / "jaff.toml").write_text("[network]\nexpand_nuclei = false\n")
+
+        net = self._net(make_network)
+
+        assert net.config.expand_nuclei is False
+        assert net.spec.expand_nuclei is False
+
+    def test_use_jaff_toml_false_skips_it(self, make_network, tmp_path):
+        (tmp_path / "jaff.toml").write_text('[network]\nlabel = "from_toml"\n')
+
+        assert self._net(make_network, use_jaff_toml=False).label == "n"
+
+    def test_config_dict_layer(self, make_network):
+        net = self._net(make_network, config={"network": {"label": "from_dict"}})
+
+        assert net.label == "from_dict"
+
+    def test_strict_keyword(self, make_network):
+        assert self._net(make_network, strict=True).config.strict is True
+
+    def test_old_jaff_toml_key_is_reported(self, make_network, tmp_path):
+        (tmp_path / "jaff.toml").write_text('[network.rates]\nT_cutoff = "clip"\n')
+
+        with pytest.raises(ParserError, match=r"network\.rates: unknown key"):
+            self._net(make_network)
+
+    def test_photo_settings_on_non_photo_reaction(self, make_network):
+        config = {
+            "network": {
+                "reactions": {
+                    "reaction": {"H.H__H2": {"photo": {"pi_database": "verner"}}}
+                }
+            }
+        }
+
+        with pytest.raises(ParserError, match="only valid for photo reactions"):
+            self._net(make_network, config=config)

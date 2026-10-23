@@ -63,7 +63,9 @@ class TestGlobalFlag:
 
     def test_without_radiation_custom_rate_is_kept(self, custom_network, tmp_path):
         cfg = tmp_path / "jaff.toml"
-        cfg.write_text(f'[network.reactions."{KEY}"]\noverride_custom_rate = true\n')
+        cfg.write_text(
+            f'[network.reactions.reaction."{KEY}".photo]\noverride_custom_rate = true\n'
+        )
         rxn = _photo(custom_network(config=str(cfg)))
 
         assert rxn.photo.custom_rad_rate is True
@@ -76,7 +78,9 @@ class TestPerReaction:
 
     def test_jaff_toml_override_beats_global(self, custom_network, tmp_path):
         cfg = tmp_path / "jaff.toml"
-        cfg.write_text(f'[network.reactions."{KEY}"]\noverride_custom_rate = true\n')
+        cfg.write_text(
+            f'[network.reactions.reaction."{KEY}".photo]\noverride_custom_rate = true\n'
+        )
         rxn = _photo(
             custom_network(config=str(cfg), radiation_props=RadiationProps(bands=BANDS))
         )
@@ -86,7 +90,9 @@ class TestPerReaction:
 
     def test_jaffgen_override_beats_jaff_toml(self, custom_network, tmp_path):
         cfg = tmp_path / "jaff.toml"
-        cfg.write_text(f'[network.reactions."{KEY}"]\noverride_custom_rate = false\n')
+        cfg.write_text(
+            f'[network.reactions.reaction."{KEY}".photo]\noverride_custom_rate = false\n'
+        )
         meta = {"reaction_props": {KEY: {"override_custom_rate": True}}}
         rxn = _photo(custom_network(config=str(cfg), _metadata=meta))
 
@@ -94,13 +100,17 @@ class TestPerReaction:
 
     def test_non_photo_reaction_raises(self, make_network, tmp_path):
         cfg = tmp_path / "jaff.toml"
-        cfg.write_text('[network.reactions."H.H__H2"]\noverride_custom_rate = true\n')
+        cfg.write_text(
+            '[network.reactions.reaction."H.H__H2".photo]\noverride_custom_rate = true\n'
+        )
         with pytest.raises(ParserError, match="photo"):
             make_network("H + H -> H2  []  1e-10\n", name="t.jet", config=str(cfg))
 
     def test_non_bool_raises(self, custom_network, tmp_path):
         cfg = tmp_path / "jaff.toml"
-        cfg.write_text(f'[network.reactions."{KEY}"]\noverride_custom_rate = "yes"\n')
+        cfg.write_text(
+            f'[network.reactions.reaction."{KEY}".photo]\noverride_custom_rate = "yes"\n'
+        )
         with pytest.raises(ParserError, match="override_custom_rate"):
             custom_network(config=str(cfg))
 
