@@ -341,7 +341,7 @@ def handle_dust_reduction(
 
     u_reduction = net.dust.u_reduction
     f_reduction = net.dust.f_reduction
-    if u_reduction not in (None, "none"):
+    if u_reduction != "none":
         grate -= (
             net.symbols.zd
             * net.radiation.c
@@ -351,7 +351,7 @@ def handle_dust_reduction(
                 u_reduction, (group.lower, group.upper)
             )
         )
-    if f_reduction not in (None, "none"):
+    if f_reduction != "none":
         gflux -= (
             net.symbols.zd
             * net.radiation.c

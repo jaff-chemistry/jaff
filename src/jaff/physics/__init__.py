@@ -3,7 +3,7 @@
 
 from . import constants
 from ._equations import get_sfluxes, get_sodes, get_sradodes
-from .dust import Dust, DustProps
+from .dust import Dust
 from .photo_reactions._photochemistry import Photochemistry, XsecProps
 from .photo_reactions._radiation import Radiation, RadiationGroup
 from .thermodynamics import Thermodynamics
@@ -17,7 +17,6 @@ __all__ = [
     "get_sodes",
     "get_sradodes",
     "Radiation",
-    "DustProps",
     "RadiationGroup",
     "Dust",
     "EosFactory",

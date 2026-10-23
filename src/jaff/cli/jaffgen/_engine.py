@@ -44,7 +44,7 @@ from ...config import TEMPLATES_DIR, predefined_templates
 from ...drivers import Toml
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
-from ...physics import DustProps, EosProps
+from ...physics import EosProps
 from .._helper import DuplicatePolicy, funcfile_arg
 from ._structs import DEFAULT_OUTPUT, ResolvedPath, State
 
@@ -699,13 +699,15 @@ class JaffGen:
                 else None
             ),
             dust_props=(
-                DustProps(
-                    rv=sn.dust_rv,
-                    u_reduction=sn.dust_u_reduction,
-                    f_reduction=sn.dust_f_reduction,
-                    pe_threshold_low=sn.dust_pe_threshold_low,
-                    pe_threshold_high=sn.dust_pe_threshold_high,
-                )
+                {
+                    "rv": sn.dust_rv,
+                    "u_reduction": sn.dust_u_reduction,
+                    "f_reduction": sn.dust_f_reduction,
+                    "pe": {
+                        "threshold_low": sn.dust_pe_threshold_low,
+                        "threshold_high": sn.dust_pe_threshold_high,
+                    },
+                }
                 if sn.dust
                 else None
             ),

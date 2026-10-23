@@ -40,7 +40,6 @@ from ...io import JaffLogger, jaff_progress
 from ...io._io import JaffProps, from_jaff_file, to_jaff_file, write_data_table
 from ...physics import (
     Dust,
-    DustProps,
     EosProps,
     Photochemistry,
     Radiation,
@@ -64,6 +63,7 @@ from ...physics.photo_reactions.shielding.config import ShieldingConfig
 from ..species import Specie, Species
 from ._spec import NetworkSpec
 from ...config.base import ConfigModel
+from ...physics.dust.config import DustConfig
 from ...physics.photo_reactions.config import RadiationConfig
 from .config import ConfigLayer, NetworkConfig, load_network_config
 from ._symbols import NetworkSymbols
@@ -109,8 +109,9 @@ def _keyword_layer(**kwargs: Any) -> Dict[str, Any]:
     if reactions:
         network["reactions"] = reactions
 
-    if "radiation" in given:
-        network["radiation"] = _section(given["radiation"])
+    for section in ("radiation", "dust"):
+        if section in given:
+            network[section] = _section(given[section])
 
     return {"network": network} if network else {}
 
@@ -277,7 +278,7 @@ class Network:
         duplicate_policy: str | None = None,  # preserve-first, preserve-last, error
         expand_nuclei: bool | None = None,
         radiation_props: RadiationConfig | Mapping[str, Any] | None = None,
-        dust_props: DustProps | None = None,
+        dust_props: DustConfig | Mapping[str, Any] | None = None,
         use_proxy_photoreaction: bool | None = None,
         eos_props: EosProps | None = None,
         use_jaff_toml: bool = True,
@@ -329,9 +330,10 @@ class Network:
             :class:`Radiation` and photochemistry.  Its keys override those of
             a ``[network.radiation]`` table in the config.  Without either, no
             radiation field is built and photochemistry is disabled.
-        dust_props : DustProps | None, optional
-            Dust configuration used to construct the network's :class:`Dust`
-            object.  When ``None`` (default), the dust module is disabled.
+        dust_props : DustConfig | dict | None, optional
+            Dust (``network.dust``): enables the network's :class:`Dust`.  Its
+            keys override those of a ``[network.dust]`` table in the config.
+            Without either, the dust module is disabled.
         use_proxy_photoreaction : bool | None, optional
             When ``True`` (default), cross-sections for photo-reactions are looked up
             using the proxy photo-reaction string (via
@@ -369,6 +371,7 @@ class Network:
                 expand_nuclei=expand_nuclei,
                 use_proxy_photoreaction=use_proxy_photoreaction,
                 radiation=radiation_props,
+                dust=dust_props,
             ),
         )
         self.config: NetworkConfig = load_network_config(
@@ -408,7 +411,7 @@ class Network:
         )
         self._photochemistry: None | Photochemistry = None
         self.dust: Dust | None = (
-            Dust(self, dust_props) if dust_props is not None else None
+            Dust(self, self.config.dust) if self.config.dust is not None else None
         )
         self.__tgas_clamp_cache: dict[tuple[float | None, float | None], Expr] = {}
 

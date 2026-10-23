@@ -2,7 +2,8 @@
 
 :class:`Dust` is the container for the network's dust-related physics.  It is
 attached to a :class:`~jaff.core.network.Network` when the network is built
-with ``Network(..., dust_props=DustProps(...))`` and groups the individual
+from its ``[network.dust]`` config (:class:`~jaff.physics.dust.config.DustConfig`)
+and groups the individual
 dust processes as sub-objects (currently photoelectric emission and tabular
 dust cross sections; more may be added later).
 
@@ -16,12 +17,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ...drivers.pooch import download_dust
-from . import DustProps
 from .photoelectric_emission import PhotoelectricEmission
 from .tabular import Tabular
 
 if TYPE_CHECKING:
     from ...core.network import Network
+    from .config import DustConfig
 
 
 class Dust:
@@ -31,9 +32,9 @@ class Dust:
     ----------
     network : Network
         The parent network this dust model belongs to.
-    props : DustProps
-        Configuration object holding the dust model selection and radiation
-        reduction settings.
+    config : DustConfig
+        The ``[network.dust]`` config: dust model selection, radiation
+        reduction settings and photoelectric band.
 
     Attributes
     ----------
@@ -45,10 +46,10 @@ class Dust:
     rv : float
         Total-to-selective extinction ratio R_V (from ``props``) selecting
         the WD01/Draine dust model.
-    u_reduction : str | None
+    u_reduction : str
         Dust cross-section kind used to attenuate the radiation *density*
         (0th) moment (from ``props``).
-    f_reduction : str | None
+    f_reduction : str
         Dust cross-section kind used to attenuate the radiation *flux*
         (1st) moment (from ``props``).
     tabular : Tabular
@@ -58,7 +59,7 @@ class Dust:
     def __init__(
         self,
         network: Network,
-        props: DustProps,
+        config: DustConfig,
     ):
         """Build the dust model and its process sub-objects.
 
@@ -66,19 +67,16 @@ class Dust:
         ----------
         network : Network
             The parent network.
-        props : DustProps
-            Configuration object supplying the R_V dust-model selection
-            (``rv``, default ``3.1``), the radiation reduction kinds
-            (``u_reduction``, ``f_reduction``), and the photoelectric band
-            edges (``pe_threshold_low``, ``pe_threshold_high``).
+        config : DustConfig
+            The ``[network.dust]`` config: the R_V dust-model selection
+            (``rv``), the radiation reduction kinds (``u_reduction``,
+            ``f_reduction``) and the photoelectric band (``pe``).
         """
         download_dust()
 
         self.net: Network = network
-        self.pe: PhotoelectricEmission = PhotoelectricEmission(
-            network, props.pe_threshold_low, props.pe_threshold_high
-        )
-        self.rv: float = props.rv
-        self.u_reduction: str | None = props.u_reduction
-        self.f_reduction: str | None = props.f_reduction
+        self.pe: PhotoelectricEmission = PhotoelectricEmission(network, config.pe)
+        self.rv: float = config.rv
+        self.u_reduction: str = config.u_reduction
+        self.f_reduction: str = config.f_reduction
         self.tabular: Tabular = Tabular(self)

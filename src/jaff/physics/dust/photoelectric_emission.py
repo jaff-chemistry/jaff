@@ -3,7 +3,7 @@
 Photoelectric heating by dust grains is driven by far-UV photons in the
 photoelectric band ``[E_low, E_high]``, which defaults to ``[6, 13.6] eV``
 (from the grain work function up to the hydrogen ionisation edge) but is
-configurable via ``DustProps.pe_threshold_low`` / ``pe_threshold_high``.
+configurable via ``[network.dust.pe]`` ``threshold_low`` / ``threshold_high``.
 Rate expressions parametrise this by ``chi_pe`` -- the local radiation field
 scaled to a reference (Draine/ISRF) field, integrated over that band.
 
@@ -18,7 +18,7 @@ densities in the photoelectric band:
 
 Both are in erg/cm³, so ``chi_pe`` is dimensionless.  The resulting symbol is
 substituted into rate expressions when a network is built with
-``Network(..., dust_props=DustProps(...))`` and radiation enabled.
+``[network.dust]`` and radiation enabled.
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ from ..constants import c, h
 
 if TYPE_CHECKING:
     from ...core.network import Network
+    from .config import PhotoelectricEmissionConfig
 
 
 class PhotoelectricEmission:
@@ -57,24 +58,21 @@ class PhotoelectricEmission:
         13.6 eV).
     """
 
-    def __init__(self, network: Network, e_low: float = 6, e_high: float = 13.6):
+    def __init__(self, network: Network, config: PhotoelectricEmissionConfig):
         """Initialise the photoelectric-emission model.
 
         Parameters
         ----------
         network : Network
             The parent network.
-        e_low : float, optional
-            Lower edge of the photoelectric band, in eV.  Default ``6``;
-            threaded from ``DustProps.pe_threshold_low``.
-        e_high : float, optional
-            Upper edge of the photoelectric band, in eV.  Default ``13.6``;
-            threaded from ``DustProps.pe_threshold_high``.
+        config : PhotoelectricEmissionConfig
+            The ``[network.dust.pe]`` config: the photoelectric band edges
+            ``threshold_low`` and ``threshold_high``, in eV.
         """
         # photoelectric emission activation energy in eV
-        self.E_low: u.Quantity = e_low * u.eV
+        self.E_low: u.Quantity = config.threshold_low * u.eV
         # photoelectric emission cutoff energy in eV
-        self.E_high: u.Quantity = e_high * u.eV
+        self.E_high: u.Quantity = config.threshold_high * u.eV
         self.net: Network = network
 
     @cached_property
