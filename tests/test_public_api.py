@@ -1,5 +1,5 @@
 # ABOUTME: Every jaff package's __all__ is a list of unique strings naming its
-# ABOUTME: attributes, as the generated API reference (mkdocstrings/griffe) requires
+# ABOUTME: attributes, as the generated API reference (jaff._utils.api_docs) requires
 
 import importlib
 import pkgutil

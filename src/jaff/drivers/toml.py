@@ -31,6 +31,34 @@ class Toml:
         Resolved path to the TOML source file.
     data : dict
         Parsed contents of the TOML file as a nested dictionary.
+
+    Examples
+    --------
+    Given ``config.toml``:
+
+    ```toml
+    temperature = 300.0
+    species = ["H", "O", "H2O"]
+
+    [network]
+    host = "localhost"
+    port = 8080
+    ```
+
+    >>> from jaff.drivers import Toml
+    >>> t = Toml("config.toml")
+    >>> t.get_key("temperature")
+    300.0
+    >>> t.get_key("network")
+    {'host': 'localhost', 'port': 8080}
+    >>> t.get_key("flux") is None
+    True
+
+    As a context manager:
+
+    >>> with Toml("config.toml") as t:
+    ...     t.get_key("species")
+    ['H', 'O', 'H2O']
     """
 
     def __init__(self, file: str | Path):
@@ -65,6 +93,10 @@ class Toml:
         """
         Retrieve the value for a top-level TOML key.
 
+        A table (section) yields a ``dict``; a scalar or array yields the
+        matching Python value (``str``, ``int``, ``float``, ``bool``,
+        ``list``, ...).  A missing key returns ``None`` rather than raising.
+
         Parameters
         ----------
         key : str
@@ -75,6 +107,13 @@ class Toml:
         Any or None
             The value associated with *key*, or ``None`` if the key is
             absent from the parsed data.
+
+        Examples
+        --------
+        With ``config.toml`` as in the :class:`Toml` examples:
+
+        >>> Toml("config.toml").get_key("network")
+        {'host': 'localhost', 'port': 8080}
         """
         return self.data.get(key, None)
 

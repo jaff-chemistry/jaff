@@ -44,32 +44,183 @@ def plot(
 ) -> Result:
     """Render a figure spec; optionally save and show it.
 
+    The spec is validated before anything is drawn, and a ``ValueError``
+    names the offending path, e.g.
+    ``axes[1].series[0]: x and y lengths differ (200 vs 199)``.
+
     Parameters
     ----------
     spec : dict or FigureSpec
-        Figure specification (see :mod:`jaff.plotting.spec`).
-    save : str, pathlib.Path or None
+        Figure specification: a plain nested dict (schema in the Notes; keys
+        as the attributes of :class:`~jaff.plotting.FigureSpec`,
+        :class:`~jaff.plotting.AxesSpec` and :class:`~jaff.plotting.SeriesSpec`)
+        or an already validated :class:`~jaff.plotting.FigureSpec`.
+    save : str or pathlib.Path or None
         Output path; the format follows the suffix.  Raster formats use the
         style's ``save["dpi"]``.
     show : bool
-        Call :func:`matplotlib.pyplot.show` after rendering.
+        Call :func:`matplotlib.pyplot.show` after rendering (skipped on a
+        non-interactive backend such as Agg).
     close : bool
         Remove the figure from pyplot (:func:`matplotlib.pyplot.close`) after
         saving / showing, so repeated calls do not pile up open figures.  The
-        returned figure can still be edited and saved.  Ignored after an
-        interactive, non-blocking show (``plt.isinteractive()``), which would
-        otherwise close the window at once.
+        returned figure can still be edited and saved with ``fig.savefig``.
+        Pass ``False`` to keep it open in pyplot (e.g. for inline notebook
+        display, or when you need the canvas itself).  Ignored after an
+        interactive, non-blocking show (``plt.isinteractive()``, e.g. IPython
+        with a Qt/Tk or ipympl backend), which would otherwise close the
+        window at once.
 
     Returns
     -------
     tuple[Figure, numpy.ndarray] or None
-        ``(fig, axes)`` with ``axes`` shaped like the grid, or ``None`` when
-        the spec holds no series at all.
+        ``(fig, axes)`` with ``axes`` a 2-D array shaped like the grid, or
+        ``None`` when the spec holds no series at all.
 
     Raises
     ------
     ValueError
         Invalid spec, style or palette.
+
+    Notes
+    -----
+    Schema (values shown are the defaults unless noted):
+
+    ```python
+    {
+        "grid": (1, 1),  # (rows, cols); axes fill row-major
+        "style": None,  # name or partial dict; None: "paper"
+        "palette": None,  # name, colour list or {label: colour}; None: "jaff"
+        "figsize": None,  # None: grid x style panel size, grown for legends
+        "sharex": False,
+        "sharey": False,
+        "legend": "auto",  # auto | axes | figure | none
+        "legend_title": None,  # bold heading of the shared legend / the groups
+        "title": None,  # figure title
+        "axes": [  # required
+            {
+                "series": [...],  # required
+                "xscale": "linear",  # or "log"
+                "yscale": "linear",  # or "log"
+                "xlim": None,
+                "ylim": None,
+                "xlabel": "",
+                "ylabel": "",
+                "title": "",  # panel name, drawn inside (upper right)
+                "tag": None,  # extra inside label, under the title
+                "legend": None,  # None: figure policy; "axes" | "none"
+            },
+        ],
+    }
+    ```
+
+    Series:
+
+    ```python
+    {
+        "x": array,  # required; 1-D
+        "y": array,  # required; same length as x
+        "label": "",
+        "color": None,  # None: palette (label map, then cycle)
+        "style": None,  # linestyle, marker ("o", "X", "D") or both ("-o")
+        "role": "data",  # "reference": thick dark-grey line beneath the rest
+        "lw": None,
+        "zorder": None,
+        "kind": "line",  # "bars": horizontal bars, needs "x_lo" and "x_hi"
+    }
+    ```
+
+    Non-finite points are dropped, as are non-positive values on log axes; a
+    series left with fewer than two points (bars: none) is skipped with a
+    warning.
+
+    Layout:
+
+    - Tight grid: the gap between panels is ``style.gap`` inches in both
+      directions; margins are sized to the outer tick and axis labels.  Rows
+      and columns of the grid with no used panel take no space (8 panels in
+      a 4×4 grid are laid out as 2×4); the returned ``axes`` keep the
+      requested shape, with those cells hidden.  Hidden cells inside used
+      rows stay (legend host).  Without ``figsize`` each panel box is
+      ``style.panel_size`` and the figure is made tall enough for
+      right-margin legends; with ``figsize`` the figure is kept as given and
+      the panels take what is left.
+    - X tick labels by place in the column (hidden cells don't count): the
+      topmost panel puts its x tick labels (and x label) on the top spine;
+      the bottommost panel (also one above a hidden cell, or the only one) at
+      the bottom; a middle panel shows none when its x range equals the
+      bottommost panel's, else draws them inside above the bottom spine, with
+      its y range widened downward so no curve runs under them (with an
+      explicit ``ylim`` they stay outside instead).  Ticks stay on all four
+      sides.
+    - Axis labels shown by every panel are drawn once: a common y label over
+      two or more rows becomes ``fig.supylabel``, a common x label over two
+      or more columns becomes ``fig.supxlabel``.  Otherwise a middle panel
+      drops an x label its column's bottom panel repeats, and a y label is
+      dropped where the panel to the left repeats it.
+    - With exponent ticks (``"paper"``), log axes get at most ~4 labelled
+      decades (every 1, 2, 3, 4, 5, 10, ... decades) and unlabelled minor
+      ticks on decades (at most 4 between labels); an axis spanning less
+      than 1.5 decades gets ticks at fractional exponents (``1.05``,
+      ``1.1``, ...) and no minor ticks.  These are fixed positions chosen
+      from the final limits: changing the limits of the returned axes does
+      not re-tick them (nor re-space hollow markers).
+    - With inside tick labels (``"paper"``), the x range is widened on the
+      left by the widest y label (plus the tick length); a panel with an
+      explicit ``xlim`` keeps its y tick labels outside instead.
+    - Headroom for inside titles is applied once per shared y range
+      (``sharey``), using the largest data span of the panels sharing it.
+    - Legends: see :mod:`jaff.plotting`.  A legend with more entries than the
+      style's ``legend_max`` is not drawn, with a warning naming the axes (or
+      ``figure``); a shared legend over the cap that keys several panels
+      falls back to per-panel groups.
+
+    Validation:
+
+    - With ``sharex`` / ``sharey``, all axes must use the same ``xscale`` /
+      ``yscale``.
+    - ``color`` must be a string; ``style`` must be a string or a tuple.
+    - Text fields (``label``, ``title``, ``xlabel``, ...) given as ``None``
+      count as empty.
+    - Style and palette names are checked when the spec is validated; errors
+      are prefixed ``figure.style`` / ``figure.palette``.
+
+    Examples
+    --------
+    Three panels on a 2×2 grid; the shared legend fills the free
+    bottom-right cell:
+
+    >>> import numpy as np
+    >>> from jaff.plotting import plot
+    >>> nh = np.logspace(17, 22, 300)
+    >>> def panel(name, ref, sim):
+    ...     return {
+    ...         "title": name,
+    ...         "xscale": "log",
+    ...         "yscale": "log",
+    ...         "xlabel": r"$N_{\\rm H}$ (cm$^{-2}$)",
+    ...         "ylabel": r"$n_i/n_{\\rm H}$",
+    ...         "series": [
+    ...             {"x": nh, "y": ref, "label": "Gong+2017", "role": "reference"},
+    ...             {"x": nh, "y": sim, "label": "simulation"},
+    ...             {"x": nh[::20], "y": sim[::20], "label": "RT off", "style": "o"},
+    ...         ],
+    ...     }
+    >>> drop = 1 / (1 + nh / 1e20)
+    >>> fig, axes = plot(
+    ...     {
+    ...         "grid": (2, 2),
+    ...         "sharex": True,
+    ...         "axes": [
+    ...             panel("CO", 1e-4 * drop, 1.1e-4 * drop),
+    ...             panel("C", 1e-5 * drop, 0.9e-5 * drop),
+    ...             panel("O", 3e-4 * drop, 3e-4 * drop),
+    ...         ],
+    ...     },
+    ...     save="abundances.pdf",
+    ... )
+    >>> axes.shape
+    (2, 2)
     """
     fs = spec if isinstance(spec, FigureSpec) else FigureSpec.from_dict(spec)
     if not any(a.series for a in fs.axes):
@@ -257,34 +408,107 @@ def plot_rates(
 
     Parameters
     ----------
-    rates
-        A reaction, SymPy expression or ``(x, y)`` tuple, or a list of them.
+    rates : Reaction or sympy.Basic or tuple or list
+        A reaction (anything with ``rate_coefficient``, optionally ``tmin`` /
+        ``tmax`` / ``get_latex``), a SymPy expression (needs *tmin* and
+        *tmax*), or an ``(x, y)`` tuple used verbatim; or a list of them.
         With *grid*, each top-level item is a panel and a nested list is
         overlaid on one panel.  Without *grid* everything is overlaid,
         unless there are more curves than the style's ``legend_max``: then
         they are split in order into panels of at most ``legend_max`` curves
-        on an automatic grid (up to 3 panels in one row, else near-square).
+        on an automatic grid (up to 3 panels in one row, else
+        ``cols = ceil(sqrt(n))``, ``rows = ceil(n / cols)``).
     grid : tuple[int, int] or None
         ``(rows, cols)``; panels fill row-major.  An explicit grid is never
         split automatically.
-    tmin, tmax, var, npoints
-        Temperature sampling (see :func:`jaff.plotting.adapters.rate_series`).
-    xscale, yscale : str or list[str]
+    tmin : float or None
+        Lower temperature bound (K).  A reaction falls back to its own
+        ``tmin`` (when finite and positive), then to 2.73 K.
+    tmax : float or None
+        Upper temperature bound (K); falls back to the reaction's ``tmax``,
+        then to 1e6 K.
+    var : str
+        Temperature symbol substituted in reaction rates.
+    npoints : int
+        Log-spaced samples per curve.
+    xscale : str or list[str]
         ``"log"`` / ``"linear"``, for all panels or one entry per panel (a
         list needs *grid* once the curves are split automatically).
-    xlabel, ylabel : str
-        Axis labels for every panel.
+    yscale : str or list[str]
+        As *xscale*, for the rate axis.
+    xlabel : str
+        Temperature axis label for every panel.
+    ylabel : str
+        Rate axis label for every panel; the default ``$\\kappa$`` (no
+        units) reads as "log₁₀ κ" with the ``"paper"`` exponent ticks.  A
+        label shared by all panels is drawn once for the figure (over two or
+        more columns / rows); otherwise it is kept only on the outer panels.
     labels : list[str] or None
-        Legend labels, one per leaf item in input order.
-    style, palette, sharex, sharey, legend, title
-        Figure options (see :class:`jaff.plotting.spec.FigureSpec`).
-    save, show, close
+        Legend labels, one per leaf item in input order.  Default: the
+        reactions' LaTeX equations.
+    style : str or dict or None
+        Style name or partial style dict (see :class:`FigureSpec`).
+    palette : str or list or dict or None
+        Palette name, colour list or ``{label: colour}`` map.
+    sharex : bool
+        Share the x range across panels.
+    sharey : bool
+        Share the y range across panels.
+    legend : str
+        Figure legend policy: ``"auto"``, ``"figure"``, ``"axes"`` or
+        ``"none"``.
+    title : str or None
+        Figure title.
+    save : str or pathlib.Path or None
+        As in :func:`plot`.
+    show : bool
+        As in :func:`plot`.
+    close : bool
         As in :func:`plot`.
 
     Returns
     -------
     tuple[Figure, numpy.ndarray] or None
         ``None`` when no rate could be evaluated.
+
+    Raises
+    ------
+    ValueError
+        If the temperature range does not satisfy ``0 < tmin < tmax``, a
+        bare SymPy expression is given without *tmin* and *tmax*, *labels*
+        or a per-panel scale list has the wrong length, or more panels have
+        data than *grid* has cells.
+    TypeError
+        An unsupported item type.
+
+    Notes
+    -----
+    Series with fewer than two plottable points on the chosen scales (e.g. a
+    zero rate on a log axis) are dropped before panels are assembled, with
+    one summary warning, so the automatic split never produces blank panels.
+    With the split, the legend switches to per-panel groups in the right
+    margin (``legend="axes"``); an explicit ``legend="figure"`` does too,
+    with a warning.  Otherwise one shared legend keys every panel.
+
+    A panel holding a single curve shows its equation as the panel title
+    (inside the panel, or above it when too long).  Rates that cannot be
+    evaluated against temperature alone (photo, cosmic-ray,
+    interpolated-function rates) are skipped with one summary warning (the
+    per-reaction reason is logged at debug level); a panel left empty is
+    dropped.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> from jaff.plotting import plot_rates
+    >>> net = Network("GOW")
+    >>> r = list(net.reactions.with_type("two_body"))
+    >>> fig, axes = plot_rates(r[:5], tmin=10, tmax=1e4)  # overlay
+    >>> fig, axes = plot_rates(r)  # 15 evaluable curves: split 12 + 3
+    >>> axes.shape
+    (1, 2)
+    >>> fig, axes = plot_rates(r, style={"legend_max": 20})  # one panel
+    >>> fig, axes = plot_rates([r[0], r[1:4]], grid=(1, 2), yscale=["log", "linear"])
     """
     panels = _as_panels(rates, grid, pair_leaves=True)
     n_leaves = sum(len(p) for p in panels)
@@ -437,19 +661,49 @@ def plot_xsecs(
 
     Parameters
     ----------
-    reactions
-        A reaction or a list (nesting / *grid* as in :func:`plot_rates`).
-        Automatic splitting keeps all curves of one reaction on one panel.
-    processes : str, list[str] or None
-        ``"all"``, ``"photo_absorption"``, ``"photodecay"`` or a list.
-    energy_unit, xsec_unit : str
-        Axis units: ``eV``/``erg``/``nm``/``um`` and ``Mb``/``barn``/``cm^2``.
-    xscale, yscale : str or list[str]
+    reactions : Reaction or list
+        A reaction (anything exposing ``photo.xsec``, optionally
+        ``band_xsecs`` / ``get_latex``) or a list (nesting / *grid* as in
+        :func:`plot_rates`, including the automatic split past
+        ``legend_max`` curves).  Automatic splitting keeps all curves of one
+        reaction on one panel.
+    grid : tuple[int, int] or None
+        As in :func:`plot_rates`.
+    processes : str or list[str] or None
+        ``"all"`` (or ``None``), ``"photo_absorption"``, ``"photodecay"`` or
+        a list.
+    energy_unit : str
+        Photon axis unit: ``"eV"``, ``"erg"``, or the wavelengths ``"nm"`` /
+        ``"um"``.
+    xsec_unit : str
+        Cross-section unit: ``"Mb"``, ``"barn"`` or ``"cm^2"`` (``"cm2"``).
+    xscale : str or list[str]
+        As in :func:`plot_rates`.
+    yscale : str or list[str]
         As in :func:`plot_rates`.
     bands : bool
-        Overlay band-average cross sections as horizontal bars.
-    style, palette, sharex, sharey, legend, title, save, show, close
+        Overlay band-average cross sections (from ``Reaction.band_xsecs``)
+        as horizontal bars; reactions without bands add nothing.  An open
+        band stays open in any unit: in wavelength units the open ionising
+        band extends to the short-wavelength edge of the axes.
+    style : str or dict or None
         As in :func:`plot_rates`.
+    palette : str or list or dict or None
+        As in :func:`plot_rates`.
+    sharex : bool
+        As in :func:`plot_rates`.
+    sharey : bool
+        As in :func:`plot_rates`.
+    legend : str
+        As in :func:`plot_rates`.
+    title : str or None
+        As in :func:`plot_rates`.
+    save : str or pathlib.Path or None
+        As in :func:`plot`.
+    show : bool
+        As in :func:`plot`.
+    close : bool
+        As in :func:`plot`.
 
     Returns
     -------
@@ -460,6 +714,32 @@ def plot_xsecs(
     ------
     KeyError
         Unknown process name.
+    ValueError
+        A per-panel scale list of the wrong length, or more panels with data
+        than *grid* has cells.
+
+    Notes
+    -----
+    A panel holding one reaction is titled with its equation (inside the
+    panel, or above it when too long) and its curves are labelled by
+    process.  Several reactions on one panel are labelled
+    ``equation — process``.  One shared legend keys all panels, with one
+    colour per process across the figure.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> from jaff.plotting import plot_xsecs
+    >>> net = Network(
+    ...     "h_photoionization", radiation_props={"bands": [1, 13.6, 100, "inf"]}
+    ... )
+    >>> photo = [p for p in net.reactions.photo_reactions() if p.photo.xsec]
+    >>> fig, axes = plot_xsecs(photo[0], bands=True)
+    >>> [t.get_text() for t in fig.legends[0].get_texts()]
+    ['Photodecay', 'Band average']
+    >>> fig, axes = plot_xsecs(
+    ...     photo, processes="photodecay", energy_unit="nm", xscale="linear"
+    ... )
     """
     panels = _as_panels(reactions, grid)
     xs = _per_panel(xscale, len(panels), "xscale")

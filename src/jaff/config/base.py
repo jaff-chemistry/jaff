@@ -159,14 +159,23 @@ def format_validation_errors(
 #: A Sphinx cross-reference role, e.g. ``:class:`~pkg.mod.Name```.
 # As in Sphinx: ``~a.b.c`` shows ``c``, ``a.b.c`` shows the whole path.
 _ROLE = re.compile(r":\w+:`(?:~[\w.]*?([\w]+)|([\w.]+))`")
-_LITERAL = re.compile(r"``(.+?)``")
+# A fenced code block, kept by ``re.split`` thanks to the capturing group.
+_FENCE = re.compile(r"(^[ \t]*```.*?^[ \t]*```)", re.S | re.M)
+# A literal may wrap across lines; its line break becomes a space.
+_LITERAL = re.compile(r"``([^`]+?)``")
 
 
 def _markdown(text: str) -> str:
-    """Turn the reST markup used in docstrings into the markdown editors render."""
-    roles = _ROLE.sub(lambda m: f"`{m.group(1) or m.group(2)}`", text)
+    """Turn the reST markup used in docstrings into the markdown editors render.
 
-    return _LITERAL.sub(r"`\1`", roles)
+    Fenced code blocks are left as they are.
+    """
+    parts = _FENCE.split(text)
+    for i in range(0, len(parts), 2):
+        roles = _ROLE.sub(lambda m: f"`{m.group(1) or m.group(2)}`", parts[i])
+        parts[i] = _LITERAL.sub(lambda m: f"`{' '.join(m.group(1).split())}`", roles)
+
+    return "".join(parts)
 
 
 def attribute_descriptions(doc: str | None) -> Tuple[str, Dict[str, str]]:

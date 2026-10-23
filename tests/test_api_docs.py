@@ -210,6 +210,8 @@ def test_committed_nav_matches():
         (":meth:`Element.configure`", "`Element.configure`"),
         (":class:`Network`", "`Network`"),
         ("``net.config``", "`net.config`"),
+        ("``a long\n    literal``", "`a long literal`"),
+        ("```\nx = 1\n```\nthen ``y``", "```\nx = 1\n```\nthen `y`"),
     ],
 )
 def test_cross_references_follow_sphinx(rest, markdown):
@@ -245,3 +247,8 @@ class Thing:
 
     assert page.count("Only once.") == 1
     assert "**size** : _int_" in page
+
+
+def test_types_returned_by_public_methods_have_pages(pages):
+    # Db.table returns a Table; without its page the methods are undocumented.
+    assert "reference/drivers/table/index.md" in pages

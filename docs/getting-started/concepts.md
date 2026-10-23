@@ -383,4 +383,4 @@ Now that the pieces have names:
 1. [Working with Networks](../user-guide/working-with-networks/index.md) — inspect species, reactions, and elements in depth;
 2. [Code Generation](../user-guide/code-generation/index.md) — run `jaffgen` over your templates;
 3. [Template Syntax](../user-guide/code-generation/template-syntax.md) — write your own `$$JAFF` templates;
-4. [API Reference](../api/index.md) — the complete surface.
+4. [API Reference](../reference/index.md) — the complete surface.

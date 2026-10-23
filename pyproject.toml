@@ -52,7 +52,7 @@ dev = [
   "ruff",
   "check-jsonschema",
   "zensical",
-  "mkdocstrings[python]>=0.24.0",
+  "griffelib>=2.3",
   "pymdown-extensions>=10.5",
   "pygments",
   "kaleido"

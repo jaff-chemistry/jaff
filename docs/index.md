@@ -127,7 +127,7 @@ Products: H+, e-
 
     The reference guide contains a detailed description of the functions, modules, and objects used by JAFF, assuming that you have an understanding of basic concepts
 
-    [:octicons-arrow-right-24: API Docs](api/index.md)
+    [:octicons-arrow-right-24: API Docs](reference/index.md)
 
 </div>
 

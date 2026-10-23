@@ -506,7 +506,7 @@ rec.get_flux_expression(idx=1, rate_variable="k",
 ### Plotting
 
 The `Reaction` plot methods forward to the
-[`jaff.plotting`](../../api/plotting/index.md) functions `plot_rates` and
+[`jaff.plotting`](../../reference/plotting/index.md) functions `plot_rates` and
 `plot_xsecs`. They return `(fig, axes)` (a 2-D array of axes), so plots can be
 edited further or saved. The figure is closed in pyplot once it has been
 saved / shown (`fig.savefig(...)` still works); pass `close=False` to keep it
@@ -564,7 +564,7 @@ net.reactions.plot_rates(legend="axes", save="catalogue.pdf")   # whole catalogu
 ```
 
 Curves are coloured first, then given new line styles once the colours run
-out. See the [`jaff.plotting`](../../api/plotting/index.md) reference for the
+out. See the [`jaff.plotting`](../../reference/plotting/index.md) reference for the
 figure-spec format, themes and legends.
 
 ---

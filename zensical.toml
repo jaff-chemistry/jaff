@@ -352,6 +352,17 @@ nav = [
       { "drivers.JaffDb" = [
         "reference/drivers/jaffdb/index.md",
       ] },
+      { "drivers.Table" = [
+        "reference/drivers/table/index.md",
+        "reference/drivers/table/all_rows.md",
+        "reference/drivers/table/rows.md",
+        "reference/drivers/table/insert_row.md",
+        "reference/drivers/table/insert_rows.md",
+        "reference/drivers/table/add_column.md",
+        "reference/drivers/table/get_cell.md",
+        "reference/drivers/table/set_cell.md",
+        "reference/drivers/table/delete.md",
+      ] },
       { "drivers.Toml" = [
         "reference/drivers/toml/index.md",
         "reference/drivers/toml/get_key.md",
@@ -607,14 +618,6 @@ Testing = "test"
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
 link = "https://github.com/jaff-chemistry/jaff"
-
-[project.plugins.mkdocstrings]
-handlers.python.paths = ["src"]
-handlers.python.options.docstring_style = "numpy"
-handlers.python.options.docstring_section_style = "table"
-handlers.python.options.show_root_heading = true
-handlers.python.options.show_source = true
-handlers.python.options.show_signature_annotations = true
 
 [project.markdown_extensions.abbr]
 

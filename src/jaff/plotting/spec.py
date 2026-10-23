@@ -144,28 +144,51 @@ def _opt_float(value: Any, path: str) -> float | None:
 class SeriesSpec:
     """One curve (or set of band bars) on an axes.
 
+    Written as a plain dict in an axes' ``"series"`` list (keys as the
+    attributes below; only ``x`` and ``y`` are required) and validated by
+    :meth:`from_dict`.
+
     Attributes
     ----------
     x, y : numpy.ndarray
         Read-only 1-D data of equal length.
     label : str
-        Legend / tag text; empty means unlabelled.
+        Legend / tag text; empty (or ``None`` in the dict) means unlabelled.
     color : str or None
-        Explicit colour; ``None`` resolves from the palette.
-    style : str, tuple or None
-        Linestyle, marker, or both as a fmt string (``"-o"``); ``None``
-        resolves from the style cycle.
+        Explicit colour string; ``None`` resolves from the palette (its
+        label map, then the cycle).
+    style : str or tuple or None
+        Linestyle (``"-"``, ``(0, (6, 3))``), marker (``"o"``, ``"X"``,
+        ``"D"``) or both as a fmt string (``"-o"``); ``None`` resolves from
+        the style cycle.
     lw : float or None
         Line (or marker-edge) width; ``None`` uses the style default.
     zorder : float or None
         Draw order.
     kind : str
-        ``"line"`` or ``"bars"``.
+        ``"line"`` (default) or ``"bars"`` (horizontal bars from ``x_lo`` to
+        ``x_hi`` at height ``y``).
     x_lo, x_hi : numpy.ndarray or None
-        Bar edges (``kind == "bars"`` only); ``y`` is the bar height.
+        Bar edges (``kind == "bars"`` only, and required there); ``y`` is
+        the bar height.
     role : str
-        ``"data"`` or ``"reference"`` (thick dark-grey line drawn beneath
-        the rest, outside the colour cycle).
+        ``"data"`` (default) or ``"reference"`` (thick dark-grey line drawn
+        beneath the rest, outside the colour cycle).
+
+    Notes
+    -----
+    Non-finite points are dropped when rendering, as are non-positive values
+    on log axes; a series left with fewer than two points (bars: none) is
+    skipped with a warning.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from jaff.plotting import SeriesSpec
+    >>> x = np.logspace(1, 4, 50)
+    >>> s = SeriesSpec.from_dict({"x": x, "y": 1e-10 * x**0.5, "style": "--D"})
+    >>> s.kind, s.role, s.x.flags.writeable
+    ('line', 'data', False)
     """
 
     x: np.ndarray
@@ -232,6 +255,30 @@ class AxesSpec:
     ``title`` names the panel (drawn inside, upper right, or above when too
     wide); ``tag`` is an extra inside label under it (``None`` / ``""``: none).
     ``legend=None`` inherits the figure policy.
+
+    Written as a plain dict in the figure's ``"axes"`` list (keys as the
+    attributes below; only ``series`` is required) and validated by
+    :meth:`from_dict`.
+
+    Attributes
+    ----------
+    series : tuple[SeriesSpec, ...]
+        The panel's series (a list of series dicts in the spec; may be
+        empty).
+    xscale, yscale : str
+        ``"linear"`` (default) or ``"log"``.
+    xlim, ylim : tuple[float, float] or None
+        Axis limits; ``None`` autoscales.
+    xlabel, ylabel : str
+        Axis labels (``None`` in the dict counts as empty).
+    title : str
+        Panel name, drawn inside the panel (upper right) with headroom above
+        the data, or above the panel when wider than ~85 % of it.
+    tag : str or None
+        Extra inside label under the title.
+    legend : str or None
+        ``None`` follows the figure policy; ``"axes"`` gives the panel its
+        own legend group, ``"none"`` none.
     """
 
     series: tuple[SeriesSpec, ...] = ()
@@ -247,7 +294,13 @@ class AxesSpec:
 
     @classmethod
     def from_dict(cls, d: dict, path: str = "axes") -> AxesSpec:
-        """Validate an axes dict (series validated recursively)."""
+        """Validate an axes dict (series validated recursively).
+
+        Raises
+        ------
+        ValueError
+            On unknown keys or invalid values; the message names the path.
+        """
         _check_keys(d, _AXES_KEYS, path)
         raw = _require(d, "series", path)
         if not isinstance(raw, (list, tuple)):
@@ -283,6 +336,55 @@ class FigureSpec:
     unresolved (a deep copy of the name, dict or list); the renderer resolves
     them with :func:`jaff.plotting.themes.resolve_style` /
     :func:`~jaff.plotting.themes.resolve_palette`.
+
+    Users normally write the figure as a plain nested dict (keys as the
+    attributes below; only ``axes`` is required) and pass it to
+    :func:`~jaff.plotting.plot`, which validates it with :meth:`from_dict`.
+
+    Attributes
+    ----------
+    axes : tuple[AxesSpec, ...]
+        The panels (a list of axes dicts in the spec), filling the grid row
+        by row; there may be fewer than grid cells, and the leftover cells
+        are hidden.
+    grid : tuple[int, int]
+        ``(rows, cols)``, default ``(1, 1)``.
+    style : str or dict or None
+        Style name or partial style dict (see
+        :func:`~jaff.plotting.register_style`); ``None`` is ``"paper"``.
+    palette : str or list or dict or None
+        Palette name, colour list, or ``{label: colour}`` map; ``None`` is
+        ``"jaff"``.
+    figsize : tuple[float, float] or None
+        Figure size in inches.  ``None``: grid × the style's ``panel_size``,
+        grown for right-margin legends, with sizes scaled for wide grids;
+        given, the figure keeps it and the panels take what is left.
+    sharex, sharey : bool
+        Share x / y ranges across panels; all axes must then use the same
+        ``xscale`` / ``yscale``.
+    legend : str
+        ``"auto"`` (default) or ``"figure"``: one shared legend;
+        ``"axes"``: one legend group per panel; ``"none"``.
+    title : str or None
+        Figure title.
+    legend_title : str or None
+        Bold heading of the shared legend, or of the stack of legend groups.
+
+    Examples
+    --------
+    >>> from jaff.plotting import FigureSpec
+    >>> spec = FigureSpec.from_dict(
+    ...     {"grid": (1, 2), "axes": [{"series": [{"x": [1, 2], "y": [3, 4]}]}]}
+    ... )
+    >>> spec.grid, len(spec.axes), spec.legend
+    ((1, 2), 1, 'auto')
+
+    Invalid input raises a ``ValueError`` naming the offending path:
+
+    >>> FigureSpec.from_dict({"axes": [{"series": [{"x": [1, 2], "y": [3]}]}]})
+    Traceback (most recent call last):
+    ...
+    ValueError: axes[0].series[0]: x and y lengths differ (2 vs 1)
     """
 
     axes: tuple[AxesSpec, ...]

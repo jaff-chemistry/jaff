@@ -77,6 +77,21 @@ def render(spec: FigureSpec) -> tuple[Figure, np.ndarray]:
     ------
     ValueError
         If the style or palette name is unknown.
+
+    Notes
+    -----
+    Unlike :func:`~jaff.plotting.plot`, the figure stays open in pyplot;
+    close it with :func:`matplotlib.pyplot.close` when done.
+
+    Examples
+    --------
+    >>> from jaff.plotting import FigureSpec, render
+    >>> spec = FigureSpec.from_dict(
+    ...     {"grid": (1, 2), "axes": [{"series": [{"x": [1, 2], "y": [3, 4]}]}]}
+    ... )
+    >>> fig, axes = render(spec)
+    >>> axes.shape, axes[0, 1].axison
+    ((1, 2), False)
     """
     style = effective_style(spec)
     palette = resolve_palette(spec.palette)

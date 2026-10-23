@@ -154,7 +154,7 @@ When installing with `[dev]`, the following additional packages are installed:
 | Package                | Minimum Version | Purpose                             |
 | ---------------------- | --------------- | ----------------------------------- |
 | `zensical`             | —               | Documentation static-site generator |
-| `mkdocstrings[python]` | ≥0.24.0         | API documentation from docstrings   |
+| `griffelib`            | ≥2.3            | Reads docstrings for the API pages  |
 | `pymdown-extensions`   | ≥10.5           | Advanced Markdown extensions        |
 | `pygments`             | ≥2.19.2         | Syntax highlighting                 |
 
