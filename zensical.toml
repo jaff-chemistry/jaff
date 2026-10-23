@@ -45,6 +45,7 @@ nav = [
     { "Configuration" = [
       "user-guide/configuration/index.md",
       "user-guide/configuration/reference.md",
+      "user-guide/configuration/editor-setup.md",
       "user-guide/configuration/data-tables.md"
     ] },
     { "Code Generation" = [

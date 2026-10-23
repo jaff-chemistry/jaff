@@ -131,15 +131,7 @@
       "description": "Network (`[network]`).",
       "properties": {
         "label": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
+          "type": "string",
           "description": "Human-readable network name; without it, the network file stem.",
           "title": "Label"
         },
@@ -186,27 +178,11 @@
           "description": "Settings of the reactions."
         },
         "radiation": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RadiationConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
+          "$ref": "#/$defs/RadiationConfig",
           "description": "Radiation field; the table enables radiation."
         },
         "dust": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DustConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
+          "$ref": "#/$defs/DustConfig",
           "description": "Dust; the table enables the dust module."
         },
         "thermodynamics": {
@@ -228,72 +204,32 @@
       "description": "Photo-reaction settings (`[network.reactions.photo]`).",
       "properties": {
         "pi_database": {
-          "anyOf": [
-            {
-              "enum": [
-                "norad",
-                "verner",
-                "leiden"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
+          "enum": [
+            "norad",
+            "verner",
+            "leiden"
           ],
-          "default": null,
+          "type": "string",
           "description": "Photoionisation cross-section database: `\"norad\"`, `\"verner\"` or `\"leiden\"`.",
           "title": "Pi Database"
         },
         "override_custom_rate": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
+          "type": "boolean",
           "description": "Recompute a `.jfunc` `chemRate<N>` rate from the cross sections.",
           "title": "Override Custom Rate"
         },
         "override_custom_cross_section": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
+          "type": "boolean",
           "description": "Ignore `.jfunc` `photoCrossSection<N>` and use the database.",
           "title": "Override Custom Cross Section"
         },
         "use_proxy_photoreaction": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
+          "type": "boolean",
           "description": "Look cross sections up under the proxy reaction (`CHx` → `CH`).",
           "title": "Use Proxy Photoreaction"
         },
         "shielding": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ShieldingConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
+          "$ref": "#/$defs/ShieldingConfig",
           "description": "Line shielding of the rate; without it, the rate is not shielded."
         }
       },
@@ -413,50 +349,26 @@
       "description": "Settings of one reaction (`[network.reactions.reaction.\"<serialized>\"]`).",
       "properties": {
         "duplicate_policy": {
-          "anyOf": [
-            {
-              "enum": [
-                "preserve-first",
-                "preserve-last",
-                "error"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
+          "enum": [
+            "preserve-first",
+            "preserve-last",
+            "error"
           ],
-          "default": null,
+          "type": "string",
           "description": "How two rate coefficients over the same temperature range are resolved: `\"preserve-first\"`, `\"preserve-last\"` or `\"error\"`.",
           "title": "Duplicate Policy"
         },
         "t_cutoff": {
-          "anyOf": [
-            {
-              "enum": [
-                "clip",
-                "extrapolate"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
+          "enum": [
+            "clip",
+            "extrapolate"
           ],
-          "default": null,
+          "type": "string",
           "description": "Rate behaviour outside the temperature range: `\"clip\"` or `\"extrapolate\"`.",
           "title": "T Cutoff"
         },
         "photo": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/PhotoConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
+          "$ref": "#/$defs/PhotoConfig",
           "description": "Photo-reaction settings."
         }
       },

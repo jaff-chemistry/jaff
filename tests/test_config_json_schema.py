@@ -2,7 +2,10 @@
 # ABOUTME: validates against them, and the committed schema files match the models
 
 import json
+import subprocess
+import sys
 import tomllib
+from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -173,3 +176,41 @@ class TestAttributeDescriptions:
 
     def test_without_attributes_section(self):
         assert attribute_descriptions("Just a summary.") == ("Just a summary.", {})
+
+
+class TestNoNull:
+    """TOML has no null: optional keys are simply absent, never typed null."""
+
+    def test_no_null_anywhere(self):
+        for name, schema in schema_files().items():
+            assert '"null"' not in json.dumps(schema), name
+
+    def test_optional_table_is_a_plain_reference(self, defs):
+        assert defs["NetworkConfig"]["properties"]["radiation"]["$ref"] == (
+            "#/$defs/RadiationConfig"
+        )
+
+    def test_optional_value_keeps_its_type(self, defs):
+        assert defs["NetworkConfig"]["properties"]["label"]["type"] == "string"
+
+
+class TestSchemaPath:
+    @pytest.mark.parametrize("name", ["jaff", "jaffgen"])
+    def test_prints_installed_schema_path(self, name):
+        result = subprocess.run(
+            [sys.executable, "-m", "jaff.config.json_schema", "--path", name],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert Path(result.stdout.strip()) == SCHEMA_DIR / f"{name}.schema.json"
+
+    def test_unknown_name_fails(self):
+        result = subprocess.run(
+            [sys.executable, "-m", "jaff.config.json_schema", "--path", "nope"],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode != 0

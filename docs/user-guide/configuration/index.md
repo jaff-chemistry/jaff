@@ -16,7 +16,8 @@ JAFF reads its settings from two TOML files that share **one schema**:
 A `jaff.toml` lives next to its network file and describes the network itself;
 a `jaffgen.toml` describes one code-generation run. Both accept every
 `[network]` key, so a run can adjust the network it generates code for. Every
-key is listed in the [reference](reference.md).
+key is listed in the [reference](reference.md); [editor setup](editor-setup.md)
+gives completion, descriptions and error checking while you write the files.
 
 ```toml
 # networks/GOW/jaff.toml
@@ -180,7 +181,7 @@ ParserError: Invalid config:
 ```
 
 Types, allowed values and unknown keys are also checked in your editor as you
-type. Checks across keys (a `profile_index`
+type ([editor setup](editor-setup.md)). Checks across keys (a `profile_index`
 list needs one entry per band; a shielding model bound to one reaction) run
 when the config loads, and checks against the network (a reaction key that
 names no reaction; `photo` settings on a non-photo reaction) when the network
