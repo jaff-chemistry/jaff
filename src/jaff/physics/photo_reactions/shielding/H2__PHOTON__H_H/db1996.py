@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, cast
 
 from sympy import Expr
 
-from jaff.config.schema import ShieldingParams
+from jaff.physics.photo_reactions.shielding.config import ShieldingParams
 
 from .. import ShieldingFunction, _register
 from ._utils import shielding

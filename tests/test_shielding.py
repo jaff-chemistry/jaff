@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 from sympy import Float
 
-from jaff.config.schema import ShieldingParams
+from jaff.physics.photo_reactions.shielding.config import ShieldingParams
 from jaff.errors import ParserError
 from jaff.physics import RadiationProps
 from jaff.physics.photo_reactions.shielding import ShieldingFunction

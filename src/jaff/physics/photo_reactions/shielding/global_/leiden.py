@@ -20,7 +20,8 @@ from typing import TYPE_CHECKING, List, Literal, cast
 from sympy import Expr, Float, Function
 
 from jaff.config import SHIELDING_DATA_DIR
-from jaff.config.schema import LowerStr, ShieldingParams
+from jaff.config.base import LowerStr
+from jaff.physics.photo_reactions.shielding.config import ShieldingParams
 from jaff.drivers import HDF5
 
 from .. import ShieldingFunction, _register

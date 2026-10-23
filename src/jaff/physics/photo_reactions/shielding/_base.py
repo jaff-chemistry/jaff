@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from pydantic import ValidationError
 from sympy import Expr
 
-from ....config.schema import ShieldingParams
+from .config import ShieldingParams
 from ....errors import ParserError
 
 if TYPE_CHECKING:
