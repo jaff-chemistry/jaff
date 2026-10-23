@@ -10,7 +10,7 @@ number or a bool) and is frozen once validated.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Any, TypeVar
+from typing import Annotated, Any, ClassVar, TypeVar
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict
 
@@ -36,7 +36,14 @@ _ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 class ConfigModel(BaseModel):
     """Base of every config model: unknown keys are errors, types are strict and
-    instances are frozen."""
+    instances are frozen.
+
+    A model whose keys depend on its ``type`` sets ``_atomic = True``: a table of
+    it is replaced whole, never merged with another (see :func:`overlay` and
+    :func:`~jaff.config.loader.atomic_tables`).
+    """
+
+    _atomic: ClassVar[bool] = False
 
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
@@ -58,7 +65,7 @@ def overlay(base: _ModelT, over: BaseModel | None) -> _ModelT:
             continue
 
         current = getattr(base, name)
-        atomic = getattr(type(value), "_atomic", False)
+        atomic = isinstance(value, ConfigModel) and value._atomic
         if isinstance(value, BaseModel) and current is not None and not atomic:
             value = overlay(current, value)
 

@@ -1,9 +1,13 @@
 # ABOUTME: Config loading: deep_merge of config layers (later wins, tables merge,
-# ABOUTME: lists/scalars replace, atomic tables replace whole)
+# ABOUTME: lists/scalars replace; tables flagged _atomic on their model replace whole)
 
 import copy
 
-from jaff.config.loader import deep_merge
+import pytest
+
+from jaff.cli.jaffgen.config import JaffgenTomlConfig
+from jaff.config.loader import atomic_tables, deep_merge
+from jaff.core.network.config import JaffTomlConfig
 
 
 class TestDeepMerge:
@@ -70,3 +74,62 @@ class TestDeepMerge:
         )
 
         assert seen == [("network",), ("network", "dust")]
+
+
+H2_SHIELDING = (
+    "network",
+    "reactions",
+    "reaction",
+    "H2._PHOTON__H.H",
+    "photo",
+    "shielding",
+)
+
+
+class TestAtomicTables:
+    @pytest.mark.parametrize(
+        "path",
+        [
+            ("network", "reactions", "photo", "shielding"),
+            H2_SHIELDING,
+            ("network", "thermodynamics", "eos"),
+        ],
+    )
+    def test_tables_selected_by_type_are_atomic(self, path):
+        assert atomic_tables(JaffgenTomlConfig)(path) is True
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            ("network",),
+            ("network", "reactions"),
+            ("network", "reactions", "photo"),
+            ("network", "reactions", "reaction", "H2._PHOTON__H.H"),
+            ("network", "dust"),
+            ("network", "dust", "pe"),
+            ("network", "radiation"),
+            ("network", "thermodynamics"),
+            ("jaffgen",),
+            ("network", "not_a_key"),
+            ("network", "label", "deeper"),
+        ],
+    )
+    def test_other_tables_merge(self, path):
+        assert atomic_tables(JaffgenTomlConfig)(path) is False
+
+    def test_works_from_jaff_toml_root(self):
+        assert atomic_tables(JaffTomlConfig)(H2_SHIELDING) is True
+
+    def test_eos_type_switch_across_layers(self):
+        jaff_toml = {
+            "network": {
+                "thermodynamics": {
+                    "eos": {"type": "multi_gamma", "default_gamma": 1.4, "gamma_map": {}}
+                }
+            }
+        }
+        jaffgen_toml = {"network": {"thermodynamics": {"eos": {"gamma": 1.3}}}}
+
+        merged = deep_merge(jaff_toml, jaffgen_toml, atomic=atomic_tables(JaffTomlConfig))
+
+        assert merged["network"]["thermodynamics"]["eos"] == {"gamma": 1.3}

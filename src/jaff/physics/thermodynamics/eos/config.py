@@ -6,7 +6,7 @@ One model per EOS ``type``; :data:`EosConfig` picks the model from ``type``
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Dict, Literal, Union
+from typing import Annotated, Any, ClassVar, Dict, Literal, Union
 
 from pydantic import BeforeValidator, Discriminator, Field, Tag
 
@@ -26,6 +26,8 @@ class IdealEosConfig(ConfigModel):
         Adiabatic index, > 1.
     """
 
+    _atomic: ClassVar[bool] = True
+
     type: Annotated[Literal["ideal"], BeforeValidator(lower)] = "ideal"
     gamma: AdiabaticIndex = 1.6666666666667
 
@@ -41,6 +43,8 @@ class MultiGammaEosConfig(ConfigModel):
         Adiabatic index per species name, each > 1.
     """
 
+    _atomic: ClassVar[bool] = True
+
     type: Annotated[Literal["multi_gamma"], BeforeValidator(lower)] = "multi_gamma"
     default_gamma: AdiabaticIndex
     gamma_map: Dict[str, AdiabaticIndex]
@@ -49,6 +53,8 @@ class MultiGammaEosConfig(ConfigModel):
 class FermiDegenerateEosConfig(ConfigModel):
     """Non-relativistic degenerate Fermi gas (``type = "fermi_degenerate"``)."""
 
+    _atomic: ClassVar[bool] = True
+
     type: Annotated[Literal["fermi_degenerate"], BeforeValidator(lower)] = (
         "fermi_degenerate"
     )
@@ -56,6 +62,8 @@ class FermiDegenerateEosConfig(ConfigModel):
 
 class RelativisticFermiDegenerateEosConfig(ConfigModel):
     """Relativistic degenerate Fermi gas (``type = "relativistic_fermi_degenerate"``)."""
+
+    _atomic: ClassVar[bool] = True
 
     type: Annotated[Literal["relativistic_fermi_degenerate"], BeforeValidator(lower)] = (
         "relativistic_fermi_degenerate"

@@ -8,10 +8,78 @@ the module-owned config models.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Mapping, Tuple
+from types import UnionType
+from typing import (
+    Annotated,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Mapping,
+    Tuple,
+    Union,
+    get_args,
+    get_origin,
+)
+
+from pydantic import BaseModel
 
 #: A key path into a layer, e.g. ``("network", "reactions", "photo")``.
 KeyPath = Tuple[str, ...]
+
+
+def atomic_tables(model: type[BaseModel]) -> Callable[[KeyPath], bool]:
+    """Return the :func:`deep_merge` ``atomic`` check derived from *model*.
+
+    A key path is atomic when it leads, through *model*'s fields, per-key
+    ``dict`` entries and union members, to a config model flagged
+    ``_atomic = True`` (e.g. a ``shielding`` table or the ``eos`` table, whose
+    keys depend on their ``type``).
+
+    Parameters
+    ----------
+    model : type[BaseModel]
+        Model of a whole config file (e.g. ``JaffgenTomlConfig``).
+
+    Returns
+    -------
+    Callable[[KeyPath], bool]
+        ``True`` for the key path of an atomic table.
+    """
+
+    def atomic(path: KeyPath) -> bool:
+        nodes: List[Any] = [model]
+        for key in path:
+            nodes = [child for node in nodes for child in _children(node, key)]
+
+        return any(getattr(node, "_atomic", False) for node in nodes)
+
+    return atomic
+
+
+def _children(node: Any, key: str) -> List[Any]:
+    """Return the types a table of type *node* can hold under *key*."""
+    if isinstance(node, type) and issubclass(node, BaseModel):
+        field = node.model_fields.get(key)
+
+        return [] if field is None else _members(field.annotation)
+
+    if get_origin(node) is dict:
+        return _members(get_args(node)[1])
+
+    return []
+
+
+def _members(annotation: Any) -> List[Any]:
+    """Return the types *annotation* stands for, unwrapping ``Annotated`` and unions."""
+    origin = get_origin(annotation)
+    if origin is Annotated:
+        return _members(get_args(annotation)[0])
+
+    if origin is Union or origin is UnionType:
+        return [member for arg in get_args(annotation) for member in _members(arg)]
+
+    return [annotation]
 
 
 def _never_atomic(path: KeyPath) -> bool:
