@@ -315,25 +315,23 @@ class Radiation:
     ----------
     network : Network
         The network passed to the constructor.
+    config : RadiationConfig
+        The ``[network.radiation]`` settings (read-only).  ``config.mode`` is
+        ``"nph"`` (field tracked as photon number density, cm⁻³) or ``"u"``
+        (energy density, erg cm⁻³): it names the density variable
+        (``"photden"`` vs. ``"radeden"``) and sets the normalisation of the
+        rate coefficients.  ``config.absorption_attenuates_flux`` says whether
+        the ``globalAbsorptionCoefficient`` also attenuates the flux equations
+        (``-c * <α>_i * rflux[i]``); see :func:`~jaff.physics.get_sradodes`.
     bands : list of (int, float, or sympy.Basic)
         Band-edge list from ``config.bands``, ``"inf"`` replaced by
         ``sympy.oo``.
-    mode : str
-        ``"nph"`` -- field tracked as photon number density (cm⁻³) -- or
-        ``"u"`` -- field tracked as energy density (erg cm⁻³).  Controls the
-        name of the symbolic density variable (``"photden"`` vs. ``"radeden"``)
-        and the normalisation of rate coefficients.
     c : float or sympy.Symbol
         Speed of light in cm/s (CGS), used in rate-coefficient expressions as
         ``k = c * den * <σ>``.  A string value in ``config.c`` (e.g. ``"c_hat"``
         for a reduced speed of light) becomes a SymPy symbol.
     background_field : BackgroundField
         Background radiation field built from ``config.background_field``.
-    absorption_attenuates_flux : bool
-        From ``config.absorption_attenuates_flux``: whether the
-        ``globalAbsorptionCoefficient`` also attenuates the flux equations
-        (``-c * <α>_i * rflux[i]``) and not only the density equations; see
-        :func:`~jaff.physics.get_sradodes`.
     nbands : int
         Number of bands (``len(bands) - 1``).
     den : sympy.IndexedBase
@@ -414,7 +412,7 @@ class Radiation:
     ...     },
     ... )
     >>> rad = net.radiation
-    >>> rad.bands, rad.nbands, rad.mode, rad.den
+    >>> rad.bands, rad.nbands, rad.config.mode, rad.den
     ([1.0, 13.6, 100.0, oo], 3, 'nph', photden)
     >>> rad.groups
     [Rad_group(0, band=(1.0, 13.6)), Rad_group(1, band=(13.6, 100.0)), Rad_group(2, band=(100.0, oo))]
@@ -454,7 +452,7 @@ class Radiation:
         """
         self.logger = JaffLogger().get_logger()
         self.network: Network = network
-        self.mode: str = config.mode
+        self.config: RadiationConfig = config
         profile_indices = self._profile_indices(config)
         self.bands: list[int | float | sp.Basic] = [
             sp.oo if edge == "inf" else edge for edge in config.bands
@@ -465,14 +463,12 @@ class Radiation:
             sp.symbols(config.c) if isinstance(config.c, str) else config.c
         )
         self.background_field = BackgroundField(config.background_field)
-        # Whether the global absorption coefficient also attenuates the flux.
-        self.absorption_attenuates_flux: bool = config.absorption_attenuates_flux
 
         self.nbands: int = len(self.bands) - 1
         # Symbolic radiation density variable: energy density (erg/cm³) or
         # photon number density (cm⁻³), depending on the mode.
         self.den = sp.IndexedBase(
-            "radeden" if self.mode == "u" else "photden", shape=(self.nbands,)
+            "radeden" if self.config.mode == "u" else "photden", shape=(self.nbands,)
         )
         self.groups: list[RadiationGroup] = [
             RadiationGroup(
@@ -521,7 +517,7 @@ class Radiation:
         starts_at_zero = isinstance(bands[0], (float, int)) and float(bands[0]) == 0.0
         ends_at_inf = bands[-1] == sp.oo
 
-        if self.mode == "u":
+        if self.config.mode == "u":
             # The average-energy numerator ∫ E·n(E) dE is the integral of the
             # energy-density spectrum u(E) = E·n(E) ∝ E^(α-1), i.e. a power law
             # with index pl_index = (α-2) + 1 = α - 1.
@@ -724,7 +720,7 @@ class Radiation:
                     profile,
                     energy_weighted=True,
                 )
-                if self.mode == "u"
+                if self.config.mode == "u"
                 else rad_xsec_avg
             )
 
@@ -757,7 +753,7 @@ class Radiation:
                     if not xsec.process.absorption
                     else (pr_xsec_avg / rad_xsec_avg if rad_xsec_avg != 0.0 else 0.0)
                 )
-                / (grp.eavg if self.mode == "u" else 1)
+                / (grp.eavg if self.config.mode == "u" else 1)
             )
 
         return k_tot, xsec_tot, grouped
@@ -1033,7 +1029,7 @@ class Radiation:
             If a spectrum with symbols other than ``ph_E`` has no closed-form
             integral over a group.
         """
-        if self.mode == "u":
+        if self.config.mode == "u":
             return [
                 sp.sympify(smart_integrate(spectrum, self.ph_E, (grp.lower, grp.upper)))
                 for grp in self.groups
@@ -1078,7 +1074,7 @@ class Radiation:
         return [
             sp.sympify(
                 self.get_group_average_cross_section(
-                    spectrum, self.ph_E, grp, energy_weighted=self.mode == "u"
+                    spectrum, self.ph_E, grp, energy_weighted=self.config.mode == "u"
                 )
             )
             for grp in self.groups

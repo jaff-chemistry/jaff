@@ -77,6 +77,7 @@ class PhotoelectricEmission:
             The ``[network.dust.pe]`` config: the photoelectric band edges
             ``threshold_low`` and ``threshold_high``, in eV.
         """
+        self.config: PhotoelectricEmissionConfig = config
         # photoelectric emission activation energy in eV
         self.E_low: u.Quantity = config.threshold_low * u.eV
         # photoelectric emission cutoff energy in eV
@@ -162,7 +163,7 @@ class PhotoelectricEmission:
             num = grp.sym * energy_frac  # type: ignore
 
             # multiply with average energy in group if number densities are enabled
-            if rad.mode == "nph":
+            if rad.config.mode == "nph":
                 num *= grp.eavg or 0.0
 
             num_tot += num

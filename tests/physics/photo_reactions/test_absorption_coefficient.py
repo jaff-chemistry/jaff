@@ -120,7 +120,7 @@ def _absorption_losses(net):
 
 def test_absorbs_from_density_and_flux_by_default(absorbing_network):
     net = absorbing_network(radiation=RadiationConfig(bands=BANDS))
-    assert net.radiation.absorption_attenuates_flux is True
+    assert net.radiation.config.absorption_attenuates_flux is True
     odes = net.sradodes(order=2)
     nb = net.radiation.nbands
     density, flux = _absorption_losses(net)
@@ -172,7 +172,7 @@ def test_jaffgen_flag_reaches_radiation(tmp_path):
     )
 
     assert gen.net.radiation is not None
-    assert gen.net.radiation.absorption_attenuates_flux is False
+    assert gen.net.radiation.config.absorption_attenuates_flux is False
 
 
 def test_jaff_round_trip_keeps_coefficient(absorbing_network, tmp_path):

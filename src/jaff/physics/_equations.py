@@ -181,7 +181,7 @@ def get_sradodes(net: "Network", order: int = 0) -> list[Expr]:
     The radiation field is described by two moments per band:
 
     - **Energy/photon density** ``den[i]`` (``radeden`` in erg/cm³, or
-      ``photden`` in cm⁻³, depending on ``radiation.mode``).
+      ``photden`` in cm⁻³, depending on ``radiation.config.mode``).
     - **Energy/photon flux** ``rflux[i]``.
 
     For each band *i* the function computes:
@@ -196,7 +196,7 @@ def get_sradodes(net: "Network", order: int = 0) -> list[Expr]:
     - ``gflux[i]``: the sink term for the flux moment, obtained by
       substituting ``den[i] → rflux[i]`` in the losses.  Emission is
       isotropic and feeds the density moment only; the absorption term is
-      included only when ``radiation.absorption_attenuates_flux`` is set.
+      included only when ``radiation.config.absorption_attenuates_flux`` is set.
 
     With dust enabled (``net.dust``), the dust attenuation of each moment is
     subtracted too (see :class:`~jaff.physics.Dust`).  Photo reactions whose
@@ -317,7 +317,7 @@ def get_sradodes(net: "Network", order: int = 0) -> list[Expr]:
         if group.absorption_coefficient is not None:
             absorption = -net.radiation.c * group.absorption_coefficient * group.sym
 
-        if net.radiation.absorption_attenuates_flux:
+        if net.radiation.config.absorption_attenuates_flux:
             group_rate += absorption
             absorption = Float(0.0)
 
@@ -387,8 +387,8 @@ def handle_dust_reduction(
     assert net.radiation is not None
     assert net.dust is not None
 
-    u_reduction = net.dust.u_reduction
-    f_reduction = net.dust.f_reduction
+    u_reduction = net.dust.config.u_reduction
+    f_reduction = net.dust.config.f_reduction
     if u_reduction != "none":
         grate -= (
             net.symbols.zd

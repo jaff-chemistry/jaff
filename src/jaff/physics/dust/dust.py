@@ -62,20 +62,16 @@ class Dust:
     ----------
     net : Network
         Back-reference to the parent network.
+    config : DustConfig
+        The ``[network.dust]`` settings (read-only): ``rv`` (R_V: ``3.1``,
+        ``4.0`` or ``5.5``) selecting the dust model, and the cross-section
+        kinds attenuating the radiation density (``u_reduction``) and flux
+        (``f_reduction``): ``"extinction"``, ``"absorption"``,
+        ``"scattering"``, ``"transport"`` or ``"none"``.
     pe : PhotoelectricEmission
         Photoelectric-emission model, source of the ``chi_pe`` symbol
         substitution (the radiation in the photoelectric band scaled to the
         network's reference background field, Draine by default).
-    rv : float
-        Total-to-selective extinction ratio R_V (from ``config.rv``: ``3.1``,
-        ``4.0`` or ``5.5``) selecting the WD01/Draine dust model.
-    u_reduction : str
-        Dust cross-section kind used to attenuate the radiation *density*
-        (0th) moment (from ``config.u_reduction``): ``"extinction"``,
-        ``"absorption"``, ``"scattering"``, ``"transport"`` or ``"none"``.
-    f_reduction : str
-        Dust cross-section kind used to attenuate the radiation *flux*
-        (1st) moment (from ``config.f_reduction``; same choices).
     tabular : Tabular
         Tabulated per-H-nucleus dust cross sections for the selected R_V.
 
@@ -87,7 +83,7 @@ class Dust:
     ...     radiation={"bands": [1, 13.6, 100, "inf"]},
     ...     dust={"rv": 3.1},
     ... )
-    >>> net.dust.rv, net.dust.u_reduction, net.dust.f_reduction
+    >>> net.dust.config.rv, net.dust.config.u_reduction, net.dust.config.f_reduction
     (3.1, 'absorption', 'transport')
     >>> float(net.dust.tabular.avg_cross_section_per_hnuc("absorption", (13.6, 100.0)))
     1.3480313134398857e-21
@@ -112,8 +108,6 @@ class Dust:
         download_dust()
 
         self.net: Network = network
+        self.config: DustConfig = config
         self.pe: PhotoelectricEmission = PhotoelectricEmission(network, config.pe)
-        self.rv: float = config.rv
-        self.u_reduction: str = config.u_reduction
-        self.f_reduction: str = config.f_reduction
         self.tabular: Tabular = Tabular(self)

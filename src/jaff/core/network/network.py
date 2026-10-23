@@ -1197,7 +1197,7 @@ class Network:
         """Return symbolic radiation moment ODE right-hand sides.
 
         Each radiation band has two moments: the energy or photon density
-        ``rd_i`` (depending on ``radiation.mode``) and the flux ``f_i``.  Each
+        ``rd_i`` (depending on ``radiation.config.mode``) and the flux ``f_i``.  Each
         density equation removes what photo reactions absorb and adds what
         reactions with a ``spectralYield<N>`` auxiliary function emit, plus the
         network ``globalEmissivity``, and removes what the network

@@ -23,16 +23,25 @@ class TestDustFromConfig:
     def test_defaults(self):
         dust = _dust()
 
-        assert dust.rv == pytest.approx(3.1)
-        assert dust.u_reduction == "absorption"
-        assert dust.f_reduction == "transport"
+        assert dust.config.rv == pytest.approx(3.1)
+        assert dust.config.u_reduction == "absorption"
+        assert dust.config.f_reduction == "transport"
 
     def test_settings_are_used(self):
         dust = _dust(rv=4.0, u_reduction="none", f_reduction="extinction")
 
-        assert dust.rv == pytest.approx(4.0)
-        assert dust.u_reduction == "none"
-        assert dust.f_reduction == "extinction"
+        assert dust.config.rv == pytest.approx(4.0)
+        assert dust.config.u_reduction == "none"
+        assert dust.config.f_reduction == "extinction"
+
+    def test_pe_gets_its_section(self):
+        dust = _dust(pe={"threshold_low": 5.0})
+
+        assert dust.pe.config is dust.config.pe
+
+    @pytest.mark.parametrize("name", ["rv", "u_reduction", "f_reduction"])
+    def test_settings_are_not_copied(self, name):
+        assert not hasattr(_dust(), name)
 
     def test_photoelectric_band_from_pe_section(self):
         pe = _dust(pe={"threshold_low": 5.0}).pe
@@ -49,7 +58,7 @@ class TestNetworkDust:
             net = make_network(NET, name="n.dat", funcfile=False)
 
         assert isinstance(net.dust, Dust)
-        assert net.dust.rv == pytest.approx(5.5)
+        assert net.dust.config.rv == pytest.approx(5.5)
 
     def test_no_dust_table_means_no_dust(self, make_network):
         assert make_network(NET, name="n.dat", funcfile=False).dust is None
@@ -77,5 +86,5 @@ class TestNetworkDust:
             )
 
         assert net.dust is not None
-        assert net.dust.rv == pytest.approx(4.0)
-        assert net.dust.f_reduction == "none"
+        assert net.dust.config.rv == pytest.approx(4.0)
+        assert net.dust.config.f_reduction == "none"

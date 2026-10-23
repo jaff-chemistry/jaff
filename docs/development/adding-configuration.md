@@ -143,9 +143,6 @@ over it; see `ReactionsConfig.resolve`), and `reaction.photo` holds only compute
 photo state (cross sections, band data, shielding tables). To tell a key set on
 the reaction itself from the global value, use `ReactionsConfig.own(serialized)`.
 
-Some older components still copy fields onto themselves (e.g. `Dust.rv`); new
-code reads `self.config`.
-
 ## Where each check belongs
 
 | Check | Where | Example |

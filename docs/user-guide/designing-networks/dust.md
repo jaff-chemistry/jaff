@@ -178,7 +178,7 @@ net = Network(
 
 # The dust container and its sub-objects
 net.dust                      # jaff.physics.dust.Dust (or None if disabled)
-net.dust.rv                   # selected R_V grain model
+net.dust.config.rv            # selected R_V grain model (the dust settings)
 net.dust.pe.chi               # symbolic chi_pe expression
 net.dust.tabular.photon_energy  # eV grid backing the cross sections
 

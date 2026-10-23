@@ -45,8 +45,20 @@ class TestRadiationFromConfig:
     def test_mode_and_absorption_flag(self):
         rad = _radiation(bands=[6.0, 13.6], mode="u", absorption_attenuates_flux=False)
 
-        assert rad.mode == "u"
-        assert rad.absorption_attenuates_flux is False
+        assert rad.config.mode == "u"
+        assert rad.config.absorption_attenuates_flux is False
+        assert rad.den.name == "radeden"
+
+    def test_keeps_its_config(self):
+        config = RadiationConfig(bands=[6.0, 13.6])
+        with patch(BACKGROUND):
+            rad = Radiation(None, config)
+
+        assert rad.config is config
+
+    @pytest.mark.parametrize("name", ["mode", "absorption_attenuates_flux"])
+    def test_settings_are_not_copied(self, name):
+        assert not hasattr(_radiation(bands=[6.0, 13.6]), name)
 
 
 class TestDivergence:

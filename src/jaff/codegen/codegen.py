@@ -1668,7 +1668,7 @@ class Codegen:
 
             if radiation and self.net.radiation:
                 radden_matrix = sp.IndexedBase(
-                    "radeden" if self.net.radiation.mode == "u" else "photden",
+                    "radeden" if self.net.radiation.config.mode == "u" else "photden",
                     shape=(self.net.radiation.nbands,),
                 )
                 radflux_matrix = sp.IndexedBase(
@@ -1783,7 +1783,7 @@ class Codegen:
                         expr_str = rrdpattern.sub(
                             lambda m: _replace_y(
                                 m,
-                                "radeden" if rad.mode == "u" else "photden",
+                                "radeden" if rad.config.mode == "u" else "photden",
                             ),
                             expr_str,
                         )
@@ -1819,7 +1819,7 @@ class Codegen:
                 expr_str = rrdpattern.sub(
                     lambda m: _replace_y(
                         m,
-                        "radeden" if rad.mode == "u" else "photden",
+                        "radeden" if rad.config.mode == "u" else "photden",
                     ),
                     expr_str,
                 )
