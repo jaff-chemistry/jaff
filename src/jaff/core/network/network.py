@@ -56,6 +56,7 @@ from ...physics.photo_reactions.config import RadiationConfig
 from ...physics.thermodynamics.config import ThermodynamicsConfig
 from ..elements import Elements
 from ..parsers import NetworkParser
+from ..parsers.network._typing import parsedListProps
 from ..reaction import (
     PhotoReaction,
     RateSegment,
@@ -411,7 +412,6 @@ class Network:
         parsers = self.__load_network()
 
         self.reactions.check_config()
-        self.elements: Elements = Elements(self.species._list)
         self.__post_process(parsers)
         self.__normalize_network_extras()
         self.__set_emissivity()
@@ -441,35 +441,95 @@ class Network:
         return self.config.label or self.spec.fname.stem
 
     def __load_network(self) -> list[Parser]:
-        """Parse the network file and build species, reactions, and auxiliary quantities.
+        """Parse the network file, then build the species and the reactions.
+
+        The species catalogue and :attr:`elements` are complete before the
+        first reaction is built.
 
         Returns
         -------
         list[Parser]
             The parsers that produced reactions, for :meth:`__post_process`.
         """
-        specie_names = set()
-        special_species: dict[str, Specie] = {}
-
         with NetworkParser(self.spec.fname, self.logger) as netp:
-            reactions_list, global_vars = netp.get_parsed()
+            rows, global_vars = netp.get_parsed()
             parsers = netp.get_parsers()
 
+        special_species = self.__build_species(rows)
+        self.elements: Elements = Elements(self.species._list)
+        self.__build_reactions(rows, global_vars, special_species)
+
+        if self._photochemistry is not None:
+            self._photochemistry.log_fallback_summary()
+
+        self.logger.info(f"Loaded {self.reactions.count} reactions")
+        self.logger.info(
+            f"Loaded {len(self.reactions.with_type('photo'))} photo-chemistry reactions"
+        )
+
+        return parsers
+
+    def __build_species(self, rows: list[parsedListProps]) -> dict[str, Specie]:
+        """Add every species named in *rows* to :attr:`species`, in file order.
+
+        Pseudo-species (names starting with ``_``, e.g. ``_PHOTON``) are not
+        added to the catalogue.
+
+        Parameters
+        ----------
+        rows : list[parsedListProps]
+            The parsed reaction rows.
+
+        Returns
+        -------
+        dict[str, Specie]
+            The pseudo-species, keyed by name.
+        """
+        seen: set[str] = set()
+        special_species: dict[str, Specie] = {}
+
+        for row in rows:
+            for name in row["r"] + row["p"]:
+                if name in seen:
+                    continue
+                seen.add(name)
+                if name.startswith("_"):
+                    special_species[name] = Specie(name, -1)
+                else:
+                    self.species.add(Specie(name, self.species.count))
+
+        return special_species
+
+    def __build_reactions(
+        self,
+        rows: list[parsedListProps],
+        global_vars: dict[str, Basic],
+        special_species: dict[str, Specie],
+    ) -> None:
+        """Build a reaction from each row, merging rows of the same reaction.
+
+        Parameters
+        ----------
+        rows : list[parsedListProps]
+            The parsed reaction rows.
+        global_vars : dict[str, Basic]
+            The network file's global variables.
+        special_species : dict[str, Specie]
+            The pseudo-species, keyed by name (see :meth:`__build_species`).
+        """
         aux_funcs = self.spec.aux_funcs
 
-        global_vars = {
+        resolved_vars: dict[str, Expr] = {
             var: resolve_dependencies(expr, {}, aux_funcs)
             for var, expr in global_vars.items()
         }
         subs_dict: dict[Basic, Basic] = {
-            symbols(var.lower()): expr for var, expr in global_vars.items()
+            symbols(var.lower()): expr for var, expr in resolved_vars.items()
         }
 
-        for i, reaction in enumerate(
-            jaff_progress.track(
-                reactions_list,
-                description=f"Creating {self.label} network",
-            )
+        for reaction in jaff_progress.track(
+            rows,
+            description=f"Creating {self.label} network",
         ):
             reactants: list[str] = reaction["r"]
             products: list[str] = reaction["p"]
@@ -478,15 +538,6 @@ class Network:
             rate: str = reaction["rate"]
             si = reaction["source_index"]
             aux_chem_rate = f"chemrate{si}"
-
-            for s in reactants + products:
-                if s in specie_names:
-                    continue
-                specie_names.add(s)
-                if s.startswith("_"):
-                    special_species[s] = Specie(s, -1)
-                else:
-                    self.species.add(Specie(s, self.species.count))
 
             rr = [
                 special_species[r] if r.startswith("_") else self.species[r]
@@ -500,7 +551,7 @@ class Network:
             local_subs_dict = {**subs_dict}
             srxn = Reaction.serialize(rr, pp)
 
-            rate_expr = self.__parse_rate(aux_chem_rate, rate, aux_funcs, global_vars)
+            rate_expr = self.__parse_rate(aux_chem_rate, rate, aux_funcs, resolved_vars)
             rate_expr = resolve_dependencies(rate_expr, local_subs_dict, aux_funcs)
 
             rtype = reaction.get("type", "unknown")
@@ -524,16 +575,6 @@ class Network:
                 metadata=reaction.get("metadata"),
             )
             self.reactions.add(rea)
-
-        if self._photochemistry is not None:
-            self._photochemistry.log_fallback_summary()
-
-        self.logger.info(f"Loaded {self.reactions.count} reactions")
-        self.logger.info(
-            f"Loaded {len(self.reactions.with_type('photo'))} photo-chemistry reactions"
-        )
-
-        return parsers
 
     def __post_process(self, parsers: list[Parser]) -> None:
         """Freeze the catalogues and run each parser's ``post_process`` hook.

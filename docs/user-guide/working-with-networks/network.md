@@ -28,9 +28,10 @@ where every attribute comes from:
 
 1. **Read** — the file is resolved and the text parser auto-detects the format
    (KROME, PRIZMO, UDFA, KIDA, UCLChem, …).
-2. **Parse & assemble** — reactions are read one by one. Each new species name
-   becomes a [`Specie`](species.md) appended to `net.species` (pseudo-species
-   such as `_PHOTON` are kept out of it); each line becomes
+2. **Parse & assemble** — every species name in the file first becomes a
+   [`Specie`](species.md) in `net.species`, in order of first appearance
+   (pseudo-species such as `_PHOTON` are kept out of it), and the unique
+   [`Elements`](elements.md) set is derived from them. Then each line becomes
    a [`Reaction`](reactions.md) appended to `net.reactions`. Any accompanying
    `.jfunc` auxiliary file is loaded here and its custom rates, heating/cooling,
    and radiation terms are wired in.
@@ -39,8 +40,7 @@ where every attribute comes from:
    representation (shorthands like `n_X`, `n_X_nuc`, `ntot` are expanded).
 4. **Validate** — mass/charge conservation, sinks/sources, recombinations,
    isomers, and duplicate reactions are [checked](#validation).
-5. **Finalize** — integer [stoichiometry matrices](#key-attributes) are built
-   and the unique [`Elements`](elements.md) set is derived from the species.
+5. **Finalize** — integer [stoichiometry matrices](#key-attributes) are built.
 
 After this, the network is a fully assembled, queryable model.
 
