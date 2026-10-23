@@ -8,13 +8,25 @@ string is never coerced into a number or a bool) and is frozen once validated.
 
 String choices (``t_cutoff``, ``pi_database``, ...) are case-insensitive and
 stored lower-cased.
+
+A ``shielding`` table is checked against the shielding plugin its ``type``
+names; a per-reaction table may name a plugin bound to that reaction.
 """
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Dict, Literal, TypeVar
+from typing import Annotated, Any, ClassVar, Dict, Literal, Self, TypeVar
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, field_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
+
+from ..errors import ParserError
 
 
 def _lower(value: Any) -> Any:
@@ -43,7 +55,8 @@ def _overlay(base: _ModelT, over: BaseModel | None) -> _ModelT:
     """Return *base* with every key set (not ``None``) in *over* applied.
 
     Nested models are overlaid field by field rather than replaced, so an
-    override that sets one nested key keeps the others from *base*.
+    override that sets one nested key keeps the others from *base* -- except
+    an atomic model (``_atomic = True``), which replaces the base one whole.
     """
     if over is None:
         return base
@@ -55,7 +68,8 @@ def _overlay(base: _ModelT, over: BaseModel | None) -> _ModelT:
             continue
 
         current = getattr(base, name)
-        if isinstance(value, BaseModel) and current is not None:
+        atomic = getattr(type(value), "_atomic", False)
+        if isinstance(value, BaseModel) and current is not None and not atomic:
             value = _overlay(current, value)
 
         update[name] = value
@@ -72,6 +86,68 @@ class ShieldingParams(_Config):
     """
 
 
+class ShieldingConfig(_Config):
+    """Shielding of a photo reaction (a ``shielding`` table).
+
+    Written flat in TOML (``{ type = "leiden", shielded_by = ["self"] }``):
+    ``type`` names the shielding plugin and every other key is one of its
+    settings, checked by the plugin's ``config_model()`` once the reaction it
+    applies to is known (see :class:`ReactionsConfig`).
+
+    The table is atomic: a per-reaction one replaces the global one whole.
+
+    Attributes
+    ----------
+    type : str
+        Shielding plugin name, lower-cased.
+    params : dict
+        The plugin's settings, as written.
+    """
+
+    _atomic: ClassVar[bool] = True
+
+    type: LowerStr = "leiden"
+    params: Dict[str, Any] = {}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _split_type(cls, data: Any) -> Any:
+        """Split a flat table into ``type`` and the plugin ``params``."""
+        if not isinstance(data, dict):
+            return data
+
+        params = {k: v for k, v in data.items() if k != "type"}
+
+        return {"type": data.get("type", "leiden"), "params": params}
+
+
+def _check_shielding(shielding: ShieldingConfig | None, reaction: str | None) -> None:
+    """Check *shielding* against its plugin, for *reaction* (``None``: global).
+
+    Raises
+    ------
+    ValueError
+        If no plugin of that type applies to *reaction*, or the plugin rejects
+        a setting.
+    """
+    if shielding is None:
+        return
+
+    # Imported here: the plugins import this module.
+    from ..physics.photo_reactions.shielding import _get_shielding_function
+
+    where = (
+        "reactions.photo.shielding"
+        if reaction is None
+        else f'reactions.reaction."{reaction}".photo.shielding'
+    )
+    try:
+        plugin = _get_shielding_function(shielding.type, reaction)
+        plugin.config_model().model_validate(shielding.params)
+    except (ParserError, ValidationError) as e:
+        raise ValueError(f"{where}: {e}") from e
+
+
 class PhotoConfig(_Config):
     """Photo-reaction settings (``[network.reactions.photo]``).
 
@@ -86,6 +162,8 @@ class PhotoConfig(_Config):
         Ignore ``.jfunc`` ``photoCrossSection<N>`` and use the database.
     use_proxy_photoreaction : bool or None
         Look cross sections up under the proxy reaction (``CHx`` → ``CH``).
+    shielding : ShieldingConfig or None
+        Line shielding of the rate; ``None`` globally means no shielding.
 
     ``None`` means unset: the value comes from the global settings.
     """
@@ -94,6 +172,7 @@ class PhotoConfig(_Config):
     override_custom_rate: bool | None = None
     override_custom_cross_section: bool | None = None
     use_proxy_photoreaction: bool | None = None
+    shielding: ShieldingConfig | None = None
 
 
 _DEFAULT_PHOTO = PhotoConfig(
@@ -150,6 +229,16 @@ class ReactionsConfig(ReactionConfig):
         """Complete a partially given global ``photo`` table with the defaults."""
         return _overlay(_DEFAULT_PHOTO, photo)
 
+    @model_validator(mode="after")
+    def _check_shielding_tables(self) -> Self:
+        """Check every shielding table against its plugin and reaction."""
+        _check_shielding(self.photo.shielding, None)
+        for serialized, entry in self.reaction.items():
+            if entry.photo is not None:
+                _check_shielding(entry.photo.shielding, serialized)
+
+        return self
+
     def resolve(self, serialized: str) -> ReactionConfig:
         """Return the settings of one reaction, every key set.
 
@@ -166,6 +255,8 @@ class ReactionsConfig(ReactionConfig):
         ReactionConfig
             The reaction's resolved settings.
         """
-        base = ReactionConfig.model_validate(self.model_dump(exclude={"reaction"}))
+        base = ReactionConfig(
+            **{name: getattr(self, name) for name in ReactionConfig.model_fields}
+        )
 
         return _overlay(base, self.reaction.get(serialized))
