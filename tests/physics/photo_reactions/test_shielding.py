@@ -10,7 +10,7 @@ from sympy import Float
 from jaff.physics.photo_reactions.shielding.config import ShieldingParams
 from jaff.errors import ParserError
 from jaff.physics.photo_reactions.config import RadiationConfig
-from jaff.physics.photo_reactions.shielding import ShieldingFunction
+from jaff.physics.photo_reactions.shielding import ShieldingFunction, ShieldingResult
 from jaff.physics.photo_reactions.shielding.global_.leiden import Leiden
 from jaff.physics.photo_reactions.shielding.H2__PHOTON__H_H.db1996 import DB1996
 from jaff.physics.photo_reactions.shielding.H2__PHOTON__H_H.hg2015 import HG2015
@@ -54,8 +54,8 @@ class TestConfigModel:
         class Plain(ShieldingFunction):
             name = "plain"
 
-            def get_shielding(self, reaction, network):
-                return Float(1.0)
+            def get_shielding(self, reaction):
+                return ShieldingResult(Float(1.0))
 
         model = Plain.config_model()
 
@@ -192,3 +192,60 @@ def test_jaffgen_writes_shielding_tables_to_output(tmp_path):
 
     assert result.exit_code == 0, result.output
     assert (out / f"shielding_{CO_KEY}.hdf5").exists()
+
+
+class TestPhotoReactionShielding:
+    def test_factor_is_on_the_photo_reaction(self, leiden_network):
+        photo = leiden_network.reactions[CO_KEY, "photo"].photo
+
+        from sympy.core.function import AppliedUndef
+
+        calls = photo.shielding_factor.atoms(AppliedUndef)
+        assert len(calls) == 2  # one interpolation per shielding species
+        assert all(band.k.has(*calls) for band in photo.bands)
+
+    def test_unshielded_reaction_has_no_factor(self, make_network):
+        net = make_network(
+            CO_PHOTO, name="co.jet", funcfile=False, radiation={"bands": [6.0, 13.6]}
+        )
+
+        assert net.reactions[CO_KEY, "photo"].photo.shielding_factor is None
+
+    def test_plugin_returns_its_factor_and_tables(self, leiden_network):
+        rxn = leiden_network.reactions[CO_KEY, "photo"]
+
+        result = Leiden().get_shielding(rxn)
+
+        assert isinstance(result, ShieldingResult)
+        assert result.factor == rxn.photo.shielding_factor
+        assert set(result.tables) == {f"shielding_{CO_KEY}.hdf5"}
+
+    def test_shielding_without_radiation_raises(self, make_network):
+        config = {
+            "network": {
+                "reactions": {"reaction": {CO_KEY: {"photo": {"shielding": LEIDEN}}}}
+            }
+        }
+
+        with pytest.raises(ParserError, match="radiation"):
+            make_network(CO_PHOTO, name="co.jet", funcfile=False, config=config)
+
+    def test_photochemistry_has_no_shielding(self):
+        from jaff.physics import Photochemistry
+
+        assert not hasattr(Photochemistry, "shielding")
+
+
+class TestRegistry:
+    def test_public_names(self):
+        from jaff.physics.photo_reactions import shielding
+
+        assert shielding.shielding_function("leiden", CO_KEY).name == "leiden"
+        assert ("leiden", None) in shielding.shielding_functions()
+        assert callable(shielding.register)
+
+    def test_private_names_are_gone(self):
+        from jaff.physics.photo_reactions import shielding
+
+        for name in ("_register", "_get_shielding_function", "_discover_shielding"):
+            assert not hasattr(shielding, name)

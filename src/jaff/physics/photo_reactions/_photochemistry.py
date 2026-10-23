@@ -35,11 +35,9 @@ from ...drivers.pooch import (
 )
 from ...errors import ParserError
 from ...io import JaffLogger
-from .shielding import _get_shielding_function
 
 if TYPE_CHECKING:
     from ...core import Reaction
-    from ...core.network import Network
     from ...core.reaction.config import ReactionsConfig
 
 
@@ -422,48 +420,3 @@ class Photochemistry:
         )
 
         self.fallbacks.clear()
-
-    @staticmethod
-    def shielding(reaction: Reaction, network: Network) -> Expr:
-        """Build the symbolic shielding factor for a photo-reaction.
-
-        The shielding function named by ``reaction.photo.config.shielding.type`` is
-        resolved from the
-        shielding registry via
-        :func:`~jaff.physics.photo_reactions.shielding._get_shielding_function`.
-        Lookup is keyed by ``(type, reaction.serialized)`` and prefers a
-        reaction-specific (local) function, falling back to a global one
-        registered with ``reaction=None``.  The resolved
-        :class:`~jaff.physics.photo_reactions.shielding._base.ShieldingFunction`
-        instance's ``get_shielding(reaction, network)`` produces the factor.
-
-        The result is not cached: the reaction's config holds only the settings,
-        so callers evaluate it once per reaction.
-
-        Parameters
-        ----------
-        reaction : Reaction
-            Reaction to shield; its ``config.photo.shielding.type`` selects
-            the shielding function.
-        network : Network
-            Network the reaction belongs to, forwarded to the shielding
-            function for species/column-density look-ups.
-
-        Returns
-        -------
-        sympy.Expr
-            Dimensionless shielding factor multiplying the photo-rate.
-
-        Raises
-        ------
-        ParserError
-            If no shielding function is registered for ``type`` either locally
-            (for this reaction) or as a global fallback.
-        """
-        photo = reaction.photo
-        shielding = photo.config.shielding if photo is not None else None
-        assert shielding is not None, f"{reaction} is not shielded"
-
-        shielding_fn = _get_shielding_function(shielding.type, reaction.serialized)
-
-        return shielding_fn.get_shielding(reaction, network)

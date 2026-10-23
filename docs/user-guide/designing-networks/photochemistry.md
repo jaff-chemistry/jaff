@@ -337,13 +337,14 @@ inputs are the H2 column density `ncol_H2` and velocity dispersion `vdisp`.
 <!-- prettier-ignore -->
 !!! note "Shielding is exposed programmatically too"
     The reaction's resolved shielding table is `rxn.config.photo.shielding`,
-    with the model in `.type` and the remaining keys in `.params`; it is saved
-    in `.jaff` files. `jaff.physics.Photochemistry.shielding(reaction, network)`
-    returns the symbolic factor; the radiation integrator evaluates it once per
-    reaction and multiplies it into every band. Data tables a model builds for
-    the generated code (the Leiden `shielding_<reaction>.hdf5`) are kept in
+    with the model in `.type` and the remaining keys in `.params`. The model's
+    symbolic factor, evaluated once per reaction and multiplied into every band,
+    is `rxn.photo.shielding_factor`. Data tables a model builds for the
+    generated code (the Leiden `shielding_<reaction>.hdf5`) are kept in
     `rxn.photo.shielding_tables` and written out by
-    `Network.write_shielding_tables(directory)`.
+    `Network.write_shielding_tables(directory)`. Shielding needs a radiation
+    field: a shielded reaction in a network without `[network.radiation]` is a
+    `ParserError`.
 
 ---
 

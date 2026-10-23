@@ -9,17 +9,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from sympy import Expr
 
 from jaff.physics.photo_reactions.shielding.config import ShieldingParams
 
-from jaff.physics.photo_reactions.shielding import _register
-from jaff.physics.photo_reactions.shielding._base import ShieldingFunction
+from jaff.physics.photo_reactions.shielding import (
+    ShieldingFunction,
+    ShieldingResult,
+    register,
+)
 
 from ._utils import shielding
 
 if TYPE_CHECKING:
-    from jaff.core.network import Network
     from jaff.core.reaction import Reaction
 
 
@@ -42,7 +43,7 @@ class HG2015Params(ShieldingParams):
     min_vdisp: float = 1.0e-50
 
 
-@_register
+@register
 class HG2015(ShieldingFunction):
     """Hartwig et al. (2015) H2 self-shielding (``shielding.type = "hg2015"``)."""
 
@@ -54,8 +55,8 @@ class HG2015(ShieldingFunction):
         """Return the settings model: the ``min_ncol`` / ``min_vdisp`` floors."""
         return HG2015Params
 
-    def get_shielding(self, reaction: "Reaction", network: "Network") -> Expr:
-        """Return the Hartwig et al. (2015) H2 self-shielding factor.
+    def get_shielding(self, reaction: "Reaction") -> ShieldingResult:
+        """Return the Hartwig et al. (2015) H2 self-shielding factor (no tables).
 
         Thin wrapper over :func:`shielding` with ``alpha = 1.1``, using the
         optional floors ``shielding.min_ncol`` (on the dimensionless column
@@ -69,8 +70,10 @@ class HG2015(ShieldingFunction):
         """
         params = cast(HG2015Params, self.params(reaction))
 
-        return shielding(
-            alpha=1.1,
-            min_ncol=params.min_ncol,
-            min_vdisp=params.min_vdisp,
+        return ShieldingResult(
+            shielding(
+                alpha=1.1,
+                min_ncol=params.min_ncol,
+                min_vdisp=params.min_vdisp,
+            )
         )

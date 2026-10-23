@@ -52,7 +52,7 @@ src/jaff/
 │   │   ├── _radiation.py       # Radiation / RadiationGroup — radiation moment equations
 │   │   ├── background_field.py # BackgroundField — tabulated reference radiation fields
 │   │   ├── config.py           # RadiationConfig ([network.radiation])
-│   │   └── shielding/          # Shielding-function registry (@_register, by config.photo.shielding.type)
+│   │   └── shielding/          # Shielding-function registry (@register, by config.photo.shielding.type)
 │   │       ├── _base.py        # ShieldingFunction ABC (name, reaction, config_model, params)
 │   │       ├── config.py       # ShieldingConfig, ShieldingParams (plugin settings base)
 │   │       ├── global_/        # Global models, reaction=None (e.g. leiden.py)

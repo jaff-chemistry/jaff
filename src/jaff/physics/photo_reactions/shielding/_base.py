@@ -5,7 +5,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 from sympy import Expr
@@ -14,15 +15,34 @@ from .config import ShieldingParams
 from ....errors import ParserError
 
 if TYPE_CHECKING:
-    from ....core.network import Network
     from ....core.reaction import Reaction
+
+
+@dataclass(frozen=True)
+class ShieldingResult:
+    """What a shielding plugin computes for one reaction.
+
+    Attributes
+    ----------
+    factor : sympy.Expr
+        The dimensionless shielding factor multiplying the reaction's band
+        rates.
+    tables : dict[str, Any]
+        Data tables the generated code interpolates over, keyed by file name
+        (e.g. ``shielding_<reaction>.hdf5``); empty when the model needs none.
+        Kept as ``reaction.photo.shielding_tables`` and written out by
+        :meth:`~jaff.core.network.Network.write_shielding_tables`.
+    """
+
+    factor: Expr
+    tables: dict[str, Any] = field(default_factory=dict)
 
 
 class ShieldingFunction(ABC):
     """A single photo-reaction line-shielding model.
 
     Subclasses live in their own module under ``shielding`` and register
-    themselves via the :func:`~jaff.physics.photo_reactions.shielding._register`
+    themselves via the :func:`~jaff.physics.photo_reactions.shielding.register`
     decorator, keyed by their ``name``
     (the ``shielding.type`` value used in the network config).  The lookup is a
     dict, so resolving a type to its function is O(1) and independent of import
@@ -73,6 +93,6 @@ class ShieldingFunction(ABC):
             ) from e
 
     @abstractmethod
-    def get_shielding(self, reaction: "Reaction", network: "Network") -> Expr:
-        """Return the dimensionless shielding factor for *reaction*."""
+    def get_shielding(self, reaction: "Reaction") -> ShieldingResult:
+        """Return the shielding factor for *reaction* and any data tables it needs."""
         ...

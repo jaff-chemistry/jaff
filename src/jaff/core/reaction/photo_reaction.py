@@ -10,6 +10,7 @@ import numpy as np
 from astropy import units as u
 from sympy import Basic, Expr, Float, Symbol
 
+from ...config.base import dotted
 from ...errors import ParserError
 from ._helper import to_float_or_none
 from .config import PhotoConfig
@@ -63,6 +64,10 @@ class PhotoReaction:
         The sum of the per-band rate coefficients: the reaction's rate
         coefficient when a radiation field sets it.  ``None`` otherwise, and
         for a ``custom_rad_rate`` reaction.
+    shielding_factor : sympy.Expr or None
+        The factor the reaction's shielding model (``config.shielding``)
+        multiplies its band rates by; ``None`` when it is not shielded, and for
+        a ``custom_rad_rate`` reaction.
     shielding_tables : dict[str, Any]
         Data tables the reaction's shielding model built for the generated
         code to interpolate over, keyed by file name (e.g.
@@ -102,20 +107,23 @@ class PhotoReaction:
         self.custom_rad_rate: bool = False
         self.bands: List[PhotoBand] | None = None
         self.band_rate: Expr | None = None
+        self.shielding_factor: Expr | None = None
         self.shielding_tables: Dict[str, Any] = {}
 
     def compute(self) -> None:
         """Resolve the cross sections and, with radiation, the band rates.
 
-        Sets :attr:`xsec` and, when a radiation field sets the rate,
+        Sets :attr:`xsec` and, when a radiation field sets the rate, the
+        shielding (:attr:`shielding_factor`, :attr:`shielding_tables`),
         :attr:`bands` and :attr:`band_rate`.
 
         Raises
         ------
         ParserError
             If a ``pi_database`` is set for the reaction itself while its
-            cross section comes from a ``photoCrossSection<N>`` function, or
-            radiation needs a cross section and no database has one.
+            cross section comes from a ``photoCrossSection<N>`` function,
+            radiation needs a cross section and no database has one, or the
+            reaction is shielded without a radiation field.
         """
         reaction = self.reaction
         if reaction.function("chemRate") is not None:
@@ -124,9 +132,27 @@ class PhotoReaction:
         self._set_xsec()
 
         if reaction.net.radiation is None:
+            self._check_no_shielding()
             return
 
         self._set_band_rates()
+
+    def _check_no_shielding(self) -> None:
+        """Reject a shielding setting without a radiation field (it would do nothing)."""
+        if self.config.shielding is None:
+            return
+
+        serialized = self.reaction.serialized
+        own = self.reaction.net.reactions.config.own(serialized)
+        path = (
+            ("network", "reactions", "reaction", serialized, "photo", "shielding")
+            if own is not None and own.photo is not None and own.photo.shielding
+            else ("network", "reactions", "photo", "shielding")
+        )
+        raise ParserError(
+            f"{dotted(path)}: shielding of {self.reaction} needs a radiation field "
+            "([network.radiation])"
+        )
 
     def _overrides_custom_rate(self) -> bool:
         """Whether radiation recomputes the reaction's ``chemRate`` rate.
@@ -207,7 +233,21 @@ class PhotoReaction:
             )
             return
 
+        self._set_shielding()
         self.band_rate, self.xsec_total, self.bands = self.band_rates(net.radiation)
+
+    def _set_shielding(self) -> None:
+        """Run the reaction's shielding model; keep its factor and tables."""
+        shielding = self.config.shielding
+        if shielding is None:
+            return
+
+        from ...physics.photo_reactions.shielding import shielding_function
+
+        plugin = shielding_function(shielding.type, self.reaction.serialized)
+        result = plugin.get_shielding(self.reaction)
+        self.shielding_factor = result.factor
+        self.shielding_tables = dict(result.tables)
 
     def band_rates(
         self, radiation: Radiation
@@ -231,7 +271,7 @@ class PhotoReaction:
            ``k``), ``<σ>_i`` and its ratio to the spectrum average
            (``xsec_frac``).
 
-        Both coefficients carry the reaction's shielding factor, if any.
+        Both coefficients carry :attr:`shielding_factor`, if any.
         Nothing is stored; :meth:`compute` stores the result.
 
         Parameters
@@ -289,7 +329,7 @@ class PhotoReaction:
             else None
         )
         xsec_total = radiation.get_total_average_cross_section(decay, energy, profile)
-        shielding = self._shielding_factor()
+        shielding = self.shielding_factor
 
         band_rate: Expr = Float(0.0)
         bands: list[PhotoBand] = []
@@ -361,19 +401,10 @@ class PhotoReaction:
 
         return xsec.photon_energy, xsec.photodecay, absorption
 
-    def _shielding_factor(self) -> Expr | None:
-        """The shielding factor of the reaction's shielding model, or ``None``."""
-        if self.config.shielding is None:
-            return None
-
-        from ...physics import Photochemistry
-
-        return Photochemistry.shielding(self.reaction, self.reaction.net)
-
     def expressions(self) -> list[Expr]:
         """The expressions the component holds.
 
-        Its :attr:`band_rate`, each band's rate coefficient ``k`` and symbolic
+        Its :attr:`band_rate`, :attr:`shielding_factor`, each band's rate coefficient ``k`` and symbolic
         band cross section, and a symbolic :attr:`xsec_total`.
 
         Returns
@@ -382,6 +413,8 @@ class PhotoReaction:
             The expressions; empty without radiation.
         """
         exprs: list[Expr] = [] if self.band_rate is None else [self.band_rate]
+        if self.shielding_factor is not None:
+            exprs.append(self.shielding_factor)
         for band in self.bands or []:
             exprs.append(band.k)
             if isinstance(band.xsec, Expr):
@@ -401,6 +434,8 @@ class PhotoReaction:
         """
         if self.band_rate is not None:
             self.band_rate = cast(Expr, self.band_rate.xreplace(mapping))
+        if self.shielding_factor is not None:
+            self.shielding_factor = cast(Expr, self.shielding_factor.xreplace(mapping))
         if self.bands is not None:
             self.bands = [_substitute_band(band, mapping) for band in self.bands]
         if isinstance(self.xsec_total, Expr):

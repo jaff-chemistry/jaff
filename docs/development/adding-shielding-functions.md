@@ -9,9 +9,9 @@ icon: phosphor/sun
 A photo-reaction can attenuate its rate by a dimensionless **shielding factor**
 `S`. JAFF resolves that factor from a **registry** of shielding models: each
 model is a [`ShieldingFunction`](#the-shieldingfunction-contract) subclass that
-registers itself with the `@_register` decorator, declares its settings as a
-config model, and returns a [SymPy](https://www.sympy.org) expression that is
-multiplied into the photo-rate. Adding a new model means writing one such class
+registers itself with the `@register` decorator, declares its settings as a
+config model, and returns a `ShieldingResult`: a [SymPy](https://www.sympy.org)
+expression that is multiplied into the photo-rate, plus any data tables it needs. Adding a new model means writing one such class
 in a subpackage of `physics/photo_reactions/shielding/` and importing it from that
 subpackage's `__init__.py`.
 
@@ -43,29 +43,32 @@ shielding = { type = "hg2015", min_ncol = 1.0e-35 }
    shielding table may only use global models.
 2. **When the network is built**, the photo reaction's resolved settings
    (`reaction.config`) hold the table as `reaction.config.photo.shielding`, a
-   `ShieldingConfig` with `.type` and the settings in `.params`; the reaction
-   starts with an empty `reaction.photo.shielding_tables`.
-3. **When its rate is computed**, `Photochemistry.shielding`
-   (`physics/photo_reactions/_photochemistry.py`) resolves the model the same
-   way and calls its `get_shielding` **once per reaction**; the returned
-   expression multiplies the rate coefficient of every radiation band.
+   `ShieldingConfig` with `.type` and the settings in `.params`. A shielded
+   reaction in a network without radiation is an error (the setting would do
+   nothing).
+3. **When its rate is computed**, the reaction's photo component
+   (`PhotoReaction`, `core/reaction/photo_reaction.py`) resolves the model the
+   same way (`shielding_function(type, reaction)`) and calls its `get_shielding`
+   **once per reaction**. It keeps the result as `reaction.photo.shielding_factor`
+   and `reaction.photo.shielding_tables`; the factor multiplies the rate
+   coefficient of every radiation band.
 
 ```mermaid
 flowchart TD
     A[shielding table in the config\ntype selects a model] --> B[config load: registry lookup\ntype, reaction - then global\nsettings checked by config_model]
-    B --> C[network build: reaction.photo.shielding\ntype + props + tables]
-    C --> D[Photochemistry.shielding\nresolves the same model]
-    D --> E[instance.get_shielding\nreaction, network]
-    E --> F[Returned sympy.Expr\nevaluated once per reaction]
+    B --> C[network build: reaction.config.photo.shielding\ntype + params]
+    C --> D[PhotoReaction resolves the same model\nshielding_function]
+    D --> E[instance.get_shielding\nreaction]
+    E --> F[ShieldingResult.factor\nreaction.photo.shielding_factor]
     F --> G[Multiplied into each\nband's rate coefficient]
-    E -.-> H[optional data tables\nreaction.photo.shielding_tables]
+    E -.-> H[ShieldingResult.tables\nreaction.photo.shielding_tables]
     H -.-> I[Network.write_shielding_tables\njaffgen writes them to its output]
 ```
 
 The registry is filled on the first lookup by importing every **subpackage**
 (folder) directly under `shielding/` whose name does not start with `_`
 (`import_subpackages`). Only the folder's `__init__.py` is imported, so a model
-registers — its `@_register` decorator runs — only if that `__init__.py` imports
+registers — its `@register` decorator runs — only if that `__init__.py` imports
 its module (`from .hg2015 import HG2015`). There is no central list to edit, but a
 module file that nothing imports is never registered, and a new folder needs an
 `__init__.py` that imports its models.
@@ -79,10 +82,11 @@ implements one method:
 ```python
 from typing import cast
 
-from sympy import Expr
-
-from jaff.physics.photo_reactions.shielding import _register
-from jaff.physics.photo_reactions.shielding._base import ShieldingFunction
+from jaff.physics.photo_reactions.shielding import (
+    ShieldingFunction,
+    ShieldingResult,
+    register,
+)
 from jaff.physics.photo_reactions.shielding.config import ShieldingParams
 
 
@@ -98,7 +102,7 @@ class MyModelParams(ShieldingParams):
     floor: float = 1.0e-50
 
 
-@_register
+@register
 class MyModel(ShieldingFunction):
     name = "my_model"          # the shielding type keyword (lower-case)
     reaction = None            # None = global; a serialized reaction = local
@@ -107,10 +111,10 @@ class MyModel(ShieldingFunction):
     def config_model() -> type[MyModelParams]:
         return MyModelParams
 
-    def get_shielding(self, reaction, network) -> Expr:
+    def get_shielding(self, reaction) -> ShieldingResult:
         params = cast(MyModelParams, self.params(reaction))
         ...
-        return shielding_expr
+        return ShieldingResult(shielding_expr)
 ```
 
 | Member           | Purpose                                                                                                   |
@@ -119,7 +123,7 @@ class MyModel(ShieldingFunction):
 | `reaction`       | Serialized reaction this model is bound to (local), or `None` for a global model.                         |
 | `config_model()` | Static method returning the model of its settings, a `ShieldingParams` subclass. Default: no settings.    |
 | `params(reaction)` | Validates `reaction.config.photo.shielding.params` against `config_model()` and returns the typed settings. |
-| `get_shielding`  | Returns the dimensionless `sympy.Expr`; may store data tables in `reaction.photo.shielding_tables`.      |
+| `get_shielding`  | Returns a `ShieldingResult`: the dimensionless `factor` (`sympy.Expr`) and any data `tables`.            |
 
 **Settings.** The `ShieldingParams` subclass is a regular
 [config model](adding-configuration.md): it rejects unknown keys, is strict about
@@ -138,12 +142,13 @@ resolves at runtime, by convention:
 | `vdisp`          | Velocity dispersion (cm s⁻¹)                         |
 
 **Data tables.** A model whose expression interpolates over tabulated data (like
-Leiden's) puts the table on the reaction instead of writing a file:
+Leiden's) returns the table with the factor instead of writing a file:
 
 ```python
-tables = reaction.photo.shielding_tables
-tables[f"shielding_{reaction.serialized}.hdf5"] = h5dict
+return ShieldingResult(factor, {f"shielding_{reaction.serialized}.hdf5": h5dict})
 ```
+
+The reaction keeps it as `reaction.photo.shielding_tables`.
 
 `Network.write_shielding_tables(directory)` writes every reaction's tables;
 `jaffgen` calls it for its output directory. A plain Python `Network` builds
@@ -185,10 +190,11 @@ DOI:https://doi.org/10.1093/mnras/stv1368
 
 from typing import cast
 
-from sympy import Expr
-
-from jaff.physics.photo_reactions.shielding import _register
-from jaff.physics.photo_reactions.shielding._base import ShieldingFunction
+from jaff.physics.photo_reactions.shielding import (
+    ShieldingFunction,
+    ShieldingResult,
+    register,
+)
 from jaff.physics.photo_reactions.shielding.config import ShieldingParams
 
 from ._utils import shielding
@@ -209,7 +215,7 @@ class HG2015Params(ShieldingParams):
     min_vdisp: float = 1.0e-50
 
 
-@_register
+@register
 class HG2015(ShieldingFunction):
     """Hartwig et al. (2015) H2 self-shielding (``shielding.type = "hg2015"``)."""
 
@@ -220,13 +226,15 @@ class HG2015(ShieldingFunction):
     def config_model() -> type[HG2015Params]:
         return HG2015Params
 
-    def get_shielding(self, reaction, network) -> Expr:
+    def get_shielding(self, reaction) -> ShieldingResult:
         params = cast(HG2015Params, self.params(reaction))
 
-        return shielding(
-            alpha=1.1,
-            min_ncol=params.min_ncol,
-            min_vdisp=params.min_vdisp,
+        return ShieldingResult(
+            shielding(
+                alpha=1.1,
+                min_ncol=params.min_ncol,
+                min_vdisp=params.min_vdisp,
+            )
         )
 ```
 
@@ -261,12 +269,12 @@ shielding = { type = "leiden", radiation = "isrf", shielded_by = ["self", "H2"] 
 
 See `shielding/global_/leiden.py` for a full example: its `LeidenParams`
 restricts `shielded_by` to the species the Leiden tables hold, and
-`get_shielding` builds one interpolation call per shielding species and keeps
-the per-reaction table in `reaction.photo.shielding_tables`.
+`get_shielding` builds one interpolation call per shielding species and returns
+the per-reaction table with it.
 
 ## Checklist
 
-- [x] Class subclasses `ShieldingFunction` and is decorated with `@_register`
+- [x] Class subclasses `ShieldingFunction` and is decorated with `@register`
 - [x] `name` (lower-case) equals the `shielding` table's `type` keyword
 - [x] `reaction` set to the serialized reaction (local) or left `None` (global)
 - [x] Local model placed under the **sanitised** folder
@@ -275,10 +283,10 @@ the per-reaction table in `reaction.photo.shielding_tables`.
       the folder name does not start with `_`
 - [x] Its own `ShieldingParams` subclass with numpydoc `Attributes`, returned by
       `config_model()`
-- [x] `get_shielding(self, reaction, network) -> sympy.Expr` reads its settings
+- [x] `get_shielding(self, reaction) -> ShieldingResult` reads its settings
       through `self.params(reaction)`
-- [x] Returns a dimensionless expression using the `ncol_<species>` / `vdisp`
-      symbol conventions; data tables go in `reaction.photo.shielding_tables`
+- [x] Its `factor` is a dimensionless expression using the `ncol_<species>` /
+      `vdisp` symbol conventions; data tables go in its `tables`
 - [x] Shared maths factored into an underscore-prefixed helper (if reused)
 - [x] Schemas and reference regenerated
       (`uv run --extra dev python -m jaff.config.json_schema`,

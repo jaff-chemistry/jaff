@@ -163,10 +163,9 @@ def _variants_section(
 
 def _shielding_section(path: Tuple[str, ...], description: str) -> str:
     """Section of a ``shielding`` table: one subsection per shielding plugin."""
-    from ..physics.photo_reactions.shielding import _REGISTER, _discover_shielding
+    from ..physics.photo_reactions.shielding import shielding_functions
     from ..physics.photo_reactions.shielding.config import ShieldingConfig
 
-    _discover_shielding()
     default = ShieldingConfig.model_fields["type"].default
     parts = [
         f"## `{_table(path)}`\n\n{description}  Written as one table, e.g. "
@@ -174,7 +173,7 @@ def _shielding_section(path: Tuple[str, ...], description: str) -> str:
         "selects the shielding model and its other keys.\n"
     ]
     for (name, reaction), plugin in sorted(
-        _REGISTER.items(), key=lambda item: (item[0][0], item[0][1] or "")
+        shielding_functions().items(), key=lambda item: (item[0][0], item[0][1] or "")
     ):
         note = " (the default)" if name == default else ""
         only = f" — only for `{reaction}`" if reaction is not None else ""

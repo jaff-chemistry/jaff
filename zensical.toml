@@ -258,7 +258,6 @@ nav = [
         "reference/physics/photochemistry/get_custom_xsec.md",
         "reference/physics/photochemistry/get_xsec.md",
         "reference/physics/photochemistry/log_fallback_summary.md",
-        "reference/physics/photochemistry/shielding.md",
       ] },
       { "physics.Radiation" = [
         "reference/physics/radiation/index.md",

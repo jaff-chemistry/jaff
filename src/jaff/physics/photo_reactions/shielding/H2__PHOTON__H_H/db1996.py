@@ -9,15 +9,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from sympy import Expr
 
 from jaff.physics.photo_reactions.shielding.config import ShieldingParams
 
-from .. import ShieldingFunction, _register
+from .. import ShieldingFunction, ShieldingResult, register
 from ._utils import shielding
 
 if TYPE_CHECKING:
-    from jaff.core.network import Network
     from jaff.core.reaction import Reaction
 
 
@@ -40,7 +38,7 @@ class DB1996Params(ShieldingParams):
     min_vdisp: float = 1.0e-50
 
 
-@_register
+@register
 class DB1996(ShieldingFunction):
     """Draine & Bertoldi (1996) H2 self-shielding (``shielding.type = "db1996"``)."""
 
@@ -52,8 +50,8 @@ class DB1996(ShieldingFunction):
         """Return the settings model: the ``min_ncol`` / ``min_vdisp`` floors."""
         return DB1996Params
 
-    def get_shielding(self, reaction: "Reaction", network: "Network") -> Expr:
-        """Return the Draine & Bertoldi (1996) H2 self-shielding factor.
+    def get_shielding(self, reaction: "Reaction") -> ShieldingResult:
+        """Return the Draine & Bertoldi (1996) H2 self-shielding factor (no tables).
 
         Thin wrapper over :func:`shielding` with ``alpha = 2.0``, using the
         optional floors ``shielding.min_ncol`` (on the dimensionless column
@@ -67,8 +65,10 @@ class DB1996(ShieldingFunction):
         """
         params = cast(DB1996Params, self.params(reaction))
 
-        return shielding(
-            alpha=2.0,
-            min_ncol=params.min_ncol,
-            min_vdisp=params.min_vdisp,
+        return ShieldingResult(
+            shielding(
+                alpha=2.0,
+                min_ncol=params.min_ncol,
+                min_vdisp=params.min_vdisp,
+            )
         )

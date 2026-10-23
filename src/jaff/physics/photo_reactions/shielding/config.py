@@ -97,13 +97,12 @@ class ShieldingConfig(ConfigModel):
         Whether a reaction-bound plugin fits the reaction is checked on load.
         """
         # Imported here: the plugin registry imports this module.
-        from . import _REGISTER, _discover_shielding
+        from . import shielding_functions
 
-        _discover_shielding()
         default = cls.model_fields["type"].default
         branches: List[JsonSchemaValue] = []
         for (name, reaction), plugin in sorted(
-            _REGISTER.items(), key=lambda item: (item[0][0], item[0][1] or "")
+            shielding_functions().items(), key=lambda item: (item[0][0], item[0][1] or "")
         ):
             params = plugin.config_model().model_json_schema()
             if "$defs" in params:
@@ -150,7 +149,7 @@ def check_shielding(shielding: ShieldingConfig | None, reaction: str | None) -> 
         return
 
     # Imported here: the plugin registry imports this module.
-    from . import _get_shielding_function
+    from . import shielding_function
 
     # Key path of the table within [network.reactions].
     where: KeyPath = (
@@ -159,7 +158,7 @@ def check_shielding(shielding: ShieldingConfig | None, reaction: str | None) -> 
         else ("reaction", reaction, "photo", "shielding")
     )
     try:
-        plugin = _get_shielding_function(shielding.type, reaction)
+        plugin = shielding_function(shielding.type, reaction)
         plugin.config_model().model_validate(shielding.params)
     except ParserError as e:
         raise ValueError(f"{dotted(where)}: {e}") from e
