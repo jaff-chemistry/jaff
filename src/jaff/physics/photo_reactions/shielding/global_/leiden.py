@@ -41,9 +41,10 @@ class LeidenParams(ShieldingParams):
     Attributes
     ----------
     shielded_by : list of str
-        Shielding species (:data:`LeidenSpecies`); their factors multiply.
+        Shielding species, ``"self"`` being the reaction's own reactant; their
+        factors multiply.
     radiation : str
-        Radiation-field subgroup of the Leiden table, lower-cased.
+        Radiation-field subgroup of the Leiden table (case-insensitive).
     """
 
     shielded_by: List[LeidenSpecies]

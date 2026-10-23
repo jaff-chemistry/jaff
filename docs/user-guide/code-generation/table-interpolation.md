@@ -17,7 +17,7 @@ treats the table lookup as an **interpolation function** that:
 2. JAFF **preserves verbatim** through code generation (it never invents a
    formula for it), and
 3. you **implement** at runtime, backed by a data table that the
-   [`[[table]]`](jaffgen-toml.md#table-section) config emits alongside the generated
+   [`[[table]]`](../configuration/data-tables.md) config emits alongside the generated
    code.
 
 The three pieces — the `.jfunc` call, the generated code, and the `[[table]]`
@@ -103,7 +103,7 @@ psigd_coll_interp2d_partial_1(..., tgas)   // ∂ psi  / ∂ tgas
 ## Emitting the table data
 
 The generated code needs the table itself. The
-[`[[table]]`](jaffgen-toml.md#table-section) section of `jaffgen.toml` converts a
+[`[[table]]`](../configuration/data-tables.md) section of `jaffgen.toml` converts a
 source table (the network's own `.hdf5` rate table, or a CSV) into the HDF5/CSV
 file your interpolation routines read at runtime — produced in the same
 `jaffgen` run that writes the source. For example, turning a CO cooling CSV into
@@ -124,7 +124,7 @@ default_group = "/"
 col = "T0"
 ```
 
-See [`jaffgen.toml` → `[[table]]`](jaffgen-toml.md#table-section) for the full
+See [`jaffgen.toml` → `[[table]]`](../configuration/data-tables.md) for the full
 conversion syntax.
 
 ---

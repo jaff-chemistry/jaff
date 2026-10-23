@@ -50,7 +50,7 @@ class ShieldingConfig(ConfigModel):
     Attributes
     ----------
     type : str
-        Shielding plugin name, lower-cased.
+        Shielding model (case-insensitive).
     params : dict
         The plugin's settings, as written.
     """

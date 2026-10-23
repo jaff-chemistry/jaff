@@ -165,7 +165,7 @@ pe_threshold_high = 13.6   # eV
 
 All keys are optional and fall back to the `DustProps` defaults; an empty
 `[network.dust]` table is enough to turn the module on. See the
-[`[network.dust]` reference](../code-generation/jaffgen-toml.md#networkdust-section)
+[`[network.dust]` reference](../configuration/reference.md#networkdust)
 in the configuration guide for the full key list, and
 [Photochemistry](photochemistry.md) for the radiation setup that dust builds on.
 

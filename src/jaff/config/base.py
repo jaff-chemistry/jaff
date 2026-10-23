@@ -196,13 +196,28 @@ def attribute_descriptions(doc: str | None) -> Tuple[str, Dict[str, str]]:
     }
 
 
+def field_descriptions(cls: type) -> Dict[str, str]:
+    """Return each key's description from the ``Attributes`` of *cls* and its bases.
+
+    A subclass's entry wins over the same key's entry in a base class, so a
+    model inheriting keys (e.g. the global reaction settings) describes them.
+    """
+    descriptions: Dict[str, str] = {}
+    for klass in reversed(cls.__mro__):
+        if issubclass(klass, ConfigModel):
+            descriptions.update(attribute_descriptions(klass.__doc__)[1])
+
+    return descriptions
+
+
 def _document_schema(schema: Dict[str, Any], cls: type) -> None:
     """Describe a config model's JSON schema from its docstring.
 
     The table gets the docstring's summary and each key its ``Attributes``
     entry; then the model's own :meth:`ConfigModel._extend_json_schema` runs.
     """
-    summary, fields = attribute_descriptions(cls.__doc__)
+    summary, _ = attribute_descriptions(cls.__doc__)
+    fields = field_descriptions(cls)
     if summary:
         schema["description"] = summary
 

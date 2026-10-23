@@ -14,7 +14,7 @@ The radiation field is split into contiguous photon-energy **bands**.
 rate data for every photo-reaction in that band.
 
 See [Photochemistry](../../../user-guide/designing-networks/photochemistry.md) for the
-physics, and [`[network.radiation]`](../../../user-guide/code-generation/jaffgen-toml.md)
+physics, and [`[network.radiation]`](../../../user-guide/configuration/index.md)
 for the `jaffgen.toml` equivalent.
 
 ## Photon spectrum

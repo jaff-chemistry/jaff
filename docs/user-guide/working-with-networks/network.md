@@ -239,7 +239,7 @@ are signed sums of these. See [`sfluxes`](../../api/core/network/sfluxes.md) and
 Each reaction's rate is only valid within a temperature range `[Tmin, Tmax]`.
 Whether `tgas` is clamped to that range (`clip`, the default) or left to
 extrapolate beyond it is configured per network in a
-[`jaff.toml`](jaff-toml.md) — see [Network Configuration](jaff-toml.md) for the
+[`jaff.toml`](../configuration/index.md) — see [Network Configuration](../configuration/index.md) for the
 full schema and precedence rules.
 
 ---
@@ -260,7 +260,7 @@ net.check_isomers(errors=False)          # species sharing one atomic compositio
 
 Duplicate reactions (same species, mechanism/`type`, and temperature range) are
 resolved at load time by the network's
-[`duplicate_policy`](jaff-toml.md#duplicate-policy) rather than by a separate
+[`duplicate_policy`](../configuration/reference.md#networkreactions) rather than by a separate
 check.
 
 <!-- prettier-ignore -->

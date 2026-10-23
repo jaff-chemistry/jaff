@@ -36,7 +36,7 @@ print(f"Elements:  {net.elements.count}")
 
     The network's `jaff.toml`: per-reaction and global temperature-cutoff (`clip` / `extrapolate`) behaviour, and how it composes with `jaffgen.toml`.
 
-    [:octicons-arrow-right-24: jaff.toml](jaff-toml.md)
+    [:octicons-arrow-right-24: jaff.toml](../configuration/index.md)
 
 - :phosphor-dna:{ .sm .middle } **Species**
 

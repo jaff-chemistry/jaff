@@ -27,7 +27,7 @@ class JaffgenConfig(ConfigModel):
     input_files : list of Path
         Individual template files.
     output_dir : Path or None
-        Output directory; ``None`` uses the default output directory.
+        Output directory; without it, ``<repo_root>/generated``.
     network_file : Path or None
         Network file, or the name of a predefined network.
     network_config : Path or None

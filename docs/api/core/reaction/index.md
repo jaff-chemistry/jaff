@@ -44,7 +44,7 @@ The `Reaction` class represents a single chemical reaction, holding its reactant
 : Internal energy released or absorbed per reaction event (erg). A `.jfunc` `deltaE<N>` function takes precedence; `None` (default) without one means zero.
 
 **t_cutoff** : _str, optional_
-: Out-of-range behaviour for the rate segment(s): `"clip"` (default) holds the boundary value, `"extrapolate"` evaluates the expression as-is. See [`jaff.toml` temperature cutoffs](../../../user-guide/working-with-networks/jaff-toml.md).
+: Out-of-range behaviour for the rate segment(s): `"clip"` (default) holds the boundary value, `"extrapolate"` evaluates the expression as-is. See [`jaff.toml` temperature cutoffs](../../../user-guide/configuration/index.md).
 
 **type** : _str, optional_
 : Reaction type concluded by the network-format parser, stored verbatim. Generic gas-phase values are `"photo"`, `"cosmic_ray"`, `"3_body"`, `"unknown"`; grain/ice networks add surface-mechanism types (`"freeze"`, `"desorption_thermal"`, `"desorption_cr"`, `"desorption_uvcr"`, `"desorption_h2"`, `"eley_rideal"`, `"eley_rideal_desorption"`, `"langmuir_hinshelwood"`, `"langmuir_hinshelwood_desorption"`, `"h2_formation"`, `"bulk_swap"`, `"surface_swap"`). Default `"unknown"`.

@@ -37,16 +37,19 @@ nav = [
     { "Working with Networks" = [
       "user-guide/working-with-networks/index.md",
       "user-guide/working-with-networks/network.md",
-      "user-guide/working-with-networks/jaff-toml.md",
       "user-guide/working-with-networks/species.md",
       "user-guide/working-with-networks/reactions.md",
       "user-guide/working-with-networks/elements.md",
       "user-guide/working-with-networks/jaffx.md"
     ] },
+    { "Configuration" = [
+      "user-guide/configuration/index.md",
+      "user-guide/configuration/reference.md",
+      "user-guide/configuration/data-tables.md"
+    ] },
     { "Code Generation" = [
       "user-guide/code-generation/index.md",
       "user-guide/code-generation/template-syntax.md",
-      "user-guide/code-generation/jaffgen-toml.md",
       "user-guide/code-generation/jaffgen.md",
       "user-guide/code-generation/table-interpolation.md",
       "user-guide/code-generation/worked-example.md",

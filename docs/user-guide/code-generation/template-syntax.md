@@ -946,7 +946,7 @@ added.
 
 The echo can be switched off with the `echo_directives` argument of
 `TemplateParser`. `jaffgen` sets it from `echo` in
-[`jaffgen.toml`](jaffgen-toml.md) or the `--echo/--no-echo` flag (default on).
+[`jaffgen.toml`](../configuration/index.md) or the `--echo/--no-echo` flag (default on).
 
 In Fortran, wrapping of long lines leaves comment lines alone.
 

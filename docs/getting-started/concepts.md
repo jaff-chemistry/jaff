@@ -319,7 +319,7 @@ $$JAFF END
 ## Driving runs with `jaffgen.toml`
 
 Spelling out the network, inputs, output, and radiation on every `jaffgen` line
-gets old. A [`jaffgen.toml`](../user-guide/code-generation/jaffgen-toml.md) declares
+gets old. A [`jaffgen.toml`](../user-guide/configuration/index.md) declares
 the run once, so the command collapses to:
 
 ```bash

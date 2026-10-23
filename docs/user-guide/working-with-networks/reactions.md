@@ -283,7 +283,7 @@ a single **piecewise** rate expression on `net.reactions[i].rate_coefficient`:
   positive, so rates spanning several decades stay smooth, and linearly in $k$
   otherwise (e.g. a zero, negative, or symbolic boundary rate);
 - behaviour past the outermost bounds follows the reaction's
-  [`T_cutoff`](jaff-toml.md#temperature-cutoffs) (`clip` holds the boundary
+  [`T_cutoff`](../configuration/reference.md#networkreactions) (`clip` holds the boundary
   value; `extrapolate` lets the end segments run on).
 
 The individual pieces live on `rxn.rate_segments`; `rxn.tmin` / `rxn.tmax` span
@@ -299,7 +299,7 @@ reaction must form a well-ordered sequence:
   network is loaded — deduplicate the source network;
 - two rows with exactly the **same** range are duplicates rather than separate
   ranges, and are resolved by the network's
-  [`duplicate_policy`](jaff-toml.md#duplicate-policy) (`preserve-first` by default, with a
+  [`duplicate_policy`](../configuration/reference.md#networkreactions) (`preserve-first` by default, with a
   warning; `error` makes it fatal).
 
 !!! note "Different mechanisms are different reactions"

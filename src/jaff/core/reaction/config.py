@@ -38,7 +38,7 @@ class PhotoConfig(ConfigModel):
     use_proxy_photoreaction : bool or None
         Look cross sections up under the proxy reaction (``CHx`` → ``CH``).
     shielding : ShieldingConfig or None
-        Line shielding of the rate; ``None`` globally means no shielding.
+        Line shielding of the rate; without it, the rate is not shielded.
 
     ``None`` means unset: the value comes from the global settings.
     """
@@ -81,16 +81,16 @@ class ReactionConfig(ConfigModel):
 
 
 class ReactionsConfig(ReactionConfig):
-    """Settings of every reaction (``[network.reactions]``).
+    """Settings of the reactions (``[network.reactions]``).
 
-    Holds the same keys as :class:`ReactionConfig`, with concrete defaults,
-    plus the per-reaction entries.
+    Each key applies to every reaction, unless a reaction's own table
+    (``reaction."<serialized>"``) sets it.
 
     Attributes
     ----------
     reaction : dict[str, ReactionConfig]
-        Per-reaction settings keyed by serialized reaction; a key set here
-        wins over the global one (see :meth:`resolve`).
+        Per-reaction settings keyed by serialized reaction; a key set there
+        wins over the same key here.
     """
 
     duplicate_policy: DuplicatePolicy = "preserve-first"

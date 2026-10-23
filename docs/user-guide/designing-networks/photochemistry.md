@@ -38,7 +38,7 @@ where $\rho_i$ is the radiation energy or photon density in band $i$ and $k_i$ i
 
 ## Radiation Field Discretisation
 
-The radiation field is divided into contiguous energy bands. You specify the band boundaries in `jaffgen.toml` (see [Configuration File](../code-generation/jaffgen-toml.md)):
+The radiation field is divided into contiguous energy bands. You specify the band boundaries in `jaffgen.toml` (see [Configuration File](../configuration/index.md)):
 
 ```toml
 [network.radiation]
@@ -194,7 +194,7 @@ queries at runtime (see [Codebase Structure](../../development/codebase-structur
 ### What lands on the reaction
 
 Which database supplies a photoionization reaction is governed by
-[`pi_database`](../code-generation/jaffgen-toml.md#networkradiation-section)
+[`pi_database`](../configuration/reference.md#networkradiation)
 (`norad` by default, or `verner` / `leiden`, globally or per reaction). The
 lookup order is the chosen database, then NORAD, then Verner, then Leiden
 (duplicates skipped); any fallback is logged once as a summary after loading.
@@ -250,7 +250,7 @@ $$
 
 Shielding is opt-in per reaction, declared in `jaffgen.toml` under
 `[network.reactions."<serialized>".shielding]` (see the
-[configuration reference](../code-generation/jaffgen-toml.md#networkreactionsserializedshielding-section)).
+[configuration reference](../configuration/reference.md#networkreactionsphotoshielding)).
 The reaction **must be a photo-reaction**; the `type` key selects the shielding
 function (default `"leiden"`). The serialized key contains `.` separators and so
 **must be quoted** in the TOML header.
@@ -379,7 +379,7 @@ net = Network(
 )
 ```
 
-From a [`jaffgen.toml`](../code-generation/jaffgen-toml.md#networkdust-section)
+From a [`jaffgen.toml`](../configuration/reference.md#networkdust)
 add a `[network.dust]` table and a `background_field` key under
 `[network.radiation]`. If either radiation or dust is missing when a rate
 references `chi_pe`, generation aborts with a `ParserError`.

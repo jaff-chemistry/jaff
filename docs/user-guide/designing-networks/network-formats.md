@@ -287,7 +287,7 @@ references, and the free symbols each rate expects are documented in the parser'
     [Temperature ranges and piecewise rates](../working-with-networks/reactions.md#temperature-ranges-and-piecewise-rates).
     Overlapping ranges raise a `ValueError`; the same reaction repeated over the
     exact same range is a duplicate, resolved by the
-    [duplicate policy](../working-with-networks/jaff-toml.md#duplicate-policy).
+    [duplicate policy](../configuration/reference.md#networkreactions).
 
 ---
 

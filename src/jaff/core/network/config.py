@@ -26,20 +26,20 @@ class NetworkConfig(ConfigModel):
     Attributes
     ----------
     label : str or None
-        Human-readable network name; ``None`` uses the network file stem.
+        Human-readable network name; without it, the network file stem.
     strict : bool
         Treat validation problems (conservation, sinks/sources, ...) as fatal.
     funcfile : bool or Path
-        ``.jfunc`` auxiliary file: ``True`` looks next to the network file,
-        ``False`` loads none, a path names it.
+        ``.jfunc`` auxiliary file: ``true`` looks next to the network file,
+        ``false`` loads none, a path names it.
     expand_nuclei : bool
         Expand ``n_<element>_nuc`` into the element-nucleus sum.
     reactions : ReactionsConfig
         Settings of the reactions.
     radiation : RadiationConfig or None
-        Radiation field; ``None`` disables radiation.
+        Radiation field; the table enables radiation.
     dust : DustConfig or None
-        Dust; ``None`` disables the dust module.
+        Dust; the table enables the dust module.
     thermodynamics : ThermodynamicsConfig
         Thermodynamics.
     """

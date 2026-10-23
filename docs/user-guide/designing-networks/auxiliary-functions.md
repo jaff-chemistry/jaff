@@ -253,7 +253,7 @@ Reactions whose rate cannot be written as a simple Arrhenius expression get a `c
         (d2g / d2g_solar) * n_H_nuc / n_e
 ```
 
-With radiation transport enabled, a photo reaction with a `chemRate<N>` keeps that rate but is **not coupled** to the radiation bands (it removes no photons), because a custom rate does not depend on the transported field. JAFF logs a warning naming each such reaction. To couple it, supply a [`photoCrossSection<N>`](#custom-cross-sections-photocrosssectionn) instead, or set [`override_custom_rate`](../working-with-networks/jaff-toml.md#custom-photo-rates-under-radiation) to use the database cross sections without editing the `.jfunc`. A reaction cannot have both a `chemRate<N>` and a `photoCrossSection<N>`.
+With radiation transport enabled, a photo reaction with a `chemRate<N>` keeps that rate but is **not coupled** to the radiation bands (it removes no photons), because a custom rate does not depend on the transported field. JAFF logs a warning naming each such reaction. To couple it, supply a [`photoCrossSection<N>`](#custom-cross-sections-photocrosssectionn) instead, or set [`override_custom_rate`](../configuration/reference.md#networkreactionsphoto) to use the database cross sections without editing the `.jfunc`. A reaction cannot have both a `chemRate<N>` and a `photoCrossSection<N>`.
 
 ### Thermal energy change — `deltaE<N>`
 
@@ -290,7 +290,7 @@ A `photoCrossSection<N>` function replaces the database cross section of photo-r
 
 The reaction stores it as `photo.xsec` with `database = "custom"` and no photo-absorption cross section. With radiation enabled it is averaged over each band and over the whole spectrum exactly like a Verner fit, and the band averages set the photo rate. A reaction cannot have both a `chemRate<N>` and a `photoCrossSection<N>` (`ParserError`), nor a per-reaction `pi_database` while its custom cross section is in use.
 
-Setting `override_custom_cross_section = true` (globally in [`jaffgen.toml`](../code-generation/jaffgen-toml.md#networkradiation-section) or `RadiationProps`, or per reaction in `jaffgen.toml` / [`jaff.toml`](../working-with-networks/jaff-toml.md#custom-photo-cross-sections)) ignores the function and uses the database cross section instead. A per-reaction value applies with or without radiation. A `.jaff` file stores the custom cross section, so it survives a reload without the `.jfunc`.
+Setting `override_custom_cross_section = true` (globally in [`jaffgen.toml`](../configuration/reference.md#networkradiation) or `RadiationProps`, or per reaction in `jaffgen.toml` / [`jaff.toml`](../configuration/reference.md#networkreactionsphoto)) ignores the function and uses the database cross section instead. A per-reaction value applies with or without radiation. A `.jaff` file stores the custom cross section, so it survives a reload without the `.jfunc`.
 
 ### Spectral yield — `spectralYield<N>`
 
@@ -386,11 +386,11 @@ $$
 \langle\alpha\rangle_i = \frac{\int_\text{group} \alpha(E)\, w(E)\, dE}{\int_\text{group} w(E)\, dE}
 $$
 
-with $w(E) = E\,n(E)$ in `"u"` mode (the energy density loses each photon's energy) and $w(E) = n(E)$ in `"nph"` mode (the photon density loses photons). The averages are stored on `group.absorption_coefficient` (with `n_X` symbols resolved to the species densities) and the spectrum on `net.radiation.absorption_coefficient`. Absorption removes radiation from every direction in proportion to the intensity, so it also attenuates the flux $F_i$ (`rflux[i]`), with the same $\langle\alpha\rangle_i$. Set `absorption_attenuates_flux = false` (in `[network.radiation]` of [`jaffgen.toml`](../code-generation/jaffgen-toml.md#networkradiation-section), or `RadiationProps(..., absorption_attenuates_flux=False)`) to apply it to the density equations only. Other symbols such as `tgas` stay symbolic, which needs a closed-form integral over every group (else `ValueError`). Without radiation it has no effect. A `.jaff` file stores it.
+with $w(E) = E\,n(E)$ in `"u"` mode (the energy density loses each photon's energy) and $w(E) = n(E)$ in `"nph"` mode (the photon density loses photons). The averages are stored on `group.absorption_coefficient` (with `n_X` symbols resolved to the species densities) and the spectrum on `net.radiation.absorption_coefficient`. Absorption removes radiation from every direction in proportion to the intensity, so it also attenuates the flux $F_i$ (`rflux[i]`), with the same $\langle\alpha\rangle_i$. Set `absorption_attenuates_flux = false` (in `[network.radiation]` of [`jaffgen.toml`](../configuration/reference.md#networkradiation), or `RadiationProps(..., absorption_attenuates_flux=False)`) to apply it to the density equations only. Other symbols such as `tgas` stay symbolic, which needs a closed-form integral over every group (else `ValueError`). Without radiation it has no effect. A `.jaff` file stores it.
 
 <!-- prettier-ignore -->
 !!! warning "Dust module"
-    With the [dust module](../code-generation/jaffgen-toml.md#networkdust-section) enabled, dust absorption is already applied to the radiation field. Do not put a dust opacity in `globalAbsorptionCoefficient` as well, or dust absorbs twice.
+    With the [dust module](../configuration/reference.md#networkdust) enabled, dust absorption is already applied to the radiation field. Do not put a dust opacity in `globalAbsorptionCoefficient` as well, or dust absorbs twice.
 
 ---
 

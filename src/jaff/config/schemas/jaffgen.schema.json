@@ -144,7 +144,7 @@
             }
           ],
           "default": null,
-          "description": "Output directory; `None` uses the default output directory.",
+          "description": "Output directory; without it, `<repo_root>/generated`.",
           "title": "Output Dir"
         },
         "network_file": {
@@ -243,7 +243,7 @@
             }
           ],
           "default": null,
-          "description": "Human-readable network name; `None` uses the network file stem.",
+          "description": "Human-readable network name; without it, the network file stem.",
           "title": "Label"
         },
         "strict": {
@@ -263,7 +263,7 @@
             }
           ],
           "default": true,
-          "description": "`.jfunc` auxiliary file: `True` looks next to the network file, `False` loads none, a path names it.",
+          "description": "`.jfunc` auxiliary file: `true` looks next to the network file, `false` loads none, a path names it.",
           "title": "Funcfile"
         },
         "expand_nuclei": {
@@ -298,7 +298,7 @@
             }
           ],
           "default": null,
-          "description": "Radiation field; `None` disables radiation."
+          "description": "Radiation field; the table enables radiation."
         },
         "dust": {
           "anyOf": [
@@ -310,7 +310,7 @@
             }
           ],
           "default": null,
-          "description": "Dust; `None` disables the dust module."
+          "description": "Dust; the table enables the dust module."
         },
         "thermodynamics": {
           "$ref": "#/$defs/ThermodynamicsConfig",
@@ -397,7 +397,7 @@
             }
           ],
           "default": null,
-          "description": "Line shielding of the rate; `None` globally means no shielding."
+          "description": "Line shielding of the rate; without it, the rate is not shielded."
         }
       },
       "title": "PhotoConfig",
@@ -568,10 +568,11 @@
     },
     "ReactionsConfig": {
       "additionalProperties": false,
-      "description": "Settings of every reaction (`[network.reactions]`).\n\nHolds the same keys as `ReactionConfig`, with concrete defaults,\nplus the per-reaction entries.",
+      "description": "Settings of the reactions (`[network.reactions]`).\n\nEach key applies to every reaction, unless a reaction's own table\n(`reaction.\"<serialized>\"`) sets it.",
       "properties": {
         "duplicate_policy": {
           "default": "preserve-first",
+          "description": "How two rate coefficients over the same temperature range are resolved: `\"preserve-first\"`, `\"preserve-last\"` or `\"error\"`.",
           "enum": [
             "preserve-first",
             "preserve-last",
@@ -582,6 +583,7 @@
         },
         "t_cutoff": {
           "default": "clip",
+          "description": "Rate behaviour outside the temperature range: `\"clip\"` or `\"extrapolate\"`.",
           "enum": [
             "clip",
             "extrapolate"
@@ -597,14 +599,15 @@
             "override_custom_cross_section": false,
             "use_proxy_photoreaction": true,
             "shielding": null
-          }
+          },
+          "description": "Photo-reaction settings."
         },
         "reaction": {
           "additionalProperties": {
             "$ref": "#/$defs/ReactionConfig"
           },
           "default": {},
-          "description": "Per-reaction settings keyed by serialized reaction; a key set here wins over the global one (see `resolve`).",
+          "description": "Per-reaction settings keyed by serialized reaction; a key set there wins over the same key here.",
           "title": "Reaction",
           "type": "object"
         }
@@ -688,7 +691,7 @@
               "const": "leiden"
             },
             "shielded_by": {
-              "description": "Shielding species (`LeidenSpecies`); their factors multiply.",
+              "description": "Shielding species, `\"self\"` being the reaction's own reactant; their factors multiply.",
               "items": {
                 "enum": [
                   "H2",
@@ -705,7 +708,7 @@
             },
             "radiation": {
               "default": "isrf",
-              "description": "Radiation-field subgroup of the Leiden table, lower-cased.",
+              "description": "Radiation-field subgroup of the Leiden table (case-insensitive).",
               "title": "Radiation",
               "type": "string"
             }
