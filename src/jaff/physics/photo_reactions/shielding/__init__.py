@@ -42,4 +42,7 @@ def _get_shielding_function(name: str, reaction: str | None):
     return _REGISTER[key]
 
 
-__all__ = [_register, ShieldingFunction]
+__all__ = [
+    "_register",
+    "ShieldingFunction",
+]

@@ -13,7 +13,5 @@ __all__ = [
     "NetworkSpec",
     "RecombinationReport",
     "SinkSourceReport",
-    "Network",
-    "NetworkSpec",
     "NetworkSymbols",
 ]

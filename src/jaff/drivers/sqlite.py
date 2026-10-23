@@ -751,11 +751,7 @@ class JaffDb(Db):
             table = db.table("verner_cross_sections")
             rows = table.all_rows()
 
-    Parameters
-    ----------
-    None
-        The database path is resolved automatically from the package
-        directory.
+    The database path is resolved automatically from the package directory.
     """
 
     def __init__(self):
