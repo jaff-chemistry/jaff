@@ -202,7 +202,7 @@ def to_jaff_file(filename: str | Path, net: "Network"):
                 "rate": encode_maybe_sympy(r.rate_coefficient),
                 "tmin": r.tmin,
                 "tmax": r.tmax,
-                "t_cutoff": r.t_cutoff,
+                "t_cutoff": r.config.t_cutoff,
                 "rate_segments": [
                     {
                         "rate": encode_maybe_sympy(s.rate),
@@ -217,14 +217,10 @@ def to_jaff_file(filename: str | Path, net: "Network"):
                 "index": r.index,
                 "type": r.type,
                 "format": r._format,
-                "pi_database": r.photo.pi_database if r.photo is not None else None,
+                "pi_database": _photo_setting(r, "pi_database"),
                 "xsecs": _encode_custom_xsec_props(r, encode_maybe_sympy),
                 "spectral_yield": encode_maybe_sympy(r.rad.spectral_yield),
-                "shielding": (
-                    {"type": r.photo.shielding.type, "props": r.photo.shielding.props}
-                    if r.photo is not None and r.photo.shielding is not None
-                    else None
-                ),
+                "shielding": _encode_shielding(r),
             }
             for r in net.reactions
         ],
@@ -239,6 +235,23 @@ def to_jaff_file(filename: str | Path, net: "Network"):
 
     with gzip.open(filename, "wt", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, sort_keys=True)
+
+
+def _photo_setting(reaction: Reaction, name: str) -> Any:
+    """A photo reaction's resolved ``config.photo`` setting; ``None`` otherwise."""
+    if reaction.photo is None or reaction.config.photo is None:
+        return None
+
+    return getattr(reaction.config.photo, name)
+
+
+def _encode_shielding(reaction: Reaction) -> dict[str, Any] | None:
+    """A photo reaction's shielding as ``{"type", "props"}``, or ``None``."""
+    shielding = _photo_setting(reaction, "shielding")
+    if shielding is None:
+        return None
+
+    return {"type": shielding.type, "props": dict(shielding.params)}
 
 
 def _encode_custom_xsec_props(

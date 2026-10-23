@@ -159,6 +159,21 @@ def _resolved_shielding(cfg: ReactionsConfig, serialized: str):
     return photo.shielding
 
 
+class TestOwn:
+    def test_returns_the_reaction_entry(self):
+        cfg = ReactionsConfig.model_validate(
+            {"reaction": {CO_KEY: {"photo": {"pi_database": "verner"}}}}
+        )
+
+        own = cfg.own(CO_KEY)
+
+        assert own is not None and own.photo is not None
+        assert own.photo.pi_database == "verner"
+
+    def test_none_without_entry(self):
+        assert ReactionsConfig().own(CO_KEY) is None
+
+
 class TestShieldingConfig:
     def test_flat_table_splits_type_from_params(self):
         cfg = ShieldingConfig.model_validate({"type": "Leiden", "shielded_by": ["self"]})

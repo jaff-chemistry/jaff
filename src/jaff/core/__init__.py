@@ -46,7 +46,6 @@ from .reaction import (
     PhotoReactionProps,
     Reaction,
     Reactions,
-    ShieldingProps,
 )
 from .species import Specie, Species
 
@@ -67,5 +66,4 @@ __all__ = [
     "ReactionProps",
     "NetworkSymbols",
     "PhotoReactionProps",
-    "ShieldingProps",
 ]

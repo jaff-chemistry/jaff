@@ -60,8 +60,8 @@ class TestGlobalFlag:
 
 
 class TestPerReaction:
-    def test_defaults_to_none(self, custom_network):
-        assert _photo(custom_network()).photo.override_custom_rate is None
+    def test_defaults_to_global(self, custom_network):
+        assert _photo(custom_network()).config.photo.override_custom_rate is False
 
     def test_jaff_toml_override_beats_global(self, custom_network, tmp_path):
         cfg = tmp_path / "jaff.toml"
@@ -72,7 +72,7 @@ class TestPerReaction:
             custom_network(config=str(cfg), radiation=RadiationConfig(bands=BANDS))
         )
 
-        assert rxn.photo.override_custom_rate is True
+        assert rxn.config.photo.override_custom_rate is True
         assert rxn.photo.custom_rad_rate is False
 
     def test_jaffgen_override_beats_jaff_toml(self, custom_network, tmp_path):
@@ -84,7 +84,7 @@ class TestPerReaction:
         jaffgen = {"network": {"reactions": {"reaction": {KEY: own}}}}
         rxn = _photo(custom_network(config=[str(cfg), jaffgen]))
 
-        assert rxn.photo.override_custom_rate is True
+        assert rxn.config.photo.override_custom_rate is True
 
     def test_non_photo_reaction_raises(self, make_network, tmp_path):
         cfg = tmp_path / "jaff.toml"

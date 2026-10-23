@@ -212,7 +212,7 @@ class TestNetworkParsers:
             # boundary value under the default "clip" cutoff, i.e. it is wrapped
             # in a Piecewise.
             rate = reaction.rate_coefficient
-            if tgas in rate.free_symbols and reaction.t_cutoff == "clip":
+            if tgas in rate.free_symbols and reaction.config.t_cutoff == "clip":
                 if reaction.tmin is not None or reaction.tmax is not None:
                     assert rate.has(Piecewise)
 

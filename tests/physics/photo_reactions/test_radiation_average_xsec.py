@@ -11,7 +11,7 @@ import sympy as sp
 from jaff.core.reaction import PhotoReactionProps
 from jaff.physics.photo_reactions.config import RadiationConfig
 from jaff.physics.photo_reactions._radiation import Radiation
-from tests.xsec_props import make_xsec_props
+from tests.xsec_props import default_reaction_config, make_xsec_props
 
 BANDS = [1.0, 2.0, 3.0]
 
@@ -73,7 +73,9 @@ def test_tabulated_profile_built_once_per_reaction():
     xsec = make_xsec_props(
         absorption=True, photon_energy=energy, photo_absorption=sigma, photodecay=sigma
     )
-    rxn = SimpleNamespace(photo=PhotoReactionProps(xsec=xsec))
+    rxn = SimpleNamespace(
+        photo=PhotoReactionProps(xsec=xsec), config=default_reaction_config()
+    )
 
     with patch.object(
         rad, "get_photden_profile", wraps=rad.get_photden_profile
@@ -95,7 +97,9 @@ def _linear_reaction():
     sigma, energy = _tabulated(lambda e: 1e-18 * e)
     xsec = make_xsec_props(photon_energy=energy, photodecay=sigma)
 
-    return SimpleNamespace(photo=PhotoReactionProps(xsec=xsec))
+    return SimpleNamespace(
+        photo=PhotoReactionProps(xsec=xsec), config=default_reaction_config()
+    )
 
 
 def test_energy_weighted_group_average():

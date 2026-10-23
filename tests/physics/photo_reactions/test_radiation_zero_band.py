@@ -11,7 +11,7 @@ import sympy as sp
 from jaff.core.reaction import PhotoReactionProps
 from jaff.physics.photo_reactions.config import RadiationConfig
 from jaff.physics.photo_reactions._radiation import Radiation
-from tests.xsec_props import make_xsec_props
+from tests.xsec_props import default_reaction_config, make_xsec_props
 
 
 class _Reaction:
@@ -19,6 +19,7 @@ class _Reaction:
 
     def __init__(self, energies, absorption, decay):
         E = np.array(energies, dtype=float)
+        self.config = default_reaction_config()
         self.photo = PhotoReactionProps(
             xsec=make_xsec_props(
                 absorption=True,

@@ -68,6 +68,7 @@ from ...io import JaffLogger
 from ..elements import Elements
 from ..species import Specie, Species
 from ._helper import to_float_or_none
+from .config import PhotoConfig, ReactionConfig
 from .reaction_props import (
     AuxFunctions,
     PhotoReactionProps,
@@ -89,11 +90,10 @@ class Reaction:
     temperature bounds, energy change and radiation terms.  Reactions are
     normally built by :class:`~jaff.core.Network` while it parses a network
     file and are reached through ``net.reactions`` (a :class:`Reactions`
-    catalogue).  Per-reaction settings (``t_cutoff``, photo-reaction options,
-    shielding) come from the network config: the global
-    ``[network.reactions]`` table with any
-    ``[network.reactions.reaction."<serialized>"]`` entry applied over it
-    (see :meth:`~jaff.core.reaction.config.ReactionsConfig.resolve`).
+    catalogue).  Its settings (``t_cutoff``, photo-reaction options,
+    shielding) are :attr:`config`: the global ``[network.reactions]`` table
+    with any ``[network.reactions.reaction."<serialized>"]`` entry applied over
+    it (see :meth:`~jaff.core.reaction.config.ReactionsConfig.resolve`).
 
     Attributes
     ----------
@@ -120,11 +120,13 @@ class Reaction:
     tmax : float or None
         Maximum gas temperature at which the rate is valid (Kelvin).
         ``None`` means no upper bound.
-    t_cutoff : str
-        Out-of-range behaviour for the rate segment(s): ``"clip"`` holds the
-        boundary value, ``"extrapolate"`` lets the outermost segment extend
-        unbounded.  Set from the ``t_cutoff`` reaction config key.  See
-        :class:`~jaff.core.reaction.types.RateSegments`.
+    config : ReactionConfig
+        The reaction's resolved settings, every key set: ``t_cutoff``
+        (out-of-range behaviour of the rate segments, see
+        :class:`~jaff.core.reaction.types.RateSegments`), ``duplicate_policy``
+        and ``photo`` (``pi_database``, ``override_custom_rate``,
+        ``override_custom_cross_section``, ``use_proxy_photoreaction``,
+        ``shielding``).  Read-only.
     rate_segments : RateSegments
         Per-temperature-range rate pieces.  A single-range reaction holds one
         segment; reactions merged across disjoint ranges accumulate several,
@@ -166,15 +168,13 @@ class Reaction:
         each species (isomer-insensitive comparison); see
         :meth:`serialize_exploded`.
     photo : PhotoReactionProps or None
-        Photo-reaction state, ``None`` for non-photo reactions: ``xsec``
-        (cross sections of the single decay channel, an
-        :class:`~jaff.physics.XsecProps`), ``pi_database`` (per-reaction
-        photoionization database override), ``override_custom_rate`` /
-        ``override_custom_cross_section`` (per-reaction overrides of the
-        global flags), ``custom_rad_rate`` (rate supplied by a ``.jfunc`` aux
-        function), ``rgrouped`` (per-band data; see :attr:`band_xsecs`) and
-        ``shielding``; the spectrum-averaged cross section is ``xsec.total``
-        (cm²).  See :class:`PhotoReactionProps`.
+        Computed photo-reaction state, ``None`` for non-photo reactions:
+        ``xsec`` (cross sections of the single decay channel, an
+        :class:`~jaff.physics.XsecProps`), ``custom_rad_rate`` (rate supplied
+        by a ``.jfunc`` aux function), ``rgrouped`` (per-band data; see
+        :attr:`band_xsecs`) and ``shielding_tables``; the spectrum-averaged
+        cross section is ``xsec.total`` (cm²).  The photo settings are
+        ``config.photo``.  See :class:`PhotoReactionProps`.
     rad : ReactionRadiationProps
         Radiation the reaction emits: ``spectral_yield`` (from a ``.jfunc``
         ``spectralYield<N>`` function, erg eV⁻¹ per event as a function of
@@ -221,7 +221,7 @@ class Reaction:
         original_string: str,
         index: int,
         dE: Expr | None = None,
-        t_cutoff: str = "clip",
+        config: ReactionConfig | None = None,
         type: str = "unknown",
         photo: PhotoReactionProps | None = None,
         rad: ReactionRadiationProps | None = None,
@@ -255,9 +255,11 @@ class Reaction:
             Energy change per event (erg).  A ``.jfunc`` ``deltaE<N>``
             function takes precedence; ``None`` (default) without one means
             zero.
-        t_cutoff : str, optional
-            Out-of-range behaviour for the initial rate segment (``"clip"`` by
-            default); see the :attr:`t_cutoff` attribute.
+        config : ReactionConfig or None, optional
+            The reaction's resolved settings (see the :attr:`config`
+            attribute); :class:`~jaff.core.Network` passes
+            ``net.config.reactions.resolve(serialized)``.  ``None`` (default)
+            uses the network's.
         type : str, optional
             Reaction type as concluded by the network-format parser (e.g.
             ``"photo"``, ``"cosmic_ray"``, ``"3_body"``, ``"unknown"``, or a
@@ -297,9 +299,14 @@ class Reaction:
         self.rate_coefficient = rate_coefficient
         self.tmin: float | None = tmin
         self.tmax: float | None = tmax
-        self.t_cutoff: str = t_cutoff
+        self.serialized: str = self.serialize(self.reactants, self.products)
+        self.config: ReactionConfig = (
+            config
+            if config is not None
+            else self.net.config.reactions.resolve(self.serialized)
+        )
         self.rate_segments: RateSegments = RateSegments(
-            [RateSegment(rate_coefficient, tmin, tmax)], t_cutoff
+            [RateSegment(rate_coefficient, tmin, tmax)], self.__t_cutoff()
         )
         self.dE: Expr = (
             cast(Expr, self.aux_funcs.deltae.expr)
@@ -324,7 +331,6 @@ class Reaction:
 
         self.check(self.net.spec.strict)
         self.serialized_exploded: str = self.serialize_exploded()
-        self.serialized: str = self.serialize(self.reactants, self.products)
         # The reaction type is concluded by the parser and supplied here, not
         # inferred from the rate expression.
         self.type: str = type
@@ -436,41 +442,42 @@ class Reaction:
             spectralyield=af.get(f"spectralyield{self.index}", None),
         )
 
+    def __t_cutoff(self) -> str:
+        """The resolved ``t_cutoff`` (always set once resolved)."""
+        t_cutoff = self.config.t_cutoff
+        assert t_cutoff is not None, f"{self}: unresolved config"
+
+        return t_cutoff
+
+    def __photo_config(self) -> PhotoConfig:
+        """The resolved photo settings (always set once resolved)."""
+        photo = self.config.photo
+        assert photo is not None, f"{self}: unresolved config"
+
+        return photo
+
     def __overrides_custom_rate(self) -> bool:
         """Whether radiation recomputes this photo reaction's ``chemRate`` rate.
 
-        The reaction's own ``override_custom_rate`` wins over the global
-        ``network.reactions.photo.override_custom_rate``; without radiation
+        From the resolved ``photo.override_custom_rate``; without radiation
         there is no cross-section rate to use, so the ``chemRate`` is always
         kept.
         """
-        assert self.photo is not None
-
-        rad = self.net.radiation
-        if rad is None:
+        if self.net.radiation is None:
             return False
 
-        if self.photo.override_custom_rate is not None:
-            return self.photo.override_custom_rate
-
-        return bool(self.net.config.reactions.photo.override_custom_rate)
+        return bool(self.__photo_config().override_custom_rate)
 
     def __overrides_custom_cross_section(self) -> bool:
         """Whether this photo reaction ignores its ``photoCrossSection``.
 
-        The reaction's own ``override_custom_cross_section`` wins over the
-        global ``network.reactions.photo.override_custom_cross_section``
-        (``False`` without radiation).
+        From the resolved ``photo.override_custom_cross_section``; like
+        ``override_custom_rate``, it has no effect without radiation.
         """
-        assert self.photo is not None
-
-        if self.photo.override_custom_cross_section is not None:
-            return self.photo.override_custom_cross_section
-
         if self.net.radiation is None:
             return False
 
-        return bool(self.net.config.reactions.photo.override_custom_cross_section)
+        return bool(self.__photo_config().override_custom_cross_section)
 
     def __set_xsec_props(self):
         from ...physics import Photochemistry
@@ -482,7 +489,8 @@ class Reaction:
 
         custom = self.aux_funcs.photocrosssection
         if custom is not None and not self.__overrides_custom_cross_section():
-            if self.photo.pi_database is not None:
+            own = self.net.config.reactions.own(self.serialized)
+            if own is not None and own.photo is not None and own.photo.pi_database:
                 raise ParserError(
                     f"pi_database cannot be set for {self}: its cross section comes "
                     "from a photoCrossSection function"

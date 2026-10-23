@@ -150,11 +150,11 @@ def leiden_network(make_network):
 
 class TestLeidenTables:
     def test_table_is_kept_on_the_reaction(self, leiden_network):
-        shielding = leiden_network.reactions[CO_KEY, "photo"].photo.shielding
+        tables = leiden_network.reactions[CO_KEY, "photo"].photo.shielding_tables
 
-        (name,) = shielding.tables
+        (name,) = tables
         assert name == f"shielding_{CO_KEY}.hdf5"
-        assert {"N", "self", "H2"} <= set(shielding.tables[name])
+        assert {"N", "self", "H2"} <= set(tables[name])
 
     def test_network_writes_the_tables(self, leiden_network, tmp_path):
         written = leiden_network.write_shielding_tables(tmp_path)

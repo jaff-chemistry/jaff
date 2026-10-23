@@ -19,7 +19,7 @@ src/jaff/
 │   │   └── config.py           # NetworkConfig ([network]), JaffTomlConfig, load_network_config
 │   ├── reaction/               # reaction.py (Reaction) · reactions.py (Reactions)
 │   │   ├── reaction_props.py   # PhotoReactionProps, GroupedPhotoReactionProps,
-│   │   │                       #   ReactionRadiationProps, ShieldingProps, AuxFunctions
+│   │   │                       #   ReactionRadiationProps, AuxFunctions
 │   │   ├── config.py           # [network.reactions] models (ReactionConfig, PhotoConfig, ...)
 │   │   ├── _helper.py          # to_float_or_none
 │   │   └── types/              # RateSegment / RateSegments (rate per temperature range)
@@ -50,7 +50,7 @@ src/jaff/
 │   │   ├── _radiation.py       # Radiation / RadiationGroup — radiation moment equations
 │   │   ├── background_field.py # BackgroundField — tabulated reference radiation fields
 │   │   ├── config.py           # RadiationConfig ([network.radiation])
-│   │   └── shielding/          # Shielding-function registry (@_register, by photo.shielding.type)
+│   │   └── shielding/          # Shielding-function registry (@_register, by config.photo.shielding.type)
 │   │       ├── _base.py        # ShieldingFunction ABC (name, reaction, config_model, params)
 │   │       ├── config.py       # ShieldingConfig, ShieldingParams (plugin settings base)
 │   │       ├── global_/        # Global models, reaction=None (e.g. leiden.py)

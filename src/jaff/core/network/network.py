@@ -37,7 +37,7 @@ from sympy import (
 )
 
 from ...common import is_jaff_file, load_mass_dict, print_motd, resolve_dependencies
-from ...config.base import ConfigModel, dotted
+from ...config.base import ConfigModel, dotted, overlay
 from ...drivers import HDF5
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
@@ -53,7 +53,6 @@ from ...physics import (
 )
 from ...physics.dust.config import DustConfig
 from ...physics.photo_reactions.config import RadiationConfig
-from ...physics.photo_reactions.shielding.config import ShieldingConfig
 from ...physics.thermodynamics.config import ThermodynamicsConfig
 from ..elements import Elements
 from ..parsers import NetworkParser
@@ -64,9 +63,8 @@ from ..reaction import (
     Reaction,
     ReactionRadiationProps,
     Reactions,
-    ShieldingProps,
 )
-from ..reaction.config import ReactionsConfig
+from ..reaction.config import ReactionConfig, ReactionsConfig
 from ..species import Specie, Species
 from ._spec import NetworkSpec
 from ._symbols import NetworkSymbols
@@ -74,6 +72,7 @@ from .config import ConfigLayer, NetworkConfig, load_network_config
 
 if TYPE_CHECKING:
     from .._typing import ElementProps
+    from .._typing._reaction import ReactionProps
     from ..parsers.auxiliary_func import AuxiliaryFunctionProps
     from ..parsers.network._formats import Parser
 
@@ -121,14 +120,6 @@ def _section(value: Any) -> Any:
         return {key: _section(item) for key, item in value.items()}
 
     return value
-
-
-def _shielding_props(shielding: ShieldingConfig | None) -> ShieldingProps | None:
-    """Return the reaction's :class:`ShieldingProps` from its shielding config."""
-    if shielding is None:
-        return None
-
-    return ShieldingProps(type=shielding.type, props=dict(shielding.params))
 
 
 @dataclass(frozen=True)
@@ -565,9 +556,8 @@ class Network:
                 rea.rate_segments.add(RateSegment(rate_expr, tmin, tmax))
                 continue
 
-            # The reaction's own photo settings; unset ones fall back to the
-            # global ones where they are used.
-            entry = reactions_config.reaction.get(srxn)
+            # Photo settings set for a reaction that is not a photo reaction.
+            entry = reactions_config.own(srxn)
             own_photo = entry.photo if entry is not None else None
             if own_photo is not None and rtype != "photo":
                 keys = ", ".join(sorted(own_photo.model_fields_set))
@@ -583,19 +573,8 @@ class Network:
                 original_string=reaction["string"],
                 index=si,
                 type=rtype,
-                t_cutoff=settings.t_cutoff,
-                photo=PhotoReactionProps(
-                    pi_database=own_photo.pi_database if own_photo else None,
-                    override_custom_rate=(
-                        own_photo.override_custom_rate if own_photo else None
-                    ),
-                    override_custom_cross_section=(
-                        own_photo.override_custom_cross_section if own_photo else None
-                    ),
-                    shielding=_shielding_props(settings.photo.shielding),
-                )
-                if rtype == "photo"
-                else None,
+                config=settings,
+                photo=PhotoReactionProps() if rtype == "photo" else None,
                 format=reaction.get("format"),
                 metadata=reaction.get("metadata"),
             )
@@ -624,7 +603,6 @@ class Network:
 
         for i, reaction in enumerate(jaff_props["reactions"]):
             rtype = reaction.get("reaction_type", "unknown")
-            shielding = reaction.get("shielding")
 
             rea = Reaction(
                 self,
@@ -634,16 +612,14 @@ class Network:
                 dE=reaction["dE"],
                 tmin=reaction["tmin"],
                 tmax=reaction["tmax"],
-                t_cutoff=reaction.get("t_cutoff", "clip"),
+                config=self.__jaff_reaction_config(reaction),
                 original_string=reaction["original_string"],
                 index=reaction.get("index", i),
                 type=rtype,
                 format=reaction.get("format"),
                 photo=PhotoReactionProps(
                     xsec=reaction.get("xsec_props"),
-                    pi_database=reaction.get("pi_database"),
                     custom_rad_rate=bool(reaction.get("custom_rad_rate")),
-                    shielding=ShieldingProps(**shielding) if shielding else None,
                 )
                 if rtype == "photo"
                 else None,
@@ -654,12 +630,34 @@ class Network:
             if segments:
                 rea.rate_segments = RateSegments(
                     [RateSegment(s["rate"], s["tmin"], s["tmax"]) for s in segments],
-                    rea.t_cutoff,
+                    rea.rate_segments.mode,
                 )
             self.reactions.add(rea)
 
         if self._photochemistry is not None:
             self._photochemistry.log_fallback_summary()
+
+    def __jaff_reaction_config(self, reaction: ReactionProps) -> ReactionConfig:
+        """Return a ``.jaff`` reaction's settings: the network's, with the stored ones.
+
+        The settings stored in the file (``t_cutoff``, ``pi_database``,
+        ``shielding``) are applied over the reaction's resolved config, as its
+        own entry would be.
+        """
+        rr, pp = reaction["reactants"], reaction["products"]
+        resolved = self.config.reactions.resolve(Reaction.serialize(rr, pp))
+        photo: Dict[str, Any] = {}
+        if reaction.get("pi_database") is not None:
+            photo["pi_database"] = reaction["pi_database"]
+        shielding = reaction.get("shielding")
+        if shielding:
+            photo["shielding"] = {"type": shielding["type"], **shielding["props"]}
+
+        stored: Dict[str, Any] = {"photo": photo} if photo else {}
+        if reaction.get("t_cutoff") is not None:
+            stored["t_cutoff"] = reaction["t_cutoff"]
+
+        return overlay(resolved, ReactionConfig.model_validate(stored))
 
     def __check_reaction_settings(self) -> None:
         """Check every per-reaction config entry names a reaction of the network.
@@ -848,7 +846,7 @@ class Network:
         """Write the data tables of the reactions' shielding models into *directory*.
 
         Models such as Leiden shielding build a per-reaction table the
-        generated code interpolates over (``photo.shielding.tables``).
+        generated code interpolates over (``photo.shielding_tables``).
 
         Parameters
         ----------
@@ -862,11 +860,8 @@ class Network:
         """
         written: list[Path] = []
         for reaction in self.reactions:
-            shielding = reaction.photo.shielding if reaction.photo is not None else None
-            if shielding is None:
-                continue
-
-            for name, table in shielding.tables.items():
+            tables = reaction.photo.shielding_tables if reaction.photo is not None else {}
+            for name, table in tables.items():
                 path = Path(directory) / name
                 HDF5().from_dict(str(path), table, mode="w")
                 written.append(path)

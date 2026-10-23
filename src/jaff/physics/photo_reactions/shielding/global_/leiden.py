@@ -6,7 +6,7 @@ Builds the shielding factor for a photo-reaction from the collapsed Leiden
 shielding tables (``data/shielding/leiden.hdf5``, one group per reaction).  For
 each requested shielding species the column-density grid (``N``) and the
 shielding-factor column are extracted into a per-reaction table, kept on the
-reaction (``photo.shielding.tables``) and written out as
+reaction (``photo.shielding_tables``) and written out as
 ``shielding_<reaction>.hdf5`` by
 :meth:`~jaff.core.network.Network.write_shielding_tables` (``jaffgen`` writes it
 to the output directory).  The total factor is the product of one
@@ -84,7 +84,7 @@ class Leiden(ShieldingFunction):
         Extracts the column-density grid and one shielding-factor column per
         species in the ``shielded_by`` setting from
         ``data/shielding/leiden.hdf5``, keeps them on the reaction as its
-        ``shielding_<reaction>.hdf5`` table (``photo.shielding.tables``), and
+        ``shielding_<reaction>.hdf5`` table (``photo.shielding_tables``), and
         returns the product of one
         ``interp_<index>_shielding_<species>(ncol_<species>)`` interpolation
         call per shielding species.
@@ -115,8 +115,8 @@ class Leiden(ShieldingFunction):
         h5dict = {**ncol, **shielding_table}
 
         # Keep the per-reaction table the generated code interpolates over.
-        assert reaction.photo is not None and reaction.photo.shielding is not None
-        tables = reaction.photo.shielding.tables
+        assert reaction.photo is not None
+        tables = reaction.photo.shielding_tables
         tables[f"shielding_{reaction.serialized}.hdf5"] = h5dict
 
         # Total factor = product of one interpolation call per shielding species.

@@ -66,7 +66,7 @@ class TestTemperatureLimits:
             0
         ]
         assert tgas in rea.rate_coefficient.free_symbols
-        assert rea.t_cutoff == "clip"
+        assert rea.config.t_cutoff == "clip"
         assert rea.rate_coefficient.has(Piecewise)
 
 

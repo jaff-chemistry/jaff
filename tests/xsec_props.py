@@ -6,6 +6,7 @@ from typing import Literal, Optional
 import numpy as np
 from sympy import Expr
 
+from jaff.core.reaction.config import ReactionConfig, ReactionsConfig
 from jaff.physics.photo_reactions._photochemistry import (
     XsecProcess,
     XsecProps,
@@ -46,3 +47,8 @@ def make_xsec_props(
         photodecay=photodecay,
         photodecay_expr=photodecay_expr,
     )
+
+
+def default_reaction_config() -> ReactionConfig:
+    """Resolved default reaction settings (unshielded), for reaction stand-ins."""
+    return ReactionsConfig().resolve("stand-in")

@@ -135,6 +135,26 @@ class ReactionsConfig(ReactionConfig):
 
         return self
 
+    def own(self, serialized: str) -> ReactionConfig | None:
+        """Return the reaction's own entry: only the keys set for it.
+
+        Use :meth:`resolve` for the reaction's settings; this tells a key set
+        for the reaction apart from the global value (e.g. a ``pi_database``
+        that cannot apply to it is an error only when set on the reaction).
+
+        Parameters
+        ----------
+        serialized : str
+            Serialized reaction (e.g. ``"H+.e-__H"``).
+
+        Returns
+        -------
+        ReactionConfig or None
+            The ``[network.reactions.reaction."<serialized>"]`` entry, or
+            ``None`` when the reaction has none.
+        """
+        return self.reaction.get(serialized)
+
     def resolve(self, serialized: str) -> ReactionConfig:
         """Return the settings of one reaction, every key set.
 

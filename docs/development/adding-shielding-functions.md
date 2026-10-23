@@ -41,9 +41,10 @@ shielding = { type = "hg2015", min_ncol = 1.0e-35 }
    An unknown type, a model bound to another reaction or a bad setting is a
    config error naming the key path. A global `[network.reactions.photo]`
    shielding table may only use global models.
-2. **When the network is built**, the photo reaction stores the table as
-   `reaction.photo.shielding`, a `ShieldingProps` with `.type`, the settings in
-   `.props` and an empty `.tables`.
+2. **When the network is built**, the photo reaction's resolved settings
+   (`reaction.config`) hold the table as `reaction.config.photo.shielding`, a
+   `ShieldingConfig` with `.type` and the settings in `.params`; the reaction
+   starts with an empty `reaction.photo.shielding_tables`.
 3. **When its rate is computed**, `Photochemistry.shielding`
    (`physics/photo_reactions/_photochemistry.py`) resolves the model the same
    way and calls its `get_shielding` **once per reaction**; the returned
@@ -57,7 +58,7 @@ flowchart TD
     D --> E[instance.get_shielding\nreaction, network]
     E --> F[Returned sympy.Expr\nevaluated once per reaction]
     F --> G[Multiplied into each\nband's rate coefficient]
-    E -.-> H[optional data tables\nreaction.photo.shielding.tables]
+    E -.-> H[optional data tables\nreaction.photo.shielding_tables]
     H -.-> I[Network.write_shielding_tables\njaffgen writes them to its output]
 ```
 
@@ -117,8 +118,8 @@ class MyModel(ShieldingFunction):
 | `name`           | Shielding type keyword, matched case-insensitively against the table's `type`.                            |
 | `reaction`       | Serialized reaction this model is bound to (local), or `None` for a global model.                         |
 | `config_model()` | Static method returning the model of its settings, a `ShieldingParams` subclass. Default: no settings.    |
-| `params(reaction)` | Validates `reaction.photo.shielding.props` against `config_model()` and returns the typed settings.     |
-| `get_shielding`  | Returns the dimensionless `sympy.Expr`; may store data tables on `reaction.photo.shielding.tables`.      |
+| `params(reaction)` | Validates `reaction.config.photo.shielding.params` against `config_model()` and returns the typed settings. |
+| `get_shielding`  | Returns the dimensionless `sympy.Expr`; may store data tables in `reaction.photo.shielding_tables`.      |
 
 **Settings.** The `ShieldingParams` subclass is a regular
 [config model](adding-configuration.md): it rejects unknown keys, is strict about
@@ -140,7 +141,7 @@ resolves at runtime, by convention:
 Leiden's) puts the table on the reaction instead of writing a file:
 
 ```python
-tables = reaction.photo.shielding.tables
+tables = reaction.photo.shielding_tables
 tables[f"shielding_{reaction.serialized}.hdf5"] = h5dict
 ```
 
@@ -261,7 +262,7 @@ shielding = { type = "leiden", radiation = "isrf", shielded_by = ["self", "H2"] 
 See `shielding/global_/leiden.py` for a full example: its `LeidenParams`
 restricts `shielded_by` to the species the Leiden tables hold, and
 `get_shielding` builds one interpolation call per shielding species and keeps
-the per-reaction table in `reaction.photo.shielding.tables`.
+the per-reaction table in `reaction.photo.shielding_tables`.
 
 ## Checklist
 
@@ -277,7 +278,7 @@ the per-reaction table in `reaction.photo.shielding.tables`.
 - [x] `get_shielding(self, reaction, network) -> sympy.Expr` reads its settings
       through `self.params(reaction)`
 - [x] Returns a dimensionless expression using the `ncol_<species>` / `vdisp`
-      symbol conventions; data tables go on `reaction.photo.shielding.tables`
+      symbol conventions; data tables go in `reaction.photo.shielding_tables`
 - [x] Shared maths factored into an underscore-prefixed helper (if reused)
 - [x] Schemas and reference regenerated
       (`uv run --extra dev python -m jaff.config.json_schema`,

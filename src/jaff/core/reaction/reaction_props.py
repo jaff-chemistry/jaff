@@ -16,15 +16,14 @@ if TYPE_CHECKING:
 
 
 class PhotoReactionProps:
-    """Photo-reaction state, held as ``Reaction.photo`` (``None`` otherwise).
+    """Computed photo-reaction state, held as ``Reaction.photo`` (``None`` otherwise).
 
     :class:`~jaff.core.Network` builds one for every reaction of type
-    ``"photo"``: the per-reaction overrides come from the reaction's own
-    ``[network.reactions.reaction."<serialized>".photo]`` table and the
-    shielding from its resolved photo settings (see
-    :meth:`~jaff.core.reaction.config.ReactionsConfig.resolve`).  The
-    :class:`Reaction` constructor then fills ``xsec``, ``custom_rad_rate`` and,
-    with a radiation field, ``rgrouped``.
+    ``"photo"``, and the :class:`Reaction` constructor fills ``xsec``,
+    ``custom_rad_rate`` and, with a radiation field, ``rgrouped``.  It holds
+    only what is computed from the settings: the settings themselves
+    (``pi_database``, ``override_*``, ``shielding``, ...) are the reaction's
+    ``config.photo`` (see :attr:`Reaction.config`).
 
     Attributes
     ----------
@@ -32,20 +31,6 @@ class PhotoReactionProps:
         Cross sections of the reaction's single decay channel, or ``None``
         when no database has an entry.  ``xsec.total`` holds the cross
         section averaged over the whole radiation spectrum (cm²).
-    pi_database : str or None
-        Per-reaction photoionization database override (``"norad"``,
-        ``"verner"`` or ``"leiden"``); ``None`` uses the global
-        ``network.reactions.photo.pi_database``.
-    override_custom_rate : bool or None
-        Per-reaction override of the global
-        ``network.reactions.photo.override_custom_rate`` (recompute a
-        ``.jfunc`` ``chemRate<N>`` rate from the cross sections when a
-        radiation field is configured); ``None`` uses the global flag.
-    override_custom_cross_section : bool or None
-        Per-reaction override of the global
-        ``network.reactions.photo.override_custom_cross_section`` (ignore a
-        ``.jfunc`` ``photoCrossSection<N>`` and use the databases); ``None``
-        uses the global flag (``False`` without radiation).
     custom_rad_rate : bool
         ``True`` when the rate comes from a ``.jfunc`` ``chemRate<N>``
         function rather than from the cross sections; such a reaction is not
@@ -56,17 +41,20 @@ class PhotoReactionProps:
         ``xsec_frac``.  Set when a radiation field is configured; ``None``
         otherwise, and for a ``custom_rad_rate`` reaction.  See
         :attr:`Reaction.band_xsecs`.
-    shielding : ShieldingProps or None
-        Shielding applied to the photo rate, or ``None`` when the reaction is
-        not shielded.
+    shielding_tables : dict[str, Any]
+        Data tables the reaction's shielding model built for the generated
+        code to interpolate over, keyed by file name (e.g.
+        ``shielding_<reaction>.hdf5``); written out by
+        :meth:`~jaff.core.network.Network.write_shielding_tables`.  Empty when
+        the reaction is not shielded or its model needs no table.
 
     Examples
     --------
     >>> from jaff import Network
     >>> net = Network("h_photoionization")
     >>> photo = net.reactions.photo_reactions()[0].photo
-    >>> photo.custom_rad_rate, photo.pi_database, photo.shielding
-    (False, None, None)
+    >>> photo.custom_rad_rate, photo.shielding_tables
+    (False, {})
     >>> photo.xsec.database
     'norad'
     """
@@ -74,21 +62,14 @@ class PhotoReactionProps:
     def __init__(
         self,
         xsec: XsecProps | None = None,
-        pi_database: str | None = None,
-        override_custom_rate: bool | None = None,
-        override_custom_cross_section: bool | None = None,
         custom_rad_rate: bool = False,
         rgrouped: List[GroupedPhotoReactionProps] | None = None,
-        shielding: ShieldingProps | None = None,
     ):
         """Store the photo-reaction state; see the class attributes."""
         self.xsec: XsecProps | None = xsec
-        self.pi_database: str | None = pi_database
-        self.override_custom_rate: bool | None = override_custom_rate
-        self.override_custom_cross_section: bool | None = override_custom_cross_section
         self.custom_rad_rate: bool = custom_rad_rate
         self.rgrouped: List[GroupedPhotoReactionProps] | None = rgrouped
-        self.shielding: ShieldingProps | None = shielding
+        self.shielding_tables: Dict[str, Any] = {}
 
 
 class GroupedPhotoReactionProps:
@@ -169,35 +150,6 @@ class ReactionRadiationProps:
         """Store the emission; see the class attributes."""
         self.spectral_yield: Expr | None = spectral_yield
         self.group_yields: List[Expr] | None = group_yields
-
-
-class ShieldingProps:
-    """Shielding of a photo rate, held as ``Reaction.photo.shielding``.
-
-    Built by :class:`~jaff.core.Network` from the reaction's resolved
-    ``photo.shielding`` config (``[network.reactions.photo.shielding]`` or the
-    reaction's own table): ``type`` is the model and ``props`` its
-    parameters.  The model reads them when the radiation field computes the
-    reaction's per-band rates.
-
-    Attributes
-    ----------
-    type : str
-        Shielding model (e.g. ``"leiden"``, ``"db1996"``).
-    props : dict[str, Any]
-        Model-specific settings (e.g. ``shielded_by``, ``min_ncol``) as given
-        by the user.
-    tables : dict[str, Any]
-        Data tables the model built for the generated code to interpolate
-        over, keyed by file name (e.g. ``shielding_<reaction>.hdf5``); written
-        out by :meth:`~jaff.core.network.Network.write_shielding_tables`.
-    """
-
-    def __init__(self, type: str, props: Dict[str, Any] | None = None):
-        """Store the model; ``props=None`` (default) starts empty."""
-        self.type: str = type
-        self.props: Dict[str, Any] = props if props is not None else {}
-        self.tables: Dict[str, Any] = {}
 
 
 @dataclass

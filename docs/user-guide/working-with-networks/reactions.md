@@ -349,10 +349,16 @@ rxn.photo.xsec                          # XsecProps: units, process, database,
                                         #   photodecay, photodecay_expr, total
 len(rxn.photo.xsec.photon_energy)       # number of grid points (energies in eV)
 rxn.photo.xsec.photodecay               # cross sections in cm^2 (or None)
-rxn.photo.pi_database                   # per-reaction PI database override (or None)
-rxn.photo.override_custom_rate          # per-reaction override_custom_rate (or None)
-rxn.photo.override_custom_cross_section # per-reaction override_custom_cross_section (or None)
+rxn.config.photo.pi_database            # the reaction's resolved PI database ("norad", ...)
+rxn.config.photo.override_custom_rate   # resolved override_custom_rate
+rxn.config.photo.shielding              # resolved shielding table, or None
 ```
+
+`rxn.photo` holds what is computed for the reaction (cross sections, band
+data, shielding tables); its settings are `rxn.config`: the global
+`[network.reactions]` table with the reaction's own
+`[network.reactions.reaction."<serialized>"]` entry applied over it, every key
+set.
 
 The `photon_energy` grid is in eV and each process array is in cm² (or `None`
 when that process has no data for the reaction). The `process` attribute

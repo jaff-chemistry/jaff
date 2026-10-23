@@ -698,7 +698,8 @@ class Radiation:
         # Shielding factor, the same for every band: the shielding model
         # evaluated once (it may write per-reaction tables).
         shielding: sp.Expr | None = None
-        if photo.shielding is not None:
+        photo_config = reaction.config.photo
+        if photo_config is not None and photo_config.shielding is not None:
             shielding = Photochemistry.shielding(reaction, self.network)
 
         # Per-band rate data, one entry per group in self.groups order.

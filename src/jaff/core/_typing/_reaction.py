@@ -92,8 +92,8 @@ pi_database : str or None
     photo reaction.
 shielding : dict or None
     Optional key.  Shielding of a photo reaction as
-    ``{"type": ..., "props": {...}}`` (the arguments of
-    :class:`~jaff.core.reaction.ShieldingProps`).
+    ``{"type": ..., "props": {...}}``: the model and its settings, as in the
+    reaction's ``config.photo.shielding``.
 xsec_props : XsecProps or None
     Optional key.  Custom (``photoCrossSection``) cross sections of a photo
     reaction (``Reaction.photo.xsec``); ``None`` for database cross sections,

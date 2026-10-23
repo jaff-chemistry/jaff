@@ -157,11 +157,19 @@ class TestOverride:
 
         assert rxn.photo.xsec.database != "custom"
 
-    def test_per_reaction_flag_applies_without_radiation(self, xsec_network, tmp_path):
+    def test_per_reaction_flag_needs_radiation(self, xsec_network, tmp_path):
+        # Like the global flag, a reaction's own flag has no effect without
+        # radiation: there is no cross-section rate to switch.
         cfg = _toml(tmp_path, "override_custom_cross_section = true")
         rxn = _photo(xsec_network(config=cfg))
 
-        assert rxn.photo.override_custom_cross_section is True
+        assert rxn.config.photo.override_custom_cross_section is True
+        assert rxn.photo.xsec.database == "custom"
+
+    def test_per_reaction_flag_applies_with_radiation(self, xsec_network, tmp_path):
+        cfg = _toml(tmp_path, "override_custom_cross_section = true")
+        rxn = _photo(xsec_network(config=cfg, radiation=RadiationConfig(bands=BANDS)))
+
         assert rxn.photo.xsec.database != "custom"
 
     def test_per_reaction_flag_beats_global(self, xsec_network, tmp_path):
@@ -177,7 +185,11 @@ class TestOverride:
 
     def test_override_allows_pi_database(self, xsec_network, tmp_path):
         body = 'override_custom_cross_section = true\npi_database = "verner"'
-        rxn = _photo(xsec_network(config=_toml(tmp_path, body)))
+        rxn = _photo(
+            xsec_network(
+                config=_toml(tmp_path, body), radiation=RadiationConfig(bands=BANDS)
+            )
+        )
 
         assert rxn.photo.xsec.database == "verner"
 

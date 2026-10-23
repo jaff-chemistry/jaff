@@ -187,7 +187,7 @@ class Photochemistry:
 
     def _lookup_key(self, reaction: Reaction) -> str:
         """Database key: the proxy string when the reaction uses proxy lookups."""
-        photo = self.net.config.reactions.resolve(reaction.serialized).photo
+        photo = reaction.config.photo
         if photo is not None and photo.use_proxy_photoreaction:
             return reaction.normalized_proxy_reaction_str()
 
@@ -248,19 +248,18 @@ class Photochemistry:
 
         return "e-" in key.partition("__")[2].split(".")
 
-    @staticmethod
-    def _pi_override(reaction: Reaction) -> str | None:
-        """The reaction's own ``pi_database``, or ``None`` when it has none."""
+    def _pi_override(self, reaction: Reaction) -> str | None:
+        """The ``pi_database`` set for the reaction itself, or ``None``."""
+        own = self.net.config.reactions.own(reaction.serialized)
 
-        return reaction.photo.pi_database if reaction.photo is not None else None
+        return (
+            own.photo.pi_database if own is not None and own.photo is not None else None
+        )
 
     def _pi_order(self, reaction: Reaction) -> list[str]:
         """Databases to try: the chosen one, then :data:`PI_DATABASES` order."""
-        chosen = (
-            self._pi_override(reaction)
-            or self.net.config.reactions.photo.pi_database
-            or "norad"
-        )
+        photo = reaction.config.photo
+        chosen = (photo.pi_database if photo is not None else None) or "norad"
 
         return list(dict.fromkeys([chosen, *PI_DATABASES]))
 
@@ -353,8 +352,9 @@ class Photochemistry:
         Resolve the cross sections for a photo-reaction.
 
         Photodissociation comes from Leiden.  Photoionisation tries, in order,
-        ``reaction.photo.pi_database`` (or the global
-        ``network.reactions.photo.pi_database``, ``"norad"`` by default),
+        the reaction's resolved ``config.photo.pi_database`` (its own setting,
+        else the global ``network.reactions.photo.pi_database``, ``"norad"`` by
+        default),
         then ``norad``, ``verner``, ``leiden`` (duplicates removed).  Fallbacks to
         a later database are recorded and reported once by
         :meth:`log_fallback_summary`.
@@ -384,8 +384,10 @@ class Photochemistry:
         Raises
         ------
         ParserError
-            If ``reaction.photo.pi_database`` is set on a non-photoionisation
-            reaction, or *required* and no database has the reaction.
+            If a ``pi_database`` is set for the reaction itself (its own
+            ``[network.reactions.reaction."<serialized>".photo]`` entry) and it
+            is not a photoionisation, or *required* and no database has the
+            reaction.
         """
         key = self._lookup_key(reaction)
         row = self._tabulated_row(key)
@@ -444,7 +446,7 @@ class Photochemistry:
     def shielding(reaction: Reaction, network: Network) -> Expr:
         """Build the symbolic shielding factor for a photo-reaction.
 
-        The shielding function named by ``reaction.photo.shielding.type`` is
+        The shielding function named by ``reaction.config.photo.shielding.type`` is
         resolved from the
         shielding registry via
         :func:`~jaff.physics.photo_reactions.shielding._get_shielding_function`.
@@ -454,13 +456,13 @@ class Photochemistry:
         :class:`~jaff.physics.photo_reactions.shielding._base.ShieldingFunction`
         instance's ``get_shielding(reaction, network)`` produces the factor.
 
-        The result is not cached: ``photo.shielding.props`` holds only the
-        user's settings, so callers evaluate it once per reaction.
+        The result is not cached: the reaction's config holds only the settings,
+        so callers evaluate it once per reaction.
 
         Parameters
         ----------
         reaction : Reaction
-            Reaction to shield; its ``photo.shielding.type`` selects
+            Reaction to shield; its ``config.photo.shielding.type`` selects
             the shielding function.
         network : Network
             Network the reaction belongs to, forwarded to the shielding
@@ -477,7 +479,8 @@ class Photochemistry:
             If no shielding function is registered for ``type`` either locally
             (for this reaction) or as a global fallback.
         """
-        shielding = reaction.photo.shielding if reaction.photo is not None else None
+        photo = reaction.config.photo
+        shielding = photo.shielding if photo is not None else None
         assert shielding is not None, f"{reaction} is not shielded"
 
         shielding_fn = _get_shielding_function(shielding.type, reaction.serialized)

@@ -227,9 +227,6 @@ nav = [
       { "core.PhotoReactionProps" = [
         "reference/core/photoreactionprops/index.md",
       ] },
-      { "core.ShieldingProps" = [
-        "reference/core/shieldingprops/index.md",
-      ] },
     ] },
     { "Physics" = [
       "reference/physics/index.md",
@@ -443,6 +440,7 @@ nav = [
         ] },
         { "ReactionsConfig" = [
           "reference/config/reactions/reactionsconfig/index.md",
+          "reference/config/reactions/reactionsconfig/own.md",
           "reference/config/reactions/reactionsconfig/resolve.md",
         ] },
       ] },
