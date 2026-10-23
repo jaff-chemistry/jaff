@@ -1,13 +1,15 @@
-# ABOUTME: Config loading: deep_merge of config layers (later wins, tables merge,
-# ABOUTME: lists/scalars replace; tables flagged _atomic on their model replace whole)
+# ABOUTME: Config loading: TOML layers with paths resolved per file, and deep_merge (later wins,
+# ABOUTME: tables merge, lists/scalars replace, _atomic tables replace whole)
 
 import copy
+from pathlib import Path
 
 import pytest
 
 from jaff.cli.jaffgen.config import JaffgenTomlConfig
-from jaff.config.loader import atomic_tables, deep_merge
+from jaff.config.loader import atomic_tables, deep_merge, load_layer, resolve_paths
 from jaff.core.network.config import JaffTomlConfig
+from jaff.errors import ParserError
 
 
 class TestDeepMerge:
@@ -133,3 +135,99 @@ class TestAtomicTables:
         merged = deep_merge(jaff_toml, jaffgen_toml, atomic=atomic_tables(JaffTomlConfig))
 
         assert merged["network"]["thermodynamics"]["eos"] == {"gamma": 1.3}
+
+
+class TestResolvePaths:
+    def test_relative_path_resolved_against_base(self, tmp_path):
+        layer = resolve_paths(
+            {"network": {"funcfile": "aux/net.jfunc"}}, JaffTomlConfig, tmp_path
+        )
+
+        assert layer["network"]["funcfile"] == (tmp_path / "aux/net.jfunc").resolve()
+
+    def test_absolute_path_unchanged(self, tmp_path):
+        target = tmp_path / "net.jfunc"
+        layer = resolve_paths(
+            {"network": {"funcfile": str(target)}}, JaffTomlConfig, Path("/")
+        )
+
+        assert layer["network"]["funcfile"] == target
+
+    def test_bool_funcfile_unchanged(self, tmp_path):
+        layer = resolve_paths({"network": {"funcfile": False}}, JaffTomlConfig, tmp_path)
+
+        assert layer["network"]["funcfile"] is False
+
+    def test_jaffgen_paths_resolved(self, tmp_path):
+        layer = resolve_paths(
+            {
+                "jaffgen": {
+                    "input_dir": "tpl",
+                    "input_files": ["a.cpp", "sub/b.f90"],
+                    "output_dir": "../out",
+                    "network_file": "GOW",
+                    "network_config": "net/jaff.toml",
+                }
+            },
+            JaffgenTomlConfig,
+            tmp_path,
+        )
+
+        jg = layer["jaffgen"]
+        assert jg["input_dir"] == (tmp_path / "tpl").resolve()
+        assert jg["input_files"] == [
+            (tmp_path / "a.cpp").resolve(),
+            (tmp_path / "sub/b.f90").resolve(),
+        ]
+        assert jg["output_dir"] == (tmp_path / "../out").resolve()
+        assert jg["network_file"] == (tmp_path / "GOW").resolve()
+        assert jg["network_config"] == (tmp_path / "net/jaff.toml").resolve()
+
+    def test_non_path_strings_unchanged(self, tmp_path):
+        layer = {"jaffgen": {"template": "microphysics"}, "network": {"label": "a/b"}}
+
+        assert resolve_paths(layer, JaffgenTomlConfig, tmp_path) == layer
+
+    def test_unknown_keys_and_tables_unchanged(self, tmp_path):
+        layer = {
+            "network": {"rsl": "c_hat", "funcfile": 5},
+            "jaffgen": {"table": [{"source": {"path": "data.csv"}}]},
+        }
+
+        assert resolve_paths(layer, JaffgenTomlConfig, tmp_path) == layer
+
+    def test_input_is_not_modified(self, tmp_path):
+        layer = {"network": {"funcfile": "net.jfunc"}}
+
+        resolve_paths(layer, JaffTomlConfig, tmp_path)
+
+        assert layer == {"network": {"funcfile": "net.jfunc"}}
+
+
+class TestLoadLayer:
+    def test_reads_toml_and_resolves_against_its_directory(self, tmp_path):
+        cfg = tmp_path / "net" / "jaff.toml"
+        cfg.parent.mkdir()
+        cfg.write_text(
+            '[network]\nfuncfile = "x.jfunc"\n\n[network.reactions]\nt_cutoff = "clip"\n'
+        )
+
+        layer = load_layer(cfg, JaffTomlConfig)
+
+        assert layer == {
+            "network": {
+                "funcfile": (cfg.parent / "x.jfunc").resolve(),
+                "reactions": {"t_cutoff": "clip"},
+            }
+        }
+
+    def test_missing_file(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            load_layer(tmp_path / "jaff.toml", JaffTomlConfig)
+
+    def test_invalid_toml_names_the_file(self, tmp_path):
+        cfg = tmp_path / "jaff.toml"
+        cfg.write_text("[network\n")
+
+        with pytest.raises(ParserError, match="jaff.toml"):
+            load_layer(cfg, JaffTomlConfig)

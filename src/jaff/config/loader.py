@@ -8,6 +8,8 @@ the module-owned config models.
 
 from __future__ import annotations
 
+import tomllib
+from pathlib import Path
 from types import UnionType
 from typing import (
     Annotated,
@@ -24,8 +26,93 @@ from typing import (
 
 from pydantic import BaseModel
 
+from ..errors import ParserError
+
 #: A key path into a layer, e.g. ``("network", "reactions", "photo")``.
 KeyPath = Tuple[str, ...]
+
+
+def load_layer(path: Path, model: type[BaseModel]) -> Dict[str, Any]:
+    """Read the TOML file *path* as a layer, its paths resolved against its directory.
+
+    The layer is not validated here; that happens once all layers are merged.
+
+    Parameters
+    ----------
+    path : Path
+        TOML config file.
+    model : type[BaseModel]
+        Model of the whole file (e.g. ``JaffTomlConfig``), locating its paths.
+
+    Returns
+    -------
+    dict
+        The layer.
+
+    Raises
+    ------
+    FileNotFoundError
+        If *path* does not exist.
+    ParserError
+        If *path* is not valid TOML.
+    """
+    with open(path, "rb") as f:
+        try:
+            layer = tomllib.load(f)
+        except tomllib.TOMLDecodeError as e:
+            raise ParserError(f"Invalid TOML in {path}: {e}") from e
+
+    return resolve_paths(layer, model, path.parent)
+
+
+def resolve_paths(
+    layer: Mapping[str, Any], model: type[BaseModel], base_dir: Path
+) -> Dict[str, Any]:
+    """Return a copy of *layer* with its relative paths resolved against *base_dir*.
+
+    A path is a string under a key the *model* types as a path (a ``PathLike``
+    field, or a list of them).  Anything else -- including unknown keys and
+    values of the wrong type, left for validation to report -- is copied as is.
+
+    Parameters
+    ----------
+    layer : Mapping[str, Any]
+        Layer to resolve.
+    model : type[BaseModel]
+        Model of the whole layer (e.g. ``JaffgenTomlConfig``).
+    base_dir : Path
+        Directory relative paths are resolved against: the file's directory,
+        or the working directory for the command line.
+
+    Returns
+    -------
+    dict
+        The resolved layer.
+    """
+    return _resolve(layer, [model], base_dir)
+
+
+def _resolve(value: Any, types: List[Any], base_dir: Path) -> Any:
+    """Copy *value*, typed by any of *types*, resolving the paths in it."""
+    if isinstance(value, Mapping):
+        return {
+            key: _resolve(item, [c for t in types for c in _children(t, key)], base_dir)
+            for key, item in value.items()
+        }
+
+    if isinstance(value, list):
+        items = [
+            m for t in types if get_origin(t) is list for m in _members(get_args(t)[0])
+        ]
+
+        return [_resolve(item, items, base_dir) for item in value]
+
+    if isinstance(value, str) and Path in types:
+        path = Path(value)
+
+        return path if path.is_absolute() else (base_dir / path).resolve()
+
+    return value
 
 
 def atomic_tables(model: type[BaseModel]) -> Callable[[KeyPath], bool]:
