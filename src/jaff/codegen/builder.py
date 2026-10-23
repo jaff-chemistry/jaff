@@ -8,8 +8,8 @@ Plugin discovery
 ----------------
 Plugins live in ``jaff.plugins.<template_name>.plugin`` and must expose a
 ``main(network, *, path_template, path_build)`` function.  The *template_name*
-corresponds to a sub-directory under
-``<jaff_codegen>/templates/preprocessor/``.
+corresponds to a sub-directory of ``TEMPLATES_DIR / "preprocessor"``
+(``jaff/templates/preprocessor/``).
 """
 
 import sys
@@ -21,9 +21,28 @@ from jaff.config import TEMPLATES_DIR
 class Builder:
     """Orchestrate plugin-based code generation for a chemical network.
 
-    :class:`Builder` is the top-level entry point for users who want to
-    generate a complete solver project (e.g. a Python ``solve_ivp`` wrapper or
-    a C++ CVODE driver) from a parsed network by selecting a named template.
+    :class:`Builder` is the high-level entry point for users who want to
+    generate a complete, ready-to-run solver project from a parsed network by
+    selecting a named template.  Each template is a plugin module
+    ``jaff.plugins.<template>.plugin`` paired with a directory of template
+    files under ``jaff/templates/preprocessor/<template>/``; the plugin
+    generates the code blocks with :class:`~jaff.codegen.Codegen` and writes
+    the filled-in files with :class:`~jaff.codegen.Preprocessor`.
+
+    The bundled templates are:
+
+    - ``python_solve_ivp``: a Python solver driven by
+      ``scipy.integrate.solve_ivp``.
+    - ``fortran_dlsodes``: a Fortran solver using the ODEPACK DLSODES
+      integrator, with a Makefile.
+    - ``kokkos_ode``: a C++ ODE system for a header-only integrator library
+      (VODE), with a CMake build.
+    - ``microphysics``: network, rate and RHS sources for an AMReX
+      Microphysics network.
+
+    For finer-grained control over the generated code, write a ``$$JAFF``
+    template and render it with :class:`~jaff.codegen.TemplateParser` (or the
+    ``jaffgen`` command) instead.
 
     Parameters
     ----------
@@ -34,6 +53,19 @@ class Builder:
     ----------
     network : Network
         The network instance provided at construction time.
+
+    Examples
+    --------
+    >>> from pathlib import Path
+    >>> from jaff import Network
+    >>> from jaff.codegen import Builder
+    >>> builder = Builder(Network("COthin"))
+    >>> path = builder.build(template="python_solve_ivp", output_dir="output/")
+    Building network with template: python_solve_ivp
+    Network built successfully using template 'python_solve_ivp'.
+    Output files are located in: output/
+    >>> sorted(p.name for p in Path(path).iterdir())
+    ['commons.py', 'fluxes.py', 'main.py', 'ode.py', 'rates.py']
     """
 
     def __init__(self, network) -> None:
@@ -53,8 +85,10 @@ class Builder:
 
         Resolves the template directory, dynamically imports the plugin module
         ``jaff.plugins.<template>.plugin``, and calls its ``main()`` function
-        with the network and resolved paths.  After a successful build the
-        output directory path is returned.
+        with the network and resolved paths.  The plugin preprocesses its
+        template files into the output directory (created if needed) and
+        copies the template's remaining files there unchanged.  Progress
+        messages are printed to stdout.
 
         If the plugin cannot be imported, all available template names are
         printed to stdout and the process exits with code ``1``.
@@ -62,9 +96,10 @@ class Builder:
         Parameters
         ----------
         template : str, optional
-            Name of the plugin template to use.  Must match a sub-directory
-            under ``<jaff_codegen>/templates/preprocessor/`` and a
-            ``jaff.plugins.<template>.plugin`` module.
+            Name of the plugin template to use: ``"python_solve_ivp"``,
+            ``"fortran_dlsodes"``, ``"kokkos_ode"`` or ``"microphysics"``.
+            Must match a sub-directory under ``jaff/templates/preprocessor/``
+            and a ``jaff.plugins.<template>.plugin`` module.
             Default ``"python_solve_ivp"``.
         output_dir : str or None, optional
             Destination directory for the generated files.  When ``None`` the
@@ -73,7 +108,9 @@ class Builder:
         Returns
         -------
         str
-            Absolute path to the directory containing the generated output files.
+            Directory containing the generated files: *output_dir* as given,
+            or the absolute path of the current working directory when
+            *output_dir* is ``None``.
 
         Raises
         ------

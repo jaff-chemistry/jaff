@@ -48,12 +48,17 @@ class Codegen:
     parsed :class:`~jaff.core.network.Network` it can produce assignment
     statements for:
 
-    * **Reaction rates** — ``k[i] = <rate_expa>``
+    * **Reaction rates** — ``k[i] = <rate_expr>``
     * **Flux expressions** — ``flux[i] = k[i] * y[r1] * y[r2]``
     * **ODE right-hand sides** — ``dy[i]/dt = sum(±flux[j])``
     * **Analytical Jacobian** — ``J[i, j] = ∂f_i/∂y_j``
-    * **Energy derivative** — ``dE/dt`` (optional, with EOS coupling)
+    * **Thermal equation** — ``dE/dt`` or ``dT/dt`` from
+      ``net.thermodynamics`` (optional)
     * **Radiation ODEs** — moment-equations for radiation fields (optional)
+
+    Supported languages: C++ (``cxx``, ``cpp``, ``c++``), C (``c``),
+    Fortran 90 (``fortran``, ``f90``), Python (``python``, ``py``),
+    Rust (``rust``, ``rs``), Julia (``julia``, ``jl``) and R (``r``).
 
     Per-method ``get_*_str()`` overrides (bracket style, assignment operator,
     line terminator) are applied by the :func:`~jaff.codegen._languages.scoped_tokens`
@@ -65,20 +70,54 @@ class Codegen:
     CSE temporaries are emitted before the main expressions and named with a
     numeric suffix, e.g. ``cse0``, ``cse1``, …
 
-    Parameters
+    Attributes
     ----------
-    network : Network
-        Parsed chemical reaction network.
-    lang : str, optional
-        Target language alias.  Accepted values: ``"c++"``, ``"cpp"``,
-        ``"cxx"``, ``"c"``, ``"fortran"``, ``"f90"``, ``"python"``,
-        ``"py"``, ``"rust"``, ``"rs"``, ``"julia"``, ``"jl"``, ``"r"``.
-        Default is ``"c++"``.
+    net : Network
+        The reaction network being code-generated.
+    lang : Language
+        The resolved language config carrying every syntax token (see Notes).
+    logger : logging.Logger
+        JAFF logger instance.
 
-    Raises
-    ------
-    InvalidLanguageError
-        If *lang* is not a supported language.
+    Notes
+    -----
+    All per-language syntax lives on the
+    :class:`~jaff.codegen._languages.Language` object at ``cg.lang``:
+
+    | Attribute | Description |
+    | --- | --- |
+    | ``lang.name`` | Canonical language name (e.g. ``"cxx"``, ``"fortran"``) |
+    | ``lang.lb``, ``lang.rb`` | 1-D array brackets (``[`` ``]``; ``(`` ``)`` for Fortran) |
+    | ``lang.mlb``, ``lang.mrb`` | 2-D array brackets |
+    | ``lang.sep`` | 2-D index separator (``"]["`` C-style, ``", "`` Fortran/Julia/R) |
+    | ``lang.assignment_op`` | Assignment operator (``"="``; ``"<-"`` for R) |
+    | ``lang.line_end`` | Statement terminator (``";"`` for C/C++/Rust, else ``""``) |
+    | ``lang.code_gen`` | SymPy printer used to serialise expressions |
+    | ``lang.idx_offset`` | Array index base (``0``; ``1`` for Fortran/Julia/R) |
+    | ``lang.comment`` | Single-line comment prefix (``"//"``, ``"!"`` or ``"#"``) |
+    | ``lang.types`` | Generic type name → language spelling (e.g. ``"double "``) |
+    | ``lang.extras`` | Extra tokens such as type qualifiers and class specifiers |
+
+    The ``get_*_str()`` overrides only last for the call: ``cg.lang`` is
+    restored afterwards.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> from jaff.codegen import Codegen
+    >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+    >>> net = Network("h_photoionization", radiation_props=bands)
+    >>> cg = Codegen(net, lang="cxx")
+    >>> cg.lang
+    <Language cxx>
+    >>> cg.lang.idx_offset, cg.lang.line_end
+    (0, ';')
+    >>> print(cg.get_flux_expressions_str(), end="")
+    flux[0] = k[0] * y[idx_h];
+    flux[1] = k[1] * y[idx_hj] * y[idx_e];
+    >>> print(Codegen(net, lang="f90").get_flux_expressions_str(), end="")
+    flux(1) = k(1) * y(idx_h)
+    flux(2) = k(2) * y(idx_hj) * y(idx_e)
     """
 
     _THERMAL_MODES = ("none", "dedt", "dtdt")
@@ -88,6 +127,23 @@ class Codegen:
         network: Network,
         lang: str = "c++",
     ) -> None:
+        """Bind a network to a target language.
+
+        Parameters
+        ----------
+        network : Network
+            Parsed chemical reaction network.
+        lang : str, optional
+            Target language alias.  Accepted values: ``"c++"``, ``"cpp"``,
+            ``"cxx"``, ``"c"``, ``"fortran"``, ``"f90"``, ``"python"``,
+            ``"py"``, ``"rust"``, ``"rs"``, ``"julia"``, ``"jl"``, ``"r"``.
+            Default is ``"c++"``.
+
+        Raises
+        ------
+        InvalidLanguageError
+            If *lang* is not a supported language.
+        """
         self.lang = Language(lang)
         self.net: Network = network
         self.logger: logging.Logger = JaffLogger().get_logger()
@@ -108,12 +164,14 @@ class Codegen:
         species count (``nspecs``) and reaction count (``nreactions``).
 
         Example output for C++ with two species H and H2 (``fidx`` names are
-        lower-cased)::
+        lower-cased and already start with ``idx_``):
 
-            const int idx_h  = 0;
-            const int idx_h2 = 1;
-            const int nspecs = 2;
-            const int nreactions = 5;
+        ```cpp
+        const int idx_h = 0;
+        const int idx_h2 = 1;
+        const int nspecs = 2;
+        const int nreactions = 5;
+        ```
 
         Parameters
         ----------
@@ -121,7 +179,8 @@ class Codegen:
             Base index added to each species position.  ``-1`` uses the
             language default stored in ``self.lang.idx_offset``.
         idx_prefix : str, optional
-            String prepended to each species index name, e.g. ``"idx_"``.
+            String prepended to each species index name (``fidx``, which
+            already starts with ``idx_``), e.g. ``"my_"`` yields ``my_idx_h``.
         definition_prefix : str, optional
             String prepended to each definition line, e.g. ``"const int "``
             for C/C++.
@@ -135,6 +194,24 @@ class Codegen:
         str
             Multi-line string of index definitions followed by the size
             constants ``nspecs`` and ``nreactions``.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> cg = Codegen(Network("h_photoionization"), lang="cxx")
+        >>> print(cg.get_commons(definition_prefix="const int "), end="")
+        const int idx_h = 0;
+        const int idx_hj = 1;
+        const int idx_e = 2;
+        const int nspecs = 3;
+        const int nreactions = 2;
+        >>> print(Codegen(cg.net, lang="f90").get_commons(), end="")
+        idx_h = 1
+        idx_hj = 2
+        idx_e = 3
+        nspecs = 3
+        nreactions = 2
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
         scommons = ""
@@ -155,7 +232,7 @@ class Codegen:
         cse_var: str = "x",
         cse_suffix: str = "",
     ) -> IndexedReturn:
-        """Return rate-coefficient expressions as an :class:`~jaff.types.IndexedReturn`.
+        """Return rate-coefficient expressions as an :class:`~jaff.codegen.IndexedReturn`.
 
         Applies SymPy CSE across all symbolic rates to minimise repeated
         sub-expression evaluation in the generated code.  Rates stored as raw
@@ -186,6 +263,20 @@ class Codegen:
             * ``"expressions"`` — :class:`~jaff.types.IndexedList` of
               ``(reaction_idx, rate_str)`` pairs for the final rate of each
               reaction (possibly referencing CSE temporaries).
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> rates = Codegen(net, lang="python").get_indexed_rates()
+        >>> rates["extras"]["cse"]
+        IndexedList([])
+        >>> for idx, rate in rates["expressions"]:
+        ...     print(idx, rate)
+        [0] 5.85154082319921e-8*photden[1] + 1.1420465158197e-10*photden[2]
+        [1] 1.65941781598291e-10*tgas**(-0.7)
         """
         out: IndexedReturn = {
             "extras": {"cse": IndexedList()},
@@ -252,12 +343,18 @@ class Codegen:
         """Generate rate-coefficient assignment code as a multi-line string.
 
         Delegates to :meth:`get_indexed_rates` to obtain (optionally CSE-
-        reduced) rate expressions, then formats them as::
+        reduced) rate expressions, then formats them as:
 
-            x0 = <cse_expr>;         // CSE temporaries (if any)
-            k[0] = x0 * exp(-alpha); // reaction 0 rate
-            k[1] = photorates(1, …); // reaction 1 (1-based photo-reaction number)
-            …
+        ```cpp
+        const double x0 = <cse_expr>;  // CSE temporaries (if any)
+        k[0] = x0 * exp(-alpha);       // reaction 0 rate
+        k[1] = …;                      // reaction 1 rate
+        ```
+
+        CSE temporaries are declared with the language's
+        :meth:`~jaff.codegen._languages.Language.format_cse_declaration`
+        (``const double`` for C++, ``double`` for C, ``let x0: f64`` for
+        Rust, a plain assignment otherwise).
 
         Parameters
         ----------
@@ -266,16 +363,15 @@ class Codegen:
         rate_variable : str, optional
             Name of the rate array.  Default ``"k"``.
         brac_format : str, optional
-            Override 1-D bracket style (``"[]"``, ``"()"``, …).  Empty string
-            uses the language default.
+            Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
+            ``"<>"``.  Empty string uses the language default.
         use_cse : bool, optional
             Enable CSE.  Default ``True``.
         cse_var : str, optional
             Prefix for CSE temporary variable names.  Default ``"x"``.
         var_prefix : str, optional
-            Type declaration prefix for CSE temporaries, e.g. ``"const double "``.
-            When empty, the language-default type qualifier and ``double`` type
-            are used.
+            Currently ignored: CSE declarations always use the language's
+            :meth:`~jaff.codegen._languages.Language.format_cse_declaration`.
         assignment_op : str, optional
             Assignment operator override.  Empty string uses the language default.
         line_end : str, optional
@@ -286,6 +382,24 @@ class Codegen:
         str
             Multi-line string of rate-coefficient assignments, including any
             CSE temporary definitions.
+
+        Raises
+        ------
+        InvalidLanguageError
+            If *brac_format* is not a supported bracket style.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> print(Codegen(net, lang="cxx").get_rates_str(), end="")
+        k[0] = 5.8515408231992116e-8*photden[1] + 1.1420465158197018e-10*photden[2];
+        k[1] = 1.6594178159829075e-10*std::pow(tgas, -0.69999999999999996);
+        >>> print(Codegen(net, lang="f90").get_rates_str(rate_variable="kr"), end="")
+        kr(1) = 5.85154082319921d-8*photden(1) + 1.1420465158197d-10*photden(2)
+        kr(2) = 1.65941781598291d-10*tgas**(-0.7d0)
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
         rates = ""
@@ -312,20 +426,33 @@ class Codegen:
         """Return per-reaction flux expressions as an :class:`~jaff.types.IndexedList`.
 
         Each flux is the product of the reaction's rate coefficient and all
-        reactant densities::
+        reactant densities:
 
-            flux[i] = k[$IDX$] * y[r1] * y[r2] * …
+        ```text
+        flux[i] = k[$IDX$] * y[r1] * y[r2] * …
+        ```
 
-        The ``$IDX$`` placeholder is left literal here and replaced with the
-        concrete reaction index when the expressions are rendered to a string
-        by :meth:`get_flux_expressions_str` or
-        :class:`~jaff.codegen.TemplateParser`.
+        A reactant appearing twice (stoichiometric coefficient 2) appears
+        twice in the product.  The ``$IDX$`` placeholder is left literal here
+        and replaced with the concrete reaction index when the expressions are
+        rendered by :class:`~jaff.codegen.TemplateParser`.
 
         Returns
         -------
         IndexedList
             One entry per reaction.  Each entry is an
             :class:`~jaff.types.IndexedValue` of ``([reaction_index], flux_str)``.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> cg = Codegen(Network("h_photoionization"), lang="cxx")
+        >>> print(cg.get_indexed_flux_expressions())
+        IndexedList[
+        [0] -> k[$IDX$] * y[idx_h]
+        [1] -> k[$IDX$] * y[idx_hj] * y[idx_e]
+        ]
         """
         out = IndexedList()
         for i, rea in enumerate(self.net.reactions):
@@ -352,9 +479,11 @@ class Codegen:
     ) -> str:
         """Generate flux-assignment code as a multi-line string.
 
-        Produces one line per reaction of the form::
+        Produces one line per reaction of the form:
 
-            flux[i] = k[i] * y[r1] * y[r2]
+        ```text
+        flux[i] = k[i] * y[r1] * y[r2]
+        ```
 
         where *r1*, *r2*, … are the formatted indices (``fidx``) of the
         reaction's reactant species.  The concrete flux expression is built by
@@ -368,12 +497,15 @@ class Codegen:
         species_var : str, optional
             Name of the species density array.  Default ``"y"``.
         idx_prefix : str, optional
-            Prefix prepended to species index names inside the expression,
-            e.g. ``"idx_"`` to yield ``y[idx_H]``.
+            Prefix prepended to species index names (``fidx``, which already
+            start with ``idx_``) inside the expression, e.g. ``"my_"`` yields
+            ``y[my_idx_h]``.
         idx_offset : int, optional
-            Base index for array subscripts.  ``-1`` uses the language default.
+            Base index for array subscripts.  ``-1`` uses the language
+            default (``0`` for C/C++/Python/Rust, ``1`` for Fortran/Julia/R).
         brac_format : str, optional
-            Override 1-D bracket style.  Empty string uses the language default.
+            Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
+            ``"<>"``.  Empty string uses the language default.
         flux_var : str, optional
             Name of the flux array.  Default ``"flux"``.
         assignment_op : str, optional
@@ -385,6 +517,23 @@ class Codegen:
         -------
         str
             Multi-line string of flux assignments, one per reaction.
+
+        Raises
+        ------
+        InvalidLanguageError
+            If *brac_format* is not a supported bracket style.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> cg = Codegen(Network("h_photoionization"), lang="cxx")
+        >>> print(cg.get_flux_expressions_str(), end="")
+        flux[0] = k[0] * y[idx_h];
+        flux[1] = k[1] * y[idx_hj] * y[idx_e];
+        >>> print(cg.get_flux_expressions_str(brac_format="()", flux_var="F"), end="")
+        F(0) = k(0) * y(idx_h);
+        F(1) = k(1) * y(idx_hj) * y(idx_e);
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
         fluxes = ""
@@ -407,12 +556,14 @@ class Codegen:
         """Return per-species ODE flux-sum expressions as an :class:`~jaff.types.IndexedList`.
 
         Constructs the symbolic right-hand side for each species density ODE
-        by collecting all fluxes that produce or consume that species::
+        by collecting all fluxes that produce or consume that species:
 
-            dn_i/dt = - flux[j1] - flux[j2] + flux[j3] + …
+        ```text
+        dn_i/dt = - flux[j1] - flux[j2] + flux[j3] + …
+        ```
 
         Reactant species appear with a negative sign (consumption) and product
-        species with a positive sign (production).
+        species with a positive sign (production).  No CSE is applied.
 
         Notes
         -----
@@ -427,6 +578,18 @@ class Codegen:
             One entry per species.  Each entry is an
             :class:`~jaff.types.IndexedValue` of ``([species_index], sum_str)``
             where *sum_str* is a signed sum of ``flux[j]`` terms.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> cg = Codegen(Network("h_photoionization"), lang="cxx")
+        >>> print(cg.get_indexed_ode_expressions())
+        IndexedList[
+        [0] ->  - flux[0] + flux[1]
+        [1] ->  + flux[0] - flux[1]
+        [2] ->  + flux[0] - flux[1]
+        ]
         """
 
         with jaff_progress.indeterminate("Generating ode expressions"):
@@ -465,15 +628,18 @@ class Codegen:
     ) -> str:
         """Generate ``dy/dt`` assignment code using a pre-computed flux array.
 
-        Produces one line per species of the form::
+        Produces one line per species of the form:
 
-            dy[idx_H] = -flux[0] + flux[3]
-            dy[idx_H2] = +flux[0] - flux[1]
+        ```cpp
+        dy[idx_h] =  - flux[0] + flux[3];
+        dy[idx_h2] =  + flux[0] - flux[1];
+        ```
 
         Unlike :meth:`get_indexed_ode_expressions`, this method uses the
         species formatted-index name (``fidx``) as the subscript so the output
-        integrates naturally with symbolic-index constants (e.g. ``idx_H = 0``
-        defined by :meth:`get_commons`).
+        integrates naturally with symbolic-index constants (e.g. ``idx_h = 0``
+        defined by :meth:`get_commons`).  Species that appear in no reaction
+        get no line.
 
         Parameters
         ----------
@@ -486,16 +652,19 @@ class Codegen:
             Name of the species density array used to derive the derivative
             variable name.  Default ``"y"``.
         idx_prefix : str, optional
-            Prefix prepended to each species index name, e.g. ``"idx_"``.
+            Prefix prepended to each species index name (``fidx``, which
+            already starts with ``idx_``), e.g. ``"my_"`` yields
+            ``dy[my_idx_h]``.
         derivative_prefix : str, optional
             Prefix prepended to *species_var* to form the derivative variable
             name when *derivative_var* is not given.  Default ``"d"``
             (yields ``"dy"``).
         derivative_var : str or None, optional
             Explicit name for the derivative array (overrides
-            *derivative_prefix* + *species_var*).
+            *derivative_prefix* + *species_var*).  Default ``None``.
         brac_format : str, optional
-            Override 1-D bracket style.  Empty string uses the language default.
+            Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
+            ``"<>"``.  Empty string uses the language default.
         assignment_op : str, optional
             Assignment operator override.  Empty string uses the language default.
         line_end : str, optional
@@ -505,6 +674,25 @@ class Codegen:
         -------
         str
             Multi-line string of derivative assignments, one per active species.
+
+        Raises
+        ------
+        InvalidLanguageError
+            If *brac_format* is not a supported bracket style.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> cg = Codegen(Network("h_photoionization"), lang="cxx")
+        >>> print(cg.get_ode_expressions_str(), end="")
+        dy[idx_h] =  - flux[0] + flux[1];
+        dy[idx_hj] =  + flux[0] - flux[1];
+        dy[idx_e] =  + flux[0] - flux[1];
+        >>> print(cg.get_ode_expressions_str(derivative_var="ydot"), end="")
+        ydot[idx_h] =  - flux[0] + flux[1];
+        ydot[idx_hj] =  + flux[0] - flux[1];
+        ydot[idx_e] =  + flux[0] - flux[1];
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
         # Construct the derivative variable name (e.g. "dy") unless overridden
@@ -535,8 +723,12 @@ class Codegen:
     def get_dedt(self, energy: str = "volumetric") -> str:
         """Target-language code for the total energy time-derivative.
 
-        Prints :attr:`Thermodynamics.dEdt_tot` in the requested form (see
-        :meth:`InternalEnergy.normaliser`).
+        A thin printer over ``net.thermodynamics.dEdt_tot``
+        (:attr:`~jaff.physics.thermodynamics.Thermodynamics.dEdt_tot`): it
+        renders ``dEdt_tot.normaliser(energy)`` (see
+        :meth:`~jaff.physics.thermodynamics.InternalEnergy.normaliser`) as a
+        target-language expression.  For the temperature rate see
+        :meth:`get_dtdt`.
 
         Parameters
         ----------
@@ -553,6 +745,32 @@ class Codegen:
         ------
         ValueError
             If *energy* is not a valid form.
+
+        Notes
+        -----
+        The forms are time derivatives of the normalised energies, with
+        ``E`` the volumetric internal energy, ``rho = Σ m_i n_i`` and
+        ``n_tot = Σ n_i``:
+
+        ```text
+        volumetric    dE/dt                                         erg/cm³/s
+        specific      d(E/rho)/dt = (dE/dt)/rho - E (drho/dt)/rho²  erg/g/s
+        per_particle  d(E/n_tot)/dt = (dE/dt)/n_tot                 erg/s
+                                      - E (dn_tot/dt)/n_tot²
+        molar         N_A d(E/n_tot)/dt                             erg/mol/s
+        ```
+
+        The quotient rule means the non-volumetric forms also contain the
+        term from the changing normaliser, not just ``dE/dt`` divided by it.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> print(Codegen(net, lang="python").get_dedt())
+        -2.29107354821899e-26*tgas**0.3*(0.684 - 0.0416*math.log(0.0001*tgas))*...
         """
         expr = self.net.thermodynamics.dEdt_tot.normaliser(energy)
         return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
@@ -560,12 +778,36 @@ class Codegen:
     def get_dtdt(self) -> str:
         """Target-language code for the gas-temperature rate ``dT/dt``.
 
-        Prints :attr:`Thermodynamics.dTdt_tot`.
+        A thin printer over ``net.thermodynamics.dTdt_tot``
+        (:attr:`~jaff.physics.thermodynamics.Thermodynamics.dTdt_tot`).  It is
+        selected in the RHS and Jacobian generators with ``thermal="dtdt"``
+        (template modifier ``THERMAL dtdt``).  For the energy rate see
+        :meth:`get_dedt`.
 
         Returns
         -------
         str
             Single-expression code string (no assignment or line terminator).
+
+        Notes
+        -----
+        With ``E = E(T, n)`` the volumetric internal energy (the EOS):
+
+        ```text
+        dT/dt = (dE_tot/dt - Σ_i ∂E/∂n_i · dn_i/dt) / (∂E/∂T)
+        ```
+
+        The composition term accounts for reactions changing the particle
+        numbers that share the thermal energy.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> print(Codegen(net, lang="python").get_dtdt())
+        (-2.29107354821899e-26*tgas**0.3*...)/(2.0709734999999e-16*nden[0] + ...)
         """
         expr = self.net.thermodynamics.dTdt_tot
         return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
@@ -635,7 +877,7 @@ class Codegen:
         cse_var: str = "cse",
         cse_suffix: str = "",
     ) -> IndexedReturn:
-        """Return symbolic ODE RHS expressions as an :class:`~jaff.types.IndexedReturn`.
+        """Return symbolic ODE RHS expressions as an :class:`~jaff.codegen.IndexedReturn`.
 
         Builds the full per-species ``dn_i/dt`` expressions by substituting
         the reaction rate symbols ``k[i]`` with their concrete symbolic rate
@@ -667,6 +909,36 @@ class Codegen:
               :class:`~jaff.types.IndexedList`.
             * ``"expressions"`` — per-species ODE expressions as
               :class:`~jaff.types.IndexedList`.
+
+        Notes
+        -----
+        The rate of change of species ``n`` sums the fluxes ``f_i`` of every
+        reaction it takes part in, with a minus sign when ``n`` is a reactant
+        and a plus sign when it is a product:
+
+        ```text
+        dn/dt = Σ_i (±) f_i
+        ```
+
+        Here the fluxes are inlined (``k_i`` times the reactant densities
+        ``nden[j]``), unlike :meth:`get_indexed_ode_expressions`.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> odes = Codegen(net, lang="python").get_indexed_odes()
+        >>> for idx, expr in odes["extras"]["cse"]:
+        ...     print(idx, expr)
+        [0] 1.65941781598291e-10*tgas**(-0.7)*nden[1]*nden[2] - (...)*nden[0]
+        [1] -cse0
+        >>> for idx, expr in odes["expressions"]:
+        ...     print(idx, expr)
+        [0] cse0
+        [1] cse1
+        [2] cse1
         """
         with jaff_progress.indeterminate("Generating odes"):
             ir: IndexedReturn = {
@@ -724,17 +996,22 @@ class Codegen:
     ) -> str:
         """Generate ODE right-hand side assignment code as a multi-line string.
 
-        Wraps :meth:`get_indexed_odes` and formats the result as::
+        Wraps :meth:`get_indexed_odes` and formats the result as:
 
-            const double cse0 = …;   // CSE temporaries (if any)
-            f[0] = cse0 * nden[1];   // dn_H/dt
-            f[1] = …;                // dn_H2/dt
-            …
+        ```cpp
+        const double cse0 = …;   // CSE temporaries (if any)
+        f[0] = cse0 * nden[1];   // dn_H/dt
+        f[1] = …;                // dn_H2/dt
+        ```
+
+        The thermal equation is not included; see :meth:`get_rhs_str`.
 
         Parameters
         ----------
         idx_offset : int, optional
-            Base index for species ODE array subscripts.  Default ``0``.
+            Base index for species ODE array subscripts.  Default ``0``;
+            negative values use the language default (``0`` for
+            C/C++/Python/Rust, ``1`` for Fortran/Julia/R).
         use_cse : bool, optional
             Enable CSE.  Default ``True``.
         cse_var : str, optional
@@ -742,10 +1019,11 @@ class Codegen:
         ode_var : str, optional
             Name of the output ODE array.  Default ``"f"``.
         brac_format : str, optional
-            Override 1-D bracket style.  Empty string uses the language default.
+            Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
+            ``"<>"``.  Empty string uses the language default.
         def_prefix : str, optional
-            Type declaration prefix for CSE temporaries.  Empty string uses the
-            language-default type qualifier and ``double`` type.
+            Currently ignored: CSE declarations always use the language's
+            :meth:`~jaff.codegen._languages.Language.format_cse_declaration`.
         assignment_op : str, optional
             Assignment operator override.  Empty string uses the language default.
         line_end : str, optional
@@ -755,6 +1033,24 @@ class Codegen:
         -------
         str
             Multi-line string of ODE assignments, including any CSE temporaries.
+
+        Raises
+        ------
+        InvalidLanguageError
+            If *brac_format* is not a supported bracket style.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> print(Codegen(net, lang="cxx").get_ode_str(), end="")
+        const double cse0 = 1.6594178159829075e-10*std::pow(tgas, ...)*nden[0];
+        const double cse1 = -cse0;
+        f[0] = cse0;
+        f[1] = cse1;
+        f[2] = cse1;
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
 
@@ -784,7 +1080,7 @@ class Codegen:
         rad_order: int = 0,
         cse_suffix: str = "",
     ) -> IndexedReturn:
-        """Return the combined ODE + energy (+ radiation) RHS as an :class:`~jaff.types.IndexedReturn`.
+        """Return the combined ODE + energy (+ radiation) RHS as an :class:`~jaff.codegen.IndexedReturn`.
 
         Assembles the full right-hand side vector by concatenating, in order:
 
@@ -807,17 +1103,19 @@ class Codegen:
             Text appended after the index of each CSE temporary name, e.g.
             ``"_value"`` yields ``<cse_var>0_value``.  Default ``""``.
         thermal : str, optional
-            Thermal equation mode: ``"none"``, ``"dedt"`` or ``"dtdt"``.
-            Default ``"dedt"``.
+            Thermal equation mode: ``"none"``, ``"dedt"`` (total dE/dt, see
+            :meth:`get_dedt`) or ``"dtdt"`` (total dT/dt, see
+            :meth:`get_dtdt`).  Default ``"dedt"``.
         energy : str, optional
-            Evolved internal-energy form (see :attr:`Thermodynamics.dEdt_tot`
-            and :meth:`InternalEnergy.normaliser`).
-            Default ``"volumetric"``.
+            Evolved internal-energy form when *thermal* is ``"dedt"``:
+            ``"volumetric"``, ``"specific"``, ``"per_particle"`` or
+            ``"molar"`` (see :meth:`get_dedt`).  Default ``"volumetric"``.
         radiation : bool, optional
             Include radiation moment ODEs in the RHS.  Default ``False``.
         rad_order : int, optional
-            Order of the radiation moment closure (``0``–``3``).  Used only
-            when *radiation* is ``True``.
+            Radiation layout order (``0``–``3``, see
+            :meth:`get_indexed_radodes`).  Used only when *radiation* is
+            ``True``.  Default ``0``.
 
         Returns
         -------
@@ -827,6 +1125,25 @@ class Codegen:
             * ``"extras"["cse"]`` — CSE temporaries.
             * ``"expressions"`` — All RHS expressions in the order described
               above, indexed sequentially from 0.
+
+        Raises
+        ------
+        ValueError
+            If *thermal* is not a valid mode, or *energy* is not a valid
+            form.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> cg = Codegen(net, lang="cxx")
+        >>> len(cg.get_indexed_rhs()["expressions"])  # 3 species + dE/dt
+        4
+        >>> rhs = cg.get_indexed_rhs(thermal="none", radiation=True)
+        >>> len(rhs["expressions"])  # 3 species + 3 bands x (density, flux)
+        9
         """
         with jaff_progress.indeterminate("Generating rhs equations"):
             ir: IndexedReturn = {
@@ -895,18 +1212,22 @@ class Codegen:
         """Generate the full RHS assignment code as a multi-line string.
 
         Wraps :meth:`get_indexed_rhs` and formats the combined species ODE,
-        energy, and (optional) radiation expressions as::
+        energy, and (optional) radiation expressions as:
 
-            const double cse0 = …;  // CSE temporaries
-            f[0] = …;               // dn_H/dt
-            …
-            f[N] = …;               // dE/dt or dT/dt (thermal row)
-            f[N+1] = …;             // radiation ODE 0 (if radiation=True)
+        ```cpp
+        const double cse0 = …;  // CSE temporaries
+        f[0] = …;               // dn_H/dt
+        …
+        f[N] = …;               // dE/dt or dT/dt (thermal row)
+        f[N+1] = …;             // radiation ODE 0 (if radiation=True)
+        ```
 
         Parameters
         ----------
         idx_offset : int, optional
-            Base index for the output array subscripts.  Default ``0``.
+            Base index for the output array subscripts.  Default ``0``;
+            negative values use the language default (``0`` for
+            C/C++/Python/Rust, ``1`` for Fortran/Julia/R).
         use_cse : bool, optional
             Enable joint CSE across all RHS equations.  Default ``True``.
         cse_var : str, optional
@@ -914,30 +1235,60 @@ class Codegen:
         ode_var : str, optional
             Name of the output RHS array.  Default ``"f"``.
         brac_format : str, optional
-            Override 1-D bracket style.  Empty string uses the language default.
+            Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
+            ``"<>"``.  Empty string uses the language default.
         def_prefix : str, optional
-            Type declaration prefix for CSE temporaries.  Empty string uses the
-            language-default type qualifier and ``double`` type.
+            Currently ignored: CSE declarations always use the language's
+            :meth:`~jaff.codegen._languages.Language.format_cse_declaration`.
         assignment_op : str, optional
             Assignment operator override.  Empty string uses the language default.
         line_end : str, optional
             Line terminator override.  Empty string uses the language default.
         thermal : str, optional
-            Thermal equation mode: ``"none"``, ``"dedt"`` or ``"dtdt"``.
-            Default ``"dedt"``.
+            Thermal equation mode: ``"none"``, ``"dedt"`` (total dE/dt, see
+            :meth:`get_dedt`) or ``"dtdt"`` (total dT/dt, see
+            :meth:`get_dtdt`).  Default ``"dedt"``.
         energy : str, optional
-            Evolved internal-energy form (see :attr:`Thermodynamics.dEdt_tot`
-            and :meth:`InternalEnergy.normaliser`).
-            Default ``"volumetric"``.
+            Evolved internal-energy form when *thermal* is ``"dedt"``:
+            ``"volumetric"``, ``"specific"``, ``"per_particle"`` or
+            ``"molar"`` (see :meth:`get_dedt`).  Default ``"volumetric"``.
         radiation : bool, optional
-            Include radiation moment ODEs.  Default ``False``.
+            Include radiation moment ODEs after the thermal row.
+            Default ``False``.
         rad_order : int, optional
-            Radiation moment closure order.  Default ``0``.
+            Radiation layout order (``0``–``3``, see
+            :meth:`get_indexed_radodes`).  Default ``0``.
 
         Returns
         -------
         str
             Multi-line string of all RHS assignments including CSE temporaries.
+
+        Raises
+        ------
+        ValueError
+            If *thermal* is not a valid mode, or *energy* is not a valid
+            form.
+        InvalidLanguageError
+            If *brac_format* is not a supported bracket style.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> print(Codegen(net, lang="cxx").get_rhs_str(), end="")
+        const double cse0 = nden[1]*nden[2];
+        const double cse1 = 5.8515408231992116e-8*photden[1] + ...*photden[2];
+        const double cse2 = 1.6594178159829075e-10*cse0*... - cse1*nden[0];
+        const double cse3 = -cse2;
+        f[0] = cse2;
+        f[1] = cse3;
+        f[2] = cse3;
+        f[3] = -2.2910735482189854e-26*cse0*... + 6.4...e-12*cse1*nden[0];
+
+        ``f[3]`` is the dE/dt row at index ``n_species``.
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
 
@@ -971,17 +1322,28 @@ class Codegen:
         cse_var: str = "rcse",
         cse_suffix: str = "",
     ) -> IndexedReturn:
-        """Return radiation moment ODE expressions as an :class:`~jaff.types.IndexedReturn`.
+        """Return radiation moment ODE expressions as an :class:`~jaff.codegen.IndexedReturn`.
 
         Retrieves the symbolic radiation moment equations from
         :meth:`~jaff.core.network.Network.sradodes` for the specified closure
         order and optionally applies CSE.
 
+        Each radiation band contributes two equations, one for its density
+        ``rd_i`` (``radeden[i]`` energy density, or ``photden[i]`` photon
+        density in photon mode) and one for its flux ``f_i`` (``rflux[i]``).
+
         Parameters
         ----------
         order : int, optional
-            Radiation moment closure order (``0``–``3``).  Passed directly to
+            Layout of the radiation equations, passed directly to
             :meth:`~jaff.core.network.Network.sradodes`.  Default ``0``.
+
+            | Order | Layout |
+            | --- | --- |
+            | ``0`` | ``[rd_0, f_0, rd_1, f_1, …]`` |
+            | ``1`` | ``[f_0, rd_0, f_1, rd_1, …]`` |
+            | ``2`` | ``[rd_0, rd_1, …, f_0, f_1, …]`` |
+            | ``3`` | ``[f_0, f_1, …, rd_0, rd_1, …]`` |
         use_cse : bool, optional
             Enable CSE across the radiation ODE expressions.  Default ``True``.
         cse_var : str, optional
@@ -999,6 +1361,25 @@ class Codegen:
             * ``"extras"["cse"]`` — CSE temporaries.
             * ``"expressions"`` — radiation ODE expressions indexed
               sequentially from 0.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> radodes = Codegen(net, lang="cxx").get_indexed_radodes(order=0)
+        >>> for idx, expr in radodes["expressions"]:
+        ...     print(idx, expr)
+        [0] 0
+        [1] 0
+        [2] -rcse0*photden[1]
+        [3] -rcse0*rflux[1]
+        [4] -rcse1*photden[2]
+        [5] -rcse1*rflux[2]
+
+        Band 0 (1–13.6 eV) lies below the H ionisation threshold, so its
+        equations vanish.
         """
         ir: IndexedReturn = {
             "extras": {"cse": IndexedList()},
@@ -1055,7 +1436,9 @@ class Codegen:
         Parameters
         ----------
         idx_offset : int, optional
-            Base index for the output array subscripts.  Default ``0``.
+            Base index for the output array subscripts.  Default ``0``;
+            negative values use the language default (``0`` for
+            C/C++/Python/Rust, ``1`` for Fortran/Julia/R).
         use_cse : bool, optional
             Enable CSE.  Default ``True``.
         cse_var : str, optional
@@ -1063,16 +1446,18 @@ class Codegen:
         radode_var : str, optional
             Name of the output radiation ODE array.  Default ``"f"``.
         brac_format : str, optional
-            Override 1-D bracket style.  Empty string uses the language default.
+            Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
+            ``"<>"``.  Empty string uses the language default.
         def_prefix : str, optional
-            Type declaration prefix for CSE temporaries.  Empty string uses the
-            language-default type qualifier and ``double`` type.
+            Currently ignored: CSE declarations always use the language's
+            :meth:`~jaff.codegen._languages.Language.format_cse_declaration`.
         assignment_op : str, optional
             Assignment operator override.  Empty string uses the language default.
         line_end : str, optional
             Line terminator override.  Empty string uses the language default.
         order : int, optional
-            Radiation moment closure order passed to :meth:`get_indexed_radodes`.
+            Radiation layout order (``0``–``3``) passed to
+            :meth:`get_indexed_radodes`, which describes the layouts.
             Default ``0``.
 
         Returns
@@ -1080,6 +1465,39 @@ class Codegen:
         str
             Multi-line string of radiation ODE assignments including any CSE
             temporaries.
+
+        Raises
+        ------
+        InvalidLanguageError
+            If *brac_format* is not a supported bracket style.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> cg = Codegen(net, lang="cxx")
+        >>> print(cg.get_radode_str(), end="")
+        const double rcse0 = 5.8515408231992116e-8*nden[0];
+        const double rcse1 = 1.1420465158197018e-10*nden[0];
+        f[0] = 0;
+        f[1] = 0;
+        f[2] = -rcse0*photden[1];
+        f[3] = -rcse0*rflux[1];
+        f[4] = -rcse1*photden[2];
+        f[5] = -rcse1*rflux[2];
+
+        With ``order=1`` each band's flux equation comes before its density
+        equation:
+
+        >>> print(cg.get_radode_str(order=1, use_cse=False), end="")
+        f[0] = 0;
+        f[1] = 0;
+        f[2] = -5.8515408231992116e-8*nden[0]*rflux[1];
+        f[3] = -5.8515408231992116e-8*nden[0]*photden[1];
+        f[4] = -1.1420465158197018e-10*nden[0]*rflux[2];
+        f[5] = -1.1420465158197018e-10*nden[0]*photden[2];
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
 
@@ -1110,7 +1528,7 @@ class Codegen:
         rad_order: int = 0,
         cse_suffix: str = "",
     ) -> IndexedReturn:
-        """Return the analytical Jacobian ∂f_i/∂y_j as an :class:`~jaff.types.IndexedReturn`.
+        """Return the analytical Jacobian ∂f_i/∂y_j as an :class:`~jaff.codegen.IndexedReturn`.
 
         Computes the exact (analytical) Jacobian of the ODE right-hand side
         vector ``f`` with respect to the state vector ``y`` using SymPy's
@@ -1120,24 +1538,30 @@ class Codegen:
         The computation proceeds in four main stages:
 
         1. **Symbol mapping** — Each ``nden[i]`` (a SymPy
-           :class:`~sympy.MatrixSymbol` entry) is mapped to a scalar symbol
-           ``y_i`` to allow :meth:`sympy.Matrix.jacobian` to differentiate
-           element-wise.  Radiation density/flux symbols are similarly mapped.
+           :class:`~sympy.Indexed` entry) is mapped to a scalar symbol
+           ``y_i`` so each element can be differentiated with respect
+           to an ordinary symbol.  Radiation density/flux symbols are similarly mapped.
         2. **Rate inlining** — Symbolic rate placeholders ``k[i]`` are
            replaced with the concrete rate expressions after the symbol
            substitution.
-        3. **Jacobian computation** — :meth:`sympy.Matrix.jacobian` is called
-           on the full ODE vector with respect to ``[y_0, y_1, …]``.
+        3. **Jacobian computation** — each ODE is differentiated with
+           respect to every ``y_j`` among its free symbols; all other
+           elements stay zero.
         4. **Back-substitution** — Scalar symbols ``y_i`` in the generated
            code strings are replaced with their original array notation
-           ``nden[i]`` (and ``radeden[i]`` / ``rflux[i]`` for radiation) via
-           regex.
+           ``nden[i]`` (and ``radeden[i]`` or ``photden[i]`` / ``rflux[i]``
+           for radiation) via regex.
 
         When *thermal* is not ``"none"``, the thermal row is appended and an
         extra column is inserted after the species columns to account for the
         implicit temperature dependence: ``∂ẋ_i/∂T_gas`` for ``"dtdt"``, or
-        ``∂ẋ_i/∂e`` via the EOS chain rule for ``"dedt"`` (see
-        :meth:`_energy_column`).
+        ``∂ẋ_i/∂e`` via the EOS chain rule for ``"dedt"``.  With
+        ``e = eos.normaliser(energy)`` the evolved energy:
+
+        ```text
+        ∂F/∂e       = (∂F/∂T) / (∂e/∂T)
+        ∂F/∂n_j|_e  = ∂F/∂n_j|_T - (∂F/∂T) (∂e/∂n_j) / (∂e/∂T)
+        ```
 
         Parameters
         ----------
@@ -1159,8 +1583,9 @@ class Codegen:
             Include radiation moment equations in the Jacobian.
             Default ``False``.
         rad_order : int, optional
-            Radiation moment closure order (``0``–``3``).  Used only when
-            *radiation* is ``True``.
+            Radiation layout order (``0``–``3``, see
+            :meth:`get_indexed_radodes`).  Used only when *radiation* is
+            ``True``.  Default ``0``.
 
         Returns
         -------
@@ -1177,6 +1602,23 @@ class Codegen:
         ValueError
             If *radiation* is ``True`` and *rad_order* is not in ``{0,1,2,3}``,
             or *thermal* is not a valid mode.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> jac = Codegen(net, lang="cxx").get_indexed_jacobian()
+        >>> for idx, expr in jac["expressions"][:3]:
+        ...     print(idx, expr)
+        [0, 0] -cse0
+        [0, 1] cse2
+        [0, 2] cse3
+        >>> for idx, expr in jac["extras"]["cse"][:2]:
+        ...     print(idx, expr)
+        [0] 5.8515408231992116e-8*photden[1] + 1.1420465158197018e-10*photden[2]
+        [1] 1.6594178159829075e-10*std::pow(tgas, -0.69999999999999996)
         """
 
         with jaff_progress.indeterminate("Preprocessing jacobian"):
@@ -1399,12 +1841,18 @@ class Codegen:
         """Generate Jacobian assignment code as a multi-line string.
 
         Wraps :meth:`get_indexed_jacobian` and formats the sparse non-zero
-        elements as::
+        elements as:
 
-            const double cse0 = …;       // CSE temporaries (if any)
-            J[0][1] = cse0 * nden[2];    // ∂f_0/∂y_1
-            J[2][2] = …;                 // ∂f_2/∂y_2
-            …
+        ```cpp
+        const double cse0 = …;       // CSE temporaries (if any)
+        J[0][1] = cse0 * nden[2];    // ∂f_0/∂y_1
+        J[2][2] = …;                 // ∂f_2/∂y_2
+        ```
+
+        Only non-zero elements are emitted; ``J[i][j]`` is ``∂f_i/∂y_j``.
+        The energy form, radiation equations and CSE suffix of
+        :meth:`get_indexed_jacobian` are not forwarded: this method always
+        uses the volumetric energy form and no radiation equations.
 
         Parameters
         ----------
@@ -1412,7 +1860,9 @@ class Codegen:
             Thermal equation mode (``"none"``, ``"dedt"`` or ``"dtdt"``);
             adds the thermal row/column when not ``"none"``.  Default ``"none"``.
         idx_offset : int, optional
-            Base index for row and column subscripts.  Default ``0``.
+            Base index for row and column subscripts.  Default ``0``;
+            negative values use the language default (``0`` for
+            C/C++/Python/Rust, ``1`` for Fortran/Julia/R).
         use_cse : bool, optional
             Enable CSE.  Default ``True``.
         cse_var : str, optional
@@ -1421,10 +1871,22 @@ class Codegen:
             Name of the Jacobian matrix.  Default ``"J"``.
         matrix_format : str, optional
             Override 2-D bracket/separator format.  Empty string uses the
-            language default.
+            language default (``J[i][j]`` for C/C++/Python/Rust, ``J(i, j)``
+            for Fortran, ``J[i, j]`` for Julia/R).  Valid values:
+
+            | Format | Output style |
+            | --- | --- |
+            | ``"()"`` / ``"()()"`` | ``J(i)(j)`` |
+            | ``"(,)"`` | ``J(i, j)`` |
+            | ``"[]"`` / ``"[][]"`` | ``J[i][j]`` |
+            | ``"[,]"`` | ``J[i, j]`` |
+            | ``"{}"`` / ``"{}{}"`` | ``J{i}{j}`` |
+            | ``"{,}"`` | ``J{i, j}`` |
+            | ``"<>"`` / ``"<><>"`` | ``J<i><j>`` |
+            | ``"<,>"`` | ``J<i, j>`` |
         var_prefix : str, optional
-            Type declaration prefix for CSE temporaries.  Empty string uses the
-            language-default type qualifier and ``double`` type.
+            Currently ignored: CSE declarations always use the language's
+            :meth:`~jaff.codegen._languages.Language.format_cse_declaration`.
         assignment_op : str, optional
             Assignment operator override.  Empty string uses the language default.
         line_end : str, optional
@@ -1440,6 +1902,32 @@ class Codegen:
         ------
         InvalidLanguageError
             If *matrix_format* is not a supported format string.
+        ValueError
+            If *thermal* is not a valid mode.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> cg = Codegen(net, lang="cxx")
+        >>> print(cg.get_jacobian_str(matrix_format="[,]"), end="")
+        const double cse0 = 5.8515408231992116e-8*photden[1] + ...*photden[2];
+        const double cse1 = 1.6594178159829075e-10*std::pow(tgas, -0.69999999999999996);
+        const double cse2 = cse1*nden[2];
+        const double cse3 = cse1*nden[1];
+        const double cse4 = -cse2;
+        const double cse5 = -cse3;
+        J[0, 0] = -cse0;
+        J[0, 1] = cse2;
+        J[0, 2] = cse3;
+        J[1, 0] = cse0;
+        J[1, 1] = cse4;
+        J[1, 2] = cse5;
+        J[2, 0] = cse0;
+        J[2, 1] = cse4;
+        J[2, 2] = cse5;
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
 

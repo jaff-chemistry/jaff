@@ -149,7 +149,7 @@ def _fortran_free_wrap(code: str, width: int = _FORTRAN_WIDTH) -> str:
         Free-form Fortran as produced by :func:`sympy.fcode` (statement lines
         plus ``&``-continued lines).
     width : int, optional
-        Significant column count.  Default 132.
+        Significant column count.  Default 120.
 
     Returns
     -------
@@ -221,7 +221,7 @@ def _fortran_code_gen(expr: Any, **kwargs: Any) -> str:
 def wrap_fortran_source(
     text: str, width: int = _FORTRAN_WIDTH, comment: str | None = None
 ) -> str:
-    """Re-wrap every over-long executable statement in a fixed-form source.
+    """Re-wrap every over-long executable statement in a free-form source.
 
     :func:`_fortran_code_gen` only wraps expressions that pass through
     :func:`sympy.fcode`.  Many generated statements -- e.g. the species ODE
@@ -239,7 +239,7 @@ def wrap_fortran_source(
     text : str
         Complete generated Fortran source.
     width : int, optional
-        Significant column count.  Default 72.
+        Significant column count.  Default 120.
     comment : str or None, optional
         Extra comment prefix whose lines are also left untouched, e.g. the
         ``$$JAFF COMMENT`` token of a template.  ``!`` lines always are.
@@ -293,10 +293,111 @@ class Language:
     instance plus its aliases, so adding a language requires only a new subclass
     with no central edits.
 
-    Resolve a language by alias with the base factory::
+    Calling the base class, ``Language(lang)``, is a factory: it returns the
+    registered singleton for the name or alias *lang* rather than a new
+    object, and raises :class:`~jaff.errors.InvalidLanguageError` for an
+    unknown name.  The registered languages, by canonical name (aliases in
+    parentheses), are ``"c"``, ``"cxx"`` (``"c++"``, ``"cpp"``),
+    ``"fortran"`` (``"f90"``), ``"python"`` (``"py"``), ``"rust"``
+    (``"rs"``), ``"julia"`` (``"jl"``) and ``"r"``.  A template file's
+    extension also selects a language, see :meth:`from_extension`.
 
-        cxx = Language("c++")  # -> the registered Cxx singleton
-        cxx.code_gen(expr)  # sp.cxxcode(expr)
+    :class:`~jaff.codegen.Codegen` holds one as ``Codegen.lang``; its
+    ``brac_format``, ``matrix_format``, ``assignment_op`` and ``line_end``
+    method arguments are applied through a temporary :meth:`derive` view.
+
+    Attributes
+    ----------
+    name : str
+        Canonical language name, e.g. ``"cxx"``.
+    aliases : tuple of str
+        Other names that resolve to this language, e.g. ``("c++", "cpp")``.
+    extensions : tuple of str
+        Template file extensions claimed by this language (lowercase, no dot).
+    brac : str
+        Default 1-D array brackets, ``"[]"`` or ``"()"``.
+    matrix_sep : str
+        Default separator between the two indices of a 2-D array element,
+        e.g. ``"]["`` (``J[i][j]``) or ``", "`` (``J(i, j)``).
+    code_gen : Callable[..., str]
+        SymPy printer turning an expression into source code, e.g.
+        :func:`sympy.cxxcode`.
+    idx_offset : int
+        First array index: ``0`` for C-like languages and Python, ``1`` for
+        Fortran, Julia and R.
+    comment : str
+        Single-line comment prefix, e.g. ``"//"``.
+    types : dict[str, str]
+        Type keys (``"int"``, ``"float"``, ``"double"``, ``"bool"``) mapped to
+        the language's type name with a trailing space; empty for untyped
+        output.
+    extras : dict[str, Any]
+        Extra declaration tokens such as ``"type_qualifier"`` (``"const "``)
+        and ``"class_specifier"`` (``"static "``).
+    assignment_op : str
+        Assignment operator, e.g. ``"="`` (``"<-"`` for R).
+    line_end : str
+        Statement terminator, e.g. ``";"`` or ``""``.
+    lb, rb : str
+        Left and right 1-D array brackets (from ``brac``).
+    mlb, mrb : str
+        Left and right 2-D array brackets.
+    sep : str
+        Separator between 2-D array indices (from ``matrix_sep``).
+    LOOKUP : dict[str, str]
+        Every registered name and alias mapped to its canonical name.
+    EXTENSIONS : dict[str, str]
+        Every claimed file extension mapped to its canonical language name.
+    BRACKET_FORMATS : tuple of str
+        Accepted ``brac_format`` values of :meth:`derive`.
+    MATRIX_FORMATS : dict[str, dict[str, str]]
+        Accepted ``matrix_format`` values of :meth:`derive`, mapped to their
+        brackets and separator: ``"[,]"`` gives ``J[i, j]`` and ``"[]"`` (or
+        ``"[][]"``) gives ``J[i][j]``.
+
+    Notes
+    -----
+    To add a language, define a subclass that sets the class attributes above
+    and implements :meth:`format_cse_declaration`; defining it registers it.
+    For example:
+
+    ```python
+    class Octave(Language):
+        name = "octave"
+        aliases = ("matlab",)
+        extensions = ("m",)
+        brac = "()"
+        assignment_op = "="
+        line_end = ";"
+        matrix_sep = ", "
+        code_gen = staticmethod(sp.octave_code)
+        idx_offset = 1
+        comment = "%"
+        types = {}
+        extras = {}
+
+        def format_cse_declaration(self, var_name, expr, type_name="double"):
+            return f"{var_name} = {expr};"
+    ```
+
+    Registration raises :class:`ValueError` if the subclass has no ``name``
+    or claims an extension owned by another language.
+
+    Examples
+    --------
+    >>> import sympy as sp
+    >>> from jaff.codegen import Language
+    >>> cxx = Language("c++")
+    >>> cxx
+    <Language cxx>
+    >>> cxx.lb, cxx.rb, cxx.idx_offset, cxx.comment
+    ('[', ']', 0, '//')
+    >>> cxx.code_gen(sp.Symbol("x") ** 2)
+    'std::pow(x, 2)'
+    >>> Language.from_extension(".f90")
+    <Language fortran>
+    >>> sorted(lang.name for lang in Language.registered())
+    ['c', 'cxx', 'fortran', 'julia', 'python', 'r', 'rust']
     """
 
     _register: ClassVar[dict[str, "Language"]] = {}
@@ -384,6 +485,15 @@ class Language:
         -------
         Language or None
             The registered singleton, or ``None`` if no language claims ``ext``.
+
+        Examples
+        --------
+        >>> Language.from_extension(".F90")
+        <Language fortran>
+        >>> Language.from_extension("hpp")
+        <Language cxx>
+        >>> Language.from_extension("txt") is None
+        True
         """
         name = Language.EXTENSIONS.get(ext.lstrip(".").lower())
         return Language._register[name] if name is not None else None
@@ -402,6 +512,9 @@ class Language:
         singleton) unchanged.  Otherwise returns a shallow, *unregistered*
         copy with the overridden attributes shadowing the class defaults, so
         the singleton is never mutated and the registry never grows.
+
+        An empty string means "no override" for every argument, so a token
+        cannot be overridden to the empty string (e.g. dropping C++'s ``;``).
 
         Parameters
         ----------
@@ -423,6 +536,17 @@ class Language:
         ------
         InvalidLanguageError
             If *brac_format* or *matrix_format* is not a supported format.
+
+        Examples
+        --------
+        >>> cxx = Language("c++")
+        >>> cxx.derive() is cxx
+        True
+        >>> view = cxx.derive(matrix_format="(,)", assignment_op="+=")
+        >>> f"J{view.mlb}i{view.sep}j{view.mrb} {view.assignment_op} x{view.line_end}"
+        'J(i, j) += x;'
+        >>> f"J{cxx.mlb}i{cxx.sep}j{cxx.mrb} {cxx.assignment_op} x{cxx.line_end}"
+        'J[i][j] = x;'
         """
         if not (brac_format or matrix_format or assignment_op or line_end):
             return self
@@ -456,12 +580,24 @@ class Language:
 
     @classmethod
     def registered(cls) -> tuple["Language", ...]:
-        """Return every registered language singleton, one per canonical name."""
+        """Return every registered language singleton, one per canonical name.
+
+        Returns
+        -------
+        tuple of Language
+            The singletons, in registration order.
+        """
         return tuple(Language._register.values())
 
     @classmethod
     def comments(cls) -> set[str]:
-        """Return the set of single-line comment prefixes across all languages."""
+        """Return the set of single-line comment prefixes across all languages.
+
+        Returns
+        -------
+        set of str
+            Comment prefixes such as ``"//"``, ``"!"`` and ``"#"``.
+        """
         return {lang.comment for lang in Language._register.values()}
 
     def __new__(cls, lang: str | None = None) -> "Language":
@@ -489,11 +625,12 @@ class Language:
         Parameters
         ----------
         var_name : str
-            Temporary variable name (e.g., 'x0', 'cse1').
+            Temporary variable name (e.g., ``"x0"``, ``"cse1"``).
         expr : str
             Expression to assign.
         type_name : str, optional
-            Type key (default 'double').
+            Type key looked up in :attr:`types` (default ``"double"``); ignored
+            by untyped languages.
 
         Returns
         -------
@@ -504,6 +641,15 @@ class Language:
         ------
         NotImplementedError
             If not implemented by subclass.
+
+        Examples
+        --------
+        >>> Language("c++").format_cse_declaration("x0", "a*b")
+        'const double x0 = a*b;'
+        >>> Language("rust").format_cse_declaration("x0", "a*b")
+        'let x0: f64 = a*b;'
+        >>> Language("fortran").format_cse_declaration("x0", "a*b")
+        'x0 = a*b'
         """
         raise NotImplementedError(
             f"Language {self.name} must implement format_cse_declaration()"

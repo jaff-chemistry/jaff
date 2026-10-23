@@ -23,7 +23,7 @@ This is a complete reference for all public APIs in JAFF.
 
     Source code generation from reaction networks: `Builder`, `Codegen`, `Preprocessor`.
 
-    [:octicons-arrow-right-24: jaff.codegen](codegen/index.md)
+    [:octicons-arrow-right-24: jaff.codegen](../reference/codegen/index.md)
 
 - :phosphor-database:{ .sm .middle } **Drivers**
 
