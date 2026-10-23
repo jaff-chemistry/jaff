@@ -191,7 +191,7 @@ class Thermodynamics:
         for r in self.net.reactions:
             dEdt += r.dE * r.rate
 
-        return DEDt(self.net.symbols.standardize(dEdt), self.net)
+        return DEDt(dEdt, self.net)
 
     def _get_dEdt_extra(self) -> DEDt:
         """Build the non-reactive heating rate from ``heatingcoolingrate``.
@@ -202,9 +202,9 @@ class Thermodynamics:
             The standardised auxiliary-function definition, or zero if absent.
         """
         dEdt = Float(0.0)
-        if "heatingcoolingrate" in self.net.spec.aux_funcs:
-            dEdt = self.net.symbols.standardize(
-                self.net.spec.aux_funcs["heatingcoolingrate"].expr
+        if "heatingcoolingrate" in self.net.functions:
+            dEdt = self.net.symbols.resolve_rate_references(
+                self.net.functions.value("heatingcoolingrate")
             )
 
         return DEDt(dEdt, self.net)

@@ -136,7 +136,8 @@ net = Network(
 | `filename`        | `Path`            | Absolute path to the source file                                                                                    |
 | `label`           | `str`             | Network name                                                                                                        |
 | `config`          | `NetworkConfig`   | The validated [configuration](../configuration/index.md) the network was built from                                |
-| `spec`            | `NetworkSpec`     | Source-file facts, not settings: resolved `fname`, the `.jfunc` used (`jfunc_path`), its `aux_funcs`                 |
+| `spec`            | `NetworkSpec`     | Source-file facts, not settings: resolved `fname`, the `.jfunc` used (`jfunc_path`)                                 |
+| `functions`       | `NetworkFunctions` | The `.jfunc` functions, used via `value(name)` / `call(name, args)` ([parameters](../designing-networks/auxiliary-functions.md#what-a-parameter-means)) |
 | `species`         | `Species`         | Ordered [`Species`](species.md) catalogue                                                                           |
 | `reactions`       | `Reactions`       | Ordered [`Reactions`](reactions.md) catalogue                                                                       |
 | `elements`        | `Elements`        | [`Elements`](elements.md) catalogue derived from the species                                                        |

@@ -7,8 +7,6 @@ import pytest
 import sympy as sp
 
 from jaff.cli import JaffGen
-from jaff.core.parsers import AuxiliaryFunctionProps
-from jaff.core.reaction.reaction_props import AuxFunctions
 from jaff.errors import ParserError
 from jaff.physics.photo_reactions.config import RadiationConfig
 
@@ -40,16 +38,7 @@ def xsec_network(make_network, tmp_path):
     return _make
 
 
-class TestAuxFunctions:
-    def test_chemrate_and_cross_section_together_raise(self):
-        func = AuxiliaryFunctionProps(sp.Float(1.0), [], {})
-        with pytest.raises(ParserError, match="photoCrossSection"):
-            AuxFunctions(chemrate=func, photocrosssection=func)
-
-    def test_cross_section_alone_is_carried(self):
-        func = AuxiliaryFunctionProps(sp.Float(1.0), [], {})
-        assert AuxFunctions(photocrosssection=func).photocrosssection is func
-
+class TestFunctionConflicts:
     def test_jfunc_with_both_raises(self, xsec_network):
         jfunc = XSEC + "@function chemRate0()\n@return 1e-10\n"
         with pytest.raises(ParserError, match="photoCrossSection"):
@@ -60,7 +49,7 @@ class TestCustomCrossSection:
     def test_replaces_database_xsec(self, xsec_network):
         rxn = _photo(xsec_network())
 
-        assert rxn.aux_funcs.photocrosssection is not None
+        assert rxn.function("photoCrossSection") is not None
         assert rxn.photo.xsec.database == "custom"
         assert float(rxn.photo.xsec.photodecay_expr) == pytest.approx(
             1e-18, rel=1e-6, abs=0

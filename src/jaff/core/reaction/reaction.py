@@ -52,7 +52,7 @@ from __future__ import annotations
 
 import sys
 from functools import cache, cached_property
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from sympy import (
@@ -62,12 +62,12 @@ from sympy import (
     sympify,
 )
 
+from ...errors import ParserError
 from ...io import JaffLogger
 from ..elements import Elements
 from ..species import Specie, Species
 from .config import PhotoConfig, ReactionConfig
 from .photo_reaction import PhotoReaction
-from .reaction_props import AuxFunctions
 from .reaction_radiation import ReactionRadiation
 from .types import RateSegment, RateSegments
 
@@ -134,8 +134,9 @@ class Reaction:
         File-side source number (``source_index``) of the reaction, i.e. its
         file-order row number.  Stable per parsed row and gapped when rows
         merge (``duplicate_policy`` or a temperature-range merge), so it is
-        NOT a valid array subscript.  Used for aux lookups (``chemRateN``,
-        ``deltaEN``, ...) and :meth:`Reactions.by_source_index`.
+        NOT a valid array subscript.  Used for ``.jfunc`` lookups (``chemRateN``,
+        ``deltaEN``, ...; see :meth:`function`) and
+        :meth:`Reactions.by_source_index`.
     catalogue_index : int
         Dense 0..count-1 position of this reaction in the parent ``Reactions``
         catalogue, assigned by :meth:`Reactions.add`.  Safe to use as an array
@@ -268,7 +269,7 @@ class Reaction:
         self._format: str | None = format
         self._metadata: dict = metadata if metadata is not None else {}
         self.index: int = index
-        self.aux_funcs: AuxFunctions = self.__get_aux_funcs()
+        self.__check_functions()
         self.reactants: Species = Species(reactants, check_length=False)
         self.products: Species = Species(products, check_length=False)
         self.rate_coefficient = rate_coefficient
@@ -279,9 +280,10 @@ class Reaction:
         self.rate_segments: RateSegments = RateSegments(
             self, [RateSegment(rate_coefficient, tmin, tmax)]
         )
+        function_dE = self.function("deltaE")
         self.dE: Expr = (
-            cast(Expr, self.aux_funcs.deltae.expr)
-            if self.aux_funcs.deltae is not None
+            function_dE
+            if function_dE is not None
             else (dE if dE is not None else Float(0.0))
         )
         self.rad: ReactionRadiation = ReactionRadiation(self)
@@ -389,15 +391,50 @@ class Reaction:
 
         return self.serialized < other.serialized
 
-    def __get_aux_funcs(self) -> AuxFunctions:
-        af = self.net.spec.aux_funcs
+    def function(self, kind: str) -> Expr | None:
+        """The reaction's ``.jfunc`` ``<kind><N>`` function, read as a network input.
 
-        return AuxFunctions(
-            chemrate=af.get(f"chemrate{self.index}", None),
-            deltae=af.get(f"deltae{self.index}", None),
-            photocrosssection=af.get(f"photocrosssection{self.index}", None),
-            spectralyield=af.get(f"spectralyield{self.index}", None),
-        )
+        ``<N>`` is :attr:`index`; e.g. ``function("deltaE")`` is the reaction's
+        ``deltaE<N>``, with its parameters read as network quantities (see
+        :meth:`~jaff.core.network.NetworkFunctions.value`).
+
+        Parameters
+        ----------
+        kind : str
+            The function kind (case-insensitive): ``"chemRate"``, ``"deltaE"``,
+            ``"photoCrossSection"``, ``"spectralYield"``, ...
+
+        Returns
+        -------
+        sympy.Expr or None
+            The standardized function, or ``None`` when the ``.jfunc`` file
+            defines none for this reaction.
+
+        Examples
+        --------
+        >>> net = Network("GOW")
+        >>> rxn = net.reactions.by_source_index(0)
+        >>> rxn.verbatim
+        'H + _CR -> H+ + e-'
+        >>> rxn.function("deltaE") is None, rxn.function("photoCrossSection") is None
+        (False, True)
+        """
+        name = f"{kind}{self.index}"
+        functions = self.net.functions
+
+        return functions.value(name) if name in functions else None
+
+    def __check_functions(self) -> None:
+        """Reject a reaction with both a custom rate and a custom cross section."""
+        functions = self.net.functions
+        if (
+            f"chemrate{self.index}" in functions
+            and f"photocrosssection{self.index}" in functions
+        ):
+            raise ParserError(
+                "A reaction cannot have both a chemRate and a photoCrossSection "
+                "auxiliary function"
+            )
 
     def __photo_config(self) -> PhotoConfig:
         """The resolved photo settings (always set once resolved)."""

@@ -101,7 +101,10 @@ class Parser(ABC):
         """Adjust this parser's reactions once the network has been built.
 
         Called once, only for parsers that produced records, after every
-        reaction is loaded and before rates are standardised.  The reaction and
+        reaction is built from its standardised rate and before ``rc_<N>``
+        references are resolved: a hook writing a shorthand symbol (``n_X``,
+        ...) standardises it itself (``network.symbols.standardize``).  The
+        reaction and
         species catalogues are frozen: a hook may change reactions (e.g. their
         rate segments, props or ``_metadata``) but must not add or remove
         reactions or species.  Use ``network.reactions.with_format(self.name)``

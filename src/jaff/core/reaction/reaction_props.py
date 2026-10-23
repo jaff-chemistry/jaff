@@ -1,15 +1,12 @@
-# ABOUTME: Per-reaction data split out of Reaction: per-band photo data and the
-# ABOUTME: reaction's auxiliary functions
+# ABOUTME: Per-reaction data split out of Reaction: per-band photo data
+# ABOUTME: (GroupedPhotoReactionProps)
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from sympy import Expr
 
-from ...core.parsers import AuxiliaryFunctionProps
-from ...errors import ParserError
 
 if TYPE_CHECKING:
     pass
@@ -65,19 +62,3 @@ class GroupedPhotoReactionProps:
         self.k: Expr = k
         self.xsec: float | Expr | None = xsec
         self.xsec_frac: float = xsec_frac
-
-
-@dataclass
-class AuxFunctions:
-    chemrate: AuxiliaryFunctionProps | None = None
-    deltae: AuxiliaryFunctionProps | None = None
-    photocrosssection: AuxiliaryFunctionProps | None = None
-    spectralyield: AuxiliaryFunctionProps | None = None
-
-    def __post_init__(self) -> None:
-        """Reject a reaction given both a custom rate and a custom cross section."""
-        if self.chemrate is not None and self.photocrosssection is not None:
-            raise ParserError(
-                "A reaction cannot have both a chemRate and a photoCrossSection "
-                "auxiliary function"
-            )

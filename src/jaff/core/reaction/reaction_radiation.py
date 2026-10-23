@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, cast
+from typing import TYPE_CHECKING, List
 
 from sympy import Expr
 
@@ -62,9 +62,7 @@ class ReactionRadiation:
         sympy.Expr or None
             The yield, or ``None`` when the reaction emits nothing.
         """
-        function = self.reaction.aux_funcs.spectralyield
-
-        return cast(Expr, function.expr) if function is not None else None
+        return self.reaction.function("spectralYield")
 
     def compute(self) -> None:
         """Integrate :attr:`spectral_yield` over the radiation groups.

@@ -27,7 +27,7 @@ _KIND_NAMES = {
 def _has_entity(ctx: RenderContext, kind: str, entity: str) -> bool:
     """Whether *entity* exists as *kind* and resolves to a single item for GET."""
     if kind == "aux":
-        return entity in ctx.net.spec.aux_funcs
+        return entity in ctx.net.functions
 
     if entity not in KINDS[kind](ctx):
         return False

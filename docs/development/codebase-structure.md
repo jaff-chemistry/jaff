@@ -14,13 +14,14 @@ This page maps the `src/jaff` source tree, explains what each package owns, and 
 src/jaff/
 ├── core/                       # Domain model
 │   ├── network/                # network.py (Network — main entry point; validation reports)
-│   │   ├── _spec.py            # NetworkSpec — normalized Network params
+│   │   ├── _functions.py       # NetworkFunctions — the .jfunc functions (net.functions)
+│   │   ├── _spec.py            # NetworkSpec — source-file paths (net.spec)
 │   │   ├── _symbols.py         # NetworkSymbols — fixed physics symbols, densities (net.symbols)
 │   │   └── config.py           # NetworkConfig ([network]), JaffTomlConfig, load_network_config
 │   ├── reaction/               # reaction.py (Reaction) · reactions.py (Reactions)
 │   │   ├── photo_reaction.py   # PhotoReaction — a photo reaction's component (rxn.photo)
 │   │   ├── reaction_radiation.py # ReactionRadiation — every reaction's radiation component (rxn.rad)
-│   │   ├── reaction_props.py   # GroupedPhotoReactionProps, AuxFunctions
+│   │   ├── reaction_props.py   # GroupedPhotoReactionProps
 │   │   ├── config.py           # [network.reactions] models (ReactionConfig, PhotoConfig, ...)
 │   │   ├── _helper.py          # to_float_or_none
 │   │   └── types/              # RateSegment / RateSegments (rate per temperature range)

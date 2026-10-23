@@ -392,7 +392,7 @@ class TestNetworkSpec:
         net = make_network(self.NET, name="n.dat")
 
         assert net.spec.jfunc_path == tmp_path / "n.jfunc"
-        assert "f" in net.spec.aux_funcs
+        assert "f" in net.functions
 
     def test_jfunc_path_none_without_one(self, make_network):
         assert make_network(self.NET, name="n.dat").spec.jfunc_path is None

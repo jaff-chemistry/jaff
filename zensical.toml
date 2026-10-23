@@ -117,6 +117,7 @@ nav = [
       { "core.Reaction" = [
         "reference/core/reaction/index.md",
         "reference/core/reaction/rate_coefficient.md",
+        "reference/core/reaction/function.md",
         "reference/core/reaction/rate.md",
         "reference/core/reaction/species.md",
         "reference/core/reaction/elements.md",
@@ -220,6 +221,7 @@ nav = [
         "reference/core/networksymbols/interp_functions.md",
         "reference/core/networksymbols/undefined_functions.md",
         "reference/core/networksymbols/standardize.md",
+        "reference/core/networksymbols/resolve_rate_references.md",
         "reference/core/networksymbols/log_summary.md",
       ] },
       { "core.PhotoReaction" = [

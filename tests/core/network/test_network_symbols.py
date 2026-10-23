@@ -153,10 +153,23 @@ def test_standardize_keeps_non_integer_rc(make_network):
     assert net.symbols.standardize(Symbol("rc_abc")) == Symbol("rc_abc")
 
 
-def test_standardize_missing_rc_target_raises(make_network):
+def test_resolve_rate_references_missing_target_raises(make_network):
     net = make_network(TWO_SPECIES, funcfile=False)
     with pytest.raises(ParserError, match="not in the network"):
-        net.symbols.standardize(Symbol("rc_99"))
+        net.symbols.resolve_rate_references(Symbol("rc_99"))
+
+
+def test_standardize_leaves_rate_references(make_network):
+    net = make_network(TWO_SPECIES, funcfile=False)
+
+    assert net.symbols.standardize(Symbol("rc_0")) == Symbol("rc_0")
+
+
+def test_standardize_keeps_given_symbols(make_network):
+    net = make_network(TWO_SPECIES, funcfile=False)
+    n_h = Symbol("n_H")
+
+    assert net.symbols.standardize(2 * n_h, keep=[n_h]) == 2 * n_h
 
 
 def test_standardize_unknown_species_raises(make_network):

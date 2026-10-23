@@ -23,7 +23,7 @@ PROPERTIES: Dict[str, Tuple[str, _Getter]] = {
     "aux_func": (
         "aux",
         lambda c, f: c.cg.lang.code_gen(
-            c.net.spec.aux_funcs[f].expr, strict=False, allow_unknown_functions=True
+            c.net.functions.value(f), strict=False, allow_unknown_functions=True
         ),
     ),
 }

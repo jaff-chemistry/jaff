@@ -1,4 +1,4 @@
-# ABOUTME: NetworkSpec: a Network's resolved file path and its .jfunc functions
+# ABOUTME: NetworkSpec: a Network's resolved file path and its .jfunc file path
 # ABOUTME: Resolves predefined network names and auxiliary .jfunc files
 
 """The :class:`NetworkSpec` source-file facts of a :class:`~jaff.Network`."""
@@ -8,8 +8,6 @@ from __future__ import annotations
 from pathlib import Path
 from ...config import NETWORKS_DIR, predefined_networks
 from ...errors import ParserError
-from ..parsers import AuxiliaryFunctionParser
-from ..parsers.auxiliary_func import AuxiliaryFunctionProps
 
 
 class NetworkSpec:
@@ -28,14 +26,12 @@ class NetworkSpec:
         The auxiliary ``.jfunc`` file actually used: the ``funcfile`` setting
         when it is a path, else the file found next to the network file
         (``<file name>.jfunc``, then ``<stem>.jfunc``); ``None`` when there is
-        none or ``funcfile`` is ``False``.
-    aux_funcs : dict[str, AuxiliaryFunctionProps]
-        The functions of :attr:`jfunc_path`, keyed by lower-cased name (``{}``
-        when none).
+        none or ``funcfile`` is ``False``.  Its functions are
+        :attr:`Network.functions`.
     """
 
     def __init__(self, fname: str | Path, funcfile: bool | Path):
-        """Resolve the network file and load its auxiliary functions.
+        """Resolve the network file and its ``.jfunc`` file.
 
         Parameters
         ----------
@@ -54,7 +50,6 @@ class NetworkSpec:
         """
         self.fname: Path = self._resolve_network_path(fname)
         self.jfunc_path: Path | None = self._find_jfunc(funcfile)
-        self.aux_funcs: dict[str, AuxiliaryFunctionProps] = self._load_aux_funcs()
 
     def _find_jfunc(self, funcfile: bool | Path) -> Path | None:
         """Return the ``.jfunc`` file *funcfile* selects, or ``None``.
@@ -76,14 +71,6 @@ class NetworkSpec:
             raise FileNotFoundError(funcfile)
 
         return funcfile
-
-    def _load_aux_funcs(self) -> dict[str, AuxiliaryFunctionProps]:
-        """Parse :attr:`jfunc_path` into a dict (``{}`` without one)."""
-        if self.jfunc_path is None:
-            return {}
-
-        with AuxiliaryFunctionParser(self.jfunc_path) as afp:
-            return afp.get_dict()
 
     @staticmethod
     def _resolve_network_path(fname: str | Path) -> Path:

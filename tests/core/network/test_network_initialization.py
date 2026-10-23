@@ -81,7 +81,10 @@ class TestNetworkInitialization:
                     "jaff.core.network.network.load_network_config",
                     return_value=NetworkConfig(),
                 ),
-                patch("jaff.core.network._spec.NetworkSpec._load_aux_funcs", return_value={}),
+                patch(
+                    "jaff.core.network._functions.NetworkFunctions._load",
+                    return_value={},
+                ),
                 patch.object(Network, "_Network__load_network", MagicMock()),
             ):
                 with patch.object(Network, "check_sink_sources", MagicMock()):

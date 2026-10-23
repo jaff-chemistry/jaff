@@ -27,10 +27,10 @@ class TestComponent:
         assert isinstance(rxn.rad, ReactionRadiation)
         assert rxn.rad.reaction is rxn
 
-    def test_yield_is_the_aux_function_not_a_copy(self, emitting):
+    def test_yield_is_the_reaction_function_not_a_copy(self, emitting):
         rxn = emitting()
 
-        assert rxn.rad.spectral_yield is rxn.aux_funcs.spectralyield.expr
+        assert rxn.rad.spectral_yield is rxn.function("spectralYield")
 
     def test_no_yield_without_the_function(self, make_network):
         rxn = make_network(RECOMB, name="y.jet", funcfile=False).reactions[0]

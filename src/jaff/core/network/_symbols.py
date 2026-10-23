@@ -13,7 +13,7 @@ package's initialisation (``io``, ``core.reaction``, ``physics``) must therefore
 from __future__ import annotations
 
 from functools import cached_property, reduce
-from typing import TYPE_CHECKING, ClassVar, Sequence
+from typing import TYPE_CHECKING, ClassVar, Collection, Sequence, cast
 
 from sympy import Basic, Expr, Float, Function, IndexedBase, S, Symbol
 from sympy.core.function import AppliedUndef, UndefinedFunction
@@ -358,23 +358,24 @@ class NetworkSymbols:
         """
         return self._net.species.charge_reverse_map()
 
-    def standardize(self, expr: Basic) -> Expr:
+    def standardize(self, expr: Basic, keep: Collection[Basic] = ()) -> Expr:
         """Replace convenience symbols with ``nden``-based expressions.
 
         ``ntot`` → :attr:`ntot`; ``n_<species>`` → that species' density;
         ``n_e`` → electron density; ``n_<element>_nuc`` → :meth:`element_sum`
         (or the free symbol ``n<element>_nuc`` when the network was built with
-        ``expand_nuclei=False``); ``rc_<int>`` → the rate of the reaction whose
-        file-side number is ``<int>`` (looked up via ``reactions.by_source_index``,
-        not the catalogue position, so it stays dedup-safe and consistent with
-        ``chemRateN``); ``chi_pe`` → ``net.dust.pe.chi`` (needs radiation and
-        dust).  Name matching is case-insensitive, except ``n_e``, which is
-        recognised only in lower case.
+        ``expand_nuclei=False``); ``chi_pe`` → ``net.dust.pe.chi`` (needs
+        radiation and dust).  Name matching is case-insensitive, except ``n_e``,
+        which is recognised only in lower case.  ``rc_<int>`` references to
+        another reaction's rate are left alone: see
+        :meth:`resolve_rate_references`.
 
         Parameters
         ----------
         expr : Basic
             Expression to standardize.
+        keep : Collection[Basic], optional
+            Symbols to leave alone, e.g. a ``.jfunc`` function's own parameters.
 
         Returns
         -------
@@ -384,8 +385,8 @@ class NetworkSymbols:
         Raises
         ------
         ParserError
-            On an unknown species/element, a charged nucleus alias, a missing
-            ``rc_`` target, or ``chi_pe`` without radiation or dust.
+            On an unknown species/element, a charged nucleus alias, or
+            ``chi_pe`` without radiation or dust.
         ValueError
             If two species collide case-insensitively (e.g. ``CO`` / ``Co``).
         """
@@ -393,12 +394,59 @@ class NetworkSymbols:
             return Float(0.0)
 
         reps = {}
-        for fs in expr.free_symbols:
+        for fs in expr.free_symbols - set(keep):
             repl = self._replacement(str(fs))
             if repl is not None:
                 reps[fs] = repl
 
         return expr.xreplace(reps)
+
+    def resolve_rate_references(self, expr: Basic) -> Expr:
+        """Replace each ``rc_<int>`` with the rate coefficient of that reaction.
+
+        ``<int>`` is the reaction's file-side number, looked up via
+        ``reactions.by_source_index`` (not the catalogue position, so it stays
+        dedup-safe and consistent with ``chemRateN``).  Run once the reactions
+        are built.
+
+        Parameters
+        ----------
+        expr : Basic
+            Expression to resolve.
+
+        Returns
+        -------
+        Expr
+            *expr* with every ``rc_<int>`` replaced.
+
+        Raises
+        ------
+        ParserError
+            If an ``rc_`` target is not in the network.
+        """
+        net = self._net
+        reps = {}
+        for fs in expr.free_symbols:
+            name = str(fs)
+            if not name.lower().startswith("rc_"):
+                continue
+            try:
+                num = int(name[3:])
+            except ValueError:
+                net.logger.error(
+                    f"The 'rc_' keyword in {net.spec.jfunc_path} must be followed by "
+                    f"an integer\ndenoting the reaction number. Found {name}"
+                )
+                continue
+
+            rxn = net.reactions.by_source_index(num)
+            if rxn is None:
+                raise ParserError(
+                    f"'{name}' references reaction {num}, which is not in the network"
+                )
+            reps[fs] = rxn.rate_coefficient
+
+        return cast(Expr, expr.xreplace(reps))
 
     def _replacement(self, name: str) -> Basic | None:
         """Replacement for the convenience symbol *name*, or ``None`` to keep it.
@@ -406,8 +454,8 @@ class NetworkSymbols:
         Raises
         ------
         ParserError
-            For ``chi_pe`` without radiation/dust, or an ``rc_`` target that is
-            not in the network (see also :meth:`_density_replacement`).
+            For ``chi_pe`` without radiation/dust (see also
+            :meth:`_density_replacement`).
         """
         net = self._net
         low_name = name.lower()
@@ -428,23 +476,6 @@ class NetworkSymbols:
 
         if low_name.startswith("n_"):
             return self._density_replacement(name)
-
-        if low_name.startswith("rc_"):
-            try:
-                num = int(name[3:])
-            except ValueError:
-                net.logger.error(
-                    f"The 'rc_' keyword in {net.spec.jfunc_path} must be followed by "
-                    f"an integer\ndenoting the reaction number. Found {name}"
-                )
-                return None
-
-            rxn = net.reactions.by_source_index(num)
-            if rxn is None:
-                raise ParserError(
-                    f"'{name}' references reaction {num}, which is not in the network"
-                )
-            return rxn.rate_coefficient
 
         return None
 

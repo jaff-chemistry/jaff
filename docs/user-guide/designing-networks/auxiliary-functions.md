@@ -72,6 +72,21 @@ Expressions may reference previously declared `@var` names:
 
 Functions may call any other function defined in the same file; the order of the definitions does not matter.
 
+#### What a parameter means
+
+A parameter means one of two things, depending on how the function is used:
+
+- **Read by JAFF** (the reserved names below: `chemRate<N>`, `deltaE<N>`,
+  `heatingCoolingRate`, ...): nothing passes arguments, so each parameter names
+  the network quantity it stands for. In `chemRate3(tgas, n_e)`, `n_e` is the
+  electron density (see [Referencing species densities](#referencing-species-densities)).
+- **Called with arguments** (from another function, or from a rate or `@var`
+  in the network file, e.g. `fselfH2(1e21*n_CO, 1e5)`): each parameter is a
+  placeholder for its argument, even when it is named like a density.
+
+In Python, `net.functions.value(name)` gives a function read the first way and
+`net.functions.call(name, args)` the second.
+
 ### Referencing species densities
 
 Functions usually depend on the number densities of species in the network. You
@@ -138,6 +153,10 @@ Arrhenius expression.
     # Reuse the coefficient of reaction 3 (e.g. a shared temperature fit)
     @return 0.5 * rc_3
 ```
+
+`rc_<N>` refers to reaction _N_'s final rate coefficient, so it is resolved
+once every reaction is built. It is not allowed in a `photoCrossSection<N>`: a
+cross section cannot depend on another reaction's rate (`ParserError`).
 
 If no reaction carries number `N`, loading raises a `ParserError`. A malformed
 index (`rc_` not followed by an integer, e.g. `rc_x`) only logs an error naming

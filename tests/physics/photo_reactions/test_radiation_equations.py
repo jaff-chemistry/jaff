@@ -85,7 +85,7 @@ def test_no_reaction_radiation_source_term(radiation_network):
     for rxn in net.reactions:
         assert rxn.rad.spectral_yield is None
         assert rxn.rad.group_yields is None
-        assert not hasattr(rxn.aux_funcs, "deltarad")
+        assert rxn.function("deltaRad") is None
         assert all(not hasattr(band, "delta_rad") for band in rxn.photo.rgrouped)
 
 

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, cast
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from astropy import units as u
 from sympy import Expr
@@ -110,7 +110,7 @@ class PhotoReaction:
             radiation needs a cross section and no database has one.
         """
         reaction = self.reaction
-        if reaction.aux_funcs.chemrate is not None:
+        if reaction.function("chemRate") is not None:
             self.custom_rad_rate = not self._overrides_custom_rate()
 
         self._set_xsec()
@@ -150,8 +150,9 @@ class PhotoReaction:
         if net._photochemistry is None:
             net._photochemistry = Photochemistry(net)
 
-        custom = reaction.aux_funcs.photocrosssection
+        custom = reaction.function("photoCrossSection")
         if custom is not None and not self._overrides_custom_cross_section():
+            self._check_no_rate_reference(custom)
             own = net.reactions.config.own(reaction.serialized)
             if own is not None and own.photo is not None and own.photo.pi_database:
                 raise ParserError(
@@ -159,9 +160,7 @@ class PhotoReaction:
                     "comes from a photoCrossSection function"
                 )
 
-            self.xsec = net._photochemistry.get_custom_xsec(
-                reaction, cast(Expr, custom.expr)
-            )
+            self.xsec = net._photochemistry.get_custom_xsec(reaction, custom)
             return
 
         # A cross section is mandatory only when radiation sets the rate.
@@ -169,6 +168,21 @@ class PhotoReaction:
             reaction,
             required=net.radiation is not None and not self.custom_rad_rate,
         )
+
+    def _check_no_rate_reference(self, xsec: Expr) -> None:
+        """Reject ``rc_<N>`` in the reaction's ``photoCrossSection`` function.
+
+        A cross section is a per-photon property of the absorber; it cannot
+        depend on another reaction's rate coefficient.
+        """
+        references = sorted(
+            str(s) for s in xsec.free_symbols if str(s).lower().startswith("rc_")
+        )
+        if references:
+            raise ParserError(
+                f"photoCrossSection{self.reaction.index} uses {', '.join(references)}: "
+                "a cross section cannot depend on another reaction's rate"
+            )
 
     def _set_band_rates(self) -> Expr | None:
         """Build the per-band rate data; return the summed rate coefficient."""

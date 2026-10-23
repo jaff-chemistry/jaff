@@ -26,7 +26,7 @@ import sys
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Mapping, Sequence, cast
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Sequence
 
 import numpy as np
 from sympy import (
@@ -58,20 +58,19 @@ from ..elements import Elements
 from ..parsers import NetworkParser
 from ..parsers.network._typing import parsedListProps
 from ..reaction import (
-    PhotoReaction,
     RateSegment,
     Reaction,
     Reactions,
 )
 from ..reaction.config import ReactionsConfig
 from ..species import Specie, Species
+from ._functions import NetworkFunctions
 from ._spec import NetworkSpec
 from ._symbols import NetworkSymbols
 from .config import ConfigLayer, NetworkConfig, load_network_config
 
 if TYPE_CHECKING:
     from .._typing import ElementProps
-    from ..parsers.auxiliary_func import AuxiliaryFunctionProps
     from ..parsers.network._formats import Parser
 
 
@@ -234,7 +233,9 @@ class Network:
         conservation checks.
     spec : NetworkSpec
         Facts about the source files (not settings): the resolved ``fname``,
-        the ``.jfunc`` file used (``jfunc_path``) and its parsed ``aux_funcs``.
+        the ``.jfunc`` file used (``jfunc_path``).
+    functions : NetworkFunctions
+        The ``.jfunc`` file's functions, standardized on use.
     config : NetworkConfig
         The validated config: the ``jaff.toml`` next to the network, the
         ``config`` layers, then the keyword arguments.
@@ -390,6 +391,7 @@ class Network:
         self.species: Species = Species()
         self.reactions: Reactions = Reactions(self.config.reactions)
         self.symbols: NetworkSymbols = NetworkSymbols(self)
+        self.functions: NetworkFunctions = NetworkFunctions(self, self.spec.jfunc_path)
         self.reactant_matrix: np.ndarray | None = None
         self.product_matrix: np.ndarray | None = None
         self.radiation: Radiation | None = (
@@ -508,6 +510,10 @@ class Network:
     ) -> None:
         """Build a reaction from each row, merging rows of the same reaction.
 
+        Each row's rate is resolved (global variables, ``.jfunc`` calls) and
+        standardized before its reaction is built; ``rc_<N>`` references are
+        left for :meth:`__normalize_network_extras`.
+
         Parameters
         ----------
         rows : list[parsedListProps]
@@ -517,10 +523,10 @@ class Network:
         special_species : dict[str, Specie]
             The pseudo-species, keyed by name (see :meth:`__build_species`).
         """
-        aux_funcs = self.spec.aux_funcs
+        functions = self.functions
 
         resolved_vars: dict[str, Expr] = {
-            var: resolve_dependencies(expr, {}, aux_funcs)
+            var: resolve_dependencies(expr, {}, functions)
             for var, expr in global_vars.items()
         }
         subs_dict: dict[Basic, Basic] = {
@@ -551,8 +557,9 @@ class Network:
             local_subs_dict = {**subs_dict}
             srxn = Reaction.serialize(rr, pp)
 
-            rate_expr = self.__parse_rate(aux_chem_rate, rate, aux_funcs, resolved_vars)
-            rate_expr = resolve_dependencies(rate_expr, local_subs_dict, aux_funcs)
+            rate_expr = self.__parse_rate(aux_chem_rate, rate, resolved_vars)
+            rate_expr = resolve_dependencies(rate_expr, local_subs_dict, functions)
+            rate_expr = self.symbols.standardize(rate_expr)
 
             rtype = reaction.get("type", "unknown")
             if (srxn, rtype) in self.reactions:
@@ -580,9 +587,11 @@ class Network:
         """Freeze the catalogues and run each parser's ``post_process`` hook.
 
         Species and reactions are final from here on: hooks may change
-        reactions but not add any (``add()`` raises once frozen).  Runs before
-        :meth:`__normalize_network_extras`, so whatever a hook writes is
-        standardised like every other rate.
+        reactions but not add any (``add()`` raises once frozen).  Rates are
+        already standardised, so a hook writing a shorthand symbol (``n_X``,
+        ...) must standardise it itself (``network.symbols.standardize``).
+        Runs before :meth:`__normalize_network_extras`, so ``rc_<N>`` in what a
+        hook writes is resolved like every other rate.
 
         Parameters
         ----------
@@ -596,98 +605,81 @@ class Network:
             parser.post_process(self)
 
     def __normalize_network_extras(self):
-        """Standardize convenience symbols in all rate and auxiliary expressions.
+        """Merge rate segments and resolve ``rc_<N>`` references.
 
-        Replaces shorthand symbols (``n_X``, ``n_e``, ``ntot``, …, and ``n_X_nuc``
-        when ``expand_nuclei`` is enabled) with ``nden[i]`` references in every
-        reaction rate, in each reaction's radiation group yields, and in a photo
-        reaction's band data (cross sections and band rates).
+        Collapses each reaction's rate segments into its rate coefficient and
+        replaces ``rc_<N>`` (another reaction's rate coefficient; see
+        :meth:`NetworkSymbols.resolve_rate_references`) in every rate, ``dE``
+        and radiation group yield.  Everything else is standardized before the
+        reactions are built.
         """
+        resolve = self.symbols.resolve_rate_references
         for r in self.reactions:
             if r.type == "photo" and self.radiation is not None:
-                r.rate_coefficient = self.symbols.standardize(r.rate_coefficient)
+                r.rate_coefficient = resolve(r.rate_coefficient)
                 r.rate_segments[0].rate = r.rate_coefficient
             else:
                 for seg in r.rate_segments:
-                    seg.rate = self.symbols.standardize(seg.rate)
+                    seg.rate = resolve(seg.rate)
                 r.rate_coefficient = r.rate_segments.sort().evaluate_equivalent_rate()
 
             r.tmin, r.tmax = r.rate_segments[0].tmin, r.rate_segments[-1].tmax
+            r.dE = resolve(r.dE)
             if r.rad.group_yields is not None:
-                r.rad.group_yields = [
-                    self.symbols.standardize(g) for g in r.rad.group_yields
-                ]
-            if r.photo is not None:
-                self.__standardize_photo_band_data(r.photo)
-
-    def __standardize_photo_band_data(self, photo: PhotoReaction) -> None:
-        """Standardize a photo reaction's band data, as its rate already is.
-
-        A symbolic ``photoCrossSection`` (e.g. one using ``n_X``) leaves those
-        symbols in the band-averaged cross sections and rate coefficients that
-        :func:`~jaff.physics._equations.get_sradodes` builds the equations from.
-        """
-        if photo.xsec is not None and isinstance(photo.xsec.total, Basic):
-            photo.xsec.total = self.symbols.standardize(photo.xsec.total)
-
-        for band in photo.rgrouped or []:
-            band.k = self.symbols.standardize(band.k)
-            if isinstance(band.xsec, Basic):
-                band.xsec = self.symbols.standardize(band.xsec)
+                r.rad.group_yields = [resolve(g) for g in r.rad.group_yields]
 
     def __set_emissivity(self) -> None:
         """Integrate the ``globalEmissivity`` over the radiation groups.
 
-        Stores the spectrum on ``radiation.emissivity`` and its standardized
-        per-group integrals on each ``group.emissivity``.  Does nothing without
+        Stores the spectrum on ``radiation.emissivity`` and its per-group
+        integrals on each ``group.emissivity``.  Does nothing without
         radiation or without a ``globalEmissivity`` function.
         """
-        aux = self.spec.aux_funcs.get("globalemissivity")
-        if self.radiation is None or aux is None:
+        if self.radiation is None or "globalemissivity" not in self.functions:
             return
 
-        emissivity = cast(Expr, aux.expr)
+        emissivity = self.functions.value("globalemissivity")
 
         self.radiation.emissivity = emissivity
         groups = self.radiation.groups
         for group, value in zip(
             groups, self.radiation.integrate_over_groups(emissivity), strict=True
         ):
-            group.emissivity = self.symbols.standardize(value)
+            group.emissivity = self.symbols.resolve_rate_references(value)
 
     def __set_absorption_coefficient(self) -> None:
         """Average the ``globalAbsorptionCoefficient`` over the radiation groups.
 
         Stores the spectrum on ``radiation.absorption_coefficient`` and its
-        standardized per-group averages on each ``group.absorption_coefficient``.
+        per-group averages on each ``group.absorption_coefficient``.
         Does nothing without radiation or without a
         ``globalAbsorptionCoefficient`` function.
         """
-        aux = self.spec.aux_funcs.get("globalabsorptioncoefficient")
-        if self.radiation is None or aux is None:
+        name = "globalabsorptioncoefficient"
+        if self.radiation is None or name not in self.functions:
             return
 
-        coefficient = cast(Expr, aux.expr)
+        coefficient = self.functions.value(name)
 
         self.radiation.absorption_coefficient = coefficient
         groups = self.radiation.groups
         for group, value in zip(
             groups, self.radiation.average_over_groups(coefficient), strict=True
         ):
-            group.absorption_coefficient = self.symbols.standardize(value)
+            group.absorption_coefficient = self.symbols.resolve_rate_references(value)
 
-    @staticmethod
     def __parse_rate(
+        self,
         aux_chem_rate: str,
         rate: str,
-        aux_funcs: dict[str, AuxiliaryFunctionProps],
         global_vars: dict[str, Expr],
     ) -> Expr:
         """Convert a raw rate string to a SymPy expression.
 
         Checks, in priority order:
 
-        1. Whether an auxiliary function named *aux_chem_rate* exists (custom rate).
+        1. Whether a ``.jfunc`` function named *aux_chem_rate* exists (custom
+           rate, read with :meth:`NetworkFunctions.value`).
         2. Whether *rate* is a global variable name.
         3. Falls back to ``sympy.parse_expr``.
 
@@ -700,8 +692,6 @@ class Network:
             Key for the optional custom-rate auxiliary function (e.g. ``"chemrate0"``).
         rate : str
             Raw rate string from the network file.
-        aux_funcs : dict[str, AuxiliaryFunctionProps]
-            Parsed auxiliary functions, keyed by lower-cased name.
         global_vars : dict[str, Expr]
             Resolved global variable map from the network file.
 
@@ -710,8 +700,8 @@ class Network:
         Expr
             The rate expression.
         """
-        if aux_chem_rate in aux_funcs:
-            rate_expr = aux_funcs[aux_chem_rate].expr
+        if aux_chem_rate in self.functions:
+            rate_expr = self.functions.value(aux_chem_rate)
         elif rate in global_vars:
             rate_expr = symbols(rate)
         else:

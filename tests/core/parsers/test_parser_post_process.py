@@ -67,7 +67,7 @@ def test_catalogues_frozen_during_hook(make_network):
     assert all("frozen" in e for e in errors)
 
 
-def test_hook_runs_before_rates_are_standardised(make_network):
+def test_hook_sees_standardised_rates(make_network):
     seen = []
 
     def spy(self, network):
@@ -76,8 +76,9 @@ def test_hook_runs_before_rates_are_standardised(make_network):
     with patch.object(PrizmoParser, "post_process", spy):
         make_network("H + H -> H2 [] 1e-10*n_H\n", name="r.jet")
 
-    # Still the raw symbol: normalisation (n_H -> nden[i]) has not run yet.
-    assert "n_h" in seen[0]
+    # Rates are standardised before the reactions are built (n_H -> nden[i]).
+    assert "nden" in seen[0]
+    assert "n_h" not in seen[0].lower()
 
 
 def test_elements_available_during_hook(make_network):
