@@ -40,6 +40,10 @@ class TestReactionsConfig:
         with pytest.raises(ValidationError, match=key):
             ReactionsConfig.model_validate({key: value})
 
+    def test_rejects_string_for_bool(self):
+        with pytest.raises(ValidationError, match="override_custom_rate"):
+            ReactionsConfig.model_validate({"photo": {"override_custom_rate": "true"}})
+
     def test_rejects_invalid_pi_database(self):
         with pytest.raises(ValidationError, match="pi_database"):
             ReactionsConfig.model_validate({"photo": {"pi_database": "nist"}})

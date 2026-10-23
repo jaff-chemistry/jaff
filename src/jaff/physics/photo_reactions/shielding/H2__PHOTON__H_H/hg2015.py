@@ -5,11 +5,12 @@ DOI:https://doi.org/10.1093/mnras/stv1368
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, cast
 
 from sympy import Expr
 
-from jaff.errors import ParserError
+from jaff.config.schema import ShieldingParams
+
 from jaff.physics.photo_reactions.shielding import _register
 from jaff.physics.photo_reactions.shielding._base import ShieldingFunction
 
@@ -20,6 +21,21 @@ if TYPE_CHECKING:
     from jaff.core.reaction import Reaction
 
 
+class HG2015Params(ShieldingParams):
+    """Settings of the Hartwig et al. (2015) H2 self-shielding.
+
+    Attributes
+    ----------
+    min_ncol : float
+        Lower floor on the H2 column density (cm^-2).
+    min_vdisp : float
+        Lower floor on the velocity dispersion (cm/s).
+    """
+
+    min_ncol: float = 1.0e-50
+    min_vdisp: float = 1.0e-50
+
+
 @_register
 class HG2015(ShieldingFunction):
     """Hartwig et al. (2015) H2 self-shielding (``shielding.type = "hg2015"``)."""
@@ -27,32 +43,27 @@ class HG2015(ShieldingFunction):
     name = "hg2015"
     reaction = "H2._PHOTON__H.H"
 
+    @staticmethod
+    def config_model() -> type[HG2015Params]:
+        """Return the settings model: the ``min_ncol`` / ``min_vdisp`` floors."""
+        return HG2015Params
+
     def get_shielding(self, reaction: "Reaction", network: "Network") -> Expr:
         """Return the Hartwig et al. (2015) H2 self-shielding factor.
 
-        Thin wrapper over :func:`shielding` with ``alpha = 1.1``.  Reads the
+        Thin wrapper over :func:`shielding` with ``alpha = 1.1``, using the
         optional floors ``shielding.min_ncol`` (cm^-2) and
-        ``shielding.min_vdisp`` (cm/s) from ``reaction.photo.shielding.props``.
+        ``shielding.min_vdisp`` (cm/s).
 
         Raises
         ------
         ParserError
-            If ``min_ncol`` or ``min_vdisp`` is set to a non-numeric value.
+            If a shielding setting is unknown or has an invalid value.
         """
-        assert reaction.photo is not None and reaction.photo.shielding is not None
-        sprops: dict[str, Any] = reaction.photo.shielding.props
-
-        if "min_ncol" in sprops and not isinstance(sprops["min_ncol"], (float, int)):
-            raise ParserError(
-                f"Minimum column density must be a float or int for: {reaction}"
-            )
-        if "min_vdisp" in sprops and not isinstance(sprops["min_vdisp"], (float, int)):
-            raise ParserError(
-                f"Minimum velocity dispersion must be a float or int for: {reaction}"
-            )
+        params = cast(HG2015Params, self.params(reaction))
 
         return shielding(
             alpha=1.1,
-            min_ncol=sprops.get("min_ncol", 1e-50),
-            min_vdisp=sprops.get("min_vdisp", 1e-50),
+            min_ncol=params.min_ncol,
+            min_vdisp=params.min_vdisp,
         )

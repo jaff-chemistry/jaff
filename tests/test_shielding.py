@@ -1,11 +1,19 @@
 # ABOUTME: Photo-reaction line shielding: the configured shielding model multiplies
-# ABOUTME: the band rate coefficients of the reaction it is attached to
+# ABOUTME: the band rates; each shielding plugin validates its own config keys
 
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
+from sympy import Float
 
+from jaff.config.schema import ShieldingParams
+from jaff.errors import ParserError
 from jaff.physics import RadiationProps
+from jaff.physics.photo_reactions.shielding import ShieldingFunction
+from jaff.physics.photo_reactions.shielding.global_.leiden import Leiden
+from jaff.physics.photo_reactions.shielding.H2__PHOTON__H_H.db1996 import DB1996
+from jaff.physics.photo_reactions.shielding.H2__PHOTON__H_H.hg2015 import HG2015
 
 H2_PHOTO = "H2 -> H + H  []  PHOTO, 11.2\n"
 H2_KEY = "H2._PHOTON__H.H"
@@ -34,7 +42,85 @@ def shielded_network(make_network):
     return _make
 
 
-def test_value_key_does_not_bypass_the_shielding_model(shielded_network):
-    modelled = shielded_network({"type": "hg2015"})
+def test_value_key_is_rejected(shielded_network):
+    # "value" was once a cached factor that, set by hand, bypassed the model.
+    with pytest.raises(ParserError, match="value"):
+        shielded_network({"type": "hg2015", "value": 0.5})
 
-    assert shielded_network({"type": "hg2015", "value": 0.5}) == modelled
+
+class TestConfigModel:
+    def test_base_default_accepts_no_keys(self):
+        class Plain(ShieldingFunction):
+            name = "plain"
+
+            def get_shielding(self, reaction, network):
+                return Float(1.0)
+
+        model = Plain.config_model()
+
+        assert model.model_validate({}) == model()
+        with pytest.raises(ValidationError, match="x"):
+            model.model_validate({"x": 1})
+
+    @pytest.mark.parametrize("cls", [Leiden, HG2015, DB1996])
+    def test_plugins_expose_shielding_params(self, cls):
+        assert issubclass(cls.config_model(), ShieldingParams)
+
+    def test_plugins_do_not_share_a_model(self):
+        models = [cls.config_model() for cls in (Leiden, HG2015, DB1996)]
+
+        assert len(set(models)) == len(models)
+
+
+class TestLeidenParams:
+    def test_requires_shielded_by(self):
+        with pytest.raises(ValidationError, match="shielded_by"):
+            Leiden.config_model().model_validate({})
+
+    def test_rejects_unknown_species(self):
+        with pytest.raises(ValidationError, match="shielded_by"):
+            Leiden.config_model().model_validate({"shielded_by": ["O2"]})
+
+    def test_radiation_defaults_to_isrf(self):
+        params = Leiden.config_model().model_validate({"shielded_by": ["self"]})
+
+        assert params.radiation == "isrf"
+
+    def test_radiation_is_lower_cased(self):
+        params = Leiden.config_model().model_validate(
+            {"shielded_by": ["self", "H2"], "radiation": "Draine"}
+        )
+
+        assert params.radiation == "draine"
+
+
+@pytest.mark.parametrize("cls", [HG2015, DB1996])
+class TestH2Params:
+    def test_floor_defaults(self, cls):
+        params = cls.config_model().model_validate({})
+
+        assert params.min_ncol == pytest.approx(1e-50)
+        assert params.min_vdisp == pytest.approx(1e-50)
+
+    def test_accepts_int(self, cls):
+        params = cls.config_model().model_validate({"min_ncol": 1})
+
+        assert params.min_ncol == pytest.approx(1.0)
+
+    def test_rejects_string(self, cls):
+        with pytest.raises(ValidationError, match="min_ncol"):
+            cls.config_model().model_validate({"min_ncol": "1e-35"})
+
+    def test_rejects_unknown_key(self, cls):
+        with pytest.raises(ValidationError, match="shielded_by"):
+            cls.config_model().model_validate({"shielded_by": ["self"]})
+
+
+class TestNetworkShielding:
+    def test_invalid_setting_is_parser_error(self, shielded_network):
+        with pytest.raises(ParserError, match="min_ncol"):
+            shielded_network({"type": "hg2015", "min_ncol": "abc"})
+
+    def test_unknown_setting_is_parser_error(self, shielded_network):
+        with pytest.raises(ParserError, match="foo"):
+            shielded_network({"type": "hg2015", "foo": 1.0})

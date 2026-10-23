@@ -3,7 +3,8 @@
 The models mirror the class structure they configure: ``[network.reactions]``
 holds the settings applied to every reaction, and
 ``[network.reactions.reaction."<serialized>"]`` overrides them for one
-reaction.  Every model rejects unknown keys and is frozen once validated.
+reaction.  Every model rejects unknown keys, is strict about types (a TOML
+string is never coerced into a number or a bool) and is frozen once validated.
 
 String choices (``t_cutoff``, ``pi_database``, ...) are case-insensitive and
 stored lower-cased.
@@ -21,6 +22,7 @@ def _lower(value: Any) -> Any:
     return value.lower() if isinstance(value, str) else value
 
 
+LowerStr = Annotated[str, BeforeValidator(_lower)]
 TCutoff = Annotated[Literal["clip", "extrapolate"], BeforeValidator(_lower)]
 DuplicatePolicy = Annotated[
     Literal["preserve-first", "preserve-last", "error"], BeforeValidator(_lower)
@@ -31,9 +33,10 @@ _ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 
 class _Config(BaseModel):
-    """Base of every config model: unknown keys are errors, instances are frozen."""
+    """Base of every config model: unknown keys are errors, types are strict and
+    instances are frozen."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
 
 def _overlay(base: _ModelT, over: BaseModel | None) -> _ModelT:
@@ -58,6 +61,15 @@ def _overlay(base: _ModelT, over: BaseModel | None) -> _ModelT:
         update[name] = value
 
     return base.model_copy(update=update)
+
+
+class ShieldingParams(_Config):
+    """Base of the settings of one shielding type (every key but ``type``).
+
+    Each shielding plugin exposes its subclass through
+    :meth:`~jaff.physics.photo_reactions.shielding.ShieldingFunction.config_model`;
+    this base has no keys, so a plugin without settings accepts none.
+    """
 
 
 class PhotoConfig(_Config):

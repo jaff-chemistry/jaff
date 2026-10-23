@@ -5,7 +5,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+from pydantic import ValidationError
 from sympy import Expr
+
+from ....config.schema import ShieldingParams
+from ....errors import ParserError
 
 if TYPE_CHECKING:
     from ....core.network import Network
@@ -31,10 +35,38 @@ class ShieldingFunction(ABC):
         ``None`` for a *global* model that applies to any reaction.  A function
         is resolved by the pair ``(reaction, name)`` with a fallback to
         ``(None, name)``, so a local model only matches its own reaction.
+
+    A model with settings overrides :meth:`config_model` to declare them.
     """
 
     name: str
     reaction: str | None = None
+
+    @staticmethod
+    def config_model() -> type[ShieldingParams]:
+        """Return the model of this shielding type's settings (keys but ``type``).
+
+        The default has no keys, so a shielding type without settings rejects
+        any.
+        """
+        return ShieldingParams
+
+    def params(self, reaction: "Reaction") -> ShieldingParams:
+        """Validate *reaction*'s shielding settings against :meth:`config_model`.
+
+        Raises
+        ------
+        ParserError
+            If a setting is unknown or has an invalid value.
+        """
+        assert reaction.photo is not None and reaction.photo.shielding is not None
+
+        try:
+            return self.config_model().model_validate(reaction.photo.shielding.props)
+        except ValidationError as e:
+            raise ParserError(
+                f"Invalid {self.name} shielding settings for {reaction}:\n{e}"
+            ) from e
 
     @abstractmethod
     def get_shielding(self, reaction: "Reaction", network: "Network") -> Expr:
