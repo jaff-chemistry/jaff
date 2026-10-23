@@ -91,8 +91,13 @@ the module is always there (like `thermodynamics`). Document the field in the
 parent's `Attributes` too. There is no registry: the parent's import of the
 child is what puts it in the tree.
 
-Then add the new module to `CONFIG_MODULES` in `tests/config/test_config_modules.py`,
-which imports every `config.py` in a fresh interpreter to catch import cycles.
+Then register the new module in two lists:
+
+- `CONFIG_MODULES` in `tests/config/test_config_modules.py`, which imports every
+  `config.py` in a fresh interpreter to catch import cycles;
+- `CONFIG_MODULES` in `src/jaff/_utils/api_docs.py` (module path → nav title), which
+  gives its models pages in the API reference. Give the module an `__all__`.
+
 A `config.py` should import only pydantic, `jaff.config` and other `config.py`
 modules.
 
@@ -170,7 +175,8 @@ building the docs.
 - [x] `config.py` next to the module, with a `ConfigModel` subclass
 - [x] Every key documented in numpydoc `Attributes`, worded for TOML users
 - [x] Field added to the parent model (and documented there)
-- [x] Module listed in `CONFIG_MODULES` (`tests/config/test_config_modules.py`)
+- [x] Module has `__all__` and is listed in both `CONFIG_MODULES`
+      (`tests/config/test_config_modules.py`, `src/jaff/_utils/api_docs.py`)
 - [x] The consuming class takes `(network, config)`; `Network` builds it
 - [x] Checks placed by kind (type / validator / network build)
 - [x] Type-selected tables: `_atomic`, one model per type, discriminated union

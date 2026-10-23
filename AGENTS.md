@@ -7,16 +7,20 @@ JAFF (Just Another Fancy Format) is an astrochemical network parser that parses 
 ### Installation
 
 ```bash
-uv pip install --system -e ".[dev]"    # Install with dev dependencies
+uv sync --extra dev                     # Install with dev dependencies
 ```
+
+Always run tools as `uv run --extra dev ...` (plain `uv run` drops the dev extras).
+Data tables download on first use; set `JAFF_OFFLINE=1` to forbid network access.
 
 ### Running Tests
 
 ```bash
 uv run pytest                           # Run all tests
 uv run pytest -v                        # Verbose output
+uv run pytest tests/core/network                     # Run one package's tests
 uv run pytest tests/core/network/test_network.py     # Run specific test file
-uv run pytest tests/core/network/test_network.py::test_load_network  # Run single test
+uv run pytest tests/core/network/test_network.py::TestConstruction  # Run one class
 uv run pytest -k "network"              # Run tests matching pattern
 uv run pytest --cov=jaff                # Run with coverage
 ```
@@ -24,11 +28,15 @@ uv run pytest --cov=jaff                # Run with coverage
 ### Code Formatting & Linting
 
 ```bash
-ruff format src/ tests/                 # Format code
+ruff format <files>                     # Format the files you changed
 ruff format --check src/                # Check formatting without modifying
 ruff check src/                         # Lint code
-ruff check --fix src/                   # Fix linting issues
+uv run --extra dev ty check <files>     # Type check (part of linting; ruff misses type errors)
 ```
+
+Only format and fix the files you touched, and only if they were already formatted:
+`tests/` is not lint-clean and a repo-wide `ruff format` / `--fix` rewrites unrelated
+files. Pre-existing `ty` errors exist; make sure you add none.
 
 ## Code Style Guidelines
 
@@ -145,6 +153,73 @@ from jaff import Network
 - Test function naming: `test_<description>()`
 - Use pytest fixtures in `conftest.py`
 - Use `@pytest.mark.parametrize` for parameterized tests
+- Compare floats with `pytest.approx` (also numbers inside snapshots)
+
+## Tests
+
+`tests/` mirrors `src/jaff/`: put a test in the folder of the package whose code it
+tests (`tests/core/network/`, `tests/physics/dust/`, `tests/codegen/templating/`, ...).
+Cross-cutting tests go in `tests/e2e/` (golden code, generated solvers, bundled
+networks, snapshots) or `tests/meta/` (public API, API docs, imports, notebooks). A
+module's config tests sit with the module; `tests/config/` holds only the loader,
+schema and reference machinery. Every folder has an `__init__.py`.
+
+- **Data paths**: import from `tests._paths` (`FIXTURES_DIR`, `SNAPSHOTS_DIR`,
+  `GOLDEN_DIR`, `REPO_ROOT`); never build paths from `Path(__file__)`.
+- **Shared helpers** live at `tests/` root and are imported as
+  `from tests.xsec_props import ...` / `from tests.codegen_render import ...`.
+- **Fixtures** (`tests/conftest.py`): `make_network(lines, name=..., **kwargs)` builds a
+  `Network` from inline reaction lines in `tmp_path`; `fixtures_dir`,
+  `sample_network`; an autouse fixture silences the banner and logging.
+- **Regenerating references**: `JAFF_UPDATE_GOLDEN=1` (golden code in `tests/golden/`),
+  `JAFF_UPDATE_SNAPSHOTS=1` (snapshots); review the diff before keeping it.
+- **Opt-in slow tests**: `JAFF_TEST_REPO_NETWORKS=1` (round-trip every bundled network).
+
+## Configuration
+
+`jaff.toml` and `jaffgen.toml` share one schema built from pydantic models. Each
+configurable module owns a `config.py` next to its code (e.g.
+`physics/dust/config.py`), and a parent model lists its children's models as fields,
+so the TOML keys mirror the class structure (`[network.dust.pe]`). Layers merge as
+defaults < `jaff.toml` < `jaffgen.toml` / `config=` < keyword args / CLI options <
+`--set key.path=value`.
+
+To add a setting, follow `docs/development/adding-configuration.md`. In short:
+
+1. Add the field to the module's `ConfigModel` subclass (`jaff.config.base`; strict,
+   frozen, unknown keys rejected) and document it in the class's numpydoc
+   `Attributes` (that text becomes the schema and reference description).
+2. A new `config.py` gets an `__all__`, a field on its parent model, an entry in
+   `CONFIG_MODULES` (`tests/config/test_config_modules.py`) and one in
+   `CONFIG_MODULES` of `src/jaff/_utils/api_docs.py`.
+3. The class doing the work takes its own section (`Thing(network, config)`), never
+   the whole config. Checks against the network raise `ParserError` with the key path.
+4. Optional shortcuts: a `Network` keyword (map it in `_keyword_layer`) or a CLI
+   option (an entry in `CLI_KEYS`, `src/jaff/cli/_helper.py`).
+5. Regenerate the committed editor schemas: `python -m jaff.config.json_schema`
+   (`tests/config/test_config_json_schema.py` fails when they are stale).
+
+There are no aliases for old keys: a renamed key is a hard break.
+
+## Documentation
+
+- Docs are built with Zensical: `uv run --extra dev zensical build --strict`.
+- The API reference (`docs/reference/`) and the configuration reference
+  (`docs/user-guide/configuration/reference.md`) are generated from docstrings and
+  are **not committed** (gitignored; CI generates them). Generate them before a local
+  build or serve:
+
+  ```bash
+  python -m jaff._utils.api_docs      # API pages + the API nav in zensical.toml
+  python -m jaff.config.reference     # configuration reference
+  ```
+
+- The API nav section of `zensical.toml` *is* committed; regenerate it when exports
+  change (`tests/meta/test_api_docs.py` checks it).
+- Documented packages are `PACKAGES` and `CONFIG_MODULES` in `src/jaff/_utils/api_docs.py`;
+  their `__all__` (strings only) decides what gets a page.
+- Write docstring markup as reST-style ``code``, :class:`~a.b.C` (tilde = last name
+  only), fenced code blocks (never `::` literal blocks), and `>>>` only in `Examples`.
 
 ### Special Project Rules
 
@@ -170,8 +245,11 @@ docs/           # Documentation
 
 ## Key Modules
 
-- `network.py`: Network class for loading/managing chemical networks
-- `codegen.py`: Multi-language code generation
-- `file_parser.py`: File format parsing
-- `reaction.py`: Reaction representations
-- `species.py`: Species representations
+- `core/network/network.py`: `Network`, loading/managing a chemical network
+- `core/reaction/`, `core/species/`, `core/elements/`: reactions, species, elements
+- `core/parsers/`: network file formats and `.jfunc` auxiliary functions
+- `physics/`: radiation and photo-reactions, dust, thermodynamics/EOS, constants
+- `codegen/`: `Codegen`, `Language`s, the `$$JAFF` template engine (`templating/`)
+- `config/`: config base models, loader, JSON schemas, reference generator
+- `cli/`: `jaffgen` and `jaffx`
+- `drivers/`, `io/`: HDF5/SQLite/TOML/CSV access, data downloads, logging
