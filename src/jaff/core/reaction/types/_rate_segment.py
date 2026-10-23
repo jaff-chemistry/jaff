@@ -1,14 +1,17 @@
 # ABOUTME: RateSegment: one rate expression valid over one temperature range
-# ABOUTME: Dataclass of rate, tmin and tmax
+# ABOUTME: Frozen dataclass of rate, tmin and tmax
 
 from dataclasses import dataclass
 
 from sympy import Expr
 
 
-@dataclass
+@dataclass(frozen=True)
 class RateSegment:
     """A reaction's rate expression valid over one temperature range.
+
+    Immutable: change a reaction's rates through its
+    :class:`RateSegments` (:meth:`RateSegments.map_rates`, :meth:`RateSegments.add`).
 
     Attributes
     ----------

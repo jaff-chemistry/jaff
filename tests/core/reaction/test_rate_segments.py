@@ -219,3 +219,43 @@ def test_network_open_ended_ranges(tmp_path):
     rate = net.reactions[0].rate_coefficient
     assert rate.subs(TGAS, 50) == 1
     assert rate.subs(TGAS, 150) == 2
+
+
+def test_segment_is_immutable():
+    from dataclasses import FrozenInstanceError
+
+    with pytest.raises(FrozenInstanceError):
+        RateSegment(Integer(1), 10, 100).rate = Integer(2)
+
+
+def test_map_rates_replaces_every_rate():
+    segs = RateSegments(
+        _owner("clip"), [RateSegment(Integer(1), 10, 100), RateSegment(Integer(2), 100, 200)]
+    )
+    segs.map_rates(lambda rate: 3 * rate)
+
+    assert [s.rate for s in segs] == [3, 6]
+    assert segs._by_prop[(100, 200)].rate == 6
+
+
+def test_equivalent_rate_tracks_changes():
+    segs = RateSegments(_owner("clip"), [RateSegment(Integer(1), 10, 100)])
+    assert segs.equivalent_rate.subs(TGAS, 50) == 1
+
+    segs.add(RateSegment(Integer(2), 100, 200))
+    assert segs.equivalent_rate.subs(TGAS, 150) == 2
+
+    segs.map_rates(lambda rate: 10 * rate)
+    assert segs.equivalent_rate.subs(TGAS, 150) == 20
+
+
+def test_reaction_temperature_range_is_derived(tmp_path):
+    dat = tmp_path / "r.dat"
+    dat.write_text(
+        "@format:idx,R,R,P,tmin,tmax,rate\n1,H,H,H2,10,100,1.0\n2,H,H,H2,100,200,2.0\n"
+    )
+    rxn = Network(str(dat), funcfile=False).reactions[0]
+
+    assert (rxn.tmin, rxn.tmax) == (10, 200)
+    with pytest.raises(AttributeError):
+        rxn.tmin = 5

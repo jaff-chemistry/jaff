@@ -82,9 +82,7 @@ class PrizmoParser(Parser):
             If a placeholder is left in any of this parser's reactions.
         """
         for n, rea in enumerate(network.reactions.with_type("photo"), start=1):
-            for seg in rea.rate_segments:
-                seg.rate = self._number_photo(seg.rate, n)
-            rea.rate_coefficient = self._number_photo(rea.rate_coefficient, n)
+            rea.rate_segments.map_rates(lambda rate, n=n: self._number_photo(rate, n))
 
         for rea in network.reactions.with_format(self.name):
             exprs = [rea.rate_coefficient, *(seg.rate for seg in rea.rate_segments)]

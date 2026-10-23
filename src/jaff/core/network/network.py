@@ -415,7 +415,7 @@ class Network:
 
         self.reactions.check_config()
         self.__post_process(parsers)
-        self.__normalize_network_extras()
+        self.__resolve_rate_references()
         self.__set_emissivity()
         self.__set_absorption_coefficient()
         self.thermodynamics: Thermodynamics = Thermodynamics(
@@ -512,7 +512,7 @@ class Network:
 
         Each row's rate is resolved (global variables, ``.jfunc`` calls) and
         standardized before its reaction is built; ``rc_<N>`` references are
-        left for :meth:`__normalize_network_extras`.
+        left for :meth:`__resolve_rate_references`.
 
         Parameters
         ----------
@@ -590,7 +590,7 @@ class Network:
         reactions but not add any (``add()`` raises once frozen).  Rates are
         already standardised, so a hook writing a shorthand symbol (``n_X``,
         ...) must standardise it itself (``network.symbols.standardize``).
-        Runs before :meth:`__normalize_network_extras`, so ``rc_<N>`` in what a
+        Runs before :meth:`__resolve_rate_references`, so ``rc_<N>`` in what a
         hook writes is resolved like every other rate.
 
         Parameters
@@ -604,26 +604,17 @@ class Network:
         for parser in parsers:
             parser.post_process(self)
 
-    def __normalize_network_extras(self):
-        """Merge rate segments and resolve ``rc_<N>`` references.
+    def __resolve_rate_references(self) -> None:
+        """Resolve ``rc_<N>`` references once every reaction is built.
 
-        Collapses each reaction's rate segments into its rate coefficient and
-        replaces ``rc_<N>`` (another reaction's rate coefficient; see
-        :meth:`NetworkSymbols.resolve_rate_references`) in every rate, ``dE``
-        and radiation group yield.  Everything else is standardized before the
-        reactions are built.
+        Replaces ``rc_<N>`` (another reaction's rate coefficient; see
+        :meth:`NetworkSymbols.resolve_rate_references`) in every rate segment,
+        ``dE`` and radiation group yield.  Everything else is standardized
+        before the reactions are built.
         """
         resolve = self.symbols.resolve_rate_references
         for r in self.reactions:
-            if r.type == "photo" and self.radiation is not None:
-                r.rate_coefficient = resolve(r.rate_coefficient)
-                r.rate_segments[0].rate = r.rate_coefficient
-            else:
-                for seg in r.rate_segments:
-                    seg.rate = resolve(seg.rate)
-                r.rate_coefficient = r.rate_segments.sort().evaluate_equivalent_rate()
-
-            r.tmin, r.tmax = r.rate_segments[0].tmin, r.rate_segments[-1].tmax
+            r.rate_segments.map_rates(resolve)
             r.dE = resolve(r.dE)
             if r.rad.group_yields is not None:
                 r.rad.group_yields = [resolve(g) for g in r.rad.group_yields]

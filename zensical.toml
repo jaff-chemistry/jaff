@@ -116,8 +116,10 @@ nav = [
       ] },
       { "core.Reaction" = [
         "reference/core/reaction/index.md",
-        "reference/core/reaction/rate_coefficient.md",
         "reference/core/reaction/function.md",
+        "reference/core/reaction/rate_coefficient.md",
+        "reference/core/reaction/tmin.md",
+        "reference/core/reaction/tmax.md",
         "reference/core/reaction/rate.md",
         "reference/core/reaction/species.md",
         "reference/core/reaction/elements.md",

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from sympy import Basic, Expr, Piecewise
 
@@ -48,6 +48,7 @@ class RateSegments(Catalogue[RateSegment]):
 
         super().__init__(segments, _by_temp)
         self.reaction: Reaction = reaction
+        self._equivalent: Expr | None = None
 
     def add(self, segment: RateSegment):
         """Append a rate segment, keyed by its ``(tmin, tmax)`` range.
@@ -74,6 +75,37 @@ class RateSegments(Catalogue[RateSegment]):
         self._by_prop[tup] = segment
         self._list.append(segment)
         self.count = len(self._list)
+        self._equivalent = None
+
+    def map_rates(self, function: Callable[[Expr], Expr]) -> None:
+        """Replace each segment's rate with ``function(rate)``, keeping its range.
+
+        Parameters
+        ----------
+        function : Callable[[Expr], Expr]
+            Maps a segment's rate to its new rate.
+        """
+        self._list = [
+            RateSegment(function(seg.rate), seg.tmin, seg.tmax) for seg in self._list
+        ]
+        self._by_prop = {(seg.tmin, seg.tmax): seg for seg in self._list}
+        self._equivalent = None
+
+    @property
+    def equivalent_rate(self) -> Expr:
+        """The segments collapsed into one rate (see :meth:`evaluate_equivalent_rate`).
+
+        Cached until the segments change (:meth:`add`, :meth:`map_rates`).
+
+        Returns
+        -------
+        Expr
+            The equivalent rate expression in ``tgas``.
+        """
+        if self._equivalent is None:
+            self._equivalent = self.sort().evaluate_equivalent_rate()
+
+        return self._equivalent
 
     def __repr__(self):
         return "<RateSegment Object>"

@@ -100,19 +100,21 @@ class Reaction:
         Ordered species catalogue of reactant species.
     products : Species
         Ordered species catalogue of product species.
-    rate_coefficient : Basic
+    rate_coefficient : Expr
         SymPy expression for the reaction rate coefficient (units depend on
         the reaction order; typically cm³ s⁻¹ for two-body reactions).
-        Reassigning it refreshes :attr:`rate`.
+        Read-only: the photo band rate when a radiation field sets it
+        (``photo.band_rate``), else the :attr:`rate_segments` collapsed into
+        one expression.
     rate : Expr
         ``rate_coefficient`` times the core reactants' number densities, the
         reaction rate per unit volume used by every equation builder.
     tmin : float or None
-        Minimum gas temperature at which the rate is valid (Kelvin).
-        ``None`` means no lower bound.
+        Minimum gas temperature at which the rate is valid (Kelvin), from the
+        lowest rate segment.  ``None`` means no lower bound.  Read-only.
     tmax : float or None
-        Maximum gas temperature at which the rate is valid (Kelvin).
-        ``None`` means no upper bound.
+        Maximum gas temperature at which the rate is valid (Kelvin), from the
+        highest rate segment.  ``None`` means no upper bound.  Read-only.
     config : ReactionConfig
         The reaction's resolved settings, every key set: ``t_cutoff``
         (out-of-range behaviour of the rate segments, see
@@ -123,7 +125,8 @@ class Reaction:
     rate_segments : RateSegments
         Per-temperature-range rate pieces.  A single-range reaction holds one
         segment; reactions merged across disjoint ranges accumulate several,
-        collapsed into :attr:`rate_coefficient` via ``evaluate_equivalent_rate``.
+        collapsed into :attr:`rate_coefficient` (``rate_segments.equivalent_rate``).
+        Change the rates through it (``map_rates``, ``Reactions.add_rate``).
     dE : Basic
         SymPy expression for the energy released per reaction event (erg),
         from a ``.jfunc`` ``deltaE<N>`` function if there is one; zero
@@ -269,12 +272,10 @@ class Reaction:
         self._format: str | None = format
         self._metadata: dict = metadata if metadata is not None else {}
         self.index: int = index
+        self._rate: tuple[Expr, Expr] | None = None
         self.__check_functions()
         self.reactants: Species = Species(reactants, check_length=False)
         self.products: Species = Species(products, check_length=False)
-        self.rate_coefficient = rate_coefficient
-        self.tmin: float | None = tmin
-        self.tmax: float | None = tmax
         self.serialized: str = self.serialize(self.reactants, self.products)
         self.config: ReactionConfig = self.net.reactions.config.resolve(self.serialized)
         self.rate_segments: RateSegments = RateSegments(
@@ -302,9 +303,7 @@ class Reaction:
             PhotoReaction(self, self.__photo_config()) if type == "photo" else None
         )
         if self.photo is not None:
-            band_rate = self.photo.compute()
-            if band_rate is not None:
-                self.rate_coefficient = band_rate
+            self.photo.compute()
 
         self.rad.compute()
 
@@ -447,29 +446,37 @@ class Reaction:
     def rate_coefficient(self) -> Expr:
         """SymPy rate coefficient; see the class attributes.
 
-        Units depend on the reaction order (e.g. cm³ s⁻¹ for a two-body
-        reaction).  Assigning a new value drops the cached :attr:`rate`.
+        The photo band rate when a radiation field sets it, else the rate
+        segments collapsed into one expression.  Units depend on the reaction
+        order (e.g. cm³ s⁻¹ for a two-body reaction).  Change it through
+        :attr:`rate_segments`.
 
         Returns
         -------
         Expr
         """
-        return self._rate_coefficient
+        if self.photo is not None and self.photo.band_rate is not None:
+            return self.photo.band_rate
 
-    @rate_coefficient.setter
-    def rate_coefficient(self, value: Expr) -> None:
-        self._rate_coefficient: Expr = value
-        # Drop the cached rate so the next read recomputes it from the new value.
-        self.__dict__.pop("rate", None)
+        return self.rate_segments.equivalent_rate
 
-    @cached_property
+    @property
+    def tmin(self) -> float | None:
+        """Lower temperature bound of the lowest rate segment (K); see the attributes."""
+        return self.rate_segments.sort()[0].tmin
+
+    @property
+    def tmax(self) -> float | None:
+        """Upper temperature bound of the highest rate segment (K); see the attributes."""
+        return self.rate_segments.sort()[-1].tmax
+
+    @property
     def rate(self) -> Expr:
         """Reaction rate per unit volume, ``rate_coefficient · Π nden[reactants]``.
 
         The rate coefficient times the number density (``net.symbols.ndens``)
         of each core reactant; pseudo-species such as ``_PHOTON`` or ``_CR``
-        carry no density.  Cached, and recomputed after
-        :attr:`rate_coefficient` is reassigned.
+        carry no density.  Cached until :attr:`rate_coefficient` changes.
 
         Returns
         -------
@@ -482,12 +489,15 @@ class Reaction:
         >>> net.reactions["H+.e-__H"].rate
         1.65941781598291e-10*nden[1]*nden[2]/tgas**0.7
         """
-        nden = self.net.symbols.ndens
-        rate = self.rate_coefficient
-        for s in self.reactants.core:
-            rate *= nden[self.net.species[s.name].index]
+        coefficient = self.rate_coefficient
+        if self._rate is None or self._rate[0] is not coefficient:
+            nden = self.net.symbols.ndens
+            rate = coefficient
+            for s in self.reactants.core:
+                rate *= nden[self.net.species[s.name].index]
+            self._rate = (coefficient, rate)
 
-        return rate
+        return self._rate[1]
 
     @cached_property
     def species(self) -> Species:

@@ -248,10 +248,12 @@ class TestAddRate:
         )
 
     def _add(self, net, rate, tmin=10, tmax=1000):
+        from sympy import Float
+
         from jaff.core.reaction import RateSegment
 
         rea = net.reactions["H.H__H2"]
-        net.reactions.add_rate(rea, RateSegment(rate, tmin, tmax))
+        net.reactions.add_rate(rea, RateSegment(Float(rate), tmin, tmax))
 
         return rea
 
@@ -259,6 +261,13 @@ class TestAddRate:
         rea = self._add(self._net(make_network, "error"), 2e-10, tmin=1000, tmax=5000)
 
         assert len(rea.rate_segments) == 2
+
+    def test_new_range_updates_the_derived_rate(self, make_network):
+        rea = self._add(self._net(make_network, "error"), 2e-10, tmin=1000, tmax=5000)
+
+        assert (rea.tmin, rea.tmax) == (10, 5000)
+        tgas = rea.net.symbols.tgas
+        assert float(rea.rate_coefficient.subs(tgas, 3000)) == pytest.approx(2e-10)
 
     def test_preserve_first_keeps_the_existing_rate(self, make_network):
         rea = self._add(self._net(make_network, "preserve-first"), 2e-10)

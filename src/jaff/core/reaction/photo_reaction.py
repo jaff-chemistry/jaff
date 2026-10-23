@@ -53,6 +53,10 @@ class PhotoReaction:
         ``xsec_frac``.  Set when a radiation field is configured; ``None``
         otherwise, and for a ``custom_rad_rate`` reaction.  See
         :attr:`band_xsecs`.
+    band_rate : sympy.Expr or None
+        The sum of the per-band rate coefficients: the reaction's rate
+        coefficient when a radiation field sets it.  ``None`` otherwise, and
+        for a ``custom_rad_rate`` reaction.
     shielding_tables : dict[str, Any]
         Data tables the reaction's shielding model built for the generated
         code to interpolate over, keyed by file name (e.g.
@@ -90,17 +94,14 @@ class PhotoReaction:
         self.xsec: XsecProps | None = None
         self.custom_rad_rate: bool = False
         self.rgrouped: List[GroupedPhotoReactionProps] | None = None
+        self.band_rate: Expr | None = None
         self.shielding_tables: Dict[str, Any] = {}
 
-    def compute(self) -> Expr | None:
+    def compute(self) -> None:
         """Resolve the cross sections and, with radiation, the band rates.
 
-        Returns
-        -------
-        sympy.Expr or None
-            The reaction's new rate coefficient (the sum of its per-band rate
-            coefficients) when a radiation field sets it; ``None`` when the
-            reaction keeps its own rate.
+        Sets :attr:`xsec` and, when a radiation field sets the rate,
+        :attr:`rgrouped` and :attr:`band_rate`.
 
         Raises
         ------
@@ -116,9 +117,9 @@ class PhotoReaction:
         self._set_xsec()
 
         if reaction.net.radiation is None:
-            return None
+            return
 
-        return self._set_band_rates()
+        self._set_band_rates()
 
     def _overrides_custom_rate(self) -> bool:
         """Whether radiation recomputes the reaction's ``chemRate`` rate.
@@ -184,8 +185,8 @@ class PhotoReaction:
                 "a cross section cannot depend on another reaction's rate"
             )
 
-    def _set_band_rates(self) -> Expr | None:
-        """Build the per-band rate data; return the summed rate coefficient."""
+    def _set_band_rates(self) -> None:
+        """Build the per-band rate data and the summed rate coefficient."""
         reaction, net = self.reaction, self.reaction.net
         assert net.radiation is not None
 
@@ -200,15 +201,14 @@ class PhotoReaction:
                 "override_custom_rate = true to compute its rate from the "
                 "database cross sections."
             )
-            return None
+            return
 
         k_tot, xsec_tot, grouped = net.radiation.get_reaction_rate_props(reaction)
 
         assert self.xsec is not None
         self.xsec.total = xsec_tot
         self.rgrouped = grouped
-
-        return k_tot
+        self.band_rate = k_tot
 
     @property
     def band_xsecs(self) -> pd.DataFrame:
