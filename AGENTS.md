@@ -200,6 +200,13 @@ so the TOML keys mirror the class structure (`[network.dust.pe]`). Layers merge 
 defaults < `jaff.toml` < `jaffgen.toml` / `config=` < keyword args / CLI options <
 `--set key.path=value`.
 
+`Network(...)`'s keyword arguments are the `[network]` keys, named and nested as in
+the file: `strict`, `label`, `funcfile`, `expand_nuclei`, and the tables `reactions`,
+`radiation`, `dust`, `thermodynamics` (each a `dict` or its config model), e.g.
+`Network("GOW", reactions={"photo": {"use_proxy_photoreaction": True}},
+thermodynamics={"eos": {"gamma": 1.4}})`. Settings are read back from `net.config`
+(same structure); don't copy config values onto other attributes.
+
 To add a setting, follow `docs/development/adding-configuration.md`. In short:
 
 1. Add the field to the module's `ConfigModel` subclass (`jaff.config.base`; strict,
@@ -238,9 +245,20 @@ There are no aliases for old keys: a renamed key is a hard break.
 - Documented packages are `PACKAGES` and `CONFIG_MODULES` in `src/jaff/_utils/api_docs.py`;
   their `__all__` (strings only) decides what gets a page.
 - Write docstring markup as reST-style ``code``, :class:`~a.b.C` (tilde = last name
-  only), fenced code blocks (never `::` literal blocks), and `>>>` only in `Examples`.
+  only), fenced code blocks (never `::` / `.. math::`), and `>>>` only in `Examples`.
+- How docstrings become pages: `docs/development/api-documentation.md`. In short:
+  - a class page = description, Constructor (from the `__init__` docstring's
+    `Parameters`), the class `Attributes` table, then `Notes`, `Examples`, and a
+    page per public method/property the class itself defines (inherited ones get none);
+  - each member's first docstring line is its row text in the tables, so make it
+    stand alone;
+  - one `Parameters` entry per name (grouped `a, b : float` gives both the first type);
+  - a constant's description is the string literal right after its assignment;
+  - config models' `Attributes` also become the JSON-schema descriptions and the
+    configuration reference: write them for TOML users.
+- `Examples` are not run in CI (Network prints a banner): run them and paste real output.
 
-### Special Project Rules
+## Special Project Rules
 
 1. **File headers**: Each code file starts with a 2-line comment:
     ```python

@@ -513,6 +513,7 @@ nav = [
     "development/contributing.md",
     "development/codebase-structure.md",
     "development/code-style.md",
+    "development/api-documentation.md",
     "development/testing.md",
     "development/adding-parsers.md",
     "development/adding-configuration.md",

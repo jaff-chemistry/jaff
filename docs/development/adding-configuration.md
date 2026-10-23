@@ -194,4 +194,5 @@ building the docs.
 
 - [Configuration overview](../user-guide/configuration/index.md)
 - [Adding a Custom Shielding Function](adding-shielding-functions.md)
+- [Writing API Documentation](api-documentation.md) — how the `Attributes` text is rendered
 - [Code Style Guide](code-style.md)

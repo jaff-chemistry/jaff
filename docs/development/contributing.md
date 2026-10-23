@@ -121,6 +121,8 @@ If you add or change a dependency, update `uv.lock` as well (`uv add <package>`,
 - See the [Testing Guide](testing.md) for running, writing, and covering tests.
 - See the [Code Style Guide](code-style.md) for formatting, naming, type hints,
   and docstring conventions.
+- See [Writing API Documentation](api-documentation.md) for how docstrings
+  become the API reference.
 
 ## 4. Open a Pull Request
 

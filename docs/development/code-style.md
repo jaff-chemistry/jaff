@@ -207,7 +207,9 @@ def load_network(
 
 ## Docstrings
 
-Every public module, class, and function gets a docstring.
+Every public module, class, and function gets a docstring. Docstrings are the
+only source of the API reference; how they turn into pages, and the markup that
+renders, is in [Writing API Documentation](api-documentation.md).
 
 ### NumPy Style
 
