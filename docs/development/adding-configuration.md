@@ -136,15 +136,19 @@ self.cosmic_rays = (
 )
 ```
 
-Per-reaction settings work the same way: every `Reaction` holds
-`reaction.config`, its resolved `ReactionConfig` (the global
-`[network.reactions]` table with its own `reaction."<serialized>"` entry applied
-over it; see `ReactionsConfig.resolve`). A photo reaction's `reaction.photo` is
+Per-reaction settings work the same way. The catalogue is
+`Reactions(config.reactions)` and owns the `[network.reactions]` settings: every
+`Reaction` holds `reaction.config`, its resolved `ReactionConfig`
+(`net.reactions.config.resolve(serialized)`: the global table with its own
+`reaction."<serialized>"` entry applied over it); `net.reactions.add_rate`
+resolves a second rate over the same range by the reaction's
+`duplicate_policy`; and `net.reactions.check_config()` reports per-reaction
+entries that name no reaction. A photo reaction's `reaction.photo` is
 itself a component, `PhotoReaction(reaction, reaction.config.photo)`: it keeps
 the photo section as `photo.config`, computes the cross sections, band data and
 shielding tables (`photo.compute()`), and offers `band_xsecs` and
 `plot_xsecs()`. To tell a key set on
-the reaction itself from the global value, use `ReactionsConfig.own(serialized)`.
+the reaction itself from the global value, use `net.reactions.config.own(serialized)`.
 
 ## Where each check belongs
 

@@ -219,8 +219,10 @@ To add a setting, follow `docs/development/adding-configuration.md`. In short:
    the whole config, keeps it read-only as `self.config`, passes `config.<child>` to
    the components it builds, and holds only computed state otherwise: no copies of
    settings, no reads of another component's settings from `net.config`. Reactions
-   do the same: `reaction.config` is the resolved `ReactionConfig`
-   (`ReactionsConfig.resolve`; `.own()` for keys set on the reaction itself), and a
+   do the same: the catalogue is `Reactions(config.reactions)` and owns the reaction
+   settings (`net.reactions.config.resolve(s)` gives a reaction's `reaction.config`,
+   `.own(s)` the keys set on it alone; `add_rate` applies `duplicate_policy`;
+   `check_config()` checks per-reaction entries), and a
    photo reaction's `reaction.photo` is a `PhotoReaction(reaction, config.photo)`
    component holding its photo settings, computed photo state and the photo logic
    (`compute()`, `band_xsecs`, `plot_xsecs()`). Checks against the network

@@ -250,7 +250,7 @@ class Photochemistry:
 
     def _pi_override(self, reaction: Reaction) -> str | None:
         """The ``pi_database`` set for the reaction itself, or ``None``."""
-        own = self.net.config.reactions.own(reaction.serialized)
+        own = self.net.reactions.config.own(reaction.serialized)
 
         return (
             own.photo.pi_database if own is not None and own.photo is not None else None

@@ -49,7 +49,11 @@ def _net(pi_database=None, own=None):
         {"reactions": {"photo": photo, "reaction": entries}}
     )
 
-    return SimpleNamespace(config=config, radiation=None)
+    return SimpleNamespace(
+        config=config,
+        reactions=SimpleNamespace(config=config.reactions),
+        radiation=None,
+    )
 
 
 def _rxn(key, net):

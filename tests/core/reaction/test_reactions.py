@@ -173,7 +173,7 @@ class TestFilterCache:
 
         net = make_network(self.NET, name="r.jet")
         # A separate catalogue, so the test never depends on the network's own.
-        cat = Reactions([net.reactions[0], net.reactions[1]])
+        cat = Reactions(net.config.reactions, [net.reactions[0], net.reactions[1]])
         before = cat.with_type("photo")
         cat.add(net.reactions[2])
         after = cat.with_type("photo")
@@ -190,7 +190,7 @@ class TestFreeze:
         from jaff.core.reaction import Reactions
 
         net = make_network("H + H -> H2 [] 1e-17\n", name="r.jet")
-        cat = Reactions(list(net.reactions._list))
+        cat = Reactions(net.config.reactions, list(net.reactions._list))
         cat._freeze()
 
         with pytest.raises(RuntimeError, match="Reactions catalogue is frozen"):
@@ -214,3 +214,80 @@ class TestFreeze:
         cat.add(Specie("He", 99))
 
         assert cat.count == 3
+
+
+class TestReactionsConfig:
+    """The catalogue owns the [network.reactions] settings of its reactions."""
+
+    NET = "H + H -> H2 [10,1000] 1e-10\nH2 -> H + H [10,1000] 1e-10\n"
+
+    def test_network_passes_its_section(self, make_network):
+        net = make_network(self.NET, name="r.jet")
+
+        assert net.reactions.config is net.config.reactions
+
+    def test_reaction_config_resolved_by_the_catalogue(self, make_network):
+        net = make_network(
+            self.NET,
+            name="r.jet",
+            reactions={"reaction": {"H.H__H2": {"t_cutoff": "extrapolate"}}},
+        )
+
+        assert net.reactions["H.H__H2"].config == net.reactions.config.resolve("H.H__H2")
+        assert net.reactions["H.H__H2"].config.t_cutoff == "extrapolate"
+
+
+class TestAddRate:
+    """A second rate for a catalogued reaction follows its duplicate_policy."""
+
+    NET = "H + H -> H2 [10,1000] 1e-10\n"
+
+    def _net(self, make_network, policy):
+        return make_network(
+            self.NET, name="r.jet", reactions={"duplicate_policy": policy}
+        )
+
+    def _add(self, net, rate, tmin=10, tmax=1000):
+        from jaff.core.reaction import RateSegment
+
+        rea = net.reactions["H.H__H2"]
+        net.reactions.add_rate(rea, RateSegment(rate, tmin, tmax))
+
+        return rea
+
+    def test_new_range_adds_a_segment(self, make_network):
+        rea = self._add(self._net(make_network, "error"), 2e-10, tmin=1000, tmax=5000)
+
+        assert len(rea.rate_segments) == 2
+
+    def test_preserve_first_keeps_the_existing_rate(self, make_network):
+        rea = self._add(self._net(make_network, "preserve-first"), 2e-10)
+
+        assert rea.rate_segments._by_prop[(10, 1000)].rate == pytest.approx(1e-10)
+
+    def test_preserve_last_replaces_it(self, make_network):
+        rea = self._add(self._net(make_network, "preserve-last"), 2e-10)
+
+        assert rea.rate_segments._by_prop[(10, 1000)].rate == pytest.approx(2e-10)
+
+    def test_error_policy_raises(self, make_network):
+        from jaff.errors import ParserError
+
+        with pytest.raises(ParserError, match="Duplicate reaction"):
+            self._add(self._net(make_network, "error"), 2e-10)
+
+
+class TestCheckConfig:
+    def test_entry_naming_no_reaction_is_reported(self, make_network):
+        from jaff.core.reaction import Reactions
+        from jaff.core.reaction.config import ReactionsConfig
+        from jaff.errors import ParserError
+
+        net = make_network("H + H -> H2 [10,1000] 1e-10\n", name="r.jet")
+        config = ReactionsConfig.model_validate(
+            {"reaction": {"C.O__CO": {"t_cutoff": "clip"}}}
+        )
+        cat = Reactions(config, list(net.reactions._list))
+
+        with pytest.raises(ParserError, match=r"reaction\.\"C\.O__CO\""):
+            cat.check_config()

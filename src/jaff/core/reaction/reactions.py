@@ -14,9 +14,14 @@ from typing import TYPE_CHECKING, Any, SupportsIndex, cast, overload
 
 from sympy import Basic
 
+from ...config.base import dotted
+from ...errors import ParserError
+from ...io import JaffLogger
 from ...types import Catalogue, Vector
 from ..species import Species
+from .config import ReactionsConfig
 from .reaction import Reaction
+from .types import RateSegment
 
 if TYPE_CHECKING:
     import matplotlib.pyplot as plt
@@ -41,8 +46,17 @@ class Reactions(Catalogue[Reaction]):
     :meth:`from_serialized` / :meth:`all` for a result that is always a
     collection.
 
+    The catalogue holds the ``[network.reactions]`` settings of its
+    reactions (:attr:`config`): each reaction's own settings are
+    ``config.resolve(serialized)``, a second rate for a catalogued reaction
+    follows its ``duplicate_policy`` (:meth:`add_rate`), and
+    :meth:`check_config` checks that every per-reaction entry names one of its
+    reactions.
+
     Attributes
     ----------
+    config : ReactionsConfig
+        The ``[network.reactions]`` settings (read-only).
     count : int
         Number of reactions in the catalogue.
 
@@ -63,14 +77,18 @@ class Reactions(Catalogue[Reaction]):
     _by_prop: dict[str, list[Reaction]]  # type: ignore[assignment]
     _by_serialized: dict[str, list[Reaction]]  # type: ignore[assignment]
 
-    def __init__(self, reactions: list[Reaction] | None = None):
+    def __init__(self, config: ReactionsConfig, reactions: list[Reaction] | None = None):
         """Initialise the reactions catalogue.
 
         Parameters
         ----------
+        config : ReactionsConfig
+            The ``[network.reactions]`` settings; :class:`~jaff.core.Network`
+            passes ``net.config.reactions``.
         reactions : list[Reaction] | None, optional
             Initial reactions.  If ``None``, an empty catalogue is created.
         """
+        self.config: ReactionsConfig = config
         _by_name: dict[str, list[Reaction]] | None = None
         _by_serialized: dict[str, list[Reaction]] = {}
         _by_source_index: dict[int, Reaction] = {}
@@ -197,6 +215,9 @@ class Reactions(Catalogue[Reaction]):
         RuntimeError
             If the catalogue has been frozen; ``Network`` freezes it once
             parsing is done, before the parsers' post-processing hooks.
+        ParserError
+            If photo settings are set for *reaction* and it is not a photo
+            reaction.
         """
         if not isinstance(reaction, Reaction):
             raise ValueError(f"'{reaction}' must be an instance of 'Reaction'")
@@ -206,6 +227,13 @@ class Reactions(Catalogue[Reaction]):
                 "Reactions catalogue is frozen: Reactions cannot be further added to the network"
             )
 
+        own = self.config.own(reaction.serialized)
+        if own is not None and own.photo is not None and reaction.type != "photo":
+            keys = ", ".join(sorted(own.photo.model_fields_set))
+            raise ParserError(
+                f"{keys} is only valid for photo reactions: {reaction.serialized}"
+            )
+
         reaction.catalogue_index = len(self._list)
         self._by_prop.setdefault(reaction.verbatim, []).append(reaction)
         self._by_serialized.setdefault(reaction.serialized, []).append(reaction)
@@ -213,6 +241,78 @@ class Reactions(Catalogue[Reaction]):
         self._list.append(reaction)
         self.count = len(self._list)
         self.__filter_cache.clear()
+
+    def add_rate(self, reaction: Reaction, segment: RateSegment) -> None:
+        """Add another rate coefficient to a catalogued reaction.
+
+        A rate over a new temperature range becomes another of the reaction's
+        rate segments.  A second rate over a range the reaction already has
+        is resolved by the reaction's ``duplicate_policy``:
+        ``"preserve-first"`` keeps the existing rate, ``"preserve-last"``
+        replaces it and ``"error"`` raises.
+
+        Parameters
+        ----------
+        reaction : Reaction
+            A reaction of this catalogue (same reaction and mechanism).
+        segment : RateSegment
+            The new rate coefficient and its temperature range.
+
+        Raises
+        ------
+        ParserError
+            If the range is already covered and the policy is ``"error"``.
+        """
+        span = (segment.tmin, segment.tmax)
+        existing = reaction.rate_segments._by_prop.get(span)
+        if existing is None:
+            reaction.rate_segments.add(segment)
+            return
+
+        policy = reaction.config.duplicate_policy
+        name = f"{reaction.verbatim} [type={reaction.type}]"
+        if policy == "error":
+            raise ParserError(
+                f"Duplicate reaction: {name} has two rate coefficients over the "
+                f"same temperature range {span}:\n"
+                f"  existing: {existing.rate}\n"
+                f"  new:      {segment.rate}\n"
+                "Same reaction, same mechanism and overlapping temperature range "
+                "cannot be resolved automatically. Deduplicate the source network."
+            )
+
+        kept, dropped = (
+            (existing.rate, segment.rate)
+            if policy == "preserve-first"
+            else (segment.rate, existing.rate)
+        )
+        JaffLogger().get_logger().warning(
+            f"Duplicate rate for [cyan]{reaction.verbatim}[/] [type={reaction.type}] "
+            f"over T={span} resolved by policy '{policy}': kept {kept}, "
+            f"dropped {dropped}"
+        )
+        if policy == "preserve-last":
+            reaction.rate_segments.add(segment)
+
+    def check_config(self) -> None:
+        """Check that every per-reaction config entry names one of the reactions.
+
+        Raises
+        ------
+        ParserError
+            Listing each ``[network.reactions.reaction."<serialized>"]`` entry
+            whose reaction is not in the catalogue.
+        """
+        unknown = [key for key in self.config.reaction if key not in self._by_serialized]
+        if not unknown:
+            return
+
+        problems = "\n  ".join(
+            f"{dotted(('network', 'reactions', 'reaction', key))}: "
+            "no such reaction in the network"
+            for key in unknown
+        )
+        raise ParserError(f"Invalid config:\n  {problems}")
 
     def by_source_index(self, n: int) -> Reaction | None:
         """Return the reaction whose file-side number (``source_index``) is *n*.

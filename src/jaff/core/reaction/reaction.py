@@ -254,8 +254,8 @@ class Reaction:
         config : ReactionConfig or None, optional
             The reaction's resolved settings (see the :attr:`config`
             attribute); :class:`~jaff.core.Network` passes
-            ``net.config.reactions.resolve(serialized)``.  ``None`` (default)
-            uses the network's.
+            ``net.reactions.config.resolve(serialized)``.  ``None`` (default)
+            resolves it from the network's reactions catalogue.
         type : str, optional
             Reaction type as concluded by the network-format parser (e.g.
             ``"photo"``, ``"cosmic_ray"``, ``"3_body"``, ``"unknown"``, or a
@@ -301,7 +301,7 @@ class Reaction:
         self.config: ReactionConfig = (
             config
             if config is not None
-            else self.net.config.reactions.resolve(self.serialized)
+            else self.net.reactions.config.resolve(self.serialized)
         )
         self.rate_segments: RateSegments = RateSegments(
             [RateSegment(rate_coefficient, tmin, tmax)], self.__t_cutoff()

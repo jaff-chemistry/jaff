@@ -37,7 +37,7 @@ from sympy import (
 )
 
 from ...common import is_jaff_file, load_mass_dict, print_motd, resolve_dependencies
-from ...config.base import ConfigModel, dotted, overlay
+from ...config.base import ConfigModel, overlay
 from ...drivers import HDF5
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
@@ -393,7 +393,7 @@ class Network:
 
         self.mass_dict: dict[str, ElementProps] = {}
         self.species: Species = Species()
-        self.reactions: Reactions = Reactions()
+        self.reactions: Reactions = Reactions(self.config.reactions)
         self.symbols: NetworkSymbols = NetworkSymbols(self)
         self.reactant_matrix: np.ndarray | None = None
         self.product_matrix: np.ndarray | None = None
@@ -420,7 +420,7 @@ class Network:
         else:
             self.__load_network_from_jaff_file(jaff_props)
 
-        self.__check_reaction_settings()
+        self.reactions.check_config()
         self.elements: Elements = Elements(self.species._list)
         self.__post_process(parsers)
         self.__normalize_network_extras(loaded_from_jaff_file)
@@ -461,7 +461,6 @@ class Network:
         """
         specie_names = set()
         special_species: dict[str, Specie] = {}
-        reactions_config = self.config.reactions
 
         with NetworkParser(self.spec.fname, self.logger) as netp:
             reactions_list, global_vars = netp.get_parsed()
@@ -512,7 +511,7 @@ class Network:
             local_subs_dict = {**subs_dict}
             srxn = Reaction.serialize(rr, pp)
             # The global reaction settings with this reaction's own applied.
-            settings = reactions_config.resolve(srxn)
+            settings = self.reactions.config.resolve(srxn)
             assert settings.t_cutoff is not None and settings.photo is not None
 
             rate_expr = self.__parse_rate(aux_chem_rate, rate, aux_funcs, global_vars)
@@ -520,48 +519,10 @@ class Network:
 
             rtype = reaction.get("type", "unknown")
             if (srxn, rtype) in self.reactions:
-                rea = self.reactions[srxn, rtype]
-                if (tmin, tmax) in rea.rate_segments._by_prop:
-                    # Same reaction, mechanism, and temperature range with a
-                    # second rate coefficient — resolved per duplicate_policy.
-                    existing = rea.rate_segments._by_prop[(tmin, tmax)]
-                    policy = settings.duplicate_policy
-                    if policy == "error":
-                        raise ParserError(
-                            f"Duplicate reaction: {rea.verbatim} [type={rtype}] "
-                            f"has two rate coefficients over the same temperature "
-                            f"range ({tmin}, {tmax}):\n"
-                            f"  existing: {existing.rate}\n"
-                            f"  new:      {rate_expr}\n"
-                            "Same reaction, same mechanism and overlapping "
-                            "temperature range cannot be resolved automatically. "
-                            "Deduplicate the source network."
-                        )
-
-                    kept, dropped = (
-                        (existing.rate, rate_expr)
-                        if policy == "preserve-first"
-                        else (rate_expr, existing.rate)
-                    )
-                    self.logger.warning(
-                        f"Duplicate rate for [cyan]{rea.verbatim}[/] "
-                        f"[type={rtype}] over T=({tmin}, {tmax}) resolved by "
-                        f"policy '{policy}': kept {kept}, "
-                        f"dropped {dropped}"
-                    )
-                    if policy == "preserve-first":
-                        continue
-                    # "preserve-last": fall through; add() replaces the segment.
-
-                rea.rate_segments.add(RateSegment(rate_expr, tmin, tmax))
+                self.reactions.add_rate(
+                    self.reactions[srxn, rtype], RateSegment(rate_expr, tmin, tmax)
+                )
                 continue
-
-            # Photo settings set for a reaction that is not a photo reaction.
-            entry = reactions_config.own(srxn)
-            own_photo = entry.photo if entry is not None else None
-            if own_photo is not None and rtype != "photo":
-                keys = ", ".join(sorted(own_photo.model_fields_set))
-                raise ParserError(f"{keys} is only valid for photo reactions: {srxn}")
 
             rea = Reaction(
                 self,
@@ -640,7 +601,7 @@ class Network:
         own entry would be.
         """
         rr, pp = reaction["reactants"], reaction["products"]
-        resolved = self.config.reactions.resolve(Reaction.serialize(rr, pp))
+        resolved = self.reactions.config.resolve(Reaction.serialize(rr, pp))
         photo: Dict[str, Any] = {}
         if reaction.get("pi_database") is not None:
             photo["pi_database"] = reaction["pi_database"]
@@ -653,27 +614,6 @@ class Network:
             stored["t_cutoff"] = reaction["t_cutoff"]
 
         return overlay(resolved, ReactionConfig.model_validate(stored))
-
-    def __check_reaction_settings(self) -> None:
-        """Check every per-reaction config entry names a reaction of the network.
-
-        Raises
-        ------
-        ParserError
-            Listing each ``[network.reactions.reaction."<serialized>"]`` entry
-            whose reaction is not in the network.
-        """
-        known = {reaction.serialized for reaction in self.reactions}
-        unknown = [key for key in self.config.reactions.reaction if key not in known]
-        if not unknown:
-            return
-
-        problems = "\n  ".join(
-            f"{dotted(('network', 'reactions', 'reaction', key))}: "
-            "no such reaction in the network"
-            for key in unknown
-        )
-        raise ParserError(f"Invalid config:\n  {problems}")
 
     def __post_process(self, parsers: list[Parser]) -> None:
         """Freeze the catalogues and run each parser's ``post_process`` hook.

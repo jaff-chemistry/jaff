@@ -159,7 +159,7 @@ class PhotoReaction:
 
         custom = reaction.aux_funcs.photocrosssection
         if custom is not None and not self._overrides_custom_cross_section():
-            own = net.config.reactions.own(reaction.serialized)
+            own = net.reactions.config.own(reaction.serialized)
             if own is not None and own.photo is not None and own.photo.pi_database:
                 raise ParserError(
                     f"pi_database cannot be set for {reaction}: its cross section "
