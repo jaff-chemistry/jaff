@@ -35,6 +35,10 @@ MANIFEST
 upload/
 builds/
 site/
+
+# generated docs (python -m jaff._utils.api_docs, python -m jaff.config.reference)
+docs/reference/
+docs/user-guide/configuration/reference.md
 generated*/
 __marimo__/
 

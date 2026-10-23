@@ -181,7 +181,15 @@ After pulling new changes, refresh your editable install:
 
 JAFF uses [Zensical](https://zensical.org/) as a static site generator for the documentation.
 
+The API reference (`docs/reference/`) and the configuration reference
+(`docs/user-guide/configuration/reference.md`) are generated from the docstrings
+and are not committed; CI generates them before every build. Generate them
+before serving or building locally:
+
 ```bash
+python -m jaff._utils.api_docs      # API pages + the API nav in zensical.toml
+python -m jaff.config.reference     # configuration reference page
+
 # Serve with live reload (recommended during development)
 zensical serve
 

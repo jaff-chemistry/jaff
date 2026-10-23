@@ -6,6 +6,9 @@ constructor, attributes and methods) and a page per public method or property
 (signature, parameters, returns, raises, examples).  The content is read from
 the numpydoc docstrings with griffe, so the docstrings are the only source.
 
+The pages are not committed (CI builds them before the site); the nav is,
+so a change of exports shows in review.
+
 For each package of :data:`PACKAGES` and module of :data:`CONFIG_MODULES`,
 its ``__all__`` decides what is documented; the config modules are listed on,
 and nested under, the ``jaff.config`` page.  The pages go under ``docs/reference/`` and the nav between
@@ -19,6 +22,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import shutil
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -516,7 +520,12 @@ def _cell(text: str) -> str:
 
 
 def write_api_docs() -> None:
-    """Write the API pages and the nav section of ``zensical.toml``."""
+    """Write the API pages and the nav section of ``zensical.toml``.
+
+    ``docs/reference/`` holds generated pages only: it is emptied first, so
+    pages of removed exports do not linger.
+    """
+    shutil.rmtree(DOCS_DIR / _ROOT, ignore_errors=True)
     for relative, text in api_pages().items():
         path = DOCS_DIR / relative
         path.parent.mkdir(parents=True, exist_ok=True)

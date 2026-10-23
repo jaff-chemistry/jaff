@@ -5,8 +5,8 @@ One section per TOML table of a ``jaffgen.toml`` (a ``jaff.toml`` holds its
 description being the key's numpydoc ``Attributes`` entry in the model's
 docstring (or a base model's).  Tables whose keys depend on their ``type``
 (the EOS, the shielding models) get one subsection per type.  The page is
-committed under :data:`REFERENCE_PAGE`; regenerate it after changing a config
-model with::
+written to :data:`REFERENCE_PAGE` (not committed; CI builds it before the
+site); write it before serving the docs locally with::
 
     python -m jaff.config.reference
 """

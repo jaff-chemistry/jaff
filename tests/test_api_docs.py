@@ -1,5 +1,5 @@
-# ABOUTME: The generated API reference, written in the hand-written pages' design:
-# ABOUTME: package tables, class pages (constructor, attributes), a page per method
+# ABOUTME: The generated API reference in the hand-written pages' design: package
+# ABOUTME: tables, class and method pages (built in CI), and the committed nav
 
 import pytest
 
@@ -7,7 +7,6 @@ import importlib
 
 from jaff._utils.api_docs import (
     CONFIG_MODULES,
-    DOCS_DIR,
     NAV_BEGIN,
     NAV_END,
     PACKAGES,
@@ -159,12 +158,21 @@ def test_nav_groups_each_class(pages):
         assert f'"{path}"' in nav, path
 
 
-def test_committed_pages_match(pages):
-    stale = [
-        path for path, text in pages.items() if (DOCS_DIR / path).read_text() != text
-    ]
+def test_write_replaces_stale_pages(tmp_path, monkeypatch):
+    import jaff._utils.api_docs as api_docs
 
-    assert stale == [], "Run `python -m jaff._utils.api_docs` to regenerate the API pages"
+    toml = tmp_path / "zensical.toml"
+    toml.write_text(f"nav = [\n  {NAV_BEGIN}\n  {NAV_END}\n]\n")
+    stale = tmp_path / "docs" / "reference" / "core" / "removed.md"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("old")
+    monkeypatch.setattr(api_docs, "DOCS_DIR", tmp_path / "docs")
+    monkeypatch.setattr(api_docs, "ZENSICAL_TOML", toml)
+
+    api_docs.write_api_docs()
+
+    assert not stale.exists()
+    assert (tmp_path / "docs" / "reference" / "core" / "network" / "index.md").exists()
 
 
 def test_committed_nav_matches():

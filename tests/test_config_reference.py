@@ -1,9 +1,9 @@
 # ABOUTME: The configuration reference page generated from the config models: one
-# ABOUTME: section per TOML table, keys with type/default/description, kept in sync
+# ABOUTME: section per TOML table, keys with type/default/description, built in CI
 
 import pytest
 
-from jaff.config.reference import REFERENCE_PAGE, config_reference
+from jaff.config.reference import config_reference
 
 
 @pytest.fixture(scope="module")
@@ -86,9 +86,3 @@ def test_table_cells_contain_no_raw_pipes(page):
         if line.startswith("| `"):
             cells = line.replace("\\|", "").split("|")
             assert len(cells) == 6, line
-
-
-def test_committed_page_matches_models(page):
-    assert REFERENCE_PAGE.read_text() == page, (
-        "Run `python -m jaff.config.reference` to regenerate the reference page"
-    )

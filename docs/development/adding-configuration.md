@@ -157,12 +157,13 @@ or with `--set`. To add a shortcut:
 
 ```bash
 python -m jaff.config.json_schema   # editor schemas, src/jaff/config/schemas/
-python -m jaff.config.reference     # docs/user-guide/configuration/reference.md
+python -m jaff.config.reference     # docs/user-guide/configuration/reference.md (for local docs)
 uv run pytest tests/test_config_*.py
 ```
 
-`tests/test_config_json_schema.py` and `tests/test_config_reference.py` fail
-when a committed file is out of date with the models.
+`tests/test_config_json_schema.py` fails when a committed schema is out of date
+with the models. The reference page is not committed: CI generates it before
+building the docs.
 
 ## Checklist
 
