@@ -190,8 +190,8 @@ class TestVernerIntegration:
         )
         rad = self._rad(bands)
         r_sym, r_tab = self._reaction(sym), self._reaction(tab)
-        _, tot_sym, grouped_sym = rad.get_reaction_rate_props(r_sym)
-        _, tot_tab, grouped_tab = rad.get_reaction_rate_props(r_tab)
+        _, tot_sym, grouped_sym = r_sym.photo.band_rates(rad)
+        _, tot_tab, grouped_tab = r_tab.photo.band_rates(rad)
         for g_sym, g_tab in zip(grouped_sym, grouped_tab, strict=True):
             a, b = float(g_sym.xsec), float(g_tab.xsec)
             assert a == pytest.approx(b, rel=1e-4, abs=1e-30)

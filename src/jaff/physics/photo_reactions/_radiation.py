@@ -80,7 +80,7 @@ field is therefore an energy density in erg/cm³.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING, List
 
 import numpy as np
 import sympy as sp
@@ -88,13 +88,10 @@ from astropy import units as u
 
 from ...common._integrators import smart_integrate
 from ...io import JaffLogger
-from ._photo_band import PhotoBand
-from ._photochemistry import Photochemistry, XsecProps
 from .background_field import BackgroundField
 
 if TYPE_CHECKING:
     from ...core.network import Network
-    from ...core.reaction import Reaction
     from .config import RadiationConfig
 
 
@@ -298,8 +295,9 @@ class Radiation:
     :class:`~jaff.physics.photo_reactions.config.RadiationConfig`) or as the
     ``[network.radiation]`` table of a config file, and stores it as
     ``net.radiation`` (``None`` when radiation is off).  Every photo reaction
-    then gets its rate coefficient and per-band data from
-    :meth:`get_reaction_rate_props`.
+    then assembles its rate coefficient and per-band data from the band
+    integrals offered here (see
+    :meth:`~jaff.core.reaction.PhotoReaction.band_rates`).
 
     Parameters
     ----------
@@ -392,11 +390,11 @@ class Radiation:
     ```
 
     with ``<σ>_i`` the photon-number-weighted band-average cross section and
-    ``<E>_i`` the band-average photon energy (``grp.eavg``, erg).  The
-    :class:`~jaff.core.reaction.Reaction` constructor calls
-    :meth:`get_reaction_rate_props` and stores the results on
-    ``reaction.rate_coefficient``, ``reaction.photo.xsec_total`` and
-    ``reaction.photo.bands``.  :func:`~jaff.physics.get_sradodes` builds the
+    ``<E>_i`` the band-average photon energy (``grp.eavg``, erg), i.e.
+    ``c * photon_density(group) * <σ>_i`` (:meth:`photon_density`).  Each photo
+    reaction assembles it (:meth:`~jaff.core.reaction.PhotoReaction.band_rates`)
+    and stores it as ``reaction.photo.band_rate``, ``reaction.photo.xsec_total``
+    and ``reaction.photo.bands``.  :func:`~jaff.physics.get_sradodes` builds the
     radiation-moment equations from them, laid out by :meth:`ordered_index`.
 
     Examples
@@ -567,195 +565,68 @@ class Radiation:
 
         return sp.Piecewise(*pieces)
 
-    def get_reaction_rate_props(
-        self, reaction: Reaction
-    ) -> Tuple[sp.Expr, float, List[PhotoBand]]:
-        """
-        Compute the symbolic band-averaged rate data for a photo reaction.
+    def photon_density(self, group: RadiationGroup) -> sp.Expr:
+        """Photon number density of *group* (cm⁻³), from its :attr:`den` symbol.
 
-        Reads the photo cross section σ(E) from ``reaction.photo.xsec``
-        (tabulated arrays, or an expression in ``ph_E`` for Verner and
-        ``photoCrossSection`` cross sections), then for each frequency band:
-
-        1. Computes the photon-number-weighted band-average cross section
-           ``<σ>_i = ∫ σ n dE / ∫ n dE``.
-        2. Uses the band-average photon energy ``<E>_i = ∫ E n dE / ∫ n dE``
-           computed once per band by :class:`RadiationGroup` (``grp.eavg``,
-           in erg).
-        3. Assembles the symbolic rate coefficient
-           ``k_i = c * den[i] * <σ>_i`` (photon-density mode) or
-           ``k_i = c * den[i] * <σ>_i / <E>_i`` (energy-density mode).
-        4. Assembles the band loss coefficient ``c * den[i] * <σ>_i`` that
-           :func:`~jaff.physics._equations.get_sradodes` removes from the band,
-           with the absorption cross section energy-weighted in
-           energy-density mode (each absorbed photon takes its own energy).
-        5. Collects the loss coefficient (as ``k``), the band-average cross
-           section and the ratio of the band average to the spectrum average
-           (``xsec_frac``) into one :class:`PhotoBand` per band.
-
-        After iterating over all bands the total symbolic rate coefficient
-        (sum over bands, in s⁻¹ in both modes) is returned as ``k_tot``.  Nothing is stored on the reaction.
+        ``den[i]`` itself in ``"nph"`` mode; in ``"u"`` mode the energy density
+        divided by the band-average photon energy, ``den[i] / <E>_i``.
 
         Parameters
         ----------
-        reaction : Reaction
-            The photochemical reaction to process.
+        group : RadiationGroup
+            The band.
 
         Returns
         -------
-        tuple[sympy.Expr, float, list[PhotoBand]]
-            ``(k_tot, xsec_tot, grouped)``: the total rate coefficient summed
-            over bands, the cross section averaged over the whole spectrum
-            (cm²), and one entry per band in ``self.groups`` order.  The
-            caller stores them on ``reaction.rate_coefficient``,
-            ``reaction.photo.xsec_total`` and ``reaction.photo.bands``.
-
-        Raises
-        ------
-        ValueError
-            If the reaction has no cross section (no ``photo.xsec``, or neither
-            a ``photodecay`` array nor a ``photodecay_expr``).
-
-        Notes
-        -----
-        The photon-number spectrum used for averaging is the piecewise power
-        law ``n(E) ∝ E^(α_i - 2)`` in band *i* (``α_i = grp.profile_idx``).
-        For ``α = 1`` this gives a flat energy spectrum; for ``α = 2`` a flat
-        photon spectrum.
-
-        A tabulated cross section with a separate photo-absorption table
-        (``xsec.process.absorption``) uses the absorption cross section for the
-        band data (``k`` and ``xsec``) and rescales each band's rate term by
-        the decay-to-absorption ratio of the band averages, so the rate still
-        follows the photodecay cross section.  The spectrum average
-        ``xsec_tot`` is always that of the photodecay cross section.
-
-        Cross-section integrals (``∫ σ n dE``) use
-        :func:`~jaff.common._integrators.smart_integrate`: tabulated ``(E, σ)``
-        arrays go through ``arr_integrate`` and Verner expressions through
-        ``sym_integrate``.  The remaining analytic integrals over ``n(E)`` and
-        ``E n(E)`` use the same function, which falls back to numerical
-        quadrature when SymPy cannot find a closed form.
-
-        Examples
-        --------
-        >>> from jaff import Network
-        >>> net = Network(
-        ...     "h_photoionization",
-        ...     radiation={"bands": [1, 13.6, 100, "inf"]},
-        ... )
-        >>> rxn = net.reactions.photo_reactions()[0]
-        >>> k_tot, xsec_tot, grouped = net.radiation.get_reaction_rate_props(rxn)
-        >>> k_tot
-        5.85154082319921e-8*photden[1] + 1.1420465158197e-10*photden[2]
-        >>> float(xsec_tot)
-        1.2403886126668026e-19
-        >>> grouped[1].k, float(grouped[1].xsec)
-        (5.85154082319921e-8*photden[1], 1.9518639202054948e-18)
+        sympy.Expr
+            The photon density.
         """
-        photo = reaction.photo
-        if photo is None or photo.xsec is None:
-            raise ValueError(
-                f"Photo reaction {reaction} has no cross section (photo.xsec is None)"
-            )
+        density = self.den[group.index]
+        if self.config.mode == "u":
+            return density / group.eavg
 
-        xsec: XsecProps = photo.xsec
+        return density
 
-        # Each reaction carries a single decay-channel cross section, either as
-        # tabulated arrays (NORAD / Leiden) or as a SymPy expression (Verner);
-        # only tabulated sources can carry a separate absorption cross section.
-        absorption: np.ndarray | None = None
-        if xsec.photodecay_expr is not None:
-            E: np.ndarray | sp.Symbol = self.ph_E
-            decay: np.ndarray | sp.Expr = xsec.photodecay_expr
-        else:
-            if xsec.photodecay is None:
-                raise ValueError(
-                    f"Photodecay cross-section cannot be None for reaction: {reaction}"
-                )
+    def loss_cross_section(
+        self,
+        xsec: np.ndarray | sp.Expr,
+        ph_E: np.ndarray | sp.Symbol,
+        group: RadiationGroup,
+        ph_profile: np.ndarray | None,
+        photon_average: float | sp.Expr,
+    ) -> float | sp.Expr:
+        """Band-average cross section that sets how fast an absorber drains *group*.
 
-            assert isinstance(xsec.photon_energy, np.ndarray)
-            E = xsec.photon_energy  # photon energy array in eV
-            decay = xsec.photodecay
+        Each absorbed photon removes one photon (``"nph"`` mode: the
+        photon-number-weighted *photon_average*) or its own energy (``"u"``
+        mode: the energy-weighted average of *xsec*, see
+        :meth:`get_group_average_cross_section`).
 
-            if xsec.process.absorption:
-                absorption = xsec.photo_absorption
+        Parameters
+        ----------
+        xsec : numpy.ndarray or sympy.Expr
+            The absorbing cross section (cm²), as for
+            :meth:`get_group_average_cross_section`.
+        ph_E : numpy.ndarray or sympy.Symbol
+            Its photon-energy grid (eV) or symbol.
+        group : RadiationGroup
+            The band.
+        ph_profile : numpy.ndarray or None
+            :meth:`get_photden_profile` on a tabulated *ph_E*, or ``None``.
+        photon_average : float or sympy.Expr
+            The photon-number-weighted band average of *xsec*, already computed.
 
-        k_tot: sp.Expr = sp.Float(
-            0.0
-        )  # Accumulates total rate coefficient over all bands
+        Returns
+        -------
+        float or sympy.Expr
+            The loss cross section (cm²).
+        """
+        if self.config.mode != "u":
+            return photon_average
 
-        # Total cross section averaged over the full spectrum (cm²),
-        # stored on the reaction for later reference
-        profile = self.get_photden_profile(E) if isinstance(E, np.ndarray) else None
-        xsec_tot: float = self.get_total_average_cross_section(decay, E, profile)
-
-        # Shielding factor, the same for every band: the shielding model
-        # evaluated once (it may write per-reaction tables).
-        shielding: sp.Expr | None = None
-        if photo.config.shielding is not None:
-            shielding = Photochemistry.shielding(reaction, self.network)
-
-        # Per-band rate data, one entry per group in self.groups order.
-        grouped: List[PhotoBand] = []
-
-        for grp in self.groups:
-            # Photon-number-weighted average cross section in the band:
-            # <σ>_i = ∫ σ(E) n(E) dE / ∫ n(E) dE
-            pr_xsec_avg: float = self.get_group_average_cross_section(
-                decay, E, grp, profile
-            )
-            rad_xsec_avg: float = (
-                self.get_group_average_cross_section(absorption, E, grp, profile)
-                if absorption is not None
-                else pr_xsec_avg
-            )
-            loss_xsec_avg = (
-                self.get_group_average_cross_section(
-                    decay if absorption is None else absorption,
-                    E,
-                    grp,
-                    profile,
-                    energy_weighted=True,
-                )
-                if self.config.mode == "u"
-                else rad_xsec_avg
-            )
-
-            # Photon-counting rate coefficient: k_rate = c · den[i] · <σ>_i
-            # (s⁻¹ in photon-density mode; in energy-density mode it is divided
-            # by <E>_i below to give s⁻¹)
-            k_rate: sp.Expr = self.c * self.den[grp.index] * rad_xsec_avg
-            # Band loss coefficient: what get_sradodes removes from den[i].
-            k: sp.Expr = self.c * self.den[grp.index] * loss_xsec_avg
-            if shielding is not None:
-                k_rate *= shielding
-                k *= shielding
-
-            rgroup = PhotoBand(
-                group=grp,
-                k=k,
-                xsec=rad_xsec_avg,
-                xsec_frac=rad_xsec_avg / xsec_tot
-                if xsec_tot != 0.0
-                else 0.0,  # fraction of total cross section
-            )
-            grouped.append(rgroup)
-
-            # In energy-density mode, turn the energy density den[i] (erg cm⁻³)
-            # into a photon density by dividing by the band-average photon
-            # energy <E>_i (erg).
-            k_tot += (
-                k_rate
-                * (
-                    1.0
-                    if not xsec.process.absorption
-                    else (pr_xsec_avg / rad_xsec_avg if rad_xsec_avg != 0.0 else 0.0)
-                )
-                / (grp.eavg if self.config.mode == "u" else 1)
-            )
-
-        return k_tot, xsec_tot, grouped
+        return self.get_group_average_cross_section(
+            xsec, ph_E, group, ph_profile, energy_weighted=True
+        )
 
     def ordered_index(self, idx: int, order: int) -> tuple[int, int]:
         """

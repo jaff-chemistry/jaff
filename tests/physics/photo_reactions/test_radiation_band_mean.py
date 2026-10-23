@@ -93,8 +93,8 @@ def test_photon_and_energy_modes_equivalent():
     rad_n = _radiation(bands, profile_index=2, mode="nph")
     rad_u = _radiation(bands, profile_index=2, mode="u")
 
-    k_n, _, _ = rad_n.get_reaction_rate_props(_FakeReaction())
-    k_u, _, _ = rad_u.get_reaction_rate_props(_FakeReaction())
+    k_n, _, _ = _FakeReaction().photo.band_rates(rad_n)
+    k_u, _, _ = _FakeReaction().photo.band_rates(rad_u)
 
     # Map radeden_i -> photden_i * <E>_i using the INDEPENDENT analytic mean
     # (converted to erg to match eavg's units).
@@ -132,3 +132,35 @@ def test_eden_profile_uses_per_band_index():
     E = np.array([1.5, 3.0])
     # band 0: E^(2-1) = 1.5; band 1: E^(1-1) = 1
     assert rad.get_eden_profile(E) == pytest.approx([1.5, 1.0])
+
+
+class TestBandHelpers:
+    """Radiation offers the mode-dependent band pieces; photo reactions assemble."""
+
+    def test_rate_assembly_is_not_on_radiation(self):
+        assert not hasattr(Radiation, "get_reaction_rate_props")
+
+    def test_photon_density_in_photon_mode(self):
+        rad = _radiation([1.0, 2.0, 3.0], profile_index=2, mode="nph")
+
+        assert rad.photon_density(rad.groups[1]) == rad.den[1]
+
+    def test_photon_density_in_energy_mode(self):
+        rad = _radiation([1.0, 2.0, 3.0], profile_index=2, mode="u")
+        group = rad.groups[1]
+
+        assert rad.photon_density(group) == rad.den[1] / group.eavg
+
+    def test_loss_cross_section_in_photon_mode_is_the_photon_average(self):
+        rad = _radiation([1.0, 2.0, 3.0], profile_index=2, mode="nph")
+        E = np.linspace(1.0, 3.0, 201)
+
+        assert rad.loss_cross_section(E, E, rad.groups[0], None, 7.0) == 7.0
+
+    def test_loss_cross_section_in_energy_mode_is_energy_weighted(self):
+        rad = _radiation([1.0, 2.0, 3.0], profile_index=2, mode="u")
+        E = np.linspace(1.0, 3.0, 201)
+        group = rad.groups[0]
+        expected = rad.get_group_average_cross_section(E, E, group, energy_weighted=True)
+
+        assert rad.loss_cross_section(E, E, group, None, 7.0) == pytest.approx(expected)

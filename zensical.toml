@@ -233,6 +233,7 @@ nav = [
       { "core.PhotoReaction" = [
         "reference/core/photoreaction/index.md",
         "reference/core/photoreaction/compute.md",
+        "reference/core/photoreaction/band_rates.md",
         "reference/core/photoreaction/expressions.md",
         "reference/core/photoreaction/substitute.md",
         "reference/core/photoreaction/band_xsecs.md",
@@ -261,7 +262,8 @@ nav = [
       ] },
       { "physics.Radiation" = [
         "reference/physics/radiation/index.md",
-        "reference/physics/radiation/get_reaction_rate_props.md",
+        "reference/physics/radiation/photon_density.md",
+        "reference/physics/radiation/loss_cross_section.md",
         "reference/physics/radiation/ordered_index.md",
         "reference/physics/radiation/get_photden_profile.md",
         "reference/physics/radiation/get_eden_profile.md",

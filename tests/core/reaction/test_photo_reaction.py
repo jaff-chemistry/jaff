@@ -154,3 +154,22 @@ class TestBands:
 
         assert rxn.photo.bands[0] is not before[0]
         assert rxn.photo.bands[0].group is before[0].group
+
+
+class TestBandRates:
+    def test_match_the_reference_values(self):
+        import sympy as sp
+
+        from jaff import Network
+
+        net = Network("h_photoionization", radiation={"bands": [1, 13.6, 100, "inf"]})
+        photo = net.reactions.photo_reactions()[0].photo
+        band_rate, xsec_total, bands = photo.band_rates(net.radiation)
+        den = net.radiation.den
+
+        assert float(band_rate.coeff(den[1])) == pytest.approx(5.85154082319921e-8)
+        assert float(band_rate.coeff(den[2])) == pytest.approx(1.1420465158197e-10)
+        assert float(xsec_total) == pytest.approx(1.2403886126668026e-19)
+        assert [band.group for band in bands] == list(net.radiation.groups)
+        assert photo.band_rate == band_rate
+        assert isinstance(band_rate, sp.Expr)

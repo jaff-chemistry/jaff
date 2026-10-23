@@ -6,8 +6,9 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, cast
 
+import numpy as np
 from astropy import units as u
-from sympy import Basic, Expr
+from sympy import Basic, Expr, Float, Symbol
 
 from ...errors import ParserError
 from ._helper import to_float_or_none
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
 
     from ...physics import XsecProps
     from .reaction import Reaction
-    from ...physics import PhotoBand
+    from ...physics import PhotoBand, Radiation
 
 
 class PhotoReaction:
@@ -206,11 +207,168 @@ class PhotoReaction:
             )
             return
 
-        k_tot, xsec_tot, bands = net.radiation.get_reaction_rate_props(reaction)
+        self.band_rate, self.xsec_total, self.bands = self.band_rates(net.radiation)
 
-        self.xsec_total = xsec_tot
-        self.bands = bands
-        self.band_rate = k_tot
+    def band_rates(
+        self, radiation: Radiation
+    ) -> tuple[Expr, float | Expr, list[PhotoBand]]:
+        """Assemble the reaction's band-averaged rate data in *radiation*.
+
+        From :attr:`xsec` (tabulated arrays, or an expression in ``ph_E`` for
+        Verner and ``photoCrossSection`` cross sections), for each band of
+        *radiation*:
+
+        1. the photon-number-weighted band-average cross section
+           ``<σ>_i = ∫ σ n dE / ∫ n dE``;
+        2. the photon-counting rate coefficient ``c · n_i · <σ>_i``, with
+           ``n_i`` the band's photon density
+           (:meth:`~jaff.physics.Radiation.photon_density`: ``den[i]``, or
+           ``den[i] / <E>_i`` in ``"u"`` mode);
+        3. the band loss coefficient ``c · den[i] · <σ>_i^loss``
+           (:meth:`~jaff.physics.Radiation.loss_cross_section`: energy-weighted
+           in ``"u"`` mode, as each absorbed photon takes its own energy);
+        4. one :class:`~jaff.physics.PhotoBand` with the loss coefficient (as
+           ``k``), ``<σ>_i`` and its ratio to the spectrum average
+           (``xsec_frac``).
+
+        Both coefficients carry the reaction's shielding factor, if any.
+        Nothing is stored; :meth:`compute` stores the result.
+
+        Parameters
+        ----------
+        radiation : Radiation
+            The radiation field.
+
+        Returns
+        -------
+        tuple[sympy.Expr, float or sympy.Expr, list[PhotoBand]]
+            ``(band_rate, xsec_total, bands)``: the rate coefficient summed
+            over the bands (s⁻¹), the cross section averaged over the whole
+            spectrum (cm²), and one band in ``radiation.groups`` order.
+
+        Raises
+        ------
+        ValueError
+            If there is no cross section (no :attr:`xsec`, or neither a
+            ``photodecay`` array nor a ``photodecay_expr``).
+
+        Notes
+        -----
+        The photon-number spectrum used for averaging is the piecewise power
+        law ``n(E) ∝ E^(α_i - 2)`` in band *i* (``α_i = group.profile_idx``).
+
+        A tabulated cross section with a separate photo-absorption table
+        (``xsec.process.absorption``) uses the absorption cross section for the
+        band data (``k`` and ``xsec``) and rescales each band's rate term by
+        the decay-to-absorption ratio of the band averages, so the rate still
+        follows the photodecay cross section.  The spectrum average is always
+        that of the photodecay cross section.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> net = Network(
+        ...     "h_photoionization",
+        ...     radiation={"bands": [1, 13.6, 100, "inf"]},
+        ... )
+        >>> photo = net.reactions.photo_reactions()[0].photo
+        >>> band_rate, xsec_total, bands = photo.band_rates(net.radiation)
+        >>> band_rate
+        5.85154082319921e-8*photden[1] + 1.1420465158197e-10*photden[2]
+        >>> float(xsec_total)
+        1.2403886126668026e-19
+        >>> bands[1].k, float(bands[1].xsec)
+        (5.85154082319921e-8*photden[1], 1.9518639202054948e-18)
+        """
+        from ...physics.photo_reactions._photo_band import PhotoBand
+
+        energy, decay, absorption = self._cross_section_data(radiation.ph_E)
+        profile = (
+            radiation.get_photden_profile(energy)
+            if isinstance(energy, np.ndarray)
+            else None
+        )
+        xsec_total = radiation.get_total_average_cross_section(decay, energy, profile)
+        shielding = self._shielding_factor()
+
+        band_rate: Expr = Float(0.0)
+        bands: list[PhotoBand] = []
+        for group in radiation.groups:
+            decay_avg = radiation.get_group_average_cross_section(
+                decay, energy, group, profile
+            )
+            band_avg = (
+                radiation.get_group_average_cross_section(
+                    absorption, energy, group, profile
+                )
+                if absorption is not None
+                else decay_avg
+            )
+            loss_avg = radiation.loss_cross_section(
+                decay if absorption is None else absorption,
+                energy,
+                group,
+                profile,
+                band_avg,
+            )
+
+            rate = radiation.c * radiation.photon_density(group) * band_avg
+            k = radiation.c * radiation.den[group.index] * loss_avg
+            if shielding is not None:
+                rate *= shielding
+                k *= shielding
+
+            bands.append(
+                PhotoBand(
+                    group=group,
+                    k=k,
+                    xsec=band_avg,
+                    xsec_frac=band_avg / xsec_total if xsec_total != 0.0 else 0.0,
+                )
+            )
+            # With an absorption table, the rate follows the decay cross section.
+            if absorption is not None:
+                rate *= decay_avg / band_avg if band_avg != 0.0 else 0.0
+            band_rate += rate
+
+        return band_rate, xsec_total, bands
+
+    def _cross_section_data(
+        self, ph_E: Symbol
+    ) -> tuple[np.ndarray | Symbol, np.ndarray | Expr, np.ndarray | None]:
+        """``(energy, decay, absorption)`` of :attr:`xsec` for the band integrals.
+
+        *energy* is the tabulated grid (eV), or *ph_E* for a symbolic cross
+        section; *absorption* is the photo-absorption table, when the cross
+        section has one.
+        """
+        xsec = self.xsec
+        if xsec is None:
+            raise ValueError(
+                f"Photo reaction {self.reaction} has no cross section (photo.xsec is None)"
+            )
+
+        if xsec.photodecay_expr is not None:
+            return ph_E, xsec.photodecay_expr, None
+
+        if xsec.photodecay is None:
+            raise ValueError(
+                f"Photodecay cross-section cannot be None for reaction: {self.reaction}"
+            )
+
+        assert isinstance(xsec.photon_energy, np.ndarray)
+        absorption = xsec.photo_absorption if xsec.process.absorption else None
+
+        return xsec.photon_energy, xsec.photodecay, absorption
+
+    def _shielding_factor(self) -> Expr | None:
+        """The shielding factor of the reaction's shielding model, or ``None``."""
+        if self.config.shielding is None:
+            return None
+
+        from ...physics import Photochemistry
+
+        return Photochemistry.shielding(self.reaction, self.reaction.net)
 
     def expressions(self) -> list[Expr]:
         """The expressions the component holds.

@@ -35,7 +35,7 @@ class PhotoBand:
         absorption cross section weighted by photon number in ``"nph"`` mode
         and by photon energy in ``"u"`` mode (each absorbed photon takes its
         own energy).  The reaction rate itself always counts photons; see
-        :meth:`Radiation.get_reaction_rate_props`.
+        :meth:`~jaff.core.reaction.PhotoReaction.band_rates`.
     xsec : float or sympy.Expr
         Photon-number-weighted band-average cross section ``<σ>_i`` (cm²): of
         the photo-absorption table when the cross section has one

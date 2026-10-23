@@ -77,7 +77,7 @@ def test_tabulated_profile_built_once_per_reaction():
     with patch.object(
         rad, "get_photden_profile", wraps=rad.get_photden_profile
     ) as profile:
-        rad.get_reaction_rate_props(rxn)
+        rxn.photo.band_rates(rad)
 
     assert profile.call_count == 1
 
@@ -118,7 +118,7 @@ def test_energy_weighted_group_average():
 def test_energy_mode_band_loss_is_energy_weighted():
     """In "u" mode the energy a band loses weights σ by photon energy."""
     rad = _radiation(mode="u")
-    _, _, grouped = rad.get_reaction_rate_props(_linear_reaction())
+    _, _, grouped = _linear_reaction().photo.band_rates(rad)
 
     losses = [float(g.k / rad.den[i]) for i, g in enumerate(grouped)]
     assert losses == pytest.approx(ENERGY_AVG, rel=1e-6, abs=0)
@@ -127,7 +127,7 @@ def test_energy_mode_band_loss_is_energy_weighted():
 def test_energy_mode_reaction_rate_stays_photon_weighted():
     """The reaction rate counts photons: photon-weighted <σ>, n_i = u_i / <E>_i."""
     rad = _radiation(mode="u")
-    k_tot, _, _ = rad.get_reaction_rate_props(_linear_reaction())
+    k_tot, _, _ = _linear_reaction().photo.band_rates(rad)
 
     for i, grp in enumerate(rad.groups):
         coeff = float(k_tot.coeff(rad.den[i]))
@@ -136,7 +136,7 @@ def test_energy_mode_reaction_rate_stays_photon_weighted():
 
 def test_photon_mode_band_loss_is_photon_weighted():
     rad = _radiation(mode="nph")
-    _, _, grouped = rad.get_reaction_rate_props(_linear_reaction())
+    _, _, grouped = _linear_reaction().photo.band_rates(rad)
 
     losses = [float(g.k / rad.den[i]) for i, g in enumerate(grouped)]
     assert losses == pytest.approx(PHOTON_AVG, rel=1e-6, abs=0)
