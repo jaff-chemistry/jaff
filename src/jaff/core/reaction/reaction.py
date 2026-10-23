@@ -168,7 +168,7 @@ class Reaction:
         The photo-reaction component, ``None`` for non-photo reactions: its
         resolved photo settings (``photo.config``, the same object as
         ``config.photo``), cross sections (``photo.xsec``), per-band data
-        (``photo.rgrouped``, ``photo.band_xsecs``), ``custom_rad_rate`` and
+        (``photo.bands``, ``photo.band_xsecs``), ``custom_rad_rate`` and
         ``shielding_tables``.  See :class:`PhotoReaction`.
     rad : ReactionRadiation
         The reaction's radiation component: the radiation it emits

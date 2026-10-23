@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, cast
 
 from astropy import units as u
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
 
     from ...physics import XsecProps
     from .reaction import Reaction
-    from .reaction_props import GroupedPhotoReactionProps
+    from ...physics import PhotoBand
 
 
 class PhotoReaction:
@@ -51,10 +52,10 @@ class PhotoReaction:
         ``True`` when the rate comes from a ``.jfunc`` ``chemRate<N>``
         function rather than from the cross sections; such a reaction is not
         coupled to the radiation bands.
-    rgrouped : list[GroupedPhotoReactionProps] or None
+    bands : list[PhotoBand] or None
         One entry per radiation band, in ``net.radiation.groups`` order, with
-        that band's loss coefficient ``k``, band-average ``xsec`` and
-        ``xsec_frac``.  Set when a radiation field is configured; ``None``
+        its ``group``, the band's loss coefficient ``k``, band-average ``xsec``
+        and ``xsec_frac``.  Set when a radiation field is configured; ``None``
         otherwise, and for a ``custom_rad_rate`` reaction.  See
         :attr:`band_xsecs`.
     band_rate : sympy.Expr or None
@@ -98,7 +99,7 @@ class PhotoReaction:
         self.xsec: XsecProps | None = None
         self.xsec_total: float | Expr | None = None
         self.custom_rad_rate: bool = False
-        self.rgrouped: List[GroupedPhotoReactionProps] | None = None
+        self.bands: List[PhotoBand] | None = None
         self.band_rate: Expr | None = None
         self.shielding_tables: Dict[str, Any] = {}
 
@@ -106,7 +107,7 @@ class PhotoReaction:
         """Resolve the cross sections and, with radiation, the band rates.
 
         Sets :attr:`xsec` and, when a radiation field sets the rate,
-        :attr:`rgrouped` and :attr:`band_rate`.
+        :attr:`bands` and :attr:`band_rate`.
 
         Raises
         ------
@@ -205,10 +206,10 @@ class PhotoReaction:
             )
             return
 
-        k_tot, xsec_tot, grouped = net.radiation.get_reaction_rate_props(reaction)
+        k_tot, xsec_tot, bands = net.radiation.get_reaction_rate_props(reaction)
 
         self.xsec_total = xsec_tot
-        self.rgrouped = grouped
+        self.bands = bands
         self.band_rate = k_tot
 
     def expressions(self) -> list[Expr]:
@@ -223,7 +224,7 @@ class PhotoReaction:
             The expressions; empty without radiation.
         """
         exprs: list[Expr] = [] if self.band_rate is None else [self.band_rate]
-        for band in self.rgrouped or []:
+        for band in self.bands or []:
             exprs.append(band.k)
             if isinstance(band.xsec, Expr):
                 exprs.append(band.xsec)
@@ -242,10 +243,8 @@ class PhotoReaction:
         """
         if self.band_rate is not None:
             self.band_rate = cast(Expr, self.band_rate.xreplace(mapping))
-        for band in self.rgrouped or []:
-            band.k = cast(Expr, band.k.xreplace(mapping))
-            if isinstance(band.xsec, Expr):
-                band.xsec = cast(Expr, band.xsec.xreplace(mapping))
+        if self.bands is not None:
+            self.bands = [_substitute_band(band, mapping) for band in self.bands]
         if isinstance(self.xsec_total, Expr):
             self.xsec_total = cast(Expr, self.xsec_total.xreplace(mapping))
 
@@ -253,11 +252,10 @@ class PhotoReaction:
     def band_xsecs(self) -> pd.DataFrame:
         """Band-averaged cross sections of the reaction, one row per band.
 
-        Pairs each per-band entry of :attr:`rgrouped` (populated when a
-        radiation field is configured, e.g. through the ``radiation``
-        argument of :class:`~jaff.core.Network` or ``[network.radiation]``)
-        with the :class:`~jaff.physics.photo_reactions._radiation.RadiationGroup`
-        it was computed for.  A photo reaction whose rate comes from a
+        One row per entry of :attr:`bands` (populated when a radiation field is
+        configured, e.g. through the ``radiation`` argument of
+        :class:`~jaff.core.Network` or ``[network.radiation]``), with the edges
+        and mean energy of its ``group``.  A photo reaction whose rate comes from a
         ``.jfunc`` ``chemRate<N>`` is not coupled to the bands and has no band
         data, so its frame is empty.  Intended as the data source for band bar
         plots (the ``bands`` option of :meth:`plot_xsecs`).
@@ -283,9 +281,7 @@ class PhotoReaction:
 
         Notes
         -----
-        The rows are ordered by ascending band index: :attr:`rgrouped` is
-        built by iterating ``net.radiation.groups`` in order, so the two are
-        paired by position.
+        The rows are ordered by ascending band index, as :attr:`bands` is.
 
         Examples
         --------
@@ -302,22 +298,19 @@ class PhotoReaction:
         import pandas as pd
 
         columns = ["lower", "upper", "eavg", "xsec", "xsec_frac"]
-        radiation = self.reaction.net.radiation
-        grouped = self.rgrouped
-        groups = radiation.groups if grouped and radiation is not None else []
         rows = [
             {
-                "lower": to_float_or_none(group.lower),
-                "upper": to_float_or_none(group.upper),
+                "lower": to_float_or_none(band.group.lower),
+                "upper": to_float_or_none(band.group.upper),
                 "eavg": (
                     None
-                    if group.eavg is None
-                    else to_float_or_none(group.eavg * u.erg.to(u.eV))
+                    if band.group.eavg is None
+                    else to_float_or_none(band.group.eavg * u.erg.to(u.eV))
                 ),
-                "xsec": to_float_or_none(props.xsec),
-                "xsec_frac": to_float_or_none(props.xsec_frac),
+                "xsec": to_float_or_none(band.xsec),
+                "xsec_frac": to_float_or_none(band.xsec_frac),
             }
-            for group, props in zip(groups, grouped or [], strict=True)
+            for band in self.bands or []
         ]
 
         return pd.DataFrame(rows, columns=columns)
@@ -348,3 +341,12 @@ class PhotoReaction:
         from ...plotting import plot_xsecs
 
         return plot_xsecs(self.reaction, **kwargs)
+
+
+def _substitute_band(band: PhotoBand, mapping: Mapping[Basic, Basic]) -> PhotoBand:
+    """*band* with *mapping* applied (``xreplace``) to its ``k`` and symbolic ``xsec``."""
+    xsec = band.xsec
+    if isinstance(xsec, Expr):
+        xsec = cast(Expr, xsec.xreplace(mapping))
+
+    return replace(band, k=cast(Expr, band.k.xreplace(mapping)), xsec=xsec)

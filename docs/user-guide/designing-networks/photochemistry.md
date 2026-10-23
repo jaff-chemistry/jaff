@@ -123,7 +123,7 @@ The two weightings agree for a flat $\sigma$ and differ when $\sigma$ varies acr
 band, e.g. at a threshold inside it, where the absorbed photons are more energetic than
 the band average. With a separate photo-absorption cross section, the absorption cross
 section is the one weighted. Each band's loss coefficient is stored as
-`reaction.photo.rgrouped[i].k` (see [`Radiation`](../../reference/physics/radiation/index.md)).
+`reaction.photo.bands[i].k` (see [`Radiation`](../../reference/physics/radiation/index.md)).
 
 ---
 

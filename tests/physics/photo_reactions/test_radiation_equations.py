@@ -38,9 +38,9 @@ def _expected(net):
     flux_map = {g.sym: rflux[i] for i, g in enumerate(groups)}
     loss = [sp.Float(0.0)] * len(groups)
     for rxn in net.reactions:
-        if rxn.photo is None or not rxn.photo.rgrouped:
+        if rxn.photo is None or not rxn.photo.bands:
             continue
-        for i, band in enumerate(rxn.photo.rgrouped):
+        for i, band in enumerate(rxn.photo.bands):
             loss[i] -= _flux(net, rxn, band.k)
 
     density = loss
@@ -86,7 +86,7 @@ def test_no_reaction_radiation_source_term(radiation_network):
         assert rxn.rad.spectral_yield is None
         assert rxn.rad.group_yields is None
         assert rxn.function("deltaRad") is None
-        assert all(not hasattr(band, "delta_rad") for band in rxn.photo.rgrouped)
+        assert all(not hasattr(band, "delta_rad") for band in rxn.photo.bands)
 
 
 def test_spectral_profiles_use_photon_energy_symbol(radiation_network):
@@ -121,7 +121,7 @@ def test_layout_places_each_band_by_ordered_index(radiation_network, order):
 def test_photo_reaction_without_band_data_raises(radiation_network):
     net = radiation_network()
     rxn = next(r for r in net.reactions if r.photo is not None)
-    rxn.photo.rgrouped = None
+    rxn.photo.bands = None
 
     with pytest.raises(RuntimeError, match="no per-band radiation data"):
         net.sradodes()

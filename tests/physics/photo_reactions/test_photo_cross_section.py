@@ -67,7 +67,7 @@ class TestCustomCrossSection:
         rxn = _photo(xsec_network(radiation=props))
 
         assert float(rxn.photo.xsec_total) == pytest.approx(1e-18, rel=1e-6, abs=0)
-        bands = [float(band.xsec) for band in rxn.photo.rgrouped]
+        bands = [float(band.xsec) for band in rxn.photo.bands]
         assert bands == pytest.approx([1e-18, 1e-18], rel=1e-6, abs=0)
         assert rxn.rate_coefficient.has(rxn.net.radiation.den[0])
 
@@ -81,7 +81,7 @@ class TestCustomCrossSection:
         rxn = _photo(net)
 
         assert rxn.photo.xsec.photodecay_expr.free_symbols == {net.radiation.ph_E}
-        bands = [float(band.xsec) for band in rxn.photo.rgrouped]
+        bands = [float(band.xsec) for band in rxn.photo.bands]
         # abs: far below the 1e-18 cross section, above noise in the zero band.
         assert bands == pytest.approx([0.0, 1e-18], rel=1e-6, abs=1e-30)
 
@@ -92,7 +92,7 @@ class TestCustomCrossSection:
         tgas = net.symbols.tgas
 
         assert float(rxn.photo.xsec_total / tgas) == pytest.approx(1e-18, rel=1e-6, abs=0)
-        assert all(band.xsec.has(tgas) for band in rxn.photo.rgrouped)
+        assert all(band.xsec.has(tgas) for band in rxn.photo.bands)
         assert rxn.rate_coefficient.has(tgas)
 
     def test_density_symbols_are_standardized(self, xsec_network):
@@ -104,10 +104,10 @@ class TestCustomCrossSection:
         nden = net.symbols.ndens[net.species["C"].index]
 
         exprs = [rxn.photo.xsec_total, *net.sradodes(order=2)]
-        for band in rxn.photo.rgrouped:
+        for band in rxn.photo.bands:
             exprs += [band.k, band.xsec]
         assert not any(sp.sympify(e).has(raw) for e in exprs)
-        assert all(band.k.has(nden) for band in rxn.photo.rgrouped)
+        assert all(band.k.has(nden) for band in rxn.photo.bands)
 
     def test_per_reaction_pi_database_raises(self, xsec_network, tmp_path):
         with pytest.raises(ParserError, match="pi_database"):

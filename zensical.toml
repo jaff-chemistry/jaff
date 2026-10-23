@@ -274,6 +274,9 @@ nav = [
       { "physics.RadiationGroup" = [
         "reference/physics/radiationgroup/index.md",
       ] },
+      { "physics.PhotoBand" = [
+        "reference/physics/photoband/index.md",
+      ] },
       { "physics.Dust" = [
         "reference/physics/dust/index.md",
       ] },

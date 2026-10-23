@@ -188,7 +188,7 @@ def get_sradodes(net: "Network", order: int = 0) -> list[Expr]:
 
     - ``grate[i]``: the *source/sink* term for the density moment: the
       photoionisation/photodissociation losses (each photo reaction's band
-      loss coefficient ``rgrouped[i].k`` times its reactant densities), the
+      loss coefficient ``bands[i].k`` times its reactant densities), the
       absorption by the medium ``-c * <α>_i * den[i]`` (from a
       ``globalAbsorptionCoefficient``), the radiation emitted by reactions
       with a spectral yield (``reaction.rad.group_yields`` times the reaction
@@ -284,23 +284,22 @@ def get_sradodes(net: "Network", order: int = 0) -> list[Expr]:
         if reaction.photo is not None and reaction.photo.custom_rad_rate:
             continue
 
-        # With radiation, Reaction.__init__ fills rgrouped for every other photo
+        # With radiation, Reaction.__init__ fills bands for every other photo
         # reaction or raises, so missing data is a broken invariant.
-        if reaction.photo is None or not reaction.photo.rgrouped:
+        if reaction.photo is None or not reaction.photo.bands:
             raise RuntimeError(
                 f"Photo reaction {reaction} has no per-band radiation data"
             )
 
-        # rgrouped is built by iterating rad_groups in order, one entry per band.
-        for group, props in zip(rad_groups, reaction.photo.rgrouped, strict=True):
-            rrate = props.k
+        for band in reaction.photo.bands:
+            rrate = band.k
             # Multiply by all reactant number densities (mass-action kinetics)
             # so rrate becomes the full reaction flux (k * prod(nden)).
             for reactant in reaction.reactants.core:
                 rrate *= nden[net.species[str(reactant)].index]
 
             # Photochemical reactions *remove* radiation, hence the minus sign.
-            group_rates[group.index] -= rrate
+            group_rates[band.group.index] -= rrate
 
     # Per-group radiation emitted by any reaction with a spectral yield.
     group_emissions: list[Expr] = [Float(0.0) for _ in rad_groups]

@@ -36,9 +36,9 @@ def shielded_network(make_network):
             )
 
         rxn = net.reactions[H2_KEY, "photo"]
-        assert rxn.photo is not None and rxn.photo.rgrouped is not None
+        assert rxn.photo is not None and rxn.photo.bands is not None
 
-        return [band.k for band in rxn.photo.rgrouped]
+        return [band.k for band in rxn.photo.bands]
 
     return _make
 

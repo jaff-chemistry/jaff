@@ -37,7 +37,7 @@ class TestComponent:
     def test_computes_band_rates_with_radiation(self, make_network):
         rxn = _photo_reaction(_net(make_network, radiation=BANDS))
 
-        assert rxn.photo.rgrouped is not None and len(rxn.photo.rgrouped) == 2
+        assert rxn.photo.bands is not None and len(rxn.photo.bands) == 2
         assert rxn.rate_coefficient.has(rxn.net.radiation.den)
 
 
@@ -110,3 +110,47 @@ class TestXsecTotal:
         rxn = _photo_reaction(_net(make_network, radiation=BANDS))
 
         assert not hasattr(rxn.photo.xsec, "total")
+
+
+class TestBands:
+    def test_each_band_holds_its_group(self, make_network):
+        net = _net(make_network, radiation=BANDS)
+        bands = _photo_reaction(net).photo.bands
+
+        assert [band.group for band in bands] == list(net.radiation.groups)
+        assert all(
+            a is b for a, b in zip([band.group for band in bands], net.radiation.groups)
+        )
+
+    def test_band_is_frozen(self, make_network):
+        from dataclasses import FrozenInstanceError
+
+        from jaff.physics import PhotoBand
+
+        band = _photo_reaction(_net(make_network, radiation=BANDS)).photo.bands[0]
+
+        assert isinstance(band, PhotoBand)
+        with pytest.raises(FrozenInstanceError):
+            band.k = 0
+
+    def test_rgrouped_is_gone(self, make_network):
+        rxn = _photo_reaction(_net(make_network, radiation=BANDS))
+
+        assert not hasattr(rxn.photo, "rgrouped")
+
+    def test_reaction_props_module_is_gone(self):
+        import importlib.util
+
+        assert importlib.util.find_spec("jaff.core.reaction.reaction_props") is None
+
+    def test_substitute_replaces_bands(self, make_network):
+        import sympy as sp
+
+        rxn = _photo_reaction(_net(make_network, radiation=BANDS))
+        before = rxn.photo.bands
+        den = before[0].k.free_symbols
+
+        rxn.photo.substitute({s: sp.Integer(1) for s in den})
+
+        assert rxn.photo.bands[0] is not before[0]
+        assert rxn.photo.bands[0].group is before[0].group

@@ -55,7 +55,7 @@ def test_under_radiation_custom_rate_is_kept(custom_network):
 def test_under_radiation_has_no_band_data(custom_network):
     rxn = _photo(custom_network(radiation=RadiationConfig(bands=BANDS)))
 
-    assert rxn.photo.rgrouped is None
+    assert rxn.photo.bands is None
     assert rxn.photo.band_xsecs.empty
 
 

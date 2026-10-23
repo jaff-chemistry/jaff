@@ -1,27 +1,33 @@
-# ABOUTME: Per-reaction data split out of Reaction: per-band photo data
-# ABOUTME: (GroupedPhotoReactionProps)
+# ABOUTME: PhotoBand: one photo reaction's data for one radiation band, holding
+# ABOUTME: the RadiationGroup it belongs to (frozen; held in reaction.photo.bands)
+
+"""The :class:`PhotoBand` per-band data of a photo reaction."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from sympy import Expr
 
-
 if TYPE_CHECKING:
-    pass
+    from ._radiation import RadiationGroup
 
 
-class GroupedPhotoReactionProps:
+@dataclass(frozen=True)
+class PhotoBand:
     """One photo reaction's data for one radiation band.
 
-    Built by :meth:`Radiation.get_reaction_rate_props` for every band, in
-    ``net.radiation.groups`` order, and stored in ``reaction.photo.rgrouped``.
-    A photo reaction whose rate comes from a ``.jfunc`` ``chemRate<N>`` is not
-    coupled to the bands and gets none.
+    Built for every band, in ``net.radiation.groups`` order, and held in
+    ``reaction.photo.bands``.  A photo reaction whose rate comes from a
+    ``.jfunc`` ``chemRate<N>`` is not coupled to the bands and gets none.
+    Immutable: :meth:`~jaff.core.reaction.PhotoReaction.substitute` replaces
+    the bands.
 
     Attributes
     ----------
+    group : RadiationGroup
+        The radiation band (``net.radiation.groups`` entry) the data is for.
     k : Expr
         Band loss coefficient: ``k`` times the reactant densities is the
         radiation the reaction removes from the band per unit time.  It is
@@ -50,15 +56,14 @@ class GroupedPhotoReactionProps:
     ...     "h_photoionization",
     ...     radiation={"bands": [1, 13.6, 100, "inf"]},
     ... )
-    >>> props = net.reactions.photo_reactions()[0].photo.rgrouped[1]
-    >>> props.k
-    5.85154082319921e-8*photden[1]
-    >>> float(props.xsec), float(props.xsec_frac)
+    >>> band = net.reactions.photo_reactions()[0].photo.bands[1]
+    >>> band.group.index, band.k
+    (1, 5.85154082319921e-8*photden[1])
+    >>> float(band.xsec), float(band.xsec_frac)
     (1.9518639202054948e-18, 15.735906475383057)
     """
 
-    def __init__(self, k: Expr, xsec: float | Expr | None, xsec_frac: float):
-        """Store the band data; see the class attributes."""
-        self.k: Expr = k
-        self.xsec: float | Expr | None = xsec
-        self.xsec_frac: float = xsec_frac
+    group: RadiationGroup
+    k: Expr
+    xsec: float | Expr
+    xsec_frac: float | Expr

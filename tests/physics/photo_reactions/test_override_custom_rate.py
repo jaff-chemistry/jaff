@@ -46,7 +46,7 @@ class TestGlobalFlag:
 
         assert rxn.photo.custom_rad_rate is False
         assert rxn.rate_coefficient.has(rxn.net.radiation.den[0])
-        assert len(rxn.photo.rgrouped) == len(BANDS) - 1
+        assert len(rxn.photo.bands) == len(BANDS) - 1
 
     def test_without_radiation_custom_rate_is_kept(self, custom_network, tmp_path):
         cfg = tmp_path / "jaff.toml"

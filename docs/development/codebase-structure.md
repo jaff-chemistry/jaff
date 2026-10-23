@@ -21,7 +21,6 @@ src/jaff/
 │   ├── reaction/               # reaction.py (Reaction) · reactions.py (Reactions)
 │   │   ├── photo_reaction.py   # PhotoReaction — a photo reaction's component (rxn.photo)
 │   │   ├── reaction_radiation.py # ReactionRadiation — every reaction's radiation component (rxn.rad)
-│   │   ├── reaction_props.py   # GroupedPhotoReactionProps
 │   │   ├── config.py           # [network.reactions] models (ReactionConfig, PhotoConfig, ...)
 │   │   ├── _helper.py          # to_float_or_none
 │   │   └── types/              # RateSegment / RateSegments (rate per temperature range)
@@ -48,6 +47,7 @@ src/jaff/
 ├── physics/                    # Symbolic ODE/flux generation + physics helpers
 │   ├── _equations.py           # get_sfluxes, get_sodes, get_sradodes
 │   ├── photo_reactions/        # Photochemistry: cross sections, radiation, shielding
+│   │   ├── _photo_band.py      # PhotoBand — a photo reaction's data for one band
 │   │   ├── _photochemistry.py  # XsecProps, Photochemistry — cross-section lookups
 │   │   ├── _radiation.py       # Radiation / RadiationGroup — radiation moment equations
 │   │   ├── background_field.py # BackgroundField — tabulated reference radiation fields

@@ -88,7 +88,7 @@ from astropy import units as u
 
 from ...common._integrators import smart_integrate
 from ...io import JaffLogger
-from ...core.reaction.reaction_props import GroupedPhotoReactionProps
+from ._photo_band import PhotoBand
 from ._photochemistry import Photochemistry, XsecProps
 from .background_field import BackgroundField
 
@@ -108,9 +108,8 @@ class RadiationGroup:
     (``net.radiation.groups``); you normally only read them.
 
     Per-reaction band data is not stored here: each photo reaction holds one
-    :class:`~jaff.core.reaction.reaction_props.GroupedPhotoReactionProps` per
-    band in ``reaction.photo.rgrouped``, in the same order as
-    ``Radiation.groups``; ``reaction.photo.band_xsecs`` shows them as a table.
+    :class:`~jaff.physics.PhotoBand` per band in ``reaction.photo.bands``, each
+    holding its group; ``reaction.photo.band_xsecs`` shows them as a table.
 
     Parameters
     ----------
@@ -397,7 +396,7 @@ class Radiation:
     :class:`~jaff.core.reaction.Reaction` constructor calls
     :meth:`get_reaction_rate_props` and stores the results on
     ``reaction.rate_coefficient``, ``reaction.photo.xsec_total`` and
-    ``reaction.photo.rgrouped``.  :func:`~jaff.physics.get_sradodes` builds the
+    ``reaction.photo.bands``.  :func:`~jaff.physics.get_sradodes` builds the
     radiation-moment equations from them, laid out by :meth:`ordered_index`.
 
     Examples
@@ -570,7 +569,7 @@ class Radiation:
 
     def get_reaction_rate_props(
         self, reaction: Reaction
-    ) -> Tuple[sp.Expr, float, List[GroupedPhotoReactionProps]]:
+    ) -> Tuple[sp.Expr, float, List[PhotoBand]]:
         """
         Compute the symbolic band-averaged rate data for a photo reaction.
 
@@ -592,7 +591,7 @@ class Radiation:
            energy-density mode (each absorbed photon takes its own energy).
         5. Collects the loss coefficient (as ``k``), the band-average cross
            section and the ratio of the band average to the spectrum average
-           (``xsec_frac``) into one :class:`GroupedPhotoReactionProps` per band.
+           (``xsec_frac``) into one :class:`PhotoBand` per band.
 
         After iterating over all bands the total symbolic rate coefficient
         (sum over bands, in s⁻¹ in both modes) is returned as ``k_tot``.  Nothing is stored on the reaction.
@@ -604,12 +603,12 @@ class Radiation:
 
         Returns
         -------
-        tuple[sympy.Expr, float, list[GroupedPhotoReactionProps]]
+        tuple[sympy.Expr, float, list[PhotoBand]]
             ``(k_tot, xsec_tot, grouped)``: the total rate coefficient summed
             over bands, the cross section averaged over the whole spectrum
             (cm²), and one entry per band in ``self.groups`` order.  The
             caller stores them on ``reaction.rate_coefficient``,
-            ``reaction.photo.xsec_total`` and ``reaction.photo.rgrouped``.
+            ``reaction.photo.xsec_total`` and ``reaction.photo.bands``.
 
         Raises
         ------
@@ -698,7 +697,7 @@ class Radiation:
             shielding = Photochemistry.shielding(reaction, self.network)
 
         # Per-band rate data, one entry per group in self.groups order.
-        grouped: List[GroupedPhotoReactionProps] = []
+        grouped: List[PhotoBand] = []
 
         for grp in self.groups:
             # Photon-number-weighted average cross section in the band:
@@ -733,7 +732,8 @@ class Radiation:
                 k_rate *= shielding
                 k *= shielding
 
-            rgroup: GroupedPhotoReactionProps = GroupedPhotoReactionProps(
+            rgroup = PhotoBand(
+                group=grp,
                 k=k,
                 xsec=rad_xsec_avg,
                 xsec_frac=rad_xsec_avg / xsec_tot
