@@ -44,6 +44,15 @@ class TestThermodynamicsConfig:
     def test_type_selects_model(self, table, cls):
         assert isinstance(ThermodynamicsConfig.model_validate({"eos": table}).eos, cls)
 
+    def test_unknown_type_error_lists_choices(self):
+        with pytest.raises(ValidationError) as info:
+            ThermodynamicsConfig.model_validate({"eos": {"type": "Polytrope"}})
+
+        message = str(info.value)
+        assert "unknown EOS type 'polytrope'" in message
+        assert "ideal, multi_gamma, fermi_degenerate, relativistic_fermi_degenerate" in message
+        assert "_eos_type" not in message
+
     def test_rejects_unknown_type(self):
         with pytest.raises(ValidationError, match="polytrope"):
             ThermodynamicsConfig.model_validate({"eos": {"type": "polytrope"}})

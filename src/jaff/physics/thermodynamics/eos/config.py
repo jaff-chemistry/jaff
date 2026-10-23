@@ -80,6 +80,26 @@ def _eos_type(value: Any) -> Any:
     return getattr(value, "type", None)
 
 
+#: EOS ``type`` values, one per model.
+EOS_TYPES: tuple[str, ...] = (
+    "ideal",
+    "multi_gamma",
+    "fermi_degenerate",
+    "relativistic_fermi_degenerate",
+)
+
+
+def _check_eos_type(value: Any) -> Any:
+    """Reject an unknown EOS ``type`` naming the choices, before the union is tried."""
+    eos_type = _eos_type(value)
+    if isinstance(value, dict) and eos_type not in EOS_TYPES:
+        raise ValueError(
+            f"unknown EOS type {eos_type!r}; choose one of {', '.join(EOS_TYPES)}"
+        )
+
+    return value
+
+
 EosConfig = Annotated[
     Union[
         Annotated[IdealEosConfig, Tag("ideal")],
@@ -90,4 +110,5 @@ EosConfig = Annotated[
         ],
     ],
     Discriminator(_eos_type),
+    BeforeValidator(_check_eos_type),
 ]

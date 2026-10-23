@@ -65,7 +65,8 @@ def load_config(layers: Sequence[Mapping[str, Any]], model: type[_ModelT]) -> _M
 def load_layer(path: Path, model: type[BaseModel]) -> Dict[str, Any]:
     """Read the TOML file *path* as a layer, its paths resolved against its directory.
 
-    The layer is not validated here; that happens once all layers are merged.
+    Only its top-level sections are checked here, so an error names the file;
+    the rest is validated once all layers are merged.
 
     Parameters
     ----------
@@ -84,13 +85,21 @@ def load_layer(path: Path, model: type[BaseModel]) -> Dict[str, Any]:
     FileNotFoundError
         If *path* does not exist.
     ParserError
-        If *path* is not valid TOML.
+        If *path* is not valid TOML or has a top-level section *model* does not
+        hold (e.g. ``[jaffgen]`` in a ``jaff.toml``).
     """
     with open(path, "rb") as f:
         try:
             layer = tomllib.load(f)
         except tomllib.TOMLDecodeError as e:
             raise ParserError(f"Invalid TOML in {path}: {e}") from e
+
+    unknown = [key for key in layer if key not in model.model_fields]
+    if unknown:
+        raise ParserError(
+            f"{path}: unknown section(s) {', '.join(unknown)}; "
+            f"this file holds only {', '.join(model.model_fields)}"
+        )
 
     return resolve_paths(layer, model, path.parent)
 

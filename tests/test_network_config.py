@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from jaff.core.network.config import NetworkConfig
+from jaff.config import NETWORKS_DIR
+from jaff.core.network.config import NetworkConfig, jaff_toml_for
 from jaff.core.reaction.config import ReactionsConfig
 from jaff.physics.dust.config import DustConfig
 from jaff.physics.thermodynamics.config import ThermodynamicsConfig
@@ -62,3 +63,14 @@ class TestNetworkConfig:
     def test_rejects_old_and_moved_keys(self, key):
         with pytest.raises(ValidationError, match=key):
             NetworkConfig.model_validate({key: {}})
+
+
+class TestJaffTomlFor:
+    def test_next_to_network_file(self, tmp_path):
+        net = tmp_path / "net.jet"
+        net.write_text("")
+
+        assert jaff_toml_for(net) == tmp_path / "jaff.toml"
+
+    def test_predefined_network_name(self):
+        assert jaff_toml_for(Path("GOW")) == NETWORKS_DIR / "GOW" / "jaff.toml"

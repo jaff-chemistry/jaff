@@ -1,17 +1,20 @@
 """Config of the network (``[network]``) and of a ``jaff.toml`` file.
 
 :class:`NetworkConfig` lists the models of the modules it configures as its
-fields.
+fields.  A network's ``jaff.toml`` lives next to its network file
+(:func:`jaff_toml_for`).
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 
 from ...config.base import ConfigModel, PathLike
 from ...physics.dust.config import DustConfig
 from ...physics.photo_reactions.config import RadiationConfig
 from ...physics.thermodynamics.config import ThermodynamicsConfig
 from ..reaction.config import ReactionsConfig
+from ._spec import NetworkSpec
 
 
 class NetworkConfig(ConfigModel):
@@ -52,3 +55,24 @@ class JaffTomlConfig(ConfigModel):
     """A ``jaff.toml`` file: the settings of the network next to it."""
 
     network: NetworkConfig = NetworkConfig()
+
+
+def jaff_toml_for(network_file: Path) -> Path:
+    """Return the ``jaff.toml`` path next to *network_file* (it may not exist).
+
+    Parameters
+    ----------
+    network_file : Path
+        Network file, or the name of a predefined network.
+
+    Returns
+    -------
+    Path
+        ``jaff.toml`` in the network file's directory.
+
+    Raises
+    ------
+    FileNotFoundError
+        If *network_file* is neither a file nor a predefined network.
+    """
+    return NetworkSpec._resolve_network_path(network_file).parent / "jaff.toml"

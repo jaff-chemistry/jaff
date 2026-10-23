@@ -352,3 +352,12 @@ class TestLoadConfig:
             in message
         )
         assert "errors.pydantic.dev" not in message
+
+
+class TestLoadLayerSections:
+    def test_unknown_section_names_the_file(self, tmp_path):
+        cfg = tmp_path / "jaff.toml"
+        cfg.write_text('[jaffgen]\ntemplate = "microphysics"\n')
+
+        with pytest.raises(ParserError, match=r"jaff\.toml.*jaffgen"):
+            load_layer(cfg, JaffTomlConfig)
