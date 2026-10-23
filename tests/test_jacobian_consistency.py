@@ -14,11 +14,11 @@ import numpy as np
 import pytest
 
 from jaff.physics.constants import k_B
-from jaff.physics import EosProps
+from jaff.physics.thermodynamics.eos.config import IdealEosConfig
 from tests.codegen_render import NETWORKS, draw_inputs, evaluate, free_names, load
 
 KB = k_B.cgs.value
-GAMMA = EosProps("ideal").gamma
+GAMMA = IdealEosConfig().gamma
 FD_STEP = 1e-6
 TOL = 1e-5
 

@@ -44,7 +44,6 @@ from ...config import TEMPLATES_DIR, predefined_templates
 from ...drivers import Toml
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
-from ...physics import EosProps
 from .._helper import DuplicatePolicy, funcfile_arg
 from ._structs import DEFAULT_OUTPUT, ResolvedPath, State
 
@@ -304,7 +303,7 @@ class JaffGen:
                 sn.dust_pe_threshold_high = v
 
         # [network.eos] keys depend on the EOS type, so the table is kept
-        # whole and validated by EosProps when the Network is built.
+        # whole and validated by the EOS config when the Network is built.
         if (ep := np.get("eos")) is not None:
             sn.eos = dict(ep)
 
@@ -712,7 +711,7 @@ class JaffGen:
                 else None
             ),
             use_proxy_photoreaction=sn.use_proxy_photoreaction,
-            eos_props=EosProps(**sn.eos) if sn.eos is not None else None,
+            eos_props=sn.eos,
             _from_cli=sn._from_cli,
             _metadata=sn._metadata,
         )

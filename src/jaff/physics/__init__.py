@@ -7,7 +7,7 @@ from .dust import Dust
 from .photo_reactions._photochemistry import Photochemistry, XsecProps
 from .photo_reactions._radiation import Radiation, RadiationGroup
 from .thermodynamics import Thermodynamics
-from .thermodynamics.eos import EosFactory, EosProps
+from .thermodynamics.eos import EosFactory
 
 __all__ = [
     "XsecProps",
@@ -20,6 +20,5 @@ __all__ = [
     "RadiationGroup",
     "Dust",
     "EosFactory",
-    "EosProps",
     "Thermodynamics",
 ]

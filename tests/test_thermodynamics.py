@@ -4,7 +4,7 @@
 import pytest
 import sympy as sp
 
-from jaff.physics import EosProps
+from jaff.physics.thermodynamics.eos.config import IdealEosConfig
 from jaff.physics.constants import N_A, k_B
 from jaff.physics.thermodynamics import InternalEnergy, Thermodynamics
 
@@ -15,7 +15,7 @@ TWO_SPECIES = "@format:idx,R,R,P,rate\n1,H,H,H2,1\n2,H2,H,H,1\n"
 @pytest.fixture
 def net(make_network):
     return make_network(
-        TWO_SPECIES, funcfile=False, eos_props=EosProps("ideal", gamma=GAMMA)
+        TWO_SPECIES, funcfile=False, eos_props=IdealEosConfig(gamma=GAMMA)
     )
 
 

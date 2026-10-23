@@ -89,6 +89,24 @@ class TestThermodynamicsConfig:
                 {"eos": {"type": "fermi_degenerate", "gamma": 1.4}}
             )
 
+    def test_empty_gamma_map_accepted(self):
+        eos = ThermodynamicsConfig.model_validate(
+            {"eos": {"type": "multi_gamma", "default_gamma": 1.4, "gamma_map": {}}}
+        ).eos
+
+        assert isinstance(eos, MultiGammaEosConfig)
+        assert eos.gamma_map == {}
+
+    def test_rejects_string_gamma(self):
+        with pytest.raises(ValidationError, match="gamma"):
+            ThermodynamicsConfig.model_validate({"eos": {"gamma": "5/3"}})
+
+    def test_rejects_non_table_gamma_map(self):
+        with pytest.raises(ValidationError, match="gamma_map"):
+            ThermodynamicsConfig.model_validate(
+                {"eos": {"type": "multi_gamma", "default_gamma": 1.4, "gamma_map": [1.4]}}
+            )
+
     def test_rejects_bool_gamma(self):
         with pytest.raises(ValidationError, match="gamma"):
             ThermodynamicsConfig.model_validate({"eos": {"gamma": True}})

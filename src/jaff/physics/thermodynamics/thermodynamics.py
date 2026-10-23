@@ -71,9 +71,9 @@ class Thermodynamics:
         Returns
         -------
         InternalEnergy
-            Built by :class:`EosFactory` from ``net.eos_props``.
+            Built by :class:`EosFactory` from ``net.config.thermodynamics.eos``.
         """
-        return EosFactory(self.net, self.net.eos_props).generate()
+        return EosFactory(self.net, self.net.config.thermodynamics.eos).generate()
 
     @cached_property
     def _dE_dT(self) -> Expr:

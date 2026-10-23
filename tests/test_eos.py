@@ -7,7 +7,7 @@ import pytest
 import sympy as sp
 
 from jaff import Network
-from jaff.physics import EosProps
+from jaff.physics.thermodynamics.eos.config import IdealEosConfig
 from jaff.physics.constants import k_B
 
 GAMMA = 5.0 / 3.0
@@ -18,7 +18,7 @@ TGAS = sp.symbols("tgas")
 def net() -> Network:
     return Network(
         str(Path(__file__).parent / "fixtures" / "react_cie_hepp.jet"),
-        eos_props=EosProps("ideal", gamma=GAMMA),
+        eos_props=IdealEosConfig(gamma=GAMMA),
     )
 
 

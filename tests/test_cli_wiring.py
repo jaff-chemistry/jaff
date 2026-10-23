@@ -198,7 +198,7 @@ class TestRadiationProfileIndexWiring:
 
 
 class TestEosWiring:
-    """[network.eos] maps onto NetworkArgs.eos and from there to EosProps."""
+    """[network.eos] maps onto NetworkArgs.eos and from there to network.thermodynamics."""
 
     def _from_config(self, tmp_path, block):
         from jaff.cli.jaffgen._engine import JaffGen

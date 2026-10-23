@@ -40,7 +40,6 @@ from ...io import JaffLogger, jaff_progress
 from ...io._io import JaffProps, from_jaff_file, to_jaff_file, write_data_table
 from ...physics import (
     Dust,
-    EosProps,
     Photochemistry,
     Radiation,
     Thermodynamics,
@@ -64,6 +63,7 @@ from ..species import Specie, Species
 from ._spec import NetworkSpec
 from ...config.base import ConfigModel
 from ...physics.dust.config import DustConfig
+from ...physics.thermodynamics.eos.config import EosConfig
 from ...physics.photo_reactions.config import RadiationConfig
 from .config import ConfigLayer, NetworkConfig, load_network_config
 from ._symbols import NetworkSymbols
@@ -113,13 +113,20 @@ def _keyword_layer(**kwargs: Any) -> Dict[str, Any]:
         if section in given:
             network[section] = _section(given[section])
 
+    if "eos" in given:
+        network["thermodynamics"] = {"eos": _section(given["eos"])}
+
     return {"network": network} if network else {}
 
 
 def _section(value: Mapping[str, Any] | ConfigModel) -> Dict[str, Any]:
-    """Return a config section given as a dict or a model (its explicitly set keys)."""
+    """Return a config section given as a dict or a model.
+
+    A model gives its explicitly set keys, except an atomic one (replaced
+    whole, e.g. an EOS), which gives every key so its ``type`` is kept.
+    """
     if isinstance(value, ConfigModel):
-        return value.model_dump(exclude_unset=True)
+        return value.model_dump(exclude_unset=not value._atomic)
 
     return dict(value)
 
@@ -280,7 +287,7 @@ class Network:
         radiation_props: RadiationConfig | Mapping[str, Any] | None = None,
         dust_props: DustConfig | Mapping[str, Any] | None = None,
         use_proxy_photoreaction: bool | None = None,
-        eos_props: EosProps | None = None,
+        eos_props: EosConfig | Mapping[str, Any] | None = None,
         use_jaff_toml: bool = True,
         _from_cli: bool = False,
         _metadata: dict[str, Any] = {},
@@ -342,10 +349,11 @@ class Network:
             ``CHx``/``OHx`` resolve to the ``CH``/``OH`` entries.  A custom
             ``.jfunc`` rate still takes precedence over the cross-sections.
             Sets ``network.reactions.photo.use_proxy_photoreaction``.
-        eos_props : EosProps | None, optional
-            Equation-of-state configuration used by
-            :attr:`Thermodynamics.eos`.  When ``None`` (default), an ideal gas
-            with the default adiabatic index (``EosProps("ideal")``) is used.
+        eos_props : EosConfig | dict | None, optional
+            Equation of state (``network.thermodynamics.eos``) used by
+            :attr:`Thermodynamics.eos`; it replaces a ``[network.thermodynamics.eos]``
+            table in the config whole.  Without either, an ideal gas with the
+            default adiabatic index is used.
         use_jaff_toml : bool, optional
             Stack the ``jaff.toml`` next to the network file, if any, under the
             ``config`` layers (default ``True``).
@@ -372,6 +380,7 @@ class Network:
                 use_proxy_photoreaction=use_proxy_photoreaction,
                 radiation=radiation_props,
                 dust=dust_props,
+                eos=eos_props,
             ),
         )
         self.config: NetworkConfig = load_network_config(
@@ -405,9 +414,6 @@ class Network:
             Radiation(self, self.config.radiation)
             if self.config.radiation is not None
             else None
-        )
-        self.eos_props: EosProps = (
-            eos_props if eos_props is not None else EosProps("ideal")
         )
         self._photochemistry: None | Photochemistry = None
         self.dust: Dust | None = (

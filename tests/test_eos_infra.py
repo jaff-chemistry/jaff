@@ -1,5 +1,5 @@
-# ABOUTME: Robustness tests for the EOS infrastructure (EosProps, EosFactory)
-# ABOUTME: Validation, InternalEnergy forms, builders, Thermodynamics.eos wiring
+# ABOUTME: Robustness tests for the EOS infrastructure (EOS config models, EosFactory)
+# ABOUTME: InternalEnergy forms, builders, Thermodynamics.eos wiring from the config
 
 import gc
 import weakref
@@ -11,7 +11,14 @@ import sympy as sp
 
 from jaff import Network
 from jaff.physics.constants import N_A, k_B
-from jaff.physics import EosFactory, EosProps
+from jaff.physics import EosFactory
+from jaff.physics.thermodynamics.eos.config import (
+    EOS_TYPES,
+    FermiDegenerateEosConfig,
+    IdealEosConfig,
+    MultiGammaEosConfig,
+    RelativisticFermiDegenerateEosConfig,
+)
 from jaff.physics.thermodynamics import InternalEnergy
 
 GAMMA = 5.0 / 3.0
@@ -50,7 +57,7 @@ class TestEosIdentity:
 
 class TestEosFactoryLifetime:
     def test_factory_not_kept_alive_after_generation(self) -> None:
-        factory = EosFactory(_stub_net("a"), EosProps("ideal", gamma=5.0 / 3.0))
+        factory = EosFactory(_stub_net("a"), IdealEosConfig(gamma=5.0 / 3.0))
         factory.ideal()
         ref = weakref.ref(factory)
         del factory
@@ -58,67 +65,19 @@ class TestEosFactoryLifetime:
         assert ref() is None
 
 
-class TestEosPropsValidation:
-    def test_missing_required_key_raises_value_error(self) -> None:
-        with pytest.raises(ValueError, match="gamma_map"):
-            EosProps("multi_gamma", default_gamma=GAMMA)
-
-    def test_ideal_gamma_defaults_to_monoatomic(self) -> None:
-        assert EosProps("ideal").gamma == 1.6666666666667
-
-    def test_unknown_key_raises_value_error(self) -> None:
-        with pytest.raises(ValueError, match="gama"):
-            EosProps("ideal", gamma=5.0 / 3.0, gama=2.0)
-
-    def test_unknown_type_raises_value_error(self) -> None:
-        with pytest.raises(ValueError, match="bad"):
-            EosProps("bad")
-
-    def test_empty_gamma_map_accepted(self) -> None:
-        props = EosProps("multi_gamma", default_gamma=5.0 / 3.0, gamma_map={})
-        assert props.gamma_map == {}
-
-    def test_non_numeric_gamma_raises_type_error(self) -> None:
-        with pytest.raises(TypeError, match="gamma"):
-            EosProps("ideal", gamma="5/3")
-
-    def test_non_dict_gamma_map_raises_type_error(self) -> None:
-        with pytest.raises(TypeError, match="gamma_map"):
-            EosProps("multi_gamma", default_gamma=5.0 / 3.0, gamma_map=[1.4])
-
-    @pytest.mark.parametrize("gamma", [1.0, 0.0, 0.5])
-    def test_gamma_not_above_one_raises(self, gamma: float) -> None:
-        with pytest.raises(ValueError, match="gamma"):
-            EosProps("ideal", gamma=gamma)
-
-    def test_gamma_map_value_of_one_raises(self) -> None:
-        with pytest.raises(ValueError, match="H2"):
-            EosProps("multi_gamma", default_gamma=5.0 / 3.0, gamma_map={"H2": 1.0})
-
-    def test_default_gamma_of_one_raises(self) -> None:
-        with pytest.raises(ValueError, match="default_gamma"):
-            EosProps("multi_gamma", default_gamma=1.0, gamma_map={})
-
-
 class TestEosFactoryDispatch:
     def test_relativistic_fermi_degenerate_not_implemented(self) -> None:
-        factory = EosFactory(_stub_net("a"), EosProps("relativistic_fermi_degenerate"))
+        factory = EosFactory(_stub_net("a"), RelativisticFermiDegenerateEosConfig())
         with pytest.raises(NotImplementedError):
             factory.relativistic_fermi_degenerate()
 
-    def test_invalid_type_message_separates_sentences(self) -> None:
-        props = EosProps("ideal", gamma=5.0 / 3.0)
-        props.type = "bad"
-        with pytest.raises(ValueError, match=r"Invalid eos: 'bad'\. Valid eos types"):
-            EosFactory(_stub_net("a"), props).generate()
-
     def test_generate_builds_eos(self) -> None:
         net = _stub_net("a")
-        eos = EosFactory(net, EosProps("ideal", gamma=GAMMA)).generate()
+        eos = EosFactory(net, IdealEosConfig(gamma=GAMMA)).generate()
         assert isinstance(eos, InternalEnergy)
 
     def test_builder_registry_matches_props_types(self) -> None:
-        assert set(EosFactory._BUILDERS) == set(EosProps._REQUIRED)
+        assert set(EosFactory._BUILDERS) == set(EOS_TYPES)
 
 
 class TestEosForms:
@@ -163,19 +122,19 @@ class TestEosNormaliser:
 class TestEosBuilders:
     def test_ideal_volumetric_energy(self) -> None:
         net = _stub_net("a")
-        eos = EosFactory(net, EosProps("ideal", gamma=GAMMA)).ideal()
+        eos = EosFactory(net, IdealEosConfig(gamma=GAMMA)).ideal()
         expected = net.symbols.ntot * k_B.cgs.value * TGAS / (GAMMA - 1.0)
         assert sp.simplify(eos.volumetric - expected) == 0
 
     def test_multi_gamma_returns_eos(self) -> None:
-        props = EosProps("multi_gamma", default_gamma=GAMMA, gamma_map={})
+        props = MultiGammaEosConfig(default_gamma=GAMMA, gamma_map={})
         assert isinstance(
             EosFactory(_stub_species_net(), props).multi_gamma(), InternalEnergy
         )
 
     def test_multi_gamma_per_species_energy(self) -> None:
         net = _stub_species_net()
-        props = EosProps("multi_gamma", default_gamma=GAMMA, gamma_map={"H2": 1.4})
+        props = MultiGammaEosConfig(default_gamma=GAMMA, gamma_map={"H2": 1.4})
         eos = EosFactory(net, props).multi_gamma()
         kt = k_B.cgs.value * TGAS
         nden = net.symbols.ndens
@@ -183,7 +142,7 @@ class TestEosBuilders:
         assert sp.simplify(eos.volumetric - expected) == 0
 
     def test_fermi_degenerate_not_implemented(self) -> None:
-        factory = EosFactory(_stub_net("a"), EosProps("fermi_degenerate"))
+        factory = EosFactory(_stub_net("a"), FermiDegenerateEosConfig())
         with pytest.raises(NotImplementedError):
             factory.fermi_degenerate()
 
@@ -198,7 +157,33 @@ class TestNetworkEos:
     def test_constructor_props_used(self) -> None:
         fresh = Network(
             str(Path(__file__).parent / "fixtures" / "react_cie_hepp.jet"),
-            eos_props=EosProps("ideal", gamma=1.4),
+            eos_props=IdealEosConfig(gamma=1.4),
         )
         expected = fresh.symbols.ntot * k_B.cgs.value * TGAS / (1.4 - 1.0)
         assert sp.simplify(fresh.thermodynamics.eos.volumetric - expected) == 0
+
+    def test_jaff_toml_eos_used(self, tmp_path) -> None:
+        net_file = tmp_path / "react_cie_hepp.jet"
+        net_file.write_text(
+            (Path(__file__).parent / "fixtures" / "react_cie_hepp.jet").read_text()
+        )
+        (tmp_path / "jaff.toml").write_text("[network.thermodynamics.eos]\ngamma = 1.3\n")
+
+        fresh = Network(str(net_file))
+
+        expected = fresh.symbols.ntot * k_B.cgs.value * TGAS / (1.3 - 1.0)
+        assert sp.simplify(fresh.thermodynamics.eos.volumetric - expected) == 0
+
+    def test_constructor_eos_replaces_jaff_toml_eos_whole(self, tmp_path) -> None:
+        net_file = tmp_path / "react_cie_hepp.jet"
+        net_file.write_text(
+            (Path(__file__).parent / "fixtures" / "react_cie_hepp.jet").read_text()
+        )
+        (tmp_path / "jaff.toml").write_text(
+            '[network.thermodynamics.eos]\ntype = "multi_gamma"\n'
+            "default_gamma = 1.4\ngamma_map = { H2 = 1.4 }\n"
+        )
+
+        fresh = Network(str(net_file), eos_props=IdealEosConfig(gamma=1.2))
+
+        assert fresh.config.thermodynamics.eos == IdealEosConfig(gamma=1.2)
