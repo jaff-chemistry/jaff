@@ -33,6 +33,7 @@ dependencies = [
   "rich>=15.0.0",
   "scipy>=1.13.0",
   "sympy>=1.14.0",
+  "tomli-w>=1.2.0",
   "typer>=0.27.0",
 ]
 

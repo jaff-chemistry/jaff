@@ -1,6 +1,7 @@
 # ABOUTME: Tests for jaffgen/jaffx CLI wiring: command-line options become a config
 # ABOUTME: layer (CLI_KEYS) over jaffgen.toml and jaff.toml, end to end through jaffgen
 
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -456,3 +457,29 @@ class TestSetEndToEnd:
         )
 
         assert args.set == ["network.label=a", "network.strict=true"]
+
+
+class TestConfigToml:
+    """jaffgen writes the run's whole config as config.toml, not a jaffgen.toml copy."""
+
+    def test_written_instead_of_jaffgen_copy(self, tmp_path):
+        cfg = tmp_path / "jaffgen.toml"
+        cfg.write_text('[network.reactions]\nt_cutoff = "extrapolate"\n')
+        gen = TestFuncfileWiring()
+        gen._generate(tmp_path, "--config", str(cfg), "--label", "from_cli")
+
+        out = tmp_path / "out"
+        written = tomllib.loads((out / "config.toml").read_text())
+        assert not (out / "jaffgen.toml").exists()
+        assert written["network"]["label"] == "from_cli"
+        assert written["network"]["reactions"]["t_cutoff"] == "extrapolate"
+        assert written["jaffgen"]["network_file"] == str((tmp_path / "net.dat").resolve())
+
+    def test_reloads_as_the_same_config(self, tmp_path):
+        TestFuncfileWiring()._generate(tmp_path, "--label", "x")
+        written = tmp_path / "out" / "config.toml"
+
+        reloaded = load_jaffgen_config(written)
+
+        assert reloaded.network.label == "x"
+        assert reloaded.jaffgen.output_dir == (tmp_path / "out").resolve()

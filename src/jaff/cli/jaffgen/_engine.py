@@ -41,6 +41,7 @@ from ... import Network
 from ...codegen import TemplateParser
 from ...common import print_motd
 from ...config import TEMPLATES_DIR, predefined_templates
+from ...config.loader import dump_config
 from ...core.network.config import JaffTomlConfig
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
@@ -62,6 +63,7 @@ class JaffGen:
     3. Write any config-declared data tables (``handle_data_tables``).
     4. Render every collected template file to the output directory
        (``process_files``).
+    5. Write the run's whole config as ``config.toml`` (``write_config``).
 
     Parameters
     ----------
@@ -114,6 +116,7 @@ class JaffGen:
         self.net: Network = self.build_network()
         self.handle_data_tables()
         self.process_files()
+        self.write_config()
 
     # ------------------------------------------------------------------
     # Config and file collection
@@ -124,9 +127,9 @@ class JaffGen:
         Load the config and collect every file to render.
 
         A ``jaffgen.toml`` bundled with the template is used when no
-        ``--config`` was given.  Files come from the template, then the input
-        directory, then the individual input files; the config file itself is
-        emitted too.
+        ``--config`` was given; it is config, not a file to render.  Files come
+        from the template, then the input directory, then the individual input
+        files.
 
         Raises
         ------
@@ -143,15 +146,14 @@ class JaffGen:
             if bundled is not None:
                 self.load_config(bundled, cli)
 
-        self.state.output_files = template_files
+        self.state.output_files = [
+            f for f in template_files if f.abspath.name != "jaffgen.toml"
+        ]
         self.collect_input_files()
         self.set_output_dir()
 
         if not self.state.output_files:
             raise RuntimeError("No valid input file/folder/template have been supplied")
-
-        # Emit the config file too (without duplicating a bundled one).
-        self.add_config_to_files()
 
         # Publish the output dir for the shielding back-reference, then create it.
         self.jaffgen_config["output_dir"] = self.state.output_dir.abspath
@@ -305,29 +307,6 @@ class JaffGen:
         self.logger.warning("No output directory has been supplied.")
         self.logger.warning(f"Files will be generated at {DEFAULT_OUTPUT}")
 
-    def add_config_to_files(self) -> None:
-        """
-        Emit the config file alongside the generated output.
-
-        Appends the config file to the output set, unless it is already
-        present (a bundled ``jaffgen.toml`` is collected with the template), so
-        it is never written twice.
-
-        Returns
-        -------
-        None
-        """
-        config_file = self.state.config_file
-        if config_file is None:
-            return
-
-        # A bundled config is already among the collected template files.
-        if any(f.abspath == config_file for f in self.state.output_files):
-            return
-
-        # relpath is a bare name so the emitted copy lands directly in outdir.
-        self.state.output_files.append(ResolvedPath(config_file, Path(config_file.name)))
-
     # ------------------------------------------------------------------
     # Execution
     # ------------------------------------------------------------------
@@ -362,6 +341,17 @@ class JaffGen:
             # The shielding code reaches the output directory through it.
             _metadata={"jaffgen_object": self},
         )
+
+    def write_config(self) -> None:
+        """Write the run's whole config to ``config.toml`` in the output directory.
+
+        Every key, defaults included, after merging the network's ``jaff.toml``,
+        the ``jaffgen.toml`` and the command line: an exact record of the run,
+        loadable again with ``--config``.
+        """
+        path = self.state.output_dir.abspath / "config.toml"
+        path.write_text(dump_config(self.state.config))
+        self.logger.info(f"[cyan]{path.name}[/] created at {path.parent}")
 
     def handle_data_tables(self) -> None:
         """

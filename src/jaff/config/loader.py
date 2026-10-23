@@ -25,12 +25,44 @@ from typing import (
     get_origin,
 )
 
+import tomli_w
 from pydantic import BaseModel, ValidationError
 
 from ..errors import ParserError
 from .base import KeyPath, format_validation_errors
 
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
+
+
+def dump_config(config: BaseModel) -> str:
+    """Write *config* as TOML text: every key, defaults included.
+
+    Paths are written as strings and shielding tables flat, as in a config
+    file; keys whose value is ``None`` (unset optionals) are omitted, as TOML
+    has no null.  The text loads back into an equal config.
+
+    Parameters
+    ----------
+    config : BaseModel
+        A validated config (e.g. a ``JaffgenTomlConfig``).
+
+    Returns
+    -------
+    str
+        The TOML text.
+    """
+    return tomli_w.dumps(_drop_none(config.model_dump(mode="json")))
+
+
+def _drop_none(value: Any) -> Any:
+    """Copy *value*, leaving out table entries whose value is ``None``."""
+    if isinstance(value, dict):
+        return {key: _drop_none(item) for key, item in value.items() if item is not None}
+
+    if isinstance(value, list):
+        return [_drop_none(item) for item in value]
+
+    return value
 
 
 def load_config(layers: Sequence[Mapping[str, Any]], model: type[_ModelT]) -> _ModelT:

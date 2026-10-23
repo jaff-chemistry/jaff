@@ -2,6 +2,7 @@
 # ABOUTME: tables merge, lists/scalars replace, _atomic tables replace whole)
 
 import copy
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ from jaff.cli.jaffgen.config import JaffgenTomlConfig
 from jaff.config.loader import (
     atomic_tables,
     deep_merge,
+    dump_config,
     load_config,
     load_layer,
     resolve_paths,
@@ -361,3 +363,57 @@ class TestLoadLayerSections:
 
         with pytest.raises(ParserError, match=r"jaff\.toml.*jaffgen"):
             load_layer(cfg, JaffTomlConfig)
+
+
+class TestDumpConfig:
+    def _config(self):
+        return JaffgenTomlConfig.model_validate(
+            {
+                "jaffgen": {
+                    "output_dir": Path("/abs/out"),
+                    "input_files": [Path("/abs/a.cpp")],
+                },
+                "network": {
+                    "radiation": {"bands": [13.6, "inf"], "c": "c_hat"},
+                    "reactions": {
+                        "reaction": {
+                            "CO._PHOTON__C.O": {
+                                "photo": {"shielding": {"shielded_by": ["self"]}}
+                            }
+                        }
+                    },
+                    "thermodynamics": {"eos": {"gamma": 1.4}},
+                },
+            }
+        )
+
+    def test_round_trips(self):
+        config = self._config()
+
+        assert (
+            JaffgenTomlConfig.model_validate(tomllib.loads(dump_config(config))) == config
+        )
+
+    def test_holds_defaults(self):
+        dumped = tomllib.loads(dump_config(self._config()))
+
+        assert dumped["network"]["strict"] is False
+        assert dumped["network"]["reactions"]["t_cutoff"] == "clip"
+        assert dumped["network"]["thermodynamics"]["eos"]["type"] == "ideal"
+
+    def test_unset_optionals_are_omitted(self):
+        dumped = tomllib.loads(dump_config(self._config()))
+
+        assert "label" not in dumped["network"]
+        assert "dust" not in dumped["network"]
+        assert "template" not in dumped["jaffgen"]
+
+    def test_paths_and_shielding_are_written_as_in_toml(self):
+        dumped = tomllib.loads(dump_config(self._config()))
+        reaction = dumped["network"]["reactions"]["reaction"]["CO._PHOTON__C.O"]
+
+        assert dumped["jaffgen"]["output_dir"] == "/abs/out"
+        assert reaction["photo"]["shielding"] == {
+            "type": "leiden",
+            "shielded_by": ["self"],
+        }
