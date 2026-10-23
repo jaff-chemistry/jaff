@@ -34,7 +34,6 @@ from sympy import (
 )
 
 from ...common import is_jaff_file, load_mass_dict, print_motd, resolve_dependencies
-from ...config.loader import deep_merge
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
 from ...io._io import JaffProps, from_jaff_file, to_jaff_file, write_data_table
@@ -129,41 +128,6 @@ def _section(value: Mapping[str, Any] | ConfigModel) -> Dict[str, Any]:
         return value.model_dump(exclude_unset=not value._atomic)
 
     return dict(value)
-
-
-def _jaffgen_metadata_layer(metadata: Mapping[str, Any]) -> Dict[str, Any]:
-    """Return jaffgen's old-format reaction settings as a config layer.
-
-    Transitional: jaffgen still passes its ``[network.reactions]`` /
-    ``[network.rates]`` tables in the old format through ``_metadata``.
-    """
-    reactions: Dict[str, Any] = {}
-    global_cutoff = metadata.get("rate_props", {}).get("T_cutoff")
-    if global_cutoff is not None:
-        reactions["t_cutoff"] = global_cutoff
-
-    entries: Dict[str, Any] = {}
-    for serialized, props in metadata.get("reaction_props", {}).items():
-        entry: Dict[str, Any] = {}
-        if "T_cutoff" in props:
-            entry["t_cutoff"] = props["T_cutoff"]
-
-        photo_keys = (
-            "pi_database",
-            "override_custom_rate",
-            "override_custom_cross_section",
-            "shielding",
-        )
-        photo = {key: props[key] for key in photo_keys if key in props}
-        if photo:
-            entry["photo"] = photo
-
-        entries[serialized] = entry
-
-    if entries:
-        reactions["reaction"] = entries
-
-    return {"network": {"reactions": reactions}} if reactions else {}
 
 
 def _shielding_props(shielding: ShieldingConfig | None) -> ShieldingProps | None:
@@ -369,19 +333,16 @@ class Network:
         """
         self.logger: logging.Logger = JaffLogger().get_logger()
 
-        overrides = deep_merge(
-            _jaffgen_metadata_layer(_metadata),
-            _keyword_layer(
-                strict=strict,
-                label=label,
-                funcfile=funcfile,
-                duplicate_policy=duplicate_policy,
-                expand_nuclei=expand_nuclei,
-                use_proxy_photoreaction=use_proxy_photoreaction,
-                radiation=radiation_props,
-                dust=dust_props,
-                eos=eos_props,
-            ),
+        overrides = _keyword_layer(
+            strict=strict,
+            label=label,
+            funcfile=funcfile,
+            duplicate_policy=duplicate_policy,
+            expand_nuclei=expand_nuclei,
+            use_proxy_photoreaction=use_proxy_photoreaction,
+            radiation=radiation_props,
+            dust=dust_props,
+            eos=eos_props,
         )
         self.config: NetworkConfig = load_network_config(
             Path(fname),

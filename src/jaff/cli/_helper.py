@@ -3,6 +3,23 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Any, Dict, Tuple
+
+#: Command-line option (its ``args`` attribute) → config key path it sets.
+CLI_KEYS: Dict[str, Tuple[str, ...]] = {
+    "template": ("jaffgen", "template"),
+    "indir": ("jaffgen", "input_dir"),
+    "files": ("jaffgen", "input_files"),
+    "outdir": ("jaffgen", "output_dir"),
+    "network": ("jaffgen", "network_file"),
+    "network_config": ("jaffgen", "network_config"),
+    "echo": ("jaffgen", "echo"),
+    "label": ("network", "label"),
+    "funcfile": ("network", "funcfile"),
+    "expand_nuclei": ("network", "expand_nuclei"),
+    "strict": ("network", "strict"),
+    "duplicate_policy": ("network", "reactions", "duplicate_policy"),
+}
 
 
 class DuplicatePolicy(str, Enum):
@@ -46,3 +63,37 @@ def funcfile_arg(value: str) -> bool | str:
         return True
 
     return value
+
+
+def cli_layer(args: Any, keys: Dict[str, Tuple[str, ...]] = CLI_KEYS) -> Dict[str, Any]:
+    """Return the config layer of the command-line options in *args*.
+
+    Each option given (an attribute of *args* that is not ``None``) sets the
+    config key path :data:`CLI_KEYS` maps it to; options not given, or absent
+    from *args*, set nothing.
+
+    Parameters
+    ----------
+    args : Any
+        Parsed command-line options, one attribute per option.
+    keys : dict, optional
+        Option name → config key path (default :data:`CLI_KEYS`).
+
+    Returns
+    -------
+    dict
+        The layer, shaped like a ``jaffgen.toml``.
+    """
+    layer: Dict[str, Any] = {}
+    for option, path in keys.items():
+        value = getattr(args, option, None)
+        if value is None:
+            continue
+
+        table = layer
+        for key in path[:-1]:
+            table = table.setdefault(key, {})
+
+        table[path[-1]] = value
+
+    return layer

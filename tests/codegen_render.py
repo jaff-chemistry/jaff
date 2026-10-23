@@ -62,7 +62,7 @@ def render(network: Path, files: Sequence[Path], outdir: Path) -> None:
             funcfile=None,
             duplicate_policy=None,
             expand_nuclei=None,
-            errors=None,
+            strict=None,
             network_config=None,
             outdir=str(outdir),
             indir=None,

@@ -24,14 +24,15 @@ def shielded_network(make_network):
     """H2 photodissociation shielded by *shielding*; returns its band rates."""
 
     def _make(shielding):
-        meta = {"reaction_props": {H2_KEY: {"shielding": shielding}}}
+        own = {"photo": {"shielding": shielding}}
+        config = {"network": {"reactions": {"reaction": {H2_KEY: own}}}}
         with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
             net = make_network(
                 H2_PHOTO,
                 name="h2.jet",
                 funcfile=False,
                 radiation_props=RadiationConfig(bands=[6.0, 13.6]),
-                _metadata=meta,
+                config=config,
             )
 
         rxn = net.reactions[H2_KEY, "photo"]

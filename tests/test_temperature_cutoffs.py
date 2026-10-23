@@ -1,5 +1,5 @@
 # ABOUTME: Tests for temperature-cutoff (clip/extrapolate) resolution
-# ABOUTME: Covers jaff.toml + jaffgen metadata sources and Model-A precedence
+# ABOUTME: Covers jaff.toml + an upper (jaffgen-style) config layer and Model-A precedence
 
 from pathlib import Path
 
@@ -18,15 +18,18 @@ KIDA = str(Path(__file__).parent / "fixtures" / "sample_kida.dat")
 RXN = "H+.H2__H.H2+"
 
 
-def _load(config=None, metadata=None):
-    """Load sample_kida with an optional jaff.toml path and Network metadata."""
-    return Network(
-        KIDA,
-        funcfile=False,
-        _from_cli=True,
-        config=config,
-        _metadata=metadata or {},
-    )
+def _load(config=None, upper=None):
+    """Load sample_kida with an optional jaff.toml path and a layer stacked above it.
+
+    *upper* stands in for a jaffgen.toml: a config layer over the jaff.toml.
+    """
+    layers = [layer for layer in (config, upper) if layer is not None]
+    return Network(KIDA, funcfile=False, _from_cli=True, config=layers)
+
+
+def _reactions(**reactions):
+    """Config layer setting [network.reactions] keys."""
+    return {"network": {"reactions": reactions}}
 
 
 def _is_clipped(net, srxn=RXN):
@@ -41,10 +44,10 @@ def _write_toml(tmp_path, body):
 
 
 class TestTemperatureCutoffResolution:
-    """T_cutoff resolution from jaff.toml and jaffgen metadata."""
+    """t_cutoff resolution from jaff.toml and the config layers above it."""
 
     def test_default_is_clip(self):
-        # No config, no metadata -> built-in default clamps tgas.
+        # No config -> built-in default clamps tgas.
         assert _is_clipped(_load()) is True
         assert symbols("tgas") in _load().reactions[RXN].rate_coefficient.free_symbols
 
@@ -79,23 +82,22 @@ class TestPrecedenceModelA:
         cfg = _write_toml(
             tmp_path, f'[network.reactions.reaction."{RXN}"]\nt_cutoff = "clip"\n'
         )
-        meta = {"reaction_props": {RXN: {"T_cutoff": "extrapolate"}}}
-        assert _is_clipped(_load(config=cfg, metadata=meta)) is False
+        upper = _reactions(reaction={RXN: {"t_cutoff": "extrapolate"}})
+        assert _is_clipped(_load(config=cfg, upper=upper)) is False
 
     def test_jaff_local_beats_jaffgen_global(self, tmp_path):
         # Model A: a per-reaction setting is never overridden by any global.
         cfg = _write_toml(
             tmp_path, f'[network.reactions.reaction."{RXN}"]\nt_cutoff = "extrapolate"\n'
         )
-        meta = {"rate_props": {"T_cutoff": "clip"}}
-        assert _is_clipped(_load(config=cfg, metadata=meta)) is False
+        assert _is_clipped(_load(config=cfg, upper=_reactions(t_cutoff="clip"))) is False
 
     def test_jaffgen_global_beats_jaff_global(self, tmp_path):
         cfg = _write_toml(tmp_path, '[network.reactions]\nt_cutoff = "clip"\n')
-        meta = {"rate_props": {"T_cutoff": "extrapolate"}}
-        assert _is_clipped(_load(config=cfg, metadata=meta)) is False
+        upper = _reactions(t_cutoff="extrapolate")
+        assert _is_clipped(_load(config=cfg, upper=upper)) is False
 
-    def test_reaction_props_tcutoff_without_jaffgen_object(self):
-        # T_cutoff-only reaction_props (no shielding) must not require jaffgen_object.
-        meta = {"reaction_props": {RXN: {"T_cutoff": "extrapolate"}}}
-        assert _is_clipped(_load(metadata=meta)) is False
+    def test_per_reaction_tcutoff_without_jaffgen_object(self):
+        # A t_cutoff-only reaction entry (no shielding) needs no jaffgen_object.
+        upper = _reactions(reaction={RXN: {"t_cutoff": "extrapolate"}})
+        assert _is_clipped(_load(upper=upper)) is False

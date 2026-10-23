@@ -21,16 +21,20 @@ CONFIG_TOML = """\
 bands = [6, 11.2, 13.6]
 profile_index = 0
 mode = "nph"
-rsl = "c_hat"
+c = "c_hat"
 background_field = "draine"
+
+[network.reactions.photo]
 use_proxy_photoreaction = true
 
 [network.dust]
 rv = 3.1
 u_reduction = "extinction"
 f_reduction = "extinction"
-pe_threshold_low = 6
-pe_threshold_high = 13.6
+
+[network.dust.pe]
+threshold_low = 6
+threshold_high = 13.6
 """
 
 
@@ -43,7 +47,7 @@ def _args(config, outdir):
         funcfile=None,
         duplicate_policy=None,
         expand_nuclei=None,
-        errors=None,
+        strict=None,
         network_config=None,
         outdir=str(outdir),
         indir=None,

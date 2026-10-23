@@ -198,7 +198,7 @@ def test_jaffgen_global_flag_reaches_radiation(tmp_path):
     cfg = tmp_path / "jaffgen.toml"
     cfg.write_text(
         "[network.radiation]\nbands = [6, 13.6, 100]\n"
-        "override_custom_cross_section = true\n"
+        "[network.reactions.photo]\noverride_custom_cross_section = true\n"
     )
     gen = JaffGen(
         SimpleNamespace(
@@ -208,7 +208,7 @@ def test_jaffgen_global_flag_reaches_radiation(tmp_path):
             funcfile=None,
             duplicate_policy=None,
             expand_nuclei=None,
-            errors=None,
+            strict=None,
             network_config=None,
             outdir=str(tmp_path / "out"),
             indir=None,

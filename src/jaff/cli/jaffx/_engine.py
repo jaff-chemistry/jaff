@@ -40,7 +40,7 @@ from typing import Optional
 
 import typer
 
-from ... import Network, NetworkArgs
+from ... import Network
 from ...common import print_motd
 from ...io import JaffLogger
 from .._helper import DuplicatePolicy, funcfile_arg
@@ -61,28 +61,16 @@ class JaffX:
     def get_network(self, args: SimpleNamespace) -> Network:
         """Construct a :class:`~jaff.Network` from parsed CLI args.
 
-        Any argument left at its CLI default (``None``) falls back to the
-        corresponding :class:`~jaff.Network` constructor default.
+        Any argument left at its CLI default (``None``) is not given, so the
+        network's ``jaff.toml`` (or the config default) applies.
         """
-        net_args = NetworkArgs(fname=args.network, _from_cli=True)
-        if args.funcfile is not None:
-            net_args.funcfile = args.funcfile
-        if args.label is not None:
-            net_args.label = args.label
-        if args.expand_nuclei is not None:
-            net_args.expand_nuclei = args.expand_nuclei
-        if args.duplicate_policy is not None:
-            net_args.duplicate_policy = args.duplicate_policy
-
         return Network(
-            fname=net_args.fname,
-            config=net_args.config,
-            strict=net_args.strict,
-            label=net_args.label,
-            funcfile=net_args.funcfile,
-            duplicate_policy=net_args.duplicate_policy,
-            expand_nuclei=net_args.expand_nuclei,
-            _from_cli=net_args._from_cli,
+            args.network,
+            label=args.label,
+            funcfile=args.funcfile,
+            duplicate_policy=args.duplicate_policy,
+            expand_nuclei=args.expand_nuclei,
+            _from_cli=True,
         )
 
     def export_table(self, args: SimpleNamespace, fmt: str) -> None:

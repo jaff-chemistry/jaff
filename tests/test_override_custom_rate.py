@@ -80,8 +80,9 @@ class TestPerReaction:
         cfg.write_text(
             f'[network.reactions.reaction."{KEY}".photo]\noverride_custom_rate = false\n'
         )
-        meta = {"reaction_props": {KEY: {"override_custom_rate": True}}}
-        rxn = _photo(custom_network(config=str(cfg), _metadata=meta))
+        own = {"photo": {"override_custom_rate": True}}
+        jaffgen = {"network": {"reactions": {"reaction": {KEY: own}}}}
+        rxn = _photo(custom_network(config=[str(cfg), jaffgen]))
 
         assert rxn.photo.override_custom_rate is True
 
@@ -105,7 +106,8 @@ class TestPerReaction:
 def test_jaffgen_global_flag_reaches_radiation(tmp_path):
     cfg = tmp_path / "jaffgen.toml"
     cfg.write_text(
-        "[network.radiation]\nbands = [6, 13.6, 100]\noverride_custom_rate = true\n"
+        "[network.radiation]\nbands = [6, 13.6, 100]\n"
+        "[network.reactions.photo]\noverride_custom_rate = true\n"
     )
     gen = JaffGen(
         SimpleNamespace(
@@ -115,7 +117,7 @@ def test_jaffgen_global_flag_reaches_radiation(tmp_path):
             funcfile=None,
             duplicate_policy=None,
             expand_nuclei=None,
-            errors=None,
+            strict=None,
             network_config=None,
             outdir=str(tmp_path / "out"),
             indir=None,

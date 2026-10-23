@@ -2,8 +2,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ...config import JAFF_DIR
-from ...core import NetworkArgs
-from ...drivers import Toml
+from .config import JaffgenTomlConfig
 
 #: Fallback output directory (``<repo_root>/generated``) when none is supplied.
 DEFAULT_OUTPUT: Path = JAFF_DIR.parent.parent / "generated"
@@ -28,49 +27,25 @@ class ResolvedPath:
 
 @dataclass
 class State:
-    """Accumulating resolved configuration for a single ``jaffgen`` run.
+    """The loaded config and the files of a single ``jaffgen`` run.
 
     Attributes
     ----------
-    template : str or None
-        Name of the resolved built-in template collection, if any.
-    config_file, config_dir : ResolvedPath or None
-        The loaded ``jaffgen.toml`` and its containing directory (used to
-        resolve config-relative paths).
-    config_raw : Toml or None
-        Parsed ``jaffgen.toml`` contents.
-    network_file : ResolvedPath or None
-        Config-provided network file, resolved against the config file's
-        directory.  A CLI ``--network`` bypasses this and writes straight to
-        :attr:`network_args`.
-    network_args : NetworkArgs
-        Accumulated arguments forwarded to the :class:`~jaff.Network` constructor.
-    input_dir : ResolvedPath or None
-        Resolved ``--indir`` / config ``input_dir`` directory.
-    input_files : list of ResolvedPath
-        Config-provided individual template files, resolved but not yet added
-        to :attr:`output_files`.
+    config_file : Path or None
+        The ``jaffgen.toml`` the config was loaded from, if any.
+    config : JaffgenTomlConfig
+        The run's validated config (jaff.toml < jaffgen.toml < command line).
     output_dir : ResolvedPath
         Directory the generated files are written to (defaults to
         :data:`DEFAULT_OUTPUT`).
     output_files : list of ResolvedPath
-        Every file to render, gathered from the template, ``--indir``,
-        ``--files``, and the config file.
-    echo : bool
-        Whether ``$$JAFF`` directives are echoed as comments in the output
-        (``[jaffgen] echo``, overridden by ``--echo/--no-echo``).
+        Every file to render, gathered from the template, the input
+        directory and files, and the config file.
     """
 
-    template: str | None = None
-    config_file: ResolvedPath | None = None
-    config_dir: ResolvedPath | None = None
-    config_raw: Toml | None = None
-    network_file: ResolvedPath | None = None
-    network_args: NetworkArgs = field(default_factory=NetworkArgs)
-    input_dir: ResolvedPath | None = None
-    input_files: list[ResolvedPath] = field(default_factory=list)
+    config_file: Path | None = None
+    config: JaffgenTomlConfig = field(default_factory=JaffgenTomlConfig)
     output_dir: ResolvedPath = field(
         default_factory=lambda: ResolvedPath(DEFAULT_OUTPUT, Path())
     )
     output_files: list[ResolvedPath] = field(default_factory=list)
-    echo: bool = True

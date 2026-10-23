@@ -162,7 +162,7 @@ def test_jaffgen_flag_reaches_radiation(tmp_path):
             funcfile=None,
             duplicate_policy=None,
             expand_nuclei=None,
-            errors=None,
+            strict=None,
             network_config=None,
             outdir=str(tmp_path / "out"),
             indir=None,

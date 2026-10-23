@@ -37,7 +37,7 @@ def test_template_uses_jk_identifiers(tmp_path, template, outfile):
         funcfile=None,
         duplicate_policy=None,
         expand_nuclei=None,
-        errors=None,
+        strict=None,
         network_config=None,
         outdir=str(outdir),
         indir=None,

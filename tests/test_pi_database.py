@@ -339,7 +339,7 @@ def _jaffgen(tmp_path, toml):
             funcfile=None,
             duplicate_policy=None,
             expand_nuclei=None,
-            errors=None,
+            strict=None,
             network_config=None,
             outdir=str(tmp_path / "out"),
             indir=None,
@@ -350,10 +350,11 @@ def _jaffgen(tmp_path, toml):
 
 
 class TestJaffgenWiring:
-    RAD = "[network.radiation]\nbands = [6, 13.6, 100]\nuse_proxy_photoreaction = true\n"
+    RAD = "[network.radiation]\nbands = [6, 13.6, 100]\n"
+    PROXY = "[network.reactions.photo]\nuse_proxy_photoreaction = true\n"
 
     def test_global_pi_database(self, tmp_path):
-        gen = _jaffgen(tmp_path, self.RAD + 'pi_database = "verner"\n')
+        gen = _jaffgen(tmp_path, self.RAD + self.PROXY + 'pi_database = "verner"\n')
         assert gen.net.config.reactions.photo.pi_database == "verner"
         (rxn,) = [r for r in gen.net.reactions if r.type == "photo"]
         assert rxn.photo.xsec.database == "verner"
@@ -362,7 +363,8 @@ class TestJaffgenWiring:
         gen = _jaffgen(
             tmp_path,
             self.RAD
-            + '\n[network.reactions."H._PHOTON__H+.e-"]\npi_database = "leiden"\n',
+            + self.PROXY
+            + '\n[network.reactions.reaction."H._PHOTON__H+.e-".photo]\npi_database = "leiden"\n',
         )
         (rxn,) = [r for r in gen.net.reactions if r.type == "photo"]
         assert rxn.photo.pi_database == "leiden"

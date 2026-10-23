@@ -1,15 +1,10 @@
 # ABOUTME: Tests for proxy photo-reaction cross-section lookup (use_proxy_photoreaction),
 # ABOUTME: e.g. CHx/OHx resolving to the CH/OH database entries by default.
-from jaff.core.network._args import NetworkArgs
 
 OHX_PHOTO = "OHx -> H + O  []  PHOTO, 6\n"
 
 
 class TestUseProxyPhotoreaction:
-    def test_network_args_default_is_unset(self):
-        # None: not given on the command line, so the config's value applies.
-        assert NetworkArgs().use_proxy_photoreaction is None
-
     def test_network_default_resolves_proxy_xsecs(self, make_network):
         net = make_network(OHX_PHOTO, name="proxy.jet")
         rxn = next(iter(net.reactions))

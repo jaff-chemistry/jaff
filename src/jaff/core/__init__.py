@@ -3,7 +3,7 @@ from jaff.core._typing._reaction import ReactionProps
 from . import elements, network, reaction, species
 from ._typing import ElementProps
 from .elements import Element, Elements
-from .network import Network, NetworkArgs, NetworkSpec, NetworkSymbols
+from .network import Network, NetworkSpec, NetworkSymbols
 from .reaction import (
     PhotoReactionProps,
     Reaction,
@@ -20,7 +20,6 @@ __all__ = [
     Element,
     Elements,
     Network,
-    NetworkArgs,
     NetworkSpec,
     Reaction,
     Reactions,

@@ -1,5 +1,5 @@
-# ABOUTME: Tests for jaffgen/jaffx CLI wiring of network options
-# ABOUTME: --network-config resolution, duplicate_policy/funcfile plumbing, [network] block
+# ABOUTME: Tests for jaffgen/jaffx CLI wiring: command-line options become a config
+# ABOUTME: layer (CLI_KEYS) over jaffgen.toml and jaff.toml, end to end through jaffgen
 
 from pathlib import Path
 from types import SimpleNamespace
@@ -7,33 +7,116 @@ from unittest.mock import patch
 
 import pytest
 
+from jaff.cli._helper import cli_layer
+from jaff.cli.jaffgen.config import load_jaffgen_config
+from jaff.errors import ParserError
+from jaff.physics.thermodynamics.eos.config import IdealEosConfig
+
 FIXTURES = Path(__file__).parent / "fixtures"
 DUP = str(FIXTURES / "duplicate_temp_range.dat")
-RXN = "H+.H2__H.H2+"
 
 
-def _bare_jaffgen(network_config=None, duplicate_policy=None, funcfile=None):
-    """A JaffGen instance with a minimal args namespace, no real CLI parse."""
-    from jaff.cli.jaffgen._engine import JaffGen
-    from jaff.cli.jaffgen._structs import State
+class TestCliLayer:
+    """Each option given sets its config key path; options not given set nothing."""
 
-    jg = JaffGen.__new__(JaffGen)
-    jg.state = State()
-    jg.args = SimpleNamespace(
-        label=None,
-        funcfile=funcfile,
-        expand_nuclei=None,
-        errors=None,
-        network_config=network_config,
-        duplicate_policy=duplicate_policy,
-    )
-    return jg
+    def test_options_map_to_key_paths(self):
+        args = SimpleNamespace(
+            network="net.dat",
+            template="microphysics",
+            files=["a.cpp"],
+            outdir="out",
+            label="x",
+            strict=True,
+            duplicate_policy="error",
+        )
+
+        assert cli_layer(args) == {
+            "jaffgen": {
+                "network_file": "net.dat",
+                "template": "microphysics",
+                "input_files": ["a.cpp"],
+                "output_dir": "out",
+            },
+            "network": {
+                "label": "x",
+                "strict": True,
+                "reactions": {"duplicate_policy": "error"},
+            },
+        }
+
+    def test_options_not_given_set_nothing(self):
+        assert cli_layer(SimpleNamespace(label=None, funcfile=None)) == {}
+
+    def test_false_is_given(self):
+        assert cli_layer(SimpleNamespace(funcfile=False, echo=False)) == {
+            "jaffgen": {"echo": False},
+            "network": {"funcfile": False},
+        }
 
 
-class TestNetworkConfigArg:
-    """--network-config resolution onto NetworkArgs.config."""
+class TestCliOverConfigFile:
+    """The command-line layer wins over jaffgen.toml, which wins over jaff.toml."""
 
-    def test_typer_callback_maps_flag(self):
+    def test_cli_flag_overrides_config_value(self, tmp_path):
+        cfg = tmp_path / "jaffgen.toml"
+        cfg.write_text('[network.reactions]\nduplicate_policy = "preserve-last"\n')
+        cli = cli_layer(SimpleNamespace(duplicate_policy="error"))
+
+        config = load_jaffgen_config(cfg, cli, cwd=tmp_path)
+
+        assert config.network.reactions.duplicate_policy == "error"
+
+    def test_no_cli_flag_keeps_config_value(self, tmp_path):
+        cfg = tmp_path / "jaffgen.toml"
+        cfg.write_text('[network.reactions]\nduplicate_policy = "preserve-last"\n')
+
+        config = load_jaffgen_config(cfg, cli_layer(SimpleNamespace()), cwd=tmp_path)
+
+        assert config.network.reactions.duplicate_policy == "preserve-last"
+
+    def test_eos_table(self, tmp_path):
+        cfg = tmp_path / "jaffgen.toml"
+        cfg.write_text('[network.thermodynamics.eos]\ntype = "ideal"\ngamma = 1.4\n')
+
+        eos = load_jaffgen_config(cfg, cwd=tmp_path).network.thermodynamics.eos
+
+        assert isinstance(eos, IdealEosConfig)
+        assert eos.gamma == pytest.approx(1.4)
+
+    @pytest.mark.parametrize("index, expected", [("1.5", 1.5), ("[2, 1.0]", [2, 1.0])])
+    def test_profile_index_scalar_or_per_band(self, tmp_path, index, expected):
+        cfg = tmp_path / "jaffgen.toml"
+        cfg.write_text(
+            f"[network.radiation]\nbands = [6, 11.2, 13.6]\nprofile_index = {index}\n"
+        )
+
+        radiation = load_jaffgen_config(cfg, cwd=tmp_path).network.radiation
+
+        assert radiation is not None
+        assert radiation.profile_index == expected
+
+    def test_non_boolean_echo_is_an_error(self, tmp_path):
+        cfg = tmp_path / "jaffgen.toml"
+        cfg.write_text('[jaffgen]\necho = "no"\n')
+
+        with pytest.raises(ParserError, match=r"jaffgen\.echo"):
+            load_jaffgen_config(cfg, cwd=tmp_path)
+
+    def test_old_keys_are_reported(self, tmp_path):
+        cfg = tmp_path / "jaffgen.toml"
+        cfg.write_text('[network]\nerrors = true\nconfig = "jaff.toml"\n')
+
+        with pytest.raises(ParserError) as info:
+            load_jaffgen_config(cfg, cwd=tmp_path)
+
+        assert "network.errors: unknown key" in str(info.value)
+        assert "network.config: unknown key" in str(info.value)
+
+
+class TestTyperFlags:
+    """The typer command turns flags into the args namespace JaffGen reads."""
+
+    def _args(self, *flags):
         from typer.testing import CliRunner
 
         import jaff.cli.jaffgen._engine as engine
@@ -44,107 +127,23 @@ class TestNetworkConfigArg:
             captured["args"] = args
 
         with patch.object(engine.JaffGen, "__init__", _capture):
-            runner = CliRunner()
-            runner.invoke(engine.app, ["--network", "n", "--network-config", "x.toml"])
-            assert captured["args"].network_config == "x.toml"
-            runner.invoke(engine.app, ["--network", "n"])
-            assert captured["args"].network_config is None
+            CliRunner().invoke(engine.app, ["--network", "n", *flags])
 
-    def test_none_leaves_config_unset(self):
-        jg = _bare_jaffgen(network_config=None)
-        jg.set_network_options()
-        assert jg.state.network_args.config is None
+        return captured["args"]
 
-    def test_relative_path_resolves_against_cwd(self, tmp_path, monkeypatch):
-        (tmp_path / "networks").mkdir()
-        rel = Path("networks") / "jaff.toml"
-        (tmp_path / rel).write_text('[network.reactions]\nt_cutoff = "clip"\n')
-        monkeypatch.chdir(tmp_path)
+    def test_network_config_flag(self):
+        assert self._args("--network-config", "x.toml").network_config == "x.toml"
 
-        jg = _bare_jaffgen(network_config=str(rel))
-        jg.set_network_options()
-        cfg = jg.state.network_args.config
-        assert cfg == (tmp_path / rel).resolve() and cfg.is_absolute()
+    def test_network_config_defaults_to_none(self):
+        assert self._args().network_config is None
 
-    def test_missing_path_raises(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        jg = _bare_jaffgen(network_config="does_not_exist.toml")
-        with pytest.raises(FileNotFoundError):
-            jg.set_network_options()
-
-    def test_directory_path_raises(self, tmp_path, monkeypatch):
-        (tmp_path / "networks").mkdir()
-        monkeypatch.chdir(tmp_path)
-        jg = _bare_jaffgen(network_config="networks")
-        with pytest.raises(FileNotFoundError):
-            jg.set_network_options()
-
-
-class TestNetworkBlockExtraction:
-    """[network.*] parses into the shapes fed to metadata slots."""
-
-    def test_block_shapes(self, tmp_path):
-        from jaff.drivers import Toml
-
-        body = (
-            '[network]\nlabel = "demo"\n'
-            '[network.rates]\nT_cutoff = "extrapolate"\n'
-            f'[network.reactions."{RXN}"]\nT_cutoff = "clip"\n'
-            f'[network.reactions."{RXN}".shielding]\ntype = "leiden"\n'
-        )
-        p = tmp_path / "jaffgen.toml"
-        p.write_text(body)
-        network_cfg = Toml(str(p)).get_key("network") or {}
-
-        assert (network_cfg.get("rates") or {}).get("T_cutoff") == "extrapolate"
-        reactions_cfg = network_cfg.get("reactions") or {}
-        assert reactions_cfg[RXN]["T_cutoff"] == "clip"
-        assert reactions_cfg[RXN]["shielding"]["type"] == "leiden"
-        assert network_cfg.get("label") == "demo"  # scalar still reachable
-
-
-class TestDuplicatePolicyWiring:
-    """jaffgen resolves duplicate_policy from CLI flag and jaffgen.toml."""
-
-    def _bare(self, cli_value=None, toml_value=None):
-        jg = _bare_jaffgen(duplicate_policy=cli_value)
-        if toml_value is not None:
-            jg.state.network_args.duplicate_policy = toml_value
-        return jg
-
-    def test_cli_flag_sets_network_args(self):
-        jg = self._bare(cli_value="preserve-last")
-        jg.set_network_options()
-        assert jg.state.network_args.duplicate_policy == "preserve-last"
-
-    def test_cli_flag_overrides_config_value(self):
-        jg = self._bare(cli_value="error", toml_value="preserve-last")
-        jg.set_network_options()
-        assert jg.state.network_args.duplicate_policy == "error"
-
-    def test_no_cli_flag_keeps_config_value(self):
-        jg = self._bare(cli_value=None, toml_value="preserve-last")
-        jg.set_network_options()
-        assert jg.state.network_args.duplicate_policy == "preserve-last"
-
-    def test_reads_key_from_config_file(self, tmp_path):
-        from jaff.cli.jaffgen._engine import JaffGen
-        from jaff.cli.jaffgen._structs import ResolvedPath, State
-        from jaff.drivers import Toml
-
-        cfg = tmp_path / "jaffgen.toml"
-        cfg.write_text('[network]\nduplicate_policy = "error"\n')
-
-        jg = JaffGen.__new__(JaffGen)
-        jg.state = State()
-        jg.state.config_dir = ResolvedPath(tmp_path, tmp_path)
-        jg.state.config_raw = Toml(cfg)
-        jg.set_state_from_config()
-        assert jg.state.network_args.duplicate_policy == "error"
+    def test_strict_flag(self):
+        assert self._args("--strict").strict is True
+        assert self._args("--no-strict").strict is False
 
 
 class TestJaffxWiring:
-    """jaffx forwards the duplicate_policy flag onto NetworkArgs."""
+    """jaffx forwards its network options to Network."""
 
     def _args(self, duplicate_policy):
         return SimpleNamespace(
@@ -170,86 +169,13 @@ class TestJaffxWiring:
         assert net.spec.duplicate_policy == "preserve-first"
 
 
-class TestRadiationProfileIndexWiring:
-    """[network.radiation] profile_index accepts a scalar or a per-band list."""
-
-    def _from_config(self, tmp_path, profile_index):
-        from jaff.cli.jaffgen._engine import JaffGen
-        from jaff.cli.jaffgen._structs import ResolvedPath, State
-        from jaff.drivers import Toml
-
-        cfg = tmp_path / "jaffgen.toml"
-        cfg.write_text(
-            f"[network.radiation]\nbands = [6, 11.2, 13.6]\n"
-            f"profile_index = {profile_index}\n"
-        )
-        jg = JaffGen.__new__(JaffGen)
-        jg.state = State()
-        jg.state.config_dir = ResolvedPath(tmp_path, tmp_path)
-        jg.state.config_raw = Toml(cfg)
-        jg.set_state_from_config()
-        return jg.state.network_args
-
-    def test_scalar_profile_index(self, tmp_path):
-        assert self._from_config(tmp_path, "1.5").rad_profile_index == 1.5
-
-    def test_list_profile_index(self, tmp_path):
-        assert self._from_config(tmp_path, "[2, 1.0]").rad_profile_index == [2, 1.0]
-
-
-class TestEosWiring:
-    """[network.eos] maps onto NetworkArgs.eos and from there to network.thermodynamics."""
-
-    def _from_config(self, tmp_path, block):
-        from jaff.cli.jaffgen._engine import JaffGen
-        from jaff.cli.jaffgen._structs import ResolvedPath, State
-        from jaff.drivers import Toml
-
-        cfg = tmp_path / "jaffgen.toml"
-        cfg.write_text(block)
-        jg = JaffGen.__new__(JaffGen)
-        jg.state = State()
-        jg.state.config_dir = ResolvedPath(tmp_path, tmp_path)
-        jg.state.config_raw = Toml(cfg)
-        jg.set_state_from_config()
-        return jg.state.network_args
-
-    def test_eos_table_is_stored(self, tmp_path):
-        args = self._from_config(tmp_path, '[network.eos]\ntype = "ideal"\ngamma = 1.4\n')
-        assert args.eos == {"type": "ideal", "gamma": 1.4}
-
-    def test_missing_eos_table_leaves_none(self, tmp_path):
-        assert self._from_config(tmp_path, '[network]\nlabel = "x"\n').eos is None
-
-
 class TestFuncfileWiring:
-    """--funcfile false must survive set_network_options and disable aux loading."""
+    """--funcfile false disables aux loading, over a sibling file or a config path."""
 
     # chemRate0 overrides reaction 0's rate of 1 with 9 when aux loading is on.
     NETWORK = "H + H -> H2 [10,1000] 1\nH2 -> H + H [10,1000] 1\n"
     JFUNC = "@function chemRate0(tgas)\n    @return 9\n"
     TEMPLATE = "$$JAFF REPEAT idx, rate IN rates\nk[$idx$] = $rate$\n$$JAFF END\n"
-
-    def _bare(self, cli_value=None, toml_value=None):
-        jg = _bare_jaffgen(funcfile=cli_value)
-        if toml_value is not None:
-            jg.state.network_args.funcfile = toml_value
-        return jg
-
-    def test_cli_false_overrides_default(self):
-        jg = self._bare(cli_value=False)
-        jg.set_network_options()
-        assert jg.state.network_args.funcfile is False
-
-    def test_cli_false_overrides_config_path(self):
-        jg = self._bare(cli_value=False, toml_value="aux.jfunc")
-        jg.set_network_options()
-        assert jg.state.network_args.funcfile is False
-
-    def test_no_cli_flag_keeps_config_path(self):
-        jg = self._bare(cli_value=None, toml_value="aux.jfunc")
-        jg.set_network_options()
-        assert jg.state.network_args.funcfile == "aux.jfunc"
 
     def _generate(self, tmp_path, *extra):
         from typer.testing import CliRunner
@@ -282,7 +208,7 @@ class TestFuncfileWiring:
 
 
 class TestConfigRelativeNetworkPaths:
-    """[network] funcfile/config in jaffgen.toml resolve against the config dir."""
+    """Paths in jaffgen.toml resolve against its directory; CLI paths against the CWD."""
 
     NETWORK = TestFuncfileWiring.NETWORK
     TEMPLATE = TestFuncfileWiring.TEMPLATE
@@ -306,50 +232,38 @@ class TestConfigRelativeNetworkPaths:
         monkeypatch.chdir(cwd)
         return cfg_dir, cwd
 
-    def _write_cfg(self, cfg_dir, network_block):
+    def _write_cfg(self, cfg_dir, jaffgen_block="", network_block=""):
         cfg = cfg_dir / "jaffgen.toml"
         cfg.write_text(
             '[jaffgen]\nnetwork_file = "net.dat"\ninput_files = ["rates.py"]\n'
-            f"[network]\n{network_block}"
+            f"{jaffgen_block}[network]\n{network_block}"
         )
         return cfg
 
-    def _state_from(self, cfg):
-        from jaff.cli.jaffgen._engine import JaffGen
-        from jaff.cli.jaffgen._structs import ResolvedPath, State
-        from jaff.drivers import Toml
-
-        jg = JaffGen.__new__(JaffGen)
-        jg.state = State()
-        jg.state.config_dir = ResolvedPath(cfg.parent, cfg.parent)
-        jg.state.config_raw = Toml(cfg)
-        jg.set_state_from_config()
-        return jg.state.network_args
-
     def test_funcfile_resolves_against_config_dir(self, dirs):
         cfg_dir, _ = dirs
-        sn = self._state_from(self._write_cfg(cfg_dir, 'funcfile = "net.jfunc"\n'))
-        assert Path(sn.funcfile) == cfg_dir / "net.jfunc"
+        cfg = self._write_cfg(cfg_dir, network_block='funcfile = "net.jfunc"\n')
 
-    def test_config_resolves_against_config_dir(self, dirs):
+        assert load_jaffgen_config(cfg).network.funcfile == cfg_dir / "net.jfunc"
+
+    def test_network_config_resolves_against_config_dir(self, dirs):
         cfg_dir, _ = dirs
-        sn = self._state_from(self._write_cfg(cfg_dir, 'config = "jaff.toml"\n'))
-        assert Path(sn.config) == cfg_dir / "jaff.toml"
+        cfg = self._write_cfg(cfg_dir, jaffgen_block='network_config = "jaff.toml"\n')
+
+        assert load_jaffgen_config(cfg).jaffgen.network_config == cfg_dir / "jaff.toml"
 
     def test_boolean_funcfile_is_preserved(self, dirs):
         cfg_dir, _ = dirs
-        sn = self._state_from(self._write_cfg(cfg_dir, "funcfile = false\n"))
-        assert sn.funcfile is False
+        cfg = self._write_cfg(cfg_dir, network_block="funcfile = false\n")
+
+        assert load_jaffgen_config(cfg).network.funcfile is False
 
     def test_absolute_paths_are_kept(self, dirs):
         cfg_dir, cwd = dirs
-        block = (
-            f'funcfile = "{(cwd / "net.jfunc").as_posix()}"\n'
-            f'config = "{(cwd / "jaff.toml").as_posix()}"\n'
-        )
-        sn = self._state_from(self._write_cfg(cfg_dir, block))
-        assert Path(sn.funcfile) == cwd / "net.jfunc"
-        assert Path(sn.config) == cwd / "jaff.toml"
+        block = f'funcfile = "{(cwd / "net.jfunc").as_posix()}"\n'
+        cfg = self._write_cfg(cfg_dir, network_block=block)
+
+        assert load_jaffgen_config(cfg).network.funcfile == cwd / "net.jfunc"
 
     def _generate(self, cfg, *extra):
         from typer.testing import CliRunner
@@ -364,19 +278,19 @@ class TestConfigRelativeNetworkPaths:
 
     def test_cli_uses_config_relative_funcfile(self, dirs):
         cfg_dir, _ = dirs
-        cfg = self._write_cfg(cfg_dir, 'funcfile = "net.jfunc"\n')
+        cfg = self._write_cfg(cfg_dir, network_block='funcfile = "net.jfunc"\n')
         assert "k[0] = 9" in self._generate(cfg)
 
     def test_cli_uses_config_relative_network_config(self, dirs):
         # The CWD decoy jaff.toml is malformed; loading it would fail the run.
         # funcfile defaults to the sibling scan, which finds cfg/net.jfunc.
         cfg_dir, _ = dirs
-        cfg = self._write_cfg(cfg_dir, 'config = "jaff.toml"\n')
+        cfg = self._write_cfg(cfg_dir, jaffgen_block='network_config = "jaff.toml"\n')
         assert "k[0] = 9" in self._generate(cfg)
 
     def test_cli_funcfile_override_stays_cwd_relative(self, dirs):
         cfg_dir, _ = dirs
-        cfg = self._write_cfg(cfg_dir, 'funcfile = "net.jfunc"\n')
+        cfg = self._write_cfg(cfg_dir, network_block='funcfile = "net.jfunc"\n')
         assert "k[0] = 5" in self._generate(cfg, "--funcfile", "net.jfunc")
 
 
@@ -415,17 +329,32 @@ class TestEchoWiring:
         assert "$$JAFF" not in self._generate(tmp_path, "--no-echo", echo="true")
         assert "# $$JAFF" in self._generate(tmp_path, "--echo", echo="false")
 
-    def test_non_boolean_config_value_is_an_error(self, tmp_path):
-        from jaff.cli.jaffgen._engine import JaffGen
-        from jaff.cli.jaffgen._structs import ResolvedPath, State
-        from jaff.drivers import Toml
-        from jaff.errors import ParserError
 
+class TestDataTables:
+    """[[jaffgen.table]] entries are converted into the output directory."""
+
+    NETWORK = TestFuncfileWiring.NETWORK
+    TEMPLATE = TestFuncfileWiring.TEMPLATE
+
+    def test_csv_table_written(self, tmp_path):
+        from typer.testing import CliRunner
+
+        from jaff.cli.jaffgen._engine import app
+
+        (tmp_path / "net.dat").write_text(self.NETWORK)
+        (tmp_path / "rates.py").write_text(self.TEMPLATE)
+        (tmp_path / "data.csv").write_text("# a comment\nT0 N\n1 2\n3 4\n")
         cfg = tmp_path / "jaffgen.toml"
-        cfg.write_text('[jaffgen]\necho = "no"\n')
-        jg = JaffGen.__new__(JaffGen)
-        jg.state = State()
-        jg.state.config_dir = ResolvedPath(tmp_path, tmp_path)
-        jg.state.config_raw = Toml(cfg)
-        with pytest.raises(ParserError, match="echo must be true or false"):
-            jg.set_state_from_config()
+        cfg.write_text(
+            '[jaffgen]\nnetwork_file = "net.dat"\ninput_files = ["rates.py"]\n'
+            "[[jaffgen.table]]\n"
+            '[jaffgen.table.source]\npath = "data.csv"\ndelimiter = " "\n'
+            'comment = "#"\ncols = ["T0"]\n'
+            '[jaffgen.table.target]\npath = "out.csv"\ndelimiter = ","\n'
+        )
+
+        out = tmp_path / "out"
+        result = CliRunner().invoke(app, ["--config", str(cfg), "--outdir", str(out)])
+
+        assert result.exit_code == 0, result.output
+        assert (out / "out.csv").exists()
