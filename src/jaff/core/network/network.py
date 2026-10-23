@@ -37,7 +37,7 @@ from sympy import (
 )
 
 from ...common import is_jaff_file, load_mass_dict, print_motd, resolve_dependencies
-from ...config.base import ConfigModel
+from ...config.base import as_layer
 from ...drivers import HDF5
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
@@ -93,30 +93,11 @@ def _keyword_layer(**kwargs: Any) -> Dict[str, Any]:
     The keywords are the keys of the ``[network]`` table, so the layer is that
     table with the arguments given (not ``None``); an omitted one never
     overrides the ``jaff.toml`` or the ``config`` layers.  A section given as a
-    config model becomes the dict of its set keys (:func:`_section`).
+    config model becomes the dict of its set keys (:func:`~jaff.config.base.as_layer`).
     """
-    network = {key: _section(value) for key, value in kwargs.items() if value is not None}
+    network = {key: as_layer(value) for key, value in kwargs.items() if value is not None}
 
     return {"network": network} if network else {}
-
-
-def _section(value: Any) -> Any:
-    """Return *value* as a plain config layer: models and dicts become dicts.
-
-    A model gives its explicitly set keys, recursively, except an atomic one
-    (replaced whole, e.g. an EOS), which gives every key so its ``type`` is
-    kept.  Anything else is returned unchanged.
-    """
-    if isinstance(value, ConfigModel):
-        if value._atomic:
-            return value.model_dump()
-
-        return {name: _section(getattr(value, name)) for name in value.model_fields_set}
-
-    if isinstance(value, Mapping):
-        return {key: _section(item) for key, item in value.items()}
-
-    return value
 
 
 @dataclass(frozen=True)
@@ -180,8 +161,7 @@ class Network:
     """Astrochemical reaction network loaded from a file.
 
     ``Network`` is the main entry point of JAFF.  It reads a reaction network
-    file, auto-detects its format (KIDA, UDFA, PRIZMO, KROME, UCLCHEM, or a
-    ``.jaff`` file written by :meth:`to_jaff`), validates mass and charge
+    file, auto-detects its format (KIDA, UDFA, PRIZMO, KROME, UCLCHEM), validates mass and charge
     conservation, and assembles the species and reaction catalogues together
     with the stoichiometry matrices.  It also handles the optional radiation
     field, photochemistry cross-sections, dust, and the auxiliary ``.jfunc``
@@ -356,6 +336,11 @@ class Network:
             or :meth:`check_isomers` finds a problem.
         """
         self.logger: logging.Logger = JaffLogger().get_logger()
+        if is_jaff_file(Path(fname)):
+            raise ParserError(
+                f"{fname}: loading .jaff files is not supported; "
+                "load the original network file"
+            )
 
         overrides = _keyword_layer(
             strict=strict,
@@ -375,11 +360,6 @@ class Network:
         )
         self.spec: NetworkSpec = NetworkSpec(fname, self.config.funcfile)
 
-        if is_jaff_file(self.spec.fname):
-            raise ParserError(
-                f"{self.spec.fname}: loading .jaff files is not supported; "
-                "load the original network file"
-            )
         if not _from_cli:
             print_motd()
 

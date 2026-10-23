@@ -400,3 +400,39 @@ class TestNetworkSpec:
     def test_label_is_the_setting_else_the_file_stem(self, make_network):
         assert make_network(self.NET, name="n.dat").label == "n"
         assert make_network(self.NET, name="n.dat", label="mine").label == "mine"
+
+
+class TestModelLayers:
+    """A config model given as a layer keeps what it says, whichever way it comes in."""
+
+    NET = "H + H -> H2 [10,1000] 1e-10\nH2 -> H + H [10,1000] 1e-10\n"
+
+    def test_eos_model_keeps_its_type_in_a_config_layer(self, make_network):
+        from jaff.physics.thermodynamics.eos.config import MultiGammaEosConfig
+
+        eos = MultiGammaEosConfig(default_gamma=1.4, gamma_map={"H2": 1.4})
+        layer = JaffTomlConfig(
+            network=NetworkConfig(thermodynamics=ThermodynamicsConfig(eos=eos))
+        )
+
+        net = make_network(self.NET, name="n.dat", config=layer)
+
+        assert net.config.thermodynamics.eos.type == "multi_gamma"
+
+    def test_model_inside_a_dict_layer(self, make_network):
+        net = make_network(
+            self.NET,
+            name="n.dat",
+            config={"network": {"reactions": ReactionsConfig(t_cutoff="extrapolate")}},
+        )
+
+        assert net.config.reactions.t_cutoff == "extrapolate"
+
+    def test_jaff_file_rejected_before_reading_config(self, tmp_path):
+        from jaff import Network
+
+        (tmp_path / "n.jaff").write_bytes(b"")
+        (tmp_path / "jaff.toml").write_text("[network]\nbogus = 1\n")
+
+        with pytest.raises(ParserError, match="loading .jaff files is not supported"):
+            Network(str(tmp_path / "n.jaff"))

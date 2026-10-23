@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence, Union, cast
 
 from ...config.loader import load_config, load_layer, resolve_paths
-from ...config.base import ConfigModel, PathLike
+from ...config.base import ConfigModel, PathLike, as_layer
 from ...physics.dust.config import DustConfig
 from ...physics.photo_reactions.config import RadiationConfig
 from ...physics.thermodynamics.config import ThermodynamicsConfig
@@ -169,11 +169,8 @@ def _as_layer(item: ConfigLayer, cwd: Path) -> Dict[str, Any]:
 
         return load_layer(path if path.is_absolute() else cwd / path, JaffTomlConfig)
 
-    if isinstance(item, JaffTomlConfig):
-        return item.model_dump(exclude_unset=True)
-
-    if isinstance(item, Mapping):
-        return resolve_paths(cast(Mapping[str, Any], item), JaffTomlConfig, cwd)
+    if isinstance(item, (JaffTomlConfig, Mapping)):
+        return resolve_paths(cast(Mapping[str, Any], as_layer(item)), JaffTomlConfig, cwd)
 
     raise TypeError(
         f"Invalid config layer {item!r}: expected a path, dict or JaffTomlConfig"

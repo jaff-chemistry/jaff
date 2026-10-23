@@ -14,7 +14,7 @@ from __future__ import annotations
 import inspect
 import re
 from pathlib import Path
-from typing import Annotated, Any, ClassVar, Dict, List, Tuple, TypeVar
+from typing import Annotated, Any, ClassVar, Dict, List, Mapping, Tuple, TypeVar
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, ValidationError
 
@@ -23,6 +23,7 @@ __all__ = [
     "KeyPath",
     "LowerStr",
     "PathLike",
+    "as_layer",
     "attribute_descriptions",
     "dotted",
     "field_descriptions",
@@ -76,6 +77,36 @@ class ConfigModel(BaseModel):
     @classmethod
     def _extend_json_schema(cls, schema: Dict[str, Any]) -> None:
         """Adjust this model's JSON schema further; nothing by default."""
+
+
+def as_layer(value: Any) -> Any:
+    """Return *value* as a plain config layer: models and dicts become dicts.
+
+    A config model gives the keys explicitly set on it, recursively, so an
+    unset key never overrides a lower layer; an atomic model (replaced whole,
+    e.g. an EOS or a shielding table) gives every key, so its ``type`` is kept.
+    A mapping is converted item by item; anything else is returned unchanged.
+
+    Parameters
+    ----------
+    value : Any
+        A config model, a mapping (possibly holding models) or a plain value.
+
+    Returns
+    -------
+    Any
+        The layer: dicts of plain values, as a TOML file would give.
+    """
+    if isinstance(value, ConfigModel):
+        if value._atomic:
+            return value.model_dump()
+
+        return {name: as_layer(getattr(value, name)) for name in value.model_fields_set}
+
+    if isinstance(value, Mapping):
+        return {key: as_layer(item) for key, item in value.items()}
+
+    return value
 
 
 def overlay(base: _ModelT, over: BaseModel | None) -> _ModelT:

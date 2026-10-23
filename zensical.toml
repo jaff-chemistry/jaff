@@ -408,6 +408,7 @@ nav = [
         { "ConfigModel" = [
           "reference/config/base/configmodel/index.md",
         ] },
+        "reference/config/base/as_layer.md",
         "reference/config/base/attribute_descriptions.md",
         "reference/config/base/dotted.md",
         "reference/config/base/field_descriptions.md",
