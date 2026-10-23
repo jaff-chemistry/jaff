@@ -201,7 +201,7 @@
     },
     "PhotoConfig": {
       "additionalProperties": false,
-      "description": "Photo-reaction settings (`[network.reactions.photo]`).",
+      "description": "Photo-reaction settings (`[network.reactions.photo]`).\n\n`None` means unset: the value comes from the global settings.",
       "properties": {
         "pi_database": {
           "enum": [
@@ -248,7 +248,7 @@
         },
         "threshold_high": {
           "default": 13.6,
-          "description": "Upper edge of the photoelectric band in eV.",
+          "description": "Upper edge of the photoelectric band in eV, above `threshold_low`.",
           "title": "Threshold High",
           "type": "number"
         }
@@ -261,7 +261,7 @@
       "description": "Radiation field (`[network.radiation]`); the table enables radiation.\n\nOnly the shape of the settings is checked here; whether the band-averaged\nspectrum converges is checked by the radiation field itself.",
       "properties": {
         "bands": {
-          "description": "Ordered photon-energy band edges in eV, at least two; `\"inf\"` is allowed as the last edge only.",
+          "description": "Increasing photon-energy band edges in eV, at least two; `\"inf\"` is allowed as the last edge only.",
           "items": {
             "anyOf": [
               {
@@ -346,7 +346,7 @@
     },
     "ReactionConfig": {
       "additionalProperties": false,
-      "description": "Settings of one reaction (`[network.reactions.reaction.\"<serialized>\"]`).",
+      "description": "Settings of one reaction (`[network.reactions.reaction.\"<serialized>\"]`).\n\n`None` means unset: the value comes from the global settings.",
       "properties": {
         "duplicate_policy": {
           "enum": [

@@ -75,3 +75,17 @@ class TestRadiationConfig:
     def test_rejects_old_and_moved_keys(self, key):
         with pytest.raises(ValidationError, match=key):
             RadiationConfig.model_validate({"bands": [6.0, 13.6], key: "x"})
+
+
+class TestBandOrder:
+    @pytest.mark.parametrize(
+        "bands",
+        [[13.6, 6.0], [6.0, 6.0], [6.0, 13.6, 10.0, "inf"]],
+        ids=["down", "equal", "mid"],
+    )
+    def test_edges_must_increase(self, bands):
+        with pytest.raises(ValidationError, match="increas"):
+            RadiationConfig.model_validate({"bands": bands})
+
+    def test_increasing_edges_with_inf(self):
+        assert RadiationConfig(bands=[6.0, 13.6, "inf"]).bands == [6.0, 13.6, "inf"]

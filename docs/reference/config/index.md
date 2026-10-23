@@ -15,6 +15,21 @@ tags:
 | [`predefined_networks`](predefined_networks.md) | Return the names of the built-in networks (sub-dirs of `NETWORKS_DIR`). |
 | [`predefined_templates`](predefined_templates.md) | Return the names of the built-in generator template collections. |
 
+## Config Modules
+
+| Module | Description |
+| --- | --- |
+| [`jaff.config.base`](base/index.md) | Shared building blocks of the module-owned config models. |
+| [`jaff.config.loader`](loader/index.md) | Loading of the `jaff.toml` / `jaffgen.toml` config. |
+| [`jaff.core.network.config`](network/index.md) | Config of the network (`[network]`) and of a `jaff.toml` file. |
+| [`jaff.core.reaction.config`](reactions/index.md) | Config of the reactions (`[network.reactions]`). |
+| [`jaff.physics.photo_reactions.config`](radiation/index.md) | Config of the radiation field (`[network.radiation]`). |
+| [`jaff.physics.photo_reactions.shielding.config`](shielding/index.md) | Config of the photo-reaction line shielding (`shielding` tables). |
+| [`jaff.physics.dust.config`](dust/index.md) | Config of the dust module (`[network.dust]`). |
+| [`jaff.physics.thermodynamics.config`](thermodynamics/index.md) | Config of the thermodynamics (`[network.thermodynamics]`). |
+| [`jaff.physics.thermodynamics.eos.config`](eos/index.md) | Config of the equation of state (`[network.thermodynamics.eos]`). |
+| [`jaff.cli.jaffgen.config`](jaffgen/index.md) | Config of a code-generation run (`[jaffgen]`) and of a `jaffgen.toml` file. |
+
 ## Constants
 
 | Name | Description |

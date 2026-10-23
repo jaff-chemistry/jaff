@@ -31,33 +31,53 @@ from pydantic import BaseModel, ValidationError
 from ..errors import ParserError
 from .base import KeyPath, format_validation_errors
 
+__all__ = [
+    "atomic_tables",
+    "deep_merge",
+    "dump_config",
+    "load_config",
+    "load_layer",
+    "resolve_paths",
+]
+
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 
-def dump_config(config: BaseModel) -> str:
+def dump_config(config: BaseModel, schema: Path | None = None) -> str:
     """Write *config* as TOML text: every key, defaults included.
 
     Paths are written as strings and shielding tables flat, as in a config
-    file; keys whose value is ``None`` (unset optionals) are omitted, as TOML
-    has no null.  The text loads back into an equal config.
+    file; keys whose value is ``None`` (unset optionals) and empty tables are
+    omitted, as TOML has no null; a ``[jaffgen]`` section comes first.  The
+    text loads back into an equal config.
 
     Parameters
     ----------
     config : BaseModel
         A validated config (e.g. a ``JaffgenTomlConfig``).
+    schema : Path or None, optional
+        JSON Schema to name in a leading ``#:schema`` line, for editors.
 
     Returns
     -------
     str
         The TOML text.
     """
-    return tomli_w.dumps(_drop_none(config.model_dump(mode="json")))
+    data = _drop_none(config.model_dump(mode="json"))
+    if "jaffgen" in data:
+        data = {"jaffgen": data.pop("jaffgen"), **data}
+
+    header = f"#:schema {schema}\n\n" if schema is not None else ""
+
+    return header + tomli_w.dumps(data)
 
 
 def _drop_none(value: Any) -> Any:
-    """Copy *value*, leaving out table entries whose value is ``None``."""
+    """Copy *value*, leaving out ``None`` values and empty tables."""
     if isinstance(value, dict):
-        return {key: _drop_none(item) for key, item in value.items() if item is not None}
+        items = {key: _drop_none(item) for key, item in value.items() if item is not None}
+
+        return {key: item for key, item in items.items() if item != {}}
 
     if isinstance(value, list):
         return [_drop_none(item) for item in value]

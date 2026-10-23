@@ -6,8 +6,9 @@ constructor, attributes and methods) and a page per public method or property
 (signature, parameters, returns, raises, examples).  The content is read from
 the numpydoc docstrings with griffe, so the docstrings are the only source.
 
-For each package of :data:`PACKAGES`, its ``__all__`` decides what is
-documented.  The pages go under ``docs/reference/`` and the nav between
+For each package of :data:`PACKAGES` and module of :data:`CONFIG_MODULES`,
+its ``__all__`` decides what is documented; the config modules are listed on,
+and nested under, the ``jaff.config`` page.  The pages go under ``docs/reference/`` and the nav between
 :data:`NAV_BEGIN` and :data:`NAV_END` in ``zensical.toml``; regenerate both
 after changing a docstring or an export with::
 
@@ -41,6 +42,21 @@ PACKAGES: Dict[str, str] = {
     "jaff.errors": "Errors",
 }
 
+#: Modules holding config models (pages under ``reference/config/<title>/``)
+#: and their nav titles.
+CONFIG_MODULES: Dict[str, str] = {
+    "jaff.config.base": "Base",
+    "jaff.config.loader": "Loader",
+    "jaff.core.network.config": "Network",
+    "jaff.core.reaction.config": "Reactions",
+    "jaff.physics.photo_reactions.config": "Radiation",
+    "jaff.physics.photo_reactions.shielding.config": "Shielding",
+    "jaff.physics.dust.config": "Dust",
+    "jaff.physics.thermodynamics.config": "Thermodynamics",
+    "jaff.physics.thermodynamics.eos.config": "EOS",
+    "jaff.cli.jaffgen.config": "jaffgen",
+}
+
 NAV_BEGIN = "# BEGIN generated API nav (python -m jaff._utils.api_docs)"
 NAV_END = "# END generated API nav"
 
@@ -72,10 +88,12 @@ def _griffe(path: str) -> Any:
 class _Package:
     """A documented package's exports, sorted by kind."""
 
-    def __init__(self, name: str, title: str):
+    def __init__(self, name: str, title: str, folder: str, children: List[_Package]):
         self.name = name
         self.title = title
-        self.folder = f"{_ROOT}/{name.split('.')[-1]}"
+        self.folder = folder
+        #: Config modules nested under this package (``jaff.config`` only).
+        self.children = children
         module = importlib.import_module(name)
         self.module = module
         self.classes: List[Tuple[str, str]] = []
@@ -104,7 +122,25 @@ class _Package:
 
 
 def _packages() -> List[_Package]:
-    return [_Package(name, title) for name, title in PACKAGES.items()]
+    config = f"{_ROOT}/config"
+    children = [
+        _Package(name, title, f"{config}/{title.lower()}", [])
+        for name, title in CONFIG_MODULES.items()
+    ]
+
+    return [
+        _Package(
+            name,
+            title,
+            f"{_ROOT}/{name.split('.')[-1]}",
+            children if name == "jaff.config" else [],
+        )
+        for name, title in PACKAGES.items()
+    ]
+
+
+def _with_children(packages: List[_Package]) -> List[_Package]:
+    return [p for package in packages for p in (package, *package.children)]
 
 
 # ----------------------------------------------------------------------
@@ -116,7 +152,7 @@ def api_pages() -> Dict[str, str]:
     """Return every API page, keyed by its path relative to ``docs/``."""
     packages = _packages()
     pages = {f"{_ROOT}/index.md": _root_page(packages)}
-    for package in packages:
+    for package in _with_children(packages):
         pages[f"{package.folder}/index.md"] = _package_page(package)
         for name, path in package.classes:
             folder = f"{package.folder}/{name.lower()}"
@@ -138,25 +174,34 @@ def api_nav() -> str:
     """Return the API section of the ``zensical.toml`` nav, markers included."""
     lines = [NAV_BEGIN, '  { "API Reference" = [', f'    "{_ROOT}/index.md",']
     for package in _packages():
-        short = package.name.split(".")[-1]
-        lines.append(f'    {{ "{package.title}" = [')
-        lines.append(f'      "{package.folder}/index.md",')
-        for name, path in package.classes:
-            folder = f"{package.folder}/{name.lower()}"
-            members = [f'"{folder}/{m}.md"' for m, _ in _public_members(_griffe(path))]
-            lines.append(f'      {{ "{short}.{name}" = [')
-            lines.append(f'        "{folder}/index.md",')
-            lines += [f"        {member}," for member in members]
-            lines.append("      ] },")
-        lines += [f'      "{package.folder}/{name}.md",' for name, _ in package.functions]
-        lines += [
-            f'      "{package.folder}/{name}/index.md",' for name, _ in package.modules
-        ]
-        lines.append("    ] },")
+        lines += _package_nav(package, "    ", f"{package.name.split('.')[-1]}.")
 
     lines += ["  ] },", f"  {NAV_END}"]
 
     return "\n".join(lines)
+
+
+def _package_nav(package: _Package, indent: str, prefix: str) -> List[str]:
+    """Nav lines of *package*: its pages, then its classes' and children's groups."""
+    inner = indent + "  "
+    lines = [f'{indent}{{ "{package.title}" = [', f'{inner}"{package.folder}/index.md",']
+    for name, path in package.classes:
+        folder = f"{package.folder}/{name.lower()}"
+        members = [f'"{folder}/{m}.md"' for m, _ in _public_members(_griffe(path))]
+        lines.append(f'{inner}{{ "{prefix}{name}" = [')
+        lines.append(f'{inner}  "{folder}/index.md",')
+        lines += [f"{inner}  {member}," for member in members]
+        lines.append(f"{inner}] }},")
+    lines += [f'{inner}"{package.folder}/{name}.md",' for name, _ in package.functions]
+    lines += [
+        f'{inner}"{package.folder}/{name}/index.md",' for name, _ in package.modules
+    ]
+    for child in package.children:
+        lines += _package_nav(child, inner, "")
+
+    lines.append(f"{indent}] }},")
+
+    return lines
 
 
 def _front_matter(*tags: str) -> str:
@@ -192,6 +237,12 @@ def _package_page(package: _Package) -> str:
         ("Functions", "Function", [(n, f"{n}.md", p) for n, p in package.functions]),
         ("Modules", "Module", [(n, f"{n}/index.md", p) for n, p in package.modules]),
     ]
+    if package.children:
+        rows = [
+            (c.name, f"{c.folder.removeprefix(package.folder + '/')}/index.md", c.name)
+            for c in package.children
+        ]
+        tables.append(("Config Modules", "Module", rows))
     for title, column, rows in tables:
         if rows:
             body = "\n".join(

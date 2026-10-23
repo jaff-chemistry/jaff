@@ -483,3 +483,43 @@ class TestConfigToml:
 
         assert reloaded.network.label == "x"
         assert reloaded.jaffgen.output_dir == (tmp_path / "out").resolve()
+
+
+class TestCliErrors:
+    """Config and input errors print their message, not a traceback."""
+
+    def test_jaffgen_config_error_is_one_message(self, tmp_path):
+        from typer.testing import CliRunner
+
+        from jaff.cli.jaffgen._engine import app
+
+        cfg = tmp_path / "jaffgen.toml"
+        cfg.write_text('[network.radiation]\nbands = [6.0, 13.6]\nrsl = "c_hat"\n')
+
+        result = CliRunner().invoke(app, ["--config", str(cfg), "--network", DUP])
+
+        assert result.exit_code == 1
+        assert "network.radiation.rsl: unknown key" in result.output
+        assert "Traceback" not in result.output
+        assert not isinstance(result.exception, ParserError)
+
+    def test_jaffx_config_error_is_one_message(self):
+        from typer.testing import CliRunner
+
+        from jaff.cli.jaffx._engine import app
+
+        result = CliRunner().invoke(
+            app,
+            [
+                "get",
+                "num-species",
+                "--network",
+                DUP,
+                "--set",
+                "network.reactions.t_cutoff=clamp",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "network.reactions.t_cutoff" in result.output
+        assert not isinstance(result.exception, ParserError)

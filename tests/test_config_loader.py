@@ -417,3 +417,18 @@ class TestDumpConfig:
             "type": "leiden",
             "shielded_by": ["self"],
         }
+
+
+class TestDumpLayout:
+    def test_jaffgen_section_comes_first(self):
+        text = dump_config(JaffgenTomlConfig())
+
+        assert text.index("[jaffgen]") < text.index("[network]")
+
+    def test_empty_tables_are_left_out(self):
+        assert "[network.reactions.reaction]" not in dump_config(JaffgenTomlConfig())
+
+    def test_schema_line(self):
+        assert dump_config(
+            JaffgenTomlConfig(), schema=Path("/s/jaffgen.schema.json")
+        ).startswith("#:schema /s/jaffgen.schema.json\n")

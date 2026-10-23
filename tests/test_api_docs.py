@@ -3,7 +3,10 @@
 
 import pytest
 
+import importlib
+
 from jaff._utils.api_docs import (
+    CONFIG_MODULES,
     DOCS_DIR,
     NAV_BEGIN,
     NAV_END,
@@ -107,6 +110,41 @@ class TestMethodPage:
 
         assert "`#!python Network.label`" in page
         assert "*property*" in page
+
+
+class TestConfigModules:
+    """Each module's config models get pages under ``reference/config/``."""
+
+    @pytest.mark.parametrize("module", CONFIG_MODULES)
+    def test_exports_are_listed(self, module):
+        exports = importlib.import_module(module).__all__
+
+        assert exports and all(isinstance(name, str) for name in exports)
+
+    def test_module_page(self, pages):
+        page = pages["reference/config/network/index.md"]
+
+        assert "\n# jaff.core.network.config\n" in page
+        assert "| [`NetworkConfig`](networkconfig/index.md) |" in page
+
+    def test_model_page_lists_keys(self, pages):
+        page = pages["reference/config/dust/dustconfig/index.md"]
+
+        assert "`jaff.physics.dust.config.DustConfig`" in page
+        assert "| `rv` |" in page
+
+    def test_listed_on_config_page(self, pages):
+        page = pages["reference/config/index.md"]
+
+        assert "| [`jaff.core.network.config`](network/index.md) |" in page
+
+    def test_nested_in_configuration_nav(self):
+        nav = api_nav()
+        group = nav[nav.index('{ "Configuration" = [') : nav.index('{ "Errors" = [')]
+
+        assert '{ "Network" = [' in group
+        assert '{ "NetworkConfig" = [' in group
+        assert '"reference/config/network/index.md",' in group
 
 
 def test_rest_markup_becomes_markdown(pages):

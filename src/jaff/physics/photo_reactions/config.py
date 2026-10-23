@@ -9,6 +9,12 @@ from pydantic import BeforeValidator, field_validator, model_validator
 
 from ...config.base import ConfigModel, lower
 
+__all__ = [
+    "BackgroundField",
+    "RadiationConfig",
+    "RadiationMode",
+]
+
 
 RadiationMode = Annotated[Literal["nph", "u"], BeforeValidator(lower)]
 BackgroundField = Annotated[
@@ -35,7 +41,7 @@ class RadiationConfig(ConfigModel):
     Attributes
     ----------
     bands : list of (float or "inf")
-        Ordered photon-energy band edges in eV, at least two; ``"inf"`` is
+        Increasing photon-energy band edges in eV, at least two; ``"inf"`` is
         allowed as the last edge only.
     profile_index : float or list of float
         Spectral index *α* of the photon-number spectrum ``n(E) ∝ E^(α-2)``:
@@ -63,12 +69,16 @@ class RadiationConfig(ConfigModel):
     @field_validator("bands", mode="after")
     @classmethod
     def _check_bands(cls, bands: List[float | str]) -> List[float | str]:
-        """At least two edges, with ``"inf"`` only as the last one."""
+        """At least two increasing edges, with ``"inf"`` only as the last one."""
         if len(bands) < 2:
             raise ValueError(f"need at least two edges (one band), got {bands}")
 
         if "inf" in bands[:-1]:
             raise ValueError(f"'inf' is allowed as the last edge only, got {bands}")
+
+        edges = [float("inf") if edge == "inf" else float(edge) for edge in bands]
+        if any(low >= high for low, high in zip(edges, edges[1:])):
+            raise ValueError(f"band edges must increase, got {bands}")
 
         return bands
 

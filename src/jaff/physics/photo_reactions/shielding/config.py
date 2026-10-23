@@ -27,6 +27,12 @@ from ....config.base import (
 )
 from ....errors import ParserError
 
+__all__ = [
+    "ShieldingConfig",
+    "ShieldingParams",
+    "check_shielding",
+]
+
 
 class ShieldingParams(ConfigModel):
     """Base of the settings of one shielding type (every key but ``type``).

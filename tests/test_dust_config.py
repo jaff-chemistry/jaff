@@ -53,3 +53,12 @@ class TestDustConfig:
     def test_rejects_old_flat_keys(self, key):
         with pytest.raises(ValidationError, match=key):
             DustConfig.model_validate({key: 6.0})
+
+
+class TestPhotoelectricBand:
+    @pytest.mark.parametrize("low, high", [(13.6, 6.0), (6.0, 6.0)])
+    def test_low_must_be_below_high(self, low, high):
+        with pytest.raises(ValidationError, match="threshold_low"):
+            DustConfig.model_validate(
+                {"pe": {"threshold_low": low, "threshold_high": high}}
+            )

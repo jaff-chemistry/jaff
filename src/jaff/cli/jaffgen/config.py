@@ -14,6 +14,12 @@ from ...config.base import ConfigModel, PathLike
 from ...config.loader import deep_merge, load_config, load_layer, resolve_paths
 from ...core.network.config import JaffTomlConfig, jaff_toml_for
 
+__all__ = [
+    "JaffgenConfig",
+    "JaffgenTomlConfig",
+    "load_jaffgen_config",
+]
+
 
 class JaffgenConfig(ConfigModel):
     """Code-generation run (``[jaffgen]``, ``jaffgen.toml`` only).

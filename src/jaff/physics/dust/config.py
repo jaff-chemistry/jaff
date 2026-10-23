@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import BeforeValidator, Field, field_validator
+from pydantic import BeforeValidator, Field, field_validator, model_validator
 
 from ...config.base import ConfigModel, lower
+
+__all__ = [
+    "DUST_RV",
+    "DustConfig",
+    "DustReduction",
+    "PhotoelectricEmissionConfig",
+]
 
 
 DustReduction = Annotated[
@@ -23,11 +30,22 @@ class PhotoelectricEmissionConfig(ConfigModel):
     threshold_low : float
         Lower edge of the photoelectric band in eV (grain work function).
     threshold_high : float
-        Upper edge of the photoelectric band in eV.
+        Upper edge of the photoelectric band in eV, above ``threshold_low``.
     """
 
     threshold_low: float = 6.0
     threshold_high: float = 13.6
+
+    @model_validator(mode="after")
+    def _check_band(self) -> Self:
+        """The band is not empty: ``threshold_low`` below ``threshold_high``."""
+        if self.threshold_low >= self.threshold_high:
+            raise ValueError(
+                f"threshold_low ({self.threshold_low}) must be below "
+                f"threshold_high ({self.threshold_high})"
+            )
+
+        return self
 
 
 #: R_V values with a tabulated dust model.

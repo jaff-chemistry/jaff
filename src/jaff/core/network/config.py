@@ -19,6 +19,14 @@ from ...physics.thermodynamics.config import ThermodynamicsConfig
 from ..reaction.config import ReactionsConfig
 from ._spec import NetworkSpec
 
+__all__ = [
+    "ConfigLayer",
+    "JaffTomlConfig",
+    "NetworkConfig",
+    "jaff_toml_for",
+    "load_network_config",
+]
+
 
 class NetworkConfig(ConfigModel):
     """Network (``[network]``).

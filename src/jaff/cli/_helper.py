@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import tomllib
 from enum import Enum
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Tuple, TypeVar, cast
+
+import typer
 
 from ..config.loader import deep_merge
 from ..errors import ParserError
@@ -30,6 +33,38 @@ CLI_KEYS: Dict[str, Tuple[str, ...]] = {
 NETWORK_KEYS: Dict[str, Tuple[str, ...]] = {
     option: path for option, path in CLI_KEYS.items() if path[0] == "network"
 }
+
+
+_CommandT = TypeVar("_CommandT", bound=Callable[..., Any])
+
+
+def reports_errors(command: _CommandT) -> _CommandT:
+    """Make a CLI command print input errors instead of a traceback.
+
+    A :class:`~jaff.errors.ParserError` (a bad config, network or option) or a
+    missing file is printed to stderr and the command exits with status 1;
+    any other exception is a bug and propagates with its traceback.
+
+    Parameters
+    ----------
+    command : callable
+        The typer command function; its signature is kept.
+
+    Returns
+    -------
+    callable
+        The wrapped command.
+    """
+
+    @functools.wraps(command)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return command(*args, **kwargs)
+        except (ParserError, FileNotFoundError) as error:
+            typer.echo(f"Error: {error}", err=True)
+            raise typer.Exit(1) from None
+
+    return cast(_CommandT, wrapper)
 
 
 class DuplicatePolicy(str, Enum):

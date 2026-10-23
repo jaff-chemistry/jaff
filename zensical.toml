@@ -390,6 +390,107 @@ nav = [
       "reference/config/list_subdirs.md",
       "reference/config/predefined_networks.md",
       "reference/config/predefined_templates.md",
+      { "Base" = [
+        "reference/config/base/index.md",
+        { "ConfigModel" = [
+          "reference/config/base/configmodel/index.md",
+        ] },
+        "reference/config/base/attribute_descriptions.md",
+        "reference/config/base/dotted.md",
+        "reference/config/base/field_descriptions.md",
+        "reference/config/base/format_validation_errors.md",
+        "reference/config/base/lower.md",
+        "reference/config/base/overlay.md",
+      ] },
+      { "Loader" = [
+        "reference/config/loader/index.md",
+        "reference/config/loader/atomic_tables.md",
+        "reference/config/loader/deep_merge.md",
+        "reference/config/loader/dump_config.md",
+        "reference/config/loader/load_config.md",
+        "reference/config/loader/load_layer.md",
+        "reference/config/loader/resolve_paths.md",
+      ] },
+      { "Network" = [
+        "reference/config/network/index.md",
+        { "JaffTomlConfig" = [
+          "reference/config/network/jafftomlconfig/index.md",
+        ] },
+        { "NetworkConfig" = [
+          "reference/config/network/networkconfig/index.md",
+        ] },
+        "reference/config/network/jaff_toml_for.md",
+        "reference/config/network/load_network_config.md",
+      ] },
+      { "Reactions" = [
+        "reference/config/reactions/index.md",
+        { "PhotoConfig" = [
+          "reference/config/reactions/photoconfig/index.md",
+        ] },
+        { "ReactionConfig" = [
+          "reference/config/reactions/reactionconfig/index.md",
+        ] },
+        { "ReactionsConfig" = [
+          "reference/config/reactions/reactionsconfig/index.md",
+          "reference/config/reactions/reactionsconfig/resolve.md",
+        ] },
+      ] },
+      { "Radiation" = [
+        "reference/config/radiation/index.md",
+        { "RadiationConfig" = [
+          "reference/config/radiation/radiationconfig/index.md",
+        ] },
+      ] },
+      { "Shielding" = [
+        "reference/config/shielding/index.md",
+        { "ShieldingConfig" = [
+          "reference/config/shielding/shieldingconfig/index.md",
+        ] },
+        { "ShieldingParams" = [
+          "reference/config/shielding/shieldingparams/index.md",
+        ] },
+        "reference/config/shielding/check_shielding.md",
+      ] },
+      { "Dust" = [
+        "reference/config/dust/index.md",
+        { "DustConfig" = [
+          "reference/config/dust/dustconfig/index.md",
+        ] },
+        { "PhotoelectricEmissionConfig" = [
+          "reference/config/dust/photoelectricemissionconfig/index.md",
+        ] },
+      ] },
+      { "Thermodynamics" = [
+        "reference/config/thermodynamics/index.md",
+        { "ThermodynamicsConfig" = [
+          "reference/config/thermodynamics/thermodynamicsconfig/index.md",
+        ] },
+      ] },
+      { "EOS" = [
+        "reference/config/eos/index.md",
+        { "FermiDegenerateEosConfig" = [
+          "reference/config/eos/fermidegenerateeosconfig/index.md",
+        ] },
+        { "IdealEosConfig" = [
+          "reference/config/eos/idealeosconfig/index.md",
+        ] },
+        { "MultiGammaEosConfig" = [
+          "reference/config/eos/multigammaeosconfig/index.md",
+        ] },
+        { "RelativisticFermiDegenerateEosConfig" = [
+          "reference/config/eos/relativisticfermidegenerateeosconfig/index.md",
+        ] },
+      ] },
+      { "jaffgen" = [
+        "reference/config/jaffgen/index.md",
+        { "JaffgenConfig" = [
+          "reference/config/jaffgen/jaffgenconfig/index.md",
+        ] },
+        { "JaffgenTomlConfig" = [
+          "reference/config/jaffgen/jaffgentomlconfig/index.md",
+        ] },
+        "reference/config/jaffgen/load_jaffgen_config.md",
+      ] },
     ] },
     { "Errors" = [
       "reference/errors/index.md",

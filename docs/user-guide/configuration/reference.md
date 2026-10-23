@@ -60,6 +60,8 @@ Each key applies to every reaction, unless a reaction's own table
 
 Photo-reaction settings (`[network.reactions.photo]`).
 
+`None` means unset: the value comes from the global settings.
+
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `pi_database` | `"norad"` or `"verner"` or `"leiden"` | `"norad"` | Photoionisation cross-section database: `"norad"`, `"verner"` or `"leiden"`. |
@@ -112,7 +114,7 @@ spectrum converges is checked by the radiation field itself.
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `bands` | array of number or `"inf"` | required | Ordered photon-energy band edges in eV, at least two; `"inf"` is allowed as the last edge only. |
+| `bands` | array of number or `"inf"` | required | Increasing photon-energy band edges in eV, at least two; `"inf"` is allowed as the last edge only. |
 | `profile_index` | number or array of number | `0.0` | Spectral index *α* of the photon-number spectrum `n(E) ∝ E^(α-2)`: one for every band, or a list with one per band. |
 | `mode` | `"nph"` or `"u"` | `"nph"` | Tracked quantity: `"nph"` (photon number density) or `"u"` (energy density). |
 | `c` | number or string | `29979245800.0` | Speed of light in cm/s, or a symbol name (e.g. `"c_hat"`) for a reduced speed of light. |
@@ -137,7 +139,7 @@ Photoelectric emission of the dust (`[network.dust.pe]`).
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `threshold_low` | number | `6.0` | Lower edge of the photoelectric band in eV (grain work function). |
-| `threshold_high` | number | `13.6` | Upper edge of the photoelectric band in eV. |
+| `threshold_high` | number | `13.6` | Upper edge of the photoelectric band in eV, above `threshold_low`. |
 
 ## `[network.thermodynamics]`
 

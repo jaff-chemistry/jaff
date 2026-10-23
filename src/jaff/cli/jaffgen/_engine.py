@@ -41,11 +41,12 @@ from ... import Network
 from ...codegen import TemplateParser
 from ...common import print_motd
 from ...config import TEMPLATES_DIR, predefined_templates
+from ...config.json_schema import SCHEMA_DIR
 from ...config.loader import dump_config
 from ...core.network.config import JaffTomlConfig
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
-from .._helper import DuplicatePolicy, command_line_layer, funcfile_arg
+from .._helper import DuplicatePolicy, command_line_layer, funcfile_arg, reports_errors
 from ._structs import DEFAULT_OUTPUT, ResolvedPath, State
 from .config import load_jaffgen_config
 
@@ -341,7 +342,8 @@ class JaffGen:
         loadable again with ``--config``.
         """
         path = self.state.output_dir.abspath / "config.toml"
-        path.write_text(dump_config(self.state.config))
+        schema = SCHEMA_DIR / "jaffgen.schema.json"
+        path.write_text(dump_config(self.state.config, schema=schema))
         self.logger.info(f"[cyan]{path.name}[/] created at {path.parent}")
 
     def handle_data_tables(self) -> None:
@@ -434,6 +436,7 @@ app = typer.Typer(
 
 
 @app.command()
+@reports_errors
 def generate(
     network: Optional[str] = typer.Option(
         None,

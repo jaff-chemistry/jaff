@@ -68,7 +68,12 @@ def process_species(
     pass
 ```
 
-### Docstrings (Google Style)
+### Docstrings (numpydoc)
+
+Docstrings are the only source of the API reference (`docs/reference/`, generated
+by `python -m jaff._utils.api_docs`) and of the config key descriptions (schemas and
+`docs/user-guide/configuration/reference.md`). Use numpydoc sections; document
+config keys in an `Attributes` section, worded for someone editing a TOML file.
 
 ```python
 def compute_rates(network: Network, temperature: float) -> np.ndarray:
@@ -77,15 +82,22 @@ def compute_rates(network: Network, temperature: float) -> np.ndarray:
     This function calculates rate coefficients for all reactions
     in the network at the specified temperature.
 
-    Args:
-        network: Chemical reaction network
-        temperature: Gas temperature in Kelvin
+    Parameters
+    ----------
+    network : Network
+        Chemical reaction network.
+    temperature : float
+        Gas temperature in Kelvin.
 
-    Returns:
-        Array of rate coefficients in cm³/s
+    Returns
+    -------
+    np.ndarray
+        Rate coefficients in cm^3 s^-1.
 
-    Raises:
-        ValueError: If temperature is negative
+    Raises
+    ------
+    ValueError
+        If temperature is negative.
     """
 ```
 

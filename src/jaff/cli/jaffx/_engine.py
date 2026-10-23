@@ -43,7 +43,13 @@ import typer
 from ... import Network
 from ...common import print_motd
 from ...io import JaffLogger
-from .._helper import NETWORK_KEYS, DuplicatePolicy, command_line_layer, funcfile_arg
+from .._helper import (
+    NETWORK_KEYS,
+    DuplicatePolicy,
+    command_line_layer,
+    funcfile_arg,
+    reports_errors,
+)
 
 
 class JaffX:
@@ -253,6 +259,7 @@ def _export_table_command(
 
 
 @export_app.command("txt")
+@reports_errors
 def export_txt(
     network: str = _NETWORK,
     file: str = _FILE,
@@ -337,6 +344,7 @@ def export_txt(
 
 
 @export_app.command("hdf5")
+@reports_errors
 def export_hdf5(
     network: str = _NETWORK,
     file: str = _FILE,
@@ -421,6 +429,7 @@ def export_hdf5(
 
 
 @export_app.command("jaff")
+@reports_errors
 def export_jaff(
     network: str = _NETWORK,
     file: str = _FILE,
@@ -447,6 +456,7 @@ def export_jaff(
 
 
 @get_app.command("num-species")
+@reports_errors
 def get_num_species(
     network: str = _NETWORK,
     label: Optional[str] = _LABEL,
@@ -471,6 +481,7 @@ def get_num_species(
 
 
 @get_app.command("num-reactions")
+@reports_errors
 def get_num_reactions(
     network: str = _NETWORK,
     label: Optional[str] = _LABEL,

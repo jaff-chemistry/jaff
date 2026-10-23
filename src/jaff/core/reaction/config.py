@@ -15,6 +15,15 @@ from pydantic import BeforeValidator, field_validator, model_validator
 from ...config.base import ConfigModel, lower, overlay
 from ...physics.photo_reactions.shielding.config import ShieldingConfig, check_shielding
 
+__all__ = [
+    "DuplicatePolicy",
+    "PhotoConfig",
+    "PiDatabase",
+    "ReactionConfig",
+    "ReactionsConfig",
+    "TCutoff",
+]
+
 
 TCutoff = Annotated[Literal["clip", "extrapolate"], BeforeValidator(lower)]
 DuplicatePolicy = Annotated[
@@ -25,6 +34,8 @@ PiDatabase = Annotated[Literal["norad", "verner", "leiden"], BeforeValidator(low
 
 class PhotoConfig(ConfigModel):
     """Photo-reaction settings (``[network.reactions.photo]``).
+
+    ``None`` means unset: the value comes from the global settings.
 
     Attributes
     ----------
@@ -39,8 +50,6 @@ class PhotoConfig(ConfigModel):
         Look cross sections up under the proxy reaction (``CHx`` → ``CH``).
     shielding : ShieldingConfig or None
         Line shielding of the rate; without it, the rate is not shielded.
-
-    ``None`` means unset: the value comes from the global settings.
     """
 
     pi_database: PiDatabase | None = None
@@ -61,6 +70,8 @@ _DEFAULT_PHOTO = PhotoConfig(
 class ReactionConfig(ConfigModel):
     """Settings of one reaction (``[network.reactions.reaction."<serialized>"]``).
 
+    ``None`` means unset: the value comes from the global settings.
+
     Attributes
     ----------
     duplicate_policy : str or None
@@ -71,8 +82,6 @@ class ReactionConfig(ConfigModel):
         ``"extrapolate"``.
     photo : PhotoConfig or None
         Photo-reaction settings.
-
-    ``None`` means unset: the value comes from the global settings.
     """
 
     duplicate_policy: DuplicatePolicy | None = None

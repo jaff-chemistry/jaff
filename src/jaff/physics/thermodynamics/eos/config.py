@@ -12,6 +12,16 @@ from pydantic import BeforeValidator, Discriminator, Field, Tag
 
 from ....config.base import ConfigModel, lower
 
+__all__ = [
+    "AdiabaticIndex",
+    "EOS_TYPES",
+    "EosConfig",
+    "FermiDegenerateEosConfig",
+    "IdealEosConfig",
+    "MultiGammaEosConfig",
+    "RelativisticFermiDegenerateEosConfig",
+]
+
 
 #: Adiabatic index; must exceed one.
 AdiabaticIndex = Annotated[float, Field(gt=1.0)]

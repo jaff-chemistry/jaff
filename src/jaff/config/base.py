@@ -16,6 +16,19 @@ from typing import Annotated, Any, ClassVar, Dict, List, Tuple, TypeVar
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, ValidationError
 
+__all__ = [
+    "ConfigModel",
+    "KeyPath",
+    "LowerStr",
+    "PathLike",
+    "attribute_descriptions",
+    "dotted",
+    "field_descriptions",
+    "format_validation_errors",
+    "lower",
+    "overlay",
+]
+
 
 def lower(value: Any) -> Any:
     """Lower-case *value* when it is a string, so choices are case-insensitive."""
