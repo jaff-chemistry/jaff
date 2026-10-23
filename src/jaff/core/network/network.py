@@ -34,6 +34,7 @@ from sympy import (
 )
 
 from ...common import is_jaff_file, load_mass_dict, print_motd, resolve_dependencies
+from ...drivers import HDF5
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
 from ...io._io import JaffProps, from_jaff_file, to_jaff_file, write_data_table
@@ -254,7 +255,6 @@ class Network:
         eos_props: EosConfig | Mapping[str, Any] | None = None,
         use_jaff_toml: bool = True,
         _from_cli: bool = False,
-        _metadata: dict[str, Any] = {},
     ):
         """Load a reaction network from *fname*.
 
@@ -350,7 +350,7 @@ class Network:
             use_jaff_toml=use_jaff_toml,
             overrides=overrides,
         )
-        self.spec: NetworkSpec = NetworkSpec(fname, self.config, _from_cli, _metadata)
+        self.spec: NetworkSpec = NetworkSpec(fname, self.config, _from_cli)
 
         jaff_props: JaffProps = {}  # type: ignore
         loaded_from_jaff_file = is_jaff_file(self.spec.fname)
@@ -806,6 +806,35 @@ class Network:
             raise ParserError(f"Rate expression is not an Expr: {rate_expr}")
 
         return rate_expr
+
+    def write_shielding_tables(self, directory: str | Path) -> list[Path]:
+        """Write the data tables of the reactions' shielding models into *directory*.
+
+        Models such as Leiden shielding build a per-reaction table the
+        generated code interpolates over (``photo.shielding.tables``).
+
+        Parameters
+        ----------
+        directory : str | Path
+            Output directory; must exist.
+
+        Returns
+        -------
+        list[Path]
+            The files written, in reaction order.
+        """
+        written: list[Path] = []
+        for reaction in self.reactions:
+            shielding = reaction.photo.shielding if reaction.photo is not None else None
+            if shielding is None:
+                continue
+
+            for name, table in shielding.tables.items():
+                path = Path(directory) / name
+                HDF5().from_dict(str(path), table, mode="w")
+                written.append(path)
+
+        return written
 
     def to_jaff(self, filename: str | Path):
         """Serialise this network to a binary ``.jaff`` file.

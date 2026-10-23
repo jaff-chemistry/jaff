@@ -67,8 +67,8 @@ class Leiden(ShieldingFunction):
 
         Extracts the column-density grid and one shielding-factor column per
         species in the ``shielded_by`` setting from
-        ``data/shielding/leiden.hdf5``, writes them to a per-reaction
-        ``shielding_<reaction>.hdf5`` in the generator output directory, and
+        ``data/shielding/leiden.hdf5``, keeps them on the reaction as its
+        ``shielding_<reaction>.hdf5`` table (``photo.shielding.tables``), and
         returns the product of one
         ``interp_<index>_shielding_<species>(ncol_<species>)`` interpolation
         call per shielding species.
@@ -98,13 +98,10 @@ class Leiden(ShieldingFunction):
         )
         h5dict = {**ncol, **shielding_table}
 
-        # Emit a per-reaction shielding table the generated code interpolates over.
-        output_dir = network.spec._metadata["jaffgen_object"].jaffgen_config["output_dir"]
-        h5obj.from_dict(
-            f"{output_dir}/shielding_{reaction.serialized}.hdf5",
-            h5dict,
-            mode="w",
-        )
+        # Keep the per-reaction table the generated code interpolates over.
+        assert reaction.photo is not None and reaction.photo.shielding is not None
+        tables = reaction.photo.shielding.tables
+        tables[f"shielding_{reaction.serialized}.hdf5"] = h5dict
 
         # Total factor = product of one interpolation call per shielding species.
         from jaff.core import NetworkSymbols

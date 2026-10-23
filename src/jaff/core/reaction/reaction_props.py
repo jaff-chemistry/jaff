@@ -132,14 +132,18 @@ class ShieldingProps:
         Shielding model (e.g. ``"leiden"``, ``"db1996"``).
     props : dict[str, Any]
         Model-specific settings (e.g. ``shielded_by``, ``min_ncol``) as given
-        by the user; a ``value`` entry fixes the factor instead of evaluating
-        the model.
+        by the user.
+    tables : dict[str, Any]
+        Data tables the model built for the generated code to interpolate
+        over, keyed by file name (e.g. ``shielding_<reaction>.hdf5``); written
+        out by :meth:`~jaff.core.network.Network.write_shielding_tables`.
     """
 
     def __init__(self, type: str, props: Dict[str, Any] | None = None):
         """Store the model; ``props=None`` (default) starts empty."""
         self.type: str = type
         self.props: Dict[str, Any] = props if props is not None else {}
+        self.tables: Dict[str, Any] = {}
 
 
 @dataclass

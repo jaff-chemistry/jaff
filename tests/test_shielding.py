@@ -125,3 +125,70 @@ class TestNetworkShielding:
     def test_unknown_setting_is_parser_error(self, shielded_network):
         with pytest.raises(ParserError, match="foo"):
             shielded_network({"type": "hg2015", "foo": 1.0})
+
+
+CO_PHOTO = "CO -> C + O  []  PHOTO, 11.1\n"
+CO_KEY = "CO._PHOTON__C.O"
+LEIDEN = {"type": "leiden", "shielded_by": ["self", "H2"]}
+
+
+@pytest.fixture
+def leiden_network(make_network):
+    """CO photodissociation with Leiden shielding, built without jaffgen."""
+    config = {
+        "network": {"reactions": {"reaction": {CO_KEY: {"photo": {"shielding": LEIDEN}}}}}
+    }
+    with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
+        return make_network(
+            CO_PHOTO,
+            name="co.jet",
+            funcfile=False,
+            radiation_props=RadiationConfig(bands=[6.0, 13.6]),
+            config=config,
+        )
+
+
+class TestLeidenTables:
+    def test_table_is_kept_on_the_reaction(self, leiden_network):
+        shielding = leiden_network.reactions[CO_KEY, "photo"].photo.shielding
+
+        (name,) = shielding.tables
+        assert name == f"shielding_{CO_KEY}.hdf5"
+        assert {"N", "self", "H2"} <= set(shielding.tables[name])
+
+    def test_network_writes_the_tables(self, leiden_network, tmp_path):
+        written = leiden_network.write_shielding_tables(tmp_path)
+
+        assert written == [tmp_path / f"shielding_{CO_KEY}.hdf5"]
+        assert written[0].exists()
+
+    def test_network_without_shielding_writes_nothing(self, make_network, tmp_path):
+        net = make_network("H + H -> H2 [10,1000] 1e-10\n", name="n.dat", funcfile=False)
+
+        assert net.write_shielding_tables(tmp_path) == []
+
+
+def test_jaffgen_writes_shielding_tables_to_output(tmp_path):
+    from typer.testing import CliRunner
+
+    from jaff.cli.jaffgen._engine import app
+
+    (tmp_path / "co.jet").write_text(CO_PHOTO)
+    (tmp_path / "rates.py").write_text(
+        "$$JAFF REPEAT idx, rate IN rates\nk[$idx$] = $rate$\n$$JAFF END\n"
+    )
+    cfg = tmp_path / "jaffgen.toml"
+    cfg.write_text(
+        '[jaffgen]\nnetwork_file = "co.jet"\ninput_files = ["rates.py"]\n'
+        "[network]\nfuncfile = false\n"
+        "[network.radiation]\nbands = [6.0, 13.6]\n"
+        f'[network.reactions.reaction."{CO_KEY}".photo.shielding]\n'
+        'shielded_by = ["self"]\n'
+    )
+
+    out = tmp_path / "out"
+    with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
+        result = CliRunner().invoke(app, ["--config", str(cfg), "--outdir", str(out)])
+
+    assert result.exit_code == 0, result.output
+    assert (out / f"shielding_{CO_KEY}.hdf5").exists()

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from ...config import NETWORKS_DIR, predefined_networks
 from ...errors import ParserError
@@ -51,8 +51,6 @@ class NetworkSpec:
         Whether ``n_<element>_nuc`` symbols expand into element-nucleus sums.
     _from_cli : bool
         Internal flag marking construction from the command-line interface.
-    _metadata : dict
-        Internal per-reaction/network metadata carried through construction.
     """
 
     def __init__(
@@ -60,7 +58,6 @@ class NetworkSpec:
         fname: str | Path,
         config: NetworkConfig,
         _from_cli: bool,
-        _metadata: dict[str, Any],
     ):
         self.fname: Path = self._resolve_network_path(fname)
         self.config: NetworkConfig = config
@@ -72,7 +69,6 @@ class NetworkSpec:
         self.aux_funcs: dict[str, AuxiliaryFunctionProps] = self._load_aux_funcs()
         self.expand_nuclei: bool = config.expand_nuclei
         self._from_cli: bool = _from_cli
-        self._metadata: dict[str, Any] = _metadata
 
     def _load_aux_funcs(self) -> dict[str, AuxiliaryFunctionProps]:
         """Detect and parse the auxiliary ``.jfunc`` file into a dict.

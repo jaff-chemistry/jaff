@@ -78,9 +78,6 @@ class JaffGen:
         The loaded config and the files and directory of this run.
     net : Network
         The reaction network built from the config.
-    jaffgen_config : dict
-        Small back-reference payload (``{"output_dir": Path}``) read by the
-        shielding code via ``network.spec._metadata["jaffgen_object"]``.
 
     Raises
     ------
@@ -107,14 +104,12 @@ class JaffGen:
         self.logger: logging.Logger = JaffLogger().get_logger()
         self.args: SimpleNamespace = args
         self.state: State = State()
-        # Consumed by the shielding code (leiden.py) through the metadata
-        # back-reference: network.spec._metadata["jaffgen_object"].
-        self.jaffgen_config: dict[str, Any] = {}
 
         print_motd("jaffgen")
         self.parse_args()
         self.net: Network = self.build_network()
         self.handle_data_tables()
+        self.net.write_shielding_tables(self.state.output_dir.abspath)
         self.process_files()
         self.write_config()
 
@@ -155,8 +150,6 @@ class JaffGen:
         if not self.state.output_files:
             raise RuntimeError("No valid input file/folder/template have been supplied")
 
-        # Publish the output dir for the shielding back-reference, then create it.
-        self.jaffgen_config["output_dir"] = self.state.output_dir.abspath
         self.state.output_dir.abspath.mkdir(parents=True, exist_ok=True)
 
     def load_config(self, config_file: Path | None, cli: dict[str, Any]) -> None:
@@ -338,8 +331,6 @@ class JaffGen:
             config=JaffTomlConfig(network=config.network),
             use_jaff_toml=False,
             _from_cli=True,
-            # The shielding code reaches the output directory through it.
-            _metadata={"jaffgen_object": self},
         )
 
     def write_config(self) -> None:
