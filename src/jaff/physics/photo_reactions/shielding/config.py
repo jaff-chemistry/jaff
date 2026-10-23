@@ -9,7 +9,12 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, Dict, List
 
-from pydantic import GetJsonSchemaHandler, ValidationError, model_validator
+from pydantic import (
+    GetJsonSchemaHandler,
+    ValidationError,
+    model_serializer,
+    model_validator,
+)
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import CoreSchema
 
@@ -65,6 +70,11 @@ class ShieldingConfig(ConfigModel):
         params = {k: v for k, v in data.items() if k != "type"}
 
         return {"type": data.get("type", "leiden"), "params": params}
+
+    @model_serializer
+    def _flat(self) -> Dict[str, Any]:
+        """Dump as the flat TOML table it is written as."""
+        return {"type": self.type, **self.params}
 
     @classmethod
     def __get_pydantic_json_schema__(
