@@ -35,7 +35,7 @@ This is a complete reference for all public APIs in JAFF.
 
     Physical constants and photo cross-section lookup.
 
-    [:octicons-arrow-right-24: jaff.physics](physics/index.md)
+    [:octicons-arrow-right-24: jaff.physics](../reference/physics/index.md)
 
 - :phosphor-chart-line:{ .sm .middle } **Plotting**
 

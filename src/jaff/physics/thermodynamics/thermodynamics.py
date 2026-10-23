@@ -19,28 +19,87 @@ class Thermodynamics:
     """Thermal state equations of a network: heating rates, EOS and ``dT/dt``.
 
     Bound to one :class:`~jaff.core.network.Network`; reachable as
-    ``net.thermodynamics``. All attributes are built lazily and cached.
-
-    Parameters
-    ----------
-    net : Network
-        Network whose reactions, symbols and EOS properties are used.
-    dEdt_extra : sympy.Expr, optional
-        Stored volumetric non-reactive heating/cooling rate (e.g. restored from a
-        ``.jaff`` file). When ``None`` it is built from the ``heatingcoolingrate``
-        auxiliary function.
+    ``net.thermodynamics``. All attributes are built lazily on first access and
+    cached.
 
     Attributes
     ----------
     eos : InternalEnergy
-        Internal energy for the configured equation of state.
-    dEdt_chemical, dEdt_extra, dEdt_tot : DEDt
-        Chemical, non-reactive and total heating/cooling rates.
-    dTdt_chemical, dTdt_extra, dTdt_tot : sympy.Expr
-        Corresponding temperature rates [K s⁻¹].
+        Internal energy for the configured equation of state
+        (``net.config.thermodynamics.eos``; an ideal gas with
+        ``gamma = 1.6666666666667`` by default).
+    dEdt_chemical : DEDt
+        Chemical heating/cooling rate ``Σ_r dE_r F_r`` [erg cm⁻³ s⁻¹].
+    dEdt_extra : DEDt
+        Non-reactive heating/cooling rate from the ``heatingcoolingrate``
+        auxiliary function (``0`` when absent) [erg cm⁻³ s⁻¹].
+    dEdt_tot : DEDt
+        ``dEdt_chemical + dEdt_extra`` [erg cm⁻³ s⁻¹].
+    dTdt_chemical : sympy.Expr
+        ``(Ė_chemical − Σ_i ∂E/∂n_i · ṅ_i) / (∂E/∂T)`` [K s⁻¹].
+    dTdt_extra : sympy.Expr
+        ``Ė_extra / (∂E/∂T)`` [K s⁻¹].
+    dTdt_tot : sympy.Expr
+        ``dTdt_chemical + dTdt_extra``, built as one fraction [K s⁻¹].
+
+    Notes
+    -----
+    ``E = E(T, n)`` is the volumetric internal energy :attr:`eos`. The
+    temperature rates follow from ``Ė = ∂E/∂T · Ṫ + Σ_i ∂E/∂n_i · ṅ_i``:
+
+    ```
+    dTdt_chemical = (Ė_chemical − Σ_i ∂E/∂n_i · ṅ_i) / (∂E/∂T)
+    dTdt_extra    =  Ė_extra / (∂E/∂T)
+    dTdt_tot      = (Ė_tot − Σ_i ∂E/∂n_i · ṅ_i) / (∂E/∂T)
+    ```
+
+    Only reactions change the particle numbers, so the composition term
+    ``Σ_i ∂E/∂n_i · ṅ_i`` belongs to the chemical part.
+
+    :class:`~jaff.physics.thermodynamics.internal_energy.DEDt` wraps a
+    volumetric rate and offers the same forms as
+    :class:`~jaff.physics.thermodynamics.internal_energy.InternalEnergy`
+    (``volumetric``, ``specific``, ``per_particle``, ``molar``, or
+    ``normaliser(form)``); its normalised forms are time derivatives of the
+    normalised energies (quotient rule with ``ρ̇`` and ``ṅ_tot``). Energies or
+    rates of exactly the same class and network support ``+`` and ``-``.
+
+    The code generator uses :attr:`eos` to form the energy column of the
+    Jacobian by the chain rule ``∂ẋ/∂e = (∂ẋ/∂T) / (∂e/∂T)``, with ``e`` the
+    EOS in the chosen normalisation.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> net = Network("COthin")
+    >>> th = net.thermodynamics
+    >>> net.config.thermodynamics.eos
+    IdealEosConfig(type='ideal', gamma=1.6666666666667)
+    >>> th.eos.per_particle.simplify()  # 3/2 k_B T [erg]
+    2.0709734999999e-16*tgas
+    >>> th.dEdt_tot.volumetric  # COthin has no reaction energies or heatingcoolingrate
+    0
+
+    Choose another EOS with ``eos_props`` (or a ``[network.thermodynamics.eos]``
+    table in the config):
+
+    >>> net = Network("COthin", eos_props={"type": "ideal", "gamma": 1.4})
+    >>> net.thermodynamics.eos.per_particle.simplify()  # k_B T / (gamma - 1)
+    3.4516225e-16*tgas
     """
 
     def __init__(self, net: Network, dEdt_extra: Expr | None = None):
+        """Bind the thermodynamics to a network.
+
+        Parameters
+        ----------
+        net : Network
+            Network whose reactions, symbols and EOS properties are used.
+        dEdt_extra : sympy.Expr, optional
+            Stored volumetric non-reactive heating/cooling rate (e.g. restored from a
+            ``.jaff`` file). When ``None`` it is built from the ``heatingcoolingrate``
+            auxiliary function.
+        """
         self.net: Network = net
         # Stored volumetric heating/cooling rate (e.g. restored from a .jaff file);
         # when None, dEdt_extra is built from the heatingcoolingrate aux function.

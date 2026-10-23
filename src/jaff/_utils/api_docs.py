@@ -293,7 +293,9 @@ def _class_page(name: str, public_path: str, cls: Any) -> str:
         constructor = [f"## Constructor\n\n`#!python {name}({_signature(init)})`\n"]
         source = init.docstring or cls.docstring
         if source:
-            constructor.append(_sections(source, skip=("text", "attributes", "examples")))
+            constructor.append(
+                _sections(source, skip=_CLASS_SECTIONS_BELOW + ("text", "attributes"))
+            )
         parts.append("\n".join(c for c in constructor if c))
 
     attributes = _attributes(cls.docstring)

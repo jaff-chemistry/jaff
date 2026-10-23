@@ -20,6 +20,46 @@ class EosFactory:
 
     Each EOS type maps to a builder method through :attr:`_BUILDERS`; the
     valid types must match :data:`~jaff.physics.thermodynamics.eos.config.EOS_TYPES`.
+    A network builds its EOS through this factory on first access to
+    ``net.thermodynamics.eos``.
+
+    Notes
+    -----
+    The EOS is configured by the ``[network.thermodynamics.eos]`` table, or the
+    ``eos_props`` dict passed to :class:`~jaff.core.network.Network`; its
+    ``type`` key (case-insensitive, ``"ideal"`` when omitted) selects the model
+    and its other keys. Omitted keys take the model's default. All energies are
+    volumetric [erg cm⁻³]:
+
+    | ``type`` | Keys | Volumetric energy |
+    | --- | --- | --- |
+    | ``ideal`` | ``gamma`` (float > 1, default 1.6666666666667) | ``E = n_tot k_B T_gas / (gamma − 1)`` |
+    | ``multi_gamma`` | ``default_gamma`` (float > 1), ``gamma_map`` (dict[str, float > 1]) | ``E = Σ_i n_i k_B T_gas / (gamma_i − 1)``, ``gamma_i`` from ``gamma_map`` by species name, else ``default_gamma`` |
+    | ``fermi_degenerate`` | -- | not implemented |
+    | ``relativistic_fermi_degenerate`` | -- | not implemented |
+
+    The config is validated when the network loads: an unknown ``type``, a
+    missing or unexpected key, or an adiabatic index ``<= 1`` is an invalid
+    config (:class:`~jaff.errors.ParserError` from ``Network``). The
+    not-implemented types raise ``NotImplementedError`` only when the EOS is
+    built.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> from jaff.physics import EosFactory
+    >>> eos_props = {
+    ...     "type": "multi_gamma",
+    ...     "default_gamma": 5 / 3,
+    ...     "gamma_map": {"H2": 1.4},
+    ... }
+    >>> net = Network("COthin", eos_props=eos_props)
+    >>> eos = EosFactory(net, net.config.thermodynamics.eos).generate()
+    >>> nden = net.symbols.ndens
+    >>> eos.volumetric.coeff(nden[net.species["H2"].index])  # k_B T / (1.4 - 1)
+    3.4516225e-16*tgas
+    >>> eos.volumetric.coeff(nden[net.species["CO"].index])  # k_B T / (5/3 - 1)
+    2.0709735e-16*tgas
     """
 
     _BUILDERS: Dict[str, str] = {

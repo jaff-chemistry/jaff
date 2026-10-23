@@ -5,6 +5,7 @@ import pytest
 
 import importlib
 import re
+from pathlib import Path
 
 from jaff._utils.api_docs import (
     CONFIG_MODULES,
@@ -215,3 +216,32 @@ def test_cross_references_follow_sphinx(rest, markdown):
     from jaff.config.base import _markdown
 
     assert _markdown(rest) == markdown
+
+
+def test_class_notes_appear_once_without_init_docstring():
+    import griffe
+
+    from jaff._utils.api_docs import _class_page
+
+    code = '''
+class Thing:
+    """A thing.
+
+    Parameters
+    ----------
+    size : int
+        Its size.
+
+    Notes
+    -----
+    Only once.
+    """
+
+    def __init__(self, size):
+        self.size = size
+'''
+    module = griffe.visit("m", filepath=Path("m.py"), code=code, docstring_parser="numpy")
+    page = _class_page("Thing", "m.Thing", module["Thing"])
+
+    assert page.count("Only once.") == 1
+    assert "**size** : _int_" in page

@@ -6,9 +6,20 @@ def to_float_or_none(value: Any) -> float | None:
 
     Band edges and averages may be plain numbers, SymPy numeric objects, or
     ``sympy.oo`` (open upper band, which casts to ``float('inf')``).  A value
-    of ``None`` (e.g. the cross section of a custom-rate reaction) or a
-    still-symbolic expression maps to ``None`` so it becomes ``NaN`` in a
-    :class:`pandas.DataFrame`.
+    of ``None`` or a still-symbolic expression (e.g. the band-average cross
+    section of a ``photoCrossSection`` that depends on ``tgas``) maps to
+    ``None`` so it becomes ``NaN`` in a :class:`pandas.DataFrame`.
+
+    Parameters
+    ----------
+    value : Any
+        The quantity to convert.
+
+    Returns
+    -------
+    float or None
+        ``float(value)``, or ``None`` when *value* is ``None`` or cannot be
+        cast.
     """
     if value is None:
         return None

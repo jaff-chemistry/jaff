@@ -40,37 +40,50 @@ def get_sfluxes(
     """
     Build the symbolic reaction flux for every reaction in the network.
 
-    For a reaction with rate coefficient *k* and reactants A, B the flux is::
+    For a reaction with rate coefficient *k* and reactants A, B the flux is
 
-        flux_i = k_i * nden[idx_A] * nden[idx_B]
+    ```
+    flux_i = k_i * nden[idx_A] * nden[idx_B]
+    ```
 
     The number densities are represented as indexed-base symbols ``nden`` that
-    support scalar indexing (``nden[i]`` for species *i*).
+    support scalar indexing (``nden[i]`` for species *i*).  Each flux is the
+    reaction's :attr:`Reaction.rate`
+    (``rate_coefficient`` times the density of each core reactant;
+    pseudo-species such as ``_PHOTON`` carry no density).
+    :meth:`Network.sfluxes` calls this
+    with the network's own arguments.
 
     Parameters
     ----------
     reactions : Reactions
-        Collection of all reactions in the network.  Each element must expose
-        ``.rate_coefficient`` (a SymPy ``Expr``) and ``.reactants`` (an iterable of
-        reactant objects with a string representation matching a key in
-        *species*).
+        Collection of all reactions in the network; the flux of each is its
+        ``.rate``.
     species : Species
-        Collection of all species.  Used to look up the numeric index of each
-        reactant via ``species[str(reactant)].index``.
+        Collection of all species.  Not used: each reaction resolves its
+        reactant indices from its own network.
     nden : IndexedBase
-        The network's density base (``net.symbols.ndens``).
+        The network's density base (``net.symbols.ndens``).  Not used, for
+        the same reason.
 
     Returns
     -------
     list of sympy.Expr
         List of length ``reactions.count``.  ``fluxes[i]`` is the symbolic
-        flux expression for the *i*-th reaction, or ``Float(0.0)`` if the
-        reaction has no rate (should not occur in practice).
+        flux expression for the *i*-th reaction.
 
     Notes
     -----
     The flux is purely a *loss* term from the reactants' perspective; signs
     are applied in :func:`get_sodes`.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> from jaff.physics import get_sfluxes
+    >>> net = Network("h_photoionization")
+    >>> get_sfluxes(net.reactions, net.species, net.symbols.ndens)[1]
+    1.65941781598291e-10*nden[1]*nden[2]/tgas**0.7
     """
     fluxes: list[Expr] = [Float(0.0) for _ in range(reactions.count)]
 
@@ -88,10 +101,15 @@ def get_sodes(
     """
     Assemble the symbolic ODE right-hand sides for all species.
 
-    For each species *s* the ODE is::
+    For each species *s* the ODE is
 
-        d nden[s] / dt = sum_{i: s in products(i)} flux_i
-                       - sum_{i: s in reactants(i)} flux_i
+    ```
+    d nden[s] / dt = sum_{i: s in products(i)} flux_i
+                   - sum_{i: s in reactants(i)} flux_i
+    ```
+
+    with ``flux_i`` from :func:`get_sfluxes`.  A species appearing several
+    times on one side of a reaction contributes the flux once per occurrence.
 
     Parameters
     ----------
@@ -121,6 +139,17 @@ def get_sodes(
 
     This dual-path allows the same code to handle both named-species networks
     and fixed-layout networks produced by certain code-generation backends.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> from jaff.physics import get_sodes
+    >>> net = Network("h_photoionization")  # H + γ -> H+ + e-, H+ + e- -> H
+    >>> [s.name for s in net.species.core]
+    ['H', 'H+', 'e-']
+    >>> sodes = get_sodes(net.reactions, net.species, net.symbols.ndens)
+    >>> sodes[1] == -sodes[0]
+    True
     """
     fluxes = get_sfluxes(reactions, species, nden)
     sodes: list[Basic] = [Float(0.0) for _ in range(species.core.count)]
@@ -161,15 +190,24 @@ def get_sradodes(net: "Network", order: int = 0) -> list[Expr]:
     For each band *i* the function computes:
 
     - ``grate[i]``: the *source/sink* term for the density moment: the
-      photoionisation/photodissociation losses plus the radiation emitted by
-      reactions with a spectral yield (``reaction.rad.group_yields`` times the
-      reaction rate).
-    - ``gflux[i]``: the spatial-gradient term for the flux moment (obtained
-      by substituting ``den[i] → rflux[i]`` in ``grate``).
+      photoionisation/photodissociation losses (each photo reaction's band
+      loss coefficient ``rgrouped[i].k`` times its reactant densities), the
+      absorption by the medium ``-c * <α>_i * den[i]`` (from a
+      ``globalAbsorptionCoefficient``), the radiation emitted by reactions
+      with a spectral yield (``reaction.rad.group_yields`` times the reaction
+      rate) and the band's ``globalEmissivity``.
+    - ``gflux[i]``: the sink term for the flux moment, obtained by
+      substituting ``den[i] → rflux[i]`` in the losses.  Emission is
+      isotropic and feeds the density moment only; the absorption term is
+      included only when ``radiation.absorption_attenuates_flux`` is set.
 
-    The two moments for each band are interleaved in the output list according
-    to the *order* convention (see :meth:`Radiation.ordered_index
-    <jaff.physics._radiation.Radiation.ordered_index>`).
+    With dust enabled (``net.dust``), the dust attenuation of each moment is
+    subtracted too (see :class:`~jaff.physics.Dust`).  Photo reactions whose
+    rate comes from a ``.jfunc`` ``chemRate<N>`` are not coupled to the bands
+    and are skipped.
+
+    The two moments for each band are placed in the output list according to
+    the *order* convention (see :meth:`Radiation.ordered_index`).
 
     Parameters
     ----------
@@ -200,15 +238,28 @@ def get_sradodes(net: "Network", order: int = 0) -> list[Expr]:
     Raises
     ------
     RuntimeError
-        If ``net.radiation`` is ``None`` (no bands have been configured).
+        If ``net.radiation`` is ``None`` (no bands have been configured), or a
+        photo reaction without a custom rate has no per-band data.
     ValueError
         If *order* is not one of ``{0, 1, 2, 3}``.
 
     Notes
     -----
-    The substitution ``den[i] → rflux[i]`` (via ``xreplace``) yields the
-    flux-divergence term needed in the first-moment (flux) equation of the
-    two-moment radiation transport system.
+    The substitution ``den[i] → rflux[i]`` (via ``xreplace``) turns the
+    density-moment losses into the attenuation term of the first-moment (flux)
+    equation of the two-moment radiation transport system.  Transport terms
+    (the divergence of the flux, the radiation pressure) are not included.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> from jaff.physics import get_sradodes
+    >>> net = Network(
+    ...     "h_photoionization",
+    ...     radiation_props={"bands": [1, 13.6, 100, "inf"]},
+    ... )
+    >>> get_sradodes(net)  # [den_0, flux_0, den_1, flux_1, den_2, flux_2]
+    [0, 0, -5.85154082319921e-8*nden[0]*photden[1], -5.85154082319921e-8*nden[0]*rflux[1], -1.1420465158197e-10*nden[0]*photden[2], -1.1420465158197e-10*nden[0]*rflux[2]]
     """
     if net.radiation is None:
         raise RuntimeError("No radiation bands found. Radiation odes cannot be generated")

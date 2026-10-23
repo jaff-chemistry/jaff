@@ -58,6 +58,60 @@ class XsecProcess:
 
 @dataclass(eq=False)
 class XsecProps:
+    """Cross sections of a photo reaction's single decay channel.
+
+    Built by :class:`Photochemistry` (:meth:`~Photochemistry.get_xsec` or
+    :meth:`~Photochemistry.get_custom_xsec`) and held as
+    ``reaction.photo.xsec``.  A cross section is either tabulated on a
+    photon-energy grid (NORAD, Leiden) or an expression in ``ph_E`` (Verner, or
+    a ``.jfunc`` ``photoCrossSection<N>`` function).
+
+    Attributes
+    ----------
+    units : XsecUnits
+        Units of the data: ``photon_energy="eV"`` and
+        ``cross_section="cm^2"``.
+    process : XsecProcess
+        ``absorption`` (``True`` when a separate photo-absorption table is
+        loaded) and ``decay_type`` (``"ionization"`` or ``"dissociation"``).
+    database : str
+        Source of the cross section: ``"norad"``, ``"verner"``, ``"leiden"``
+        or ``"custom"`` (a ``photoCrossSection<N>`` function).
+    photon_energy : numpy.ndarray or None
+        Photon-energy grid (eV) of a tabulated cross section; ``None`` for a
+        symbolic one.
+    photo_absorption : numpy.ndarray or None
+        Tabulated photo-absorption cross section (cm²) on ``photon_energy``,
+        or ``None`` when there is none.
+    photodecay : numpy.ndarray or None
+        Tabulated photodecay (photoionisation / photodissociation) cross
+        section (cm²) on ``photon_energy``; ``None`` for a symbolic one.
+    photodecay_expr : sympy.Expr or None
+        Photodecay cross section (cm²) as an expression in ``ph_E`` (eV);
+        ``None`` for a tabulated one.
+    total : float or sympy.Expr or None
+        Photodecay cross section averaged over the whole radiation spectrum
+        (cm²), set when the reaction's rate is computed from the bands (see
+        :meth:`Radiation.get_reaction_rate_props`).  ``0.0`` until then when
+        a radiation field is configured, ``None`` without one.  An expression
+        when a ``photoCrossSection`` uses other symbols (e.g. ``tgas``).
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> net = Network(
+    ...     "h_photoionization",
+    ...     radiation_props={"bands": [1, 13.6, 100, "inf"]},
+    ... )
+    >>> xsec = net.reactions.photo_reactions()[0].photo.xsec
+    >>> xsec.database, xsec.process.decay_type, xsec.process.absorption
+    ('norad', 'ionization', False)
+    >>> xsec.photon_energy.shape == xsec.photodecay.shape
+    True
+    >>> float(xsec.total)
+    1.2403886126668026e-19
+    """
+
     units: XsecUnits
     process: XsecProcess
     database: Literal["norad", "verner", "leiden", "custom"]
@@ -77,6 +131,33 @@ class Photochemistry:
     Resolves per-reaction photoionisation / photodissociation / photoabsorption
     cross sections from the JAFF database and the tabulated Leiden, NORAD, and
     Verner data files.
+
+    The network creates one lazily, when its first photo reaction is built, and
+    every :class:`~jaff.core.reaction.Reaction` stores what it resolves as
+    ``reaction.photo.xsec`` (an :class:`XsecProps`).  Photodissociation always
+    comes from Leiden; photoionisation follows the reaction's ``pi_database``,
+    then ``[network.reactions.photo] pi_database`` (``"norad"`` by default),
+    then the other databases in the order ``norad``, ``verner``, ``leiden``.
+
+    Attributes
+    ----------
+    net : Network
+        The network the reactions belong to; its config supplies the
+        ``pi_database`` and ``use_proxy_photoreaction`` settings.
+    logger : logging.Logger
+        The JAFF logger, used by :meth:`log_fallback_summary`.
+    fallbacks : list of tuple of (str, str, str)
+        ``(key, requested, used)`` for every photoionisation resolved from a
+        fallback database since the last :meth:`log_fallback_summary`.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> from jaff.physics import Photochemistry
+    >>> net = Network("h_photoionization")
+    >>> rxn = net.reactions.photo_reactions()[0]
+    >>> Photochemistry(net).get_xsec(rxn).database
+    'norad'
     """
 
     def __init__(self, network: Network):
@@ -88,6 +169,11 @@ class Photochemistry:
         Leiden line-shielding tables), downloading both on first use (a network
         fetch unless already cached). Instantiate once and reuse rather than per
         reaction.
+
+        Parameters
+        ----------
+        network : Network
+            The network whose photo reactions are resolved.
         """
         self.net = network
         self.logger: logging.Logger = JaffLogger().get_logger()
