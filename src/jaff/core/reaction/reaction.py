@@ -992,7 +992,7 @@ class Reaction:
         """Band-averaged cross sections for this reaction, one row per band.
 
         Pairs each per-band entry of ``photo.rgrouped`` (populated when a
-        radiation field is configured, e.g. through the ``radiation_props``
+        radiation field is configured, e.g. through the ``radiation``
         argument of :class:`~jaff.core.Network` or ``[network.radiation]``)
         with the :class:`~jaff.physics.photo_reactions._radiation.RadiationGroup`
         it was computed for.  A photo reaction whose rate comes from a
@@ -1029,7 +1029,7 @@ class Reaction:
         --------
         >>> net = Network(
         ...     "h_photoionization",
-        ...     radiation_props={"bands": [1, 13.6, 100, "inf"]},
+        ...     radiation={"bands": [1, 13.6, 100, "inf"]},
         ... )
         >>> rxn = net.reactions.photo_reactions()[0]
         >>> rxn.band_xsecs.columns.tolist()

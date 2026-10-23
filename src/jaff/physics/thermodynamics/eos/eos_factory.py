@@ -25,8 +25,8 @@ class EosFactory:
 
     Notes
     -----
-    The EOS is configured by the ``[network.thermodynamics.eos]`` table, or the
-    ``eos_props`` dict passed to :class:`~jaff.core.network.Network`; its
+    The EOS is configured by the ``[network.thermodynamics.eos]`` table, or
+    ``thermodynamics={"eos": {...}}`` passed to :class:`~jaff.core.network.Network`; its
     ``type`` key (case-insensitive, ``"ideal"`` when omitted) selects the model
     and its other keys. Omitted keys take the model's default. All energies are
     volumetric [erg cm⁻³]:
@@ -48,12 +48,12 @@ class EosFactory:
     --------
     >>> from jaff import Network
     >>> from jaff.physics import EosFactory
-    >>> eos_props = {
+    >>> eos = {
     ...     "type": "multi_gamma",
     ...     "default_gamma": 5 / 3,
     ...     "gamma_map": {"H2": 1.4},
     ... }
-    >>> net = Network("COthin", eos_props=eos_props)
+    >>> net = Network("COthin", thermodynamics={"eos": eos})
     >>> eos = EosFactory(net, net.config.thermodynamics.eos).generate()
     >>> nden = net.symbols.ndens
     >>> eos.volumetric.coeff(nden[net.species["H2"].index])  # k_B T / (1.4 - 1)

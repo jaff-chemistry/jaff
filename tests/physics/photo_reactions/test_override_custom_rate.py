@@ -39,7 +39,7 @@ class TestGlobalFlag:
     def test_override_recomputes_rate_from_xsecs(self, custom_network):
         rxn = _photo(
             custom_network(
-                radiation_props=RadiationConfig(bands=BANDS),
+                radiation=RadiationConfig(bands=BANDS),
                 config=_global_photo(override_custom_rate=True),
             )
         )
@@ -69,7 +69,7 @@ class TestPerReaction:
             f'[network.reactions.reaction."{KEY}".photo]\noverride_custom_rate = true\n'
         )
         rxn = _photo(
-            custom_network(config=str(cfg), radiation_props=RadiationConfig(bands=BANDS))
+            custom_network(config=str(cfg), radiation=RadiationConfig(bands=BANDS))
         )
 
         assert rxn.photo.override_custom_rate is True

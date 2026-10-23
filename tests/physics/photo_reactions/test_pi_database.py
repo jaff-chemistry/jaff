@@ -213,7 +213,7 @@ class TestNetworkWiring:
         net = make_network(
             PHOTO_JET,
             name="t.jet",
-            radiation_props=RadiationConfig(bands=BANDS),
+            radiation=RadiationConfig(bands=BANDS),
             config=_global_photo(pi_database="verner"),
         )
         r = _by_key(net)
@@ -229,7 +229,7 @@ class TestNetworkWiring:
             PHOTO_JET,
             name="t.jet",
             config=str(cfg),
-            radiation_props=RadiationConfig(bands=BANDS),
+            radiation=RadiationConfig(bands=BANDS),
         )
         rxn = _by_key(net)["C._PHOTON__C+.e-"]
         assert rxn.photo.pi_database == "leiden"
@@ -268,8 +268,8 @@ class TestNetworkWiring:
             "Cx -> C+ + E  []  PHOTO, 11.3\n",
             name="p.jet",
             config=str(cfg),
-            use_proxy_photoreaction=True,
-            radiation_props=RadiationConfig(bands=BANDS),
+            reactions={"photo": {"use_proxy_photoreaction": True}},
+            radiation=RadiationConfig(bands=BANDS),
         )
         rxn = _by_key(net)["Cx._PHOTON__C+.e-"]
         assert rxn.photo.xsec.database == "verner"
@@ -279,7 +279,7 @@ class TestNetworkWiring:
         net = make_network(line, name="a.jet")  # no radiation: fine
         assert _by_key(net)["C9H9._PHOTON__C9H9+.e-"].photo.xsec is None
         with pytest.raises(ParserError, match="C9H9"):
-            make_network(line, name="b.jet", radiation_props=RadiationConfig(bands=BANDS))
+            make_network(line, name="b.jet", radiation=RadiationConfig(bands=BANDS))
 
 
 class TestFallbackSummary:
@@ -317,7 +317,7 @@ class TestFallbackSummary:
         ):
             jl.return_value.get_logger.return_value = logger
             make_network(
-                lines, name="t.jet", radiation_props=RadiationConfig(bands=BANDS)
+                lines, name="t.jet", radiation=RadiationConfig(bands=BANDS)
             )
         warn.assert_called_once()
         msg = warn.call_args.args[0]
@@ -379,11 +379,11 @@ class TestJaffRoundTrip:
         )
         props = RadiationConfig(bands=BANDS)
         net = make_network(
-            PHOTO_JET, name="t.jet", config=str(cfg), radiation_props=props
+            PHOTO_JET, name="t.jet", config=str(cfg), radiation=props
         )
         out = tmp_path / "t.jaff"
         net.to_jaff(out)
-        back = Network(str(out), radiation_props=props)
+        back = Network(str(out), radiation=props)
         rxn = _by_key(back)["C._PHOTON__C+.e-"]
         assert rxn.photo.pi_database == "verner"
         assert rxn.photo.xsec.database == "verner"

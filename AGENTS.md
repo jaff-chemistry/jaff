@@ -210,8 +210,10 @@ To add a setting, follow `docs/development/adding-configuration.md`. In short:
    `CONFIG_MODULES` of `src/jaff/_utils/api_docs.py`.
 3. The class doing the work takes its own section (`Thing(network, config)`), never
    the whole config. Checks against the network raise `ParserError` with the key path.
-4. Optional shortcuts: a `Network` keyword (map it in `_keyword_layer`) or a CLI
-   option (an entry in `CLI_KEYS`, `src/jaff/cli/_helper.py`).
+4. `Network`'s keyword arguments are exactly the `[network]` keys: a new top-level
+   field of `NetworkConfig` needs a keyword of the same name (a test enforces it);
+   nothing else maps keywords. Optional CLI shortcut: an entry in `CLI_KEYS`
+   (`src/jaff/cli/_helper.py`).
 5. Regenerate the committed editor schemas:
    `uv run --extra dev python -m jaff.config.json_schema`
    (`tests/config/test_config_json_schema.py` fails when they are stale).

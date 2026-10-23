@@ -60,7 +60,7 @@ NETWORKS: Dict[str, Callable[[], Network]] = {
     # photoionisation with one radiation band
     "h_photo": lambda: Network(
         str(REPO / "networks" / "h_photoionization" / "h_photo.jet"),
-        radiation_props=RadiationConfig(
+        radiation=RadiationConfig(
             bands=[13.6, float("inf")], profile_index=0, mode="nph"
         ),
     ),

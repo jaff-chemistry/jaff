@@ -183,7 +183,7 @@ class RadiationGroup:
     >>> from jaff import Network
     >>> net = Network(
     ...     "h_photoionization",
-    ...     radiation_props={"bands": [1, 13.6, 100, "inf"]},
+    ...     radiation={"bands": [1, 13.6, 100, "inf"]},
     ... )
     >>> grp = net.radiation.groups[1]
     >>> grp, grp.sym, grp.band, grp.dE
@@ -295,7 +295,7 @@ class Radiation:
     consecutive pair of edges.
 
     :class:`~jaff.core.Network` builds it from its radiation config, given as
-    the ``radiation_props`` argument (a dict or a
+    the ``radiation`` argument (a dict or a
     :class:`~jaff.physics.photo_reactions.config.RadiationConfig`) or as the
     ``[network.radiation]`` table of a config file, and stores it as
     ``net.radiation`` (``None`` when radiation is off).  Every photo reaction
@@ -408,7 +408,7 @@ class Radiation:
     >>> from jaff import Network
     >>> net = Network(
     ...     "h_photoionization",
-    ...     radiation_props={
+    ...     radiation={
     ...         "bands": [1, 13.6, 100, "inf"],
     ...         "profile_index": [0, 1, 0],
     ...     },
@@ -647,7 +647,7 @@ class Radiation:
         >>> from jaff import Network
         >>> net = Network(
         ...     "h_photoionization",
-        ...     radiation_props={"bands": [1, 13.6, 100, "inf"]},
+        ...     radiation={"bands": [1, 13.6, 100, "inf"]},
         ... )
         >>> rxn = net.reactions.photo_reactions()[0]
         >>> k_tot, xsec_tot, grouped = net.radiation.get_reaction_rate_props(rxn)
@@ -805,7 +805,7 @@ class Radiation:
         >>> from jaff import Network
         >>> net = Network(
         ...     "h_photoionization",
-        ...     radiation_props={"bands": [1, 13.6, 100, "inf"]},
+        ...     radiation={"bands": [1, 13.6, 100, "inf"]},
         ... )
         >>> net.radiation.nbands
         3
@@ -858,7 +858,7 @@ class Radiation:
         >>> from jaff import Network
         >>> net = Network(
         ...     "h_photoionization",
-        ...     radiation_props={
+        ...     radiation={
         ...         "bands": [1, 13.6, 100, "inf"],
         ...         "profile_index": [0, 1, 0],
         ...     },
@@ -895,7 +895,7 @@ class Radiation:
         >>> from jaff import Network
         >>> net = Network(
         ...     "h_photoionization",
-        ...     radiation_props={
+        ...     radiation={
         ...         "bands": [1, 13.6, 100, "inf"],
         ...         "profile_index": [0, 1, 0],
         ...     },

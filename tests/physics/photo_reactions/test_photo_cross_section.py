@@ -76,7 +76,7 @@ class TestCustomCrossSection:
 
     def test_band_and_total_averages_use_it(self, xsec_network):
         props = RadiationConfig(bands=BANDS)
-        rxn = _photo(xsec_network(radiation_props=props))
+        rxn = _photo(xsec_network(radiation=props))
 
         assert float(rxn.photo.xsec.total) == pytest.approx(1e-18, rel=1e-6, abs=0)
         bands = [float(band.xsec) for band in rxn.photo.rgrouped]
@@ -89,7 +89,7 @@ class TestCustomCrossSection:
             "@function photoCrossSection0()\n"
             "@return Piecewise((1e-18, ph_E >= 13.6), (0, True))\n"
         )
-        net = xsec_network(jfunc=jfunc, radiation_props=RadiationConfig(bands=BANDS))
+        net = xsec_network(jfunc=jfunc, radiation=RadiationConfig(bands=BANDS))
         rxn = _photo(net)
 
         assert rxn.photo.xsec.photodecay_expr.free_symbols == {net.radiation.ph_E}
@@ -99,7 +99,7 @@ class TestCustomCrossSection:
 
     def test_extra_symbols_stay_symbolic(self, xsec_network):
         jfunc = "@function photoCrossSection0(tgas)\n@return 1e-18*tgas\n"
-        net = xsec_network(jfunc=jfunc, radiation_props=RadiationConfig(bands=BANDS))
+        net = xsec_network(jfunc=jfunc, radiation=RadiationConfig(bands=BANDS))
         rxn = _photo(net)
         tgas = net.symbols.tgas
 
@@ -110,7 +110,7 @@ class TestCustomCrossSection:
     def test_density_symbols_are_standardized(self, xsec_network):
         """A density in a custom σ reaches the band data and equations as nden."""
         jfunc = "@function photoCrossSection0(n_C)\n@return 1e-18*n_C\n"
-        net = xsec_network(jfunc=jfunc, radiation_props=RadiationConfig(bands=BANDS))
+        net = xsec_network(jfunc=jfunc, radiation=RadiationConfig(bands=BANDS))
         rxn = _photo(net)
         raw = sp.Symbol("n_C")
         nden = net.symbols.ndens[net.species["C"].index]
@@ -123,13 +123,13 @@ class TestCustomCrossSection:
 
     def test_jaff_reload_keeps_custom_xsec(self, xsec_network, tmp_path):
         """A ``.jaff`` reload without the ``.jfunc`` keeps the stored custom σ."""
-        net = xsec_network(radiation_props=RadiationConfig(bands=BANDS))
+        net = xsec_network(radiation=RadiationConfig(bands=BANDS))
         net.to_jaff(tmp_path / "p.jaff")
 
         back = Network(
             str(tmp_path / "p.jaff"),
             funcfile=False,
-            radiation_props=RadiationConfig(bands=BANDS),
+            radiation=RadiationConfig(bands=BANDS),
         )
 
         rxn = _photo(back)
@@ -150,7 +150,7 @@ class TestOverride:
     def test_global_flag_uses_database(self, xsec_network):
         rxn = _photo(
             xsec_network(
-                radiation_props=RadiationConfig(bands=BANDS),
+                radiation=RadiationConfig(bands=BANDS),
                 config=_global_photo(override_custom_cross_section=True),
             )
         )
@@ -169,7 +169,7 @@ class TestOverride:
         rxn = _photo(
             xsec_network(
                 config=[_global_photo(override_custom_cross_section=True), cfg],
-                radiation_props=RadiationConfig(bands=BANDS),
+                radiation=RadiationConfig(bands=BANDS),
             )
         )
 

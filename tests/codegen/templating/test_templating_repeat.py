@@ -171,7 +171,7 @@ def test_sign_options_reach_normalized_names(net, tmp_path):
 def test_radodes_takes_the_radiation_order(tmp_path):
     photo = Network(
         str(REPO / "networks" / "h_photoionization" / "h_photo.jet"),
-        radiation_props=RadiationConfig(
+        radiation=RadiationConfig(
             bands=[13.6, float("inf")], profile_index=0, mode="nph"
         ),
     )

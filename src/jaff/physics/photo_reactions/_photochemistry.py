@@ -103,7 +103,7 @@ class XsecProps:
     >>> from jaff import Network
     >>> net = Network(
     ...     "h_photoionization",
-    ...     radiation_props={"bands": [1, 13.6, 100, "inf"]},
+    ...     radiation={"bands": [1, 13.6, 100, "inf"]},
     ... )
     >>> xsec = net.reactions.photo_reactions()[0].photo.xsec
     >>> xsec.database, xsec.process.decay_type, xsec.process.absorption

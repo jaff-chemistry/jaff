@@ -18,7 +18,7 @@ TGAS = sp.symbols("tgas")
 def net() -> Network:
     return Network(
         str(FIXTURES_DIR / "react_cie_hepp.jet"),
-        eos_props=IdealEosConfig(gamma=GAMMA),
+        thermodynamics={"eos": IdealEosConfig(gamma=GAMMA)},
     )
 
 

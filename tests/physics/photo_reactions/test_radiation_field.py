@@ -96,19 +96,19 @@ class TestNetworkRadiation:
     def test_no_radiation_table_means_no_radiation(self, make_network):
         assert make_network(self.NET, name="n.dat", funcfile=False).radiation is None
 
-    def test_radiation_props_accepts_a_dict(self, make_network):
+    def test_radiation_keyword_accepts_a_dict(self, make_network):
         with patch(BACKGROUND):
             net = make_network(
                 self.NET,
                 name="n.dat",
                 funcfile=False,
-                radiation_props={"bands": [6.0, 13.6]},
+                radiation={"bands": [6.0, 13.6]},
             )
 
         assert net.radiation is not None
         assert net.radiation.bands == [6.0, 13.6]
 
-    def test_radiation_props_beats_jaff_toml(self, make_network, tmp_path):
+    def test_radiation_keyword_beats_jaff_toml(self, make_network, tmp_path):
         (tmp_path / "jaff.toml").write_text("[network.radiation]\nbands = [6.0, 13.6]\n")
 
         with patch(BACKGROUND):
@@ -116,7 +116,7 @@ class TestNetworkRadiation:
                 self.NET,
                 name="n.dat",
                 funcfile=False,
-                radiation_props=RadiationConfig(bands=[1.0, 2.0, 3.0]),
+                radiation=RadiationConfig(bands=[1.0, 2.0, 3.0]),
             )
 
         assert net.radiation is not None

@@ -108,7 +108,7 @@ class Codegen:
     >>> from jaff import Network
     >>> from jaff.codegen import Codegen
     >>> bands = {"bands": [1, 13.6, 100, "inf"]}
-    >>> net = Network("h_photoionization", radiation_props=bands)
+    >>> net = Network("h_photoionization", radiation=bands)
     >>> cg = Codegen(net, lang="cxx")
     >>> cg.lang
     <Language cxx>
@@ -271,7 +271,7 @@ class Codegen:
         >>> from jaff import Network
         >>> from jaff.codegen import Codegen
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
-        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> net = Network("h_photoionization", radiation=bands)
         >>> rates = Codegen(net, lang="python").get_indexed_rates()
         >>> rates["extras"]["cse"]
         IndexedList([])
@@ -395,7 +395,7 @@ class Codegen:
         >>> from jaff import Network
         >>> from jaff.codegen import Codegen
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
-        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> net = Network("h_photoionization", radiation=bands)
         >>> print(Codegen(net, lang="cxx").get_rates_str(), end="")
         k[0] = 5.8515408231992116e-8*photden[1] + 1.1420465158197018e-10*photden[2];
         k[1] = 1.6594178159829075e-10*std::pow(tgas, -0.69999999999999996);
@@ -770,7 +770,7 @@ class Codegen:
         >>> from jaff import Network
         >>> from jaff.codegen import Codegen
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
-        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> net = Network("h_photoionization", radiation=bands)
         >>> print(Codegen(net, lang="python").get_dedt())
         -2.29107354821899e-26*tgas**0.3*(0.684 - 0.0416*math.log(0.0001*tgas))*...
         """
@@ -807,7 +807,7 @@ class Codegen:
         >>> from jaff import Network
         >>> from jaff.codegen import Codegen
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
-        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> net = Network("h_photoionization", radiation=bands)
         >>> print(Codegen(net, lang="python").get_dtdt())
         (-2.29107354821899e-26*tgas**0.3*...)/(2.0709734999999e-16*nden[0] + ...)
         """
@@ -930,7 +930,7 @@ class Codegen:
         >>> from jaff import Network
         >>> from jaff.codegen import Codegen
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
-        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> net = Network("h_photoionization", radiation=bands)
         >>> odes = Codegen(net, lang="python").get_indexed_odes()
         >>> for idx, expr in odes["extras"]["cse"]:
         ...     print(idx, expr)
@@ -1046,7 +1046,7 @@ class Codegen:
         >>> from jaff import Network
         >>> from jaff.codegen import Codegen
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
-        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> net = Network("h_photoionization", radiation=bands)
         >>> print(Codegen(net, lang="cxx").get_ode_str(), end="")
         const double cse0 = 1.6594178159829075e-10*std::pow(tgas, ...)*nden[0];
         const double cse1 = -cse0;
@@ -1139,7 +1139,7 @@ class Codegen:
         >>> from jaff import Network
         >>> from jaff.codegen import Codegen
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
-        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> net = Network("h_photoionization", radiation=bands)
         >>> cg = Codegen(net, lang="cxx")
         >>> len(cg.get_indexed_rhs()["expressions"])  # 3 species + dE/dt
         4
@@ -1279,7 +1279,7 @@ class Codegen:
         >>> from jaff import Network
         >>> from jaff.codegen import Codegen
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
-        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> net = Network("h_photoionization", radiation=bands)
         >>> print(Codegen(net, lang="cxx").get_rhs_str(), end="")
         const double cse0 = nden[1]*nden[2];
         const double cse1 = 5.8515408231992116e-8*photden[1] + ...*photden[2];
@@ -1369,7 +1369,7 @@ class Codegen:
         >>> from jaff import Network
         >>> from jaff.codegen import Codegen
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
-        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> net = Network("h_photoionization", radiation=bands)
         >>> radodes = Codegen(net, lang="cxx").get_indexed_radodes(order=0)
         >>> for idx, expr in radodes["expressions"]:
         ...     print(idx, expr)
@@ -1478,7 +1478,7 @@ class Codegen:
         >>> from jaff import Network
         >>> from jaff.codegen import Codegen
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
-        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> net = Network("h_photoionization", radiation=bands)
         >>> cg = Codegen(net, lang="cxx")
         >>> print(cg.get_radode_str(), end="")
         const double rcse0 = 5.8515408231992116e-8*nden[0];
@@ -1610,7 +1610,7 @@ class Codegen:
         >>> from jaff import Network
         >>> from jaff.codegen import Codegen
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
-        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> net = Network("h_photoionization", radiation=bands)
         >>> jac = Codegen(net, lang="cxx").get_indexed_jacobian()
         >>> for idx, expr in jac["expressions"][:3]:
         ...     print(idx, expr)
@@ -1914,7 +1914,7 @@ class Codegen:
         >>> from jaff import Network
         >>> from jaff.codegen import Codegen
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
-        >>> net = Network("h_photoionization", radiation_props=bands)
+        >>> net = Network("h_photoionization", radiation=bands)
         >>> cg = Codegen(net, lang="cxx")
         >>> print(cg.get_jacobian_str(matrix_format="[,]"), end="")
         const double cse0 = 5.8515408231992116e-8*photden[1] + ...*photden[2];

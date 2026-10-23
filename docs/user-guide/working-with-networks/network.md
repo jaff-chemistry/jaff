@@ -56,21 +56,24 @@ Network(
     strict=None,
     label=None,
     funcfile=None,
-    duplicate_policy=None,
     expand_nuclei=None,
-    radiation_props=None,
-    dust_props=None,
-    use_proxy_photoreaction=None,
-    eos_props=None,
+    reactions=None,
+    radiation=None,
+    dust=None,
+    thermodynamics=None,
     use_jaff_toml=True,
 )
 ```
 
 Settings come from the network's [configuration](../configuration/index.md):
 the `jaff.toml` next to the network file, then the `config` layers, then the
-keyword arguments. Every keyword argument defaults to `None` — *not given* — so
-it only overrides the config when you pass it. The validated result is
-`net.config`.
+keyword arguments. The keyword arguments are the keys of the
+[`[network]`](../configuration/reference.md#network) table, named and nested
+exactly as in the file: a table (`reactions`, `radiation`, `dust`,
+`thermodynamics`) is a `dict` or its config model. Every keyword argument
+defaults to `None` — *not given* — so it only overrides the config when you pass
+it; a table merges key by key over the config's (an `eos` or a shielding model
+replaces it whole). The validated result is `net.config`.
 
 | Parameter                 | Type                                 | Description                                                                                                                         |
 | ------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -79,12 +82,11 @@ it only overrides the config when you pass it. The validated result is
 | `strict`                  | `bool`                               | Treat validation problems (conservation, sinks/sources, ...) as fatal (`network.strict`; default `False`)                          |
 | `label`                   | `str`                                | Human-readable network name (`network.label`; default the file stem)                                                               |
 | `funcfile`                | `bool or str or Path`                | `.jfunc` auxiliary file; `True` scans the network dir, `False` skips loading (`network.funcfile`; default `True`)                  |
-| `duplicate_policy`        | `str`                                | `preserve-first`, `preserve-last` or `error` (`network.reactions.duplicate_policy`; default `preserve-first`)                      |
 | `expand_nuclei`           | `bool`                               | Expand `n_<element>_nuc` into the element-nucleus sum (`network.expand_nuclei`; default `True`)                                    |
-| `radiation_props`         | `RadiationConfig` or `dict`          | Radiation field (`network.radiation`); enables radiation transport and photochemistry                                              |
-| `dust_props`              | `DustConfig` or `dict`               | Dust (`network.dust`); enables the dust module                                                                                      |
-| `use_proxy_photoreaction` | `bool`                               | Look up cross-sections under the proxy key (`CHx`→`CH`, `OHx`→`OH`) (`network.reactions.photo.use_proxy_photoreaction`; default `True`) |
-| `eos_props`               | EOS config model or `dict`           | Equation of state (`network.thermodynamics.eos`); replaces a configured EOS whole                                                   |
+| `reactions`               | `ReactionsConfig` or `dict`          | [`[network.reactions]`](../configuration/reference.md#networkreactions): `duplicate_policy`, `t_cutoff`, `photo` (`pi_database`, `use_proxy_photoreaction`, ...), per-reaction `reaction` |
+| `radiation`               | `RadiationConfig` or `dict`          | [`[network.radiation]`](../configuration/reference.md#networkradiation); enables radiation transport and photochemistry           |
+| `dust`                    | `DustConfig` or `dict`               | [`[network.dust]`](../configuration/reference.md#networkdust); enables the dust module                                               |
+| `thermodynamics`          | `ThermodynamicsConfig` or `dict`     | [`[network.thermodynamics]`](../configuration/reference.md#networkthermodynamics), e.g. `{"eos": {"type": "ideal", "gamma": 1.4}}`; an `eos` replaces a configured EOS whole |
 | `use_jaff_toml`           | `bool`                               | Stack the `jaff.toml` next to the network file under the `config` layers (default `True`)                                          |
 
 ### Examples
@@ -106,6 +108,13 @@ net = Network(
     funcfile="networks/GOW/GOW.jfunc",
 )
 
+# Tables as keyword arguments, keyed as in the config file
+net = Network(
+    "networks/GOW/GOW.jet",
+    reactions={"duplicate_policy": "error", "photo": {"use_proxy_photoreaction": True}},
+    thermodynamics={"eos": {"type": "ideal", "gamma": 1.4}},
+)
+
 # Config layers: a file, then a dict
 net = Network(
     "networks/GOW/GOW.jet",
@@ -115,7 +124,7 @@ net = Network(
 # With radiation bands (needed for photochemistry during code generation)
 net = Network(
     "networks/h_photoionization/h_photo.jet",
-    radiation_props=RadiationConfig(bands=[13.6, "inf"], mode="nph"),
+    radiation=RadiationConfig(bands=[13.6, "inf"], mode="nph"),
 )
 ```
 

@@ -16,7 +16,7 @@ NON_PHOTO = "H + H -> H2  []  1e-17\n"
 def radiation_network(make_network):
     def _make(lines=PHOTO, name="rad.jet"):
         return make_network(
-            lines, name=name, radiation_props=RadiationConfig(bands=BANDS)
+            lines, name=name, radiation=RadiationConfig(bands=BANDS)
         )
 
     return _make

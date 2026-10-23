@@ -162,7 +162,7 @@ jaffx export jaff \
 <!-- prettier-ignore -->
 !!! warning "Same serialization limit as `Network.to_jaff`"
     Networks whose rates contain an undefined function — most often an
-    unresolved `photorates(...)` (a photo-reaction loaded without `radiation_props`)
+    unresolved `photorates(...)` (a photo-reaction loaded without `radiation`)
     or a custom `interp(...)` — cannot be serialized. GOW is one: `jaffx export
     jaff --network networks/GOW/GOW.jet ...` currently stops with a Python
     traceback ending in

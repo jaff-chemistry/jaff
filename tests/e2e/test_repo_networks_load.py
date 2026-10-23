@@ -19,8 +19,8 @@ NETWORK_FILES: List[str] = sorted(
 # Networks that need constructor arguments to load (see the docs for each).
 LOAD_KWARGS: Dict[str, Dict[str, Any]] = {
     "GOW++/GOW++.jet": {
-        "radiation_props": RadiationConfig(bands=[6.0, 11.2, 13.6]),
-        "dust_props": DustConfig(rv=3.1),
+        "radiation": RadiationConfig(bands=[6.0, 11.2, 13.6]),
+        "dust": DustConfig(rv=3.1),
     },
 }
 

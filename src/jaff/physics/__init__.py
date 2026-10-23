@@ -34,7 +34,7 @@ Examples
 <Quantity 8.61733326e-05 eV / K>
 >>> float(c.m_e.cgs.value)  # bare float [g] when a number is required
 9.1093837139e-28
->>> net = Network("COthin", eos_props={"type": "ideal", "gamma": 1.4})
+>>> net = Network("COthin", thermodynamics={"eos": {"type": "ideal", "gamma": 1.4}})
 >>> net.thermodynamics.eos.per_particle.simplify()  # k_B T / (gamma - 1) [erg]
 3.4516225e-16*tgas
 """

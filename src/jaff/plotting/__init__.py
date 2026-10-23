@@ -131,7 +131,7 @@ Examples
 
 Cross sections need a network with photo reactions:
 
->>> net = Network("h_photoionization", radiation_props={"bands": [1, 13.6, 100, "inf"]})
+>>> net = Network("h_photoionization", radiation={"bands": [1, 13.6, 100, "inf"]})
 >>> photo = [p for p in net.reactions.photo_reactions() if p.photo.xsec]
 >>> fig, axes = plot_xsecs(photo, bands=True, save="xsecs.pdf")
 """

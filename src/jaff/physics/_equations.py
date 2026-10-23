@@ -253,7 +253,7 @@ def get_sradodes(net: "Network", order: int = 0) -> list[Expr]:
     >>> from jaff.physics import get_sradodes
     >>> net = Network(
     ...     "h_photoionization",
-    ...     radiation_props={"bands": [1, 13.6, 100, "inf"]},
+    ...     radiation={"bands": [1, 13.6, 100, "inf"]},
     ... )
     >>> get_sradodes(net)  # [den_0, flux_0, den_1, flux_1, den_2, flux_2]
     [0, 0, -5.85154082319921e-8*nden[0]*photden[1], -5.85154082319921e-8*nden[0]*rflux[1], -1.1420465158197e-10*nden[0]*photden[2], -1.1420465158197e-10*nden[0]*rflux[2]]

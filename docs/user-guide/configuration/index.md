@@ -49,7 +49,7 @@ first:
 | --- | --- |
 | 1. the network's `jaff.toml` | 1. the network's `jaff.toml` (unless `use_jaff_toml=False`) |
 | 2. the `jaffgen.toml` (`--config`, or the one a template bundles) | 2. the `config=` layers, in order |
-| 3. command-line options | 3. keyword arguments (`label=`, `strict=`, `radiation_props=`, …) |
+| 3. command-line options | 3. keyword arguments: the `[network]` keys (`label=`, `reactions=`, `radiation=`, …) |
 | 4. `--set key.path=value` items | |
 
 <!-- prettier-ignore -->
@@ -131,9 +131,21 @@ net.config                                              # the validated config
 
 A `config=` layer is a file path, a `dict` shaped like a `jaff.toml`, or a
 `JaffTomlConfig`; of a `JaffTomlConfig`, only the keys explicitly set count. A
-keyword argument given (not `None`) wins over every layer.
-`radiation_props=`, `dust_props=` and `eos_props=` take the matching config
-model or a `dict`.
+keyword argument given (not `None`) wins over every layer. The keyword
+arguments are the keys of the `[network]` table, named and nested as in the
+file: `strict`, `label`, `funcfile`, `expand_nuclei`, and the tables
+`reactions`, `radiation`, `dust` and `thermodynamics`, each a `dict` or its
+config model (`ReactionsConfig`, `RadiationConfig`, `DustConfig`,
+`ThermodynamicsConfig`):
+
+```python
+Network(
+    "networks/GOW/GOW.jet",
+    reactions={"duplicate_policy": "error", "photo": {"use_proxy_photoreaction": True}},
+    radiation={"bands": [6.0, 13.6, "inf"]},
+    thermodynamics={"eos": {"type": "ideal", "gamma": 1.4}},
+)
+```
 
 ---
 
@@ -234,5 +246,9 @@ Old keys are errors (`unknown key`). They map to:
 | `[network.eos]` | `[network.thermodynamics.eos]` |
 | `[[table]]` | `[[jaffgen.table]]` |
 | `RadiationProps` / `DustProps` / `EosProps` | `RadiationConfig` / `DustConfig` / the EOS config models (or a `dict`) |
+| `Network(radiation_props=…)` / `dust_props=…` | `Network(radiation=…)` / `dust=…` |
+| `Network(eos_props=…)` | `Network(thermodynamics={"eos": …})` |
+| `Network(duplicate_policy=…)` | `Network(reactions={"duplicate_policy": …})` |
+| `Network(use_proxy_photoreaction=…)` | `Network(reactions={"photo": {"use_proxy_photoreaction": …}})` |
 | a copy of `jaffgen.toml` in the output | `config.toml` |
 | `Network(config="x.toml")` replaced the network's `jaff.toml` | `x.toml` is layered over the `jaff.toml`; pass `use_jaff_toml=False` for the old behaviour |

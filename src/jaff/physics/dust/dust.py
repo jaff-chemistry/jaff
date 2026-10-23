@@ -31,7 +31,7 @@ class Dust:
     """Dust-physics container for a network.
 
     :class:`~jaff.core.Network` builds one from its dust config, given as the
-    ``dust_props`` argument (a dict or a
+    ``dust`` argument (a dict or a
     :class:`~jaff.physics.dust.config.DustConfig`) or as the ``[network.dust]``
     table of a config file, and stores it as ``net.dust`` (``None`` without
     either).  It groups the dust processes as sub-objects: photoelectric
@@ -84,8 +84,8 @@ class Dust:
     >>> from jaff import Network
     >>> net = Network(
     ...     "h_photoionization",
-    ...     radiation_props={"bands": [1, 13.6, 100, "inf"]},
-    ...     dust_props={"rv": 3.1},
+    ...     radiation={"bands": [1, 13.6, 100, "inf"]},
+    ...     dust={"rv": 3.1},
     ... )
     >>> net.dust.rv, net.dust.u_reduction, net.dust.f_reduction
     (3.1, 'absorption', 'transport')

@@ -21,7 +21,9 @@ def _load(fname=KIDA, config=None, duplicate_policy=None):
         fname,
         funcfile=False,
         config=config,
-        duplicate_policy=duplicate_policy,
+        reactions=None
+        if duplicate_policy is None
+        else {"duplicate_policy": duplicate_policy},
     )
 
 
@@ -104,7 +106,7 @@ class TestSameRangeDuplicateInline:
                     "H + H -> H2 [10,1000] 1e-10",
                     "H + H -> H2 [10,1000] 1e-10",
                 ],
-                duplicate_policy="error",
+                reactions={"duplicate_policy": "error"},
             )
 
     def test_different_temperature_ranges_not_duplicates(self, make_network):

@@ -31,7 +31,7 @@ def shielded_network(make_network):
                 H2_PHOTO,
                 name="h2.jet",
                 funcfile=False,
-                radiation_props=RadiationConfig(bands=[6.0, 13.6]),
+                radiation=RadiationConfig(bands=[6.0, 13.6]),
                 config=config,
             )
 
@@ -143,7 +143,7 @@ def leiden_network(make_network):
             CO_PHOTO,
             name="co.jet",
             funcfile=False,
-            radiation_props=RadiationConfig(bands=[6.0, 13.6]),
+            radiation=RadiationConfig(bands=[6.0, 13.6]),
             config=config,
         )
 

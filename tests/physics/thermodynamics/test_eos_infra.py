@@ -157,7 +157,7 @@ class TestNetworkEos:
     def test_constructor_props_used(self) -> None:
         fresh = Network(
             str(FIXTURES_DIR / "react_cie_hepp.jet"),
-            eos_props=IdealEosConfig(gamma=1.4),
+            thermodynamics={"eos": IdealEosConfig(gamma=1.4)},
         )
         expected = fresh.symbols.ntot * k_B.cgs.value * TGAS / (1.4 - 1.0)
         assert sp.simplify(fresh.thermodynamics.eos.volumetric - expected) == 0
@@ -180,6 +180,6 @@ class TestNetworkEos:
             "default_gamma = 1.4\ngamma_map = { H2 = 1.4 }\n"
         )
 
-        fresh = Network(str(net_file), eos_props=IdealEosConfig(gamma=1.2))
+        fresh = Network(str(net_file), thermodynamics={"eos": IdealEosConfig(gamma=1.2)})
 
         assert fresh.config.thermodynamics.eos == IdealEosConfig(gamma=1.2)

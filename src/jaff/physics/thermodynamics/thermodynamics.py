@@ -80,10 +80,10 @@ class Thermodynamics:
     >>> th.dEdt_tot.volumetric  # COthin has no reaction energies or heatingcoolingrate
     0
 
-    Choose another EOS with ``eos_props`` (or a ``[network.thermodynamics.eos]``
-    table in the config):
+    Choose another EOS with ``thermodynamics={"eos": ...}`` (or a
+    ``[network.thermodynamics.eos]`` table in the config):
 
-    >>> net = Network("COthin", eos_props={"type": "ideal", "gamma": 1.4})
+    >>> net = Network("COthin", thermodynamics={"eos": {"type": "ideal", "gamma": 1.4}})
     >>> net.thermodynamics.eos.per_particle.simplify()  # k_B T / (gamma - 1)
     3.4516225e-16*tgas
     """

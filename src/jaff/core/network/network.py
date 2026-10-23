@@ -54,7 +54,7 @@ from ...physics import (
 from ...physics.dust.config import DustConfig
 from ...physics.photo_reactions.config import RadiationConfig
 from ...physics.photo_reactions.shielding.config import ShieldingConfig
-from ...physics.thermodynamics.eos.config import EosConfig
+from ...physics.thermodynamics.config import ThermodynamicsConfig
 from ..elements import Elements
 from ..parsers import NetworkParser
 from ..reaction import (
@@ -66,6 +66,7 @@ from ..reaction import (
     Reactions,
     ShieldingProps,
 )
+from ..reaction.config import ReactionsConfig
 from ..species import Specie, Species
 from ._spec import NetworkSpec
 from ._symbols import NetworkSymbols
@@ -93,45 +94,33 @@ def _parse_rate_expr(rate: str) -> Expr:
 def _keyword_layer(**kwargs: Any) -> Dict[str, Any]:
     """Return the config layer of :class:`Network`'s keyword arguments.
 
-    Only the arguments given (not ``None``) are set, so an omitted one never
-    overrides the ``jaff.toml`` or the ``config`` layers.
+    The keywords are the keys of the ``[network]`` table, so the layer is that
+    table with the arguments given (not ``None``); an omitted one never
+    overrides the ``jaff.toml`` or the ``config`` layers.  A section given as a
+    config model becomes the dict of its set keys (:func:`_section`).
     """
-    given = {key: value for key, value in kwargs.items() if value is not None}
-    network = {
-        k: given[k]
-        for k in ("strict", "label", "funcfile", "expand_nuclei")
-        if k in given
-    }
-    reactions: Dict[str, Any] = {}
-    if "duplicate_policy" in given:
-        reactions["duplicate_policy"] = given["duplicate_policy"]
-
-    if "use_proxy_photoreaction" in given:
-        reactions["photo"] = {"use_proxy_photoreaction": given["use_proxy_photoreaction"]}
-
-    if reactions:
-        network["reactions"] = reactions
-
-    for section in ("radiation", "dust"):
-        if section in given:
-            network[section] = _section(given[section])
-
-    if "eos" in given:
-        network["thermodynamics"] = {"eos": _section(given["eos"])}
+    network = {key: _section(value) for key, value in kwargs.items() if value is not None}
 
     return {"network": network} if network else {}
 
 
-def _section(value: Mapping[str, Any] | ConfigModel) -> Dict[str, Any]:
-    """Return a config section given as a dict or a model.
+def _section(value: Any) -> Any:
+    """Return *value* as a plain config layer: models and dicts become dicts.
 
-    A model gives its explicitly set keys, except an atomic one (replaced
-    whole, e.g. an EOS), which gives every key so its ``type`` is kept.
+    A model gives its explicitly set keys, recursively, except an atomic one
+    (replaced whole, e.g. an EOS), which gives every key so its ``type`` is
+    kept.  Anything else is returned unchanged.
     """
     if isinstance(value, ConfigModel):
-        return value.model_dump(exclude_unset=not value._atomic)
+        if value._atomic:
+            return value.model_dump()
 
-    return dict(value)
+        return {name: _section(getattr(value, name)) for name in value.model_fields_set}
+
+    if isinstance(value, Mapping):
+        return {key: _section(item) for key, item in value.items()}
+
+    return value
 
 
 def _shielding_props(shielding: ShieldingConfig | None) -> ShieldingProps | None:
@@ -244,11 +233,11 @@ class Network:
         ``n_hnuc``), introspection sets and symbol standardization for this
         network.
     radiation : Radiation or None
-        Radiation field object; ``None`` when no ``network.radiation`` config
-        (or ``radiation_props``) is given.
+        Radiation field object; ``None`` when no ``[network.radiation]`` table
+        (in the config or the ``radiation`` argument) is given.
     dust : Dust or None
-        Dust module; ``None`` when no ``network.dust`` config (or
-        ``dust_props``) is given.
+        Dust module; ``None`` when no ``[network.dust]`` table (in the config or
+        the ``dust`` argument) is given.
     mass_dict : dict[str, ElementProps]
         Element mass dictionary used during species construction and the
         conservation checks.
@@ -279,7 +268,7 @@ class Network:
     >>> net = Network(
     ...     "h_photoionization",
     ...     config={"network": {"label": "hphoto"}},
-    ...     radiation_props={"bands": [13.6, 20.0, 50.0]},
+    ...     radiation={"bands": [13.6, 20.0, 50.0]},
     ... )
     >>> net.config.label, net.radiation.nbands
     ('hphoto', 2)
@@ -292,12 +281,11 @@ class Network:
         strict: bool | None = None,
         label: str | None = None,
         funcfile: bool | str | Path | None = None,
-        duplicate_policy: str | None = None,  # preserve-first, preserve-last, error
         expand_nuclei: bool | None = None,
-        radiation_props: RadiationConfig | Mapping[str, Any] | None = None,
-        dust_props: DustConfig | Mapping[str, Any] | None = None,
-        use_proxy_photoreaction: bool | None = None,
-        eos_props: EosConfig | Mapping[str, Any] | None = None,
+        reactions: ReactionsConfig | Mapping[str, Any] | None = None,
+        radiation: RadiationConfig | Mapping[str, Any] | None = None,
+        dust: DustConfig | Mapping[str, Any] | None = None,
+        thermodynamics: ThermodynamicsConfig | Mapping[str, Any] | None = None,
         use_jaff_toml: bool = True,
         _from_cli: bool = False,
     ):
@@ -318,7 +306,10 @@ class Network:
             file: a TOML file path, a ``dict`` shaped like a ``jaff.toml``
             (``{"network": {...}}``) or a ``JaffTomlConfig``; see
             :func:`~jaff.core.network.config.load_network_config`.  The keyword
-            arguments below override them when given (not ``None``).
+            arguments below are the keys of the ``[network]`` table, named and
+            nested as in the config file; given ones (not ``None``) override the
+            layers: tables merge key by key, except an ``eos`` or a shielding
+            model, which replaces the layers' whole.
         strict : bool | None, optional
             If ``True``, treat conservation violations and validation problems
             as fatal errors (process exits).  Default (``network.strict``):
@@ -329,13 +320,6 @@ class Network:
             Path to a ``.jfunc`` auxiliary function file.  ``True`` (the
             default) scans the network's directory for ``<network>.jfunc``;
             ``False`` skips auxiliary-function loading entirely.
-        duplicate_policy : str | None, optional
-            How to resolve two rate coefficients sharing a reaction, mechanism,
-            and temperature range: ``"preserve-first"`` (keep the first, drop
-            later duplicates; the default), ``"preserve-last"`` (keep the last),
-            or ``"error"`` (raise a ``ParserError``).  Sets
-            ``network.reactions.duplicate_policy``; a reaction's own policy in
-            the config still wins.
         expand_nuclei : bool | None, optional
             When ``True`` (default), an ``n_<element>_nuc`` symbol (e.g.
             ``n_H_nuc``, ``n_He_nuc``) in rate expressions is expanded to the
@@ -343,28 +327,23 @@ class Network:
             bearing that element.  Set to ``False`` to keep it as a free symbol
             ``n<element>_nuc`` (e.g. ``nh_nuc``).  (Plain ``n_X`` always resolves
             to species ``X``; only ``n_X_nuc`` is affected by this flag.)
-        radiation_props : RadiationConfig | dict | None, optional
-            Radiation field (``network.radiation``): enables the network's
-            :class:`Radiation` and photochemistry.  Its keys override those of
-            a ``[network.radiation]`` table in the config.  Without either, no
-            radiation field is built and photochemistry is disabled.
-        dust_props : DustConfig | dict | None, optional
-            Dust (``network.dust``): enables the network's :class:`Dust`.  Its
-            keys override those of a ``[network.dust]`` table in the config.
-            Without either, the dust module is disabled.
-        use_proxy_photoreaction : bool | None, optional
-            When ``True`` (default), cross-sections for photo-reactions are looked up
-            using the proxy photo-reaction string (via
-            :meth:`Reaction.normalized_proxy_reaction_str`) rather than the
-            reaction's standard serialized form, so proxy species such as
-            ``CHx``/``OHx`` resolve to the ``CH``/``OH`` entries.  A custom
-            ``.jfunc`` rate still takes precedence over the cross-sections.
-            Sets ``network.reactions.photo.use_proxy_photoreaction``.
-        eos_props : EosConfig | dict | None, optional
-            Equation of state (``network.thermodynamics.eos``) used by
-            :attr:`Thermodynamics.eos`; it replaces a ``[network.thermodynamics.eos]``
-            table in the config whole.  Without either, an ideal gas with the
-            default adiabatic index is used.
+        reactions : ReactionsConfig | dict | None, optional
+            The ``[network.reactions]`` table: e.g. ``duplicate_policy``,
+            ``t_cutoff``, ``photo`` (``pi_database``, ``use_proxy_photoreaction``,
+            ...) and per-reaction ``reaction`` settings, with the keys of the
+            config file.
+        radiation : RadiationConfig | dict | None, optional
+            The ``[network.radiation]`` table; enables the network's
+            :class:`Radiation` and photochemistry.  Without it (here or in the
+            config), no radiation field is built and photochemistry is disabled.
+        dust : DustConfig | dict | None, optional
+            The ``[network.dust]`` table; enables the network's :class:`Dust`.
+            Without it (here or in the config), the dust module is disabled.
+        thermodynamics : ThermodynamicsConfig | dict | None, optional
+            The ``[network.thermodynamics]`` table, e.g. ``{"eos": {"type":
+            "ideal", "gamma": 1.4}}``.  An ``eos`` given here replaces the
+            config's whole; without one, an ideal gas with the default adiabatic
+            index is used.
         use_jaff_toml : bool, optional
             Stack the ``jaff.toml`` next to the network file, if any, under the
             ``config`` layers (default ``True``).
@@ -378,8 +357,8 @@ class Network:
             If a predefined network directory has more than one ``.jet`` file,
             the config is invalid (including a per-reaction config entry that
             names no reaction of the network, or photo settings on a non-photo
-            reaction), a duplicate rate is found under
-            ``duplicate_policy="error"``, or the network or ``.jfunc`` file is
+            reaction), a duplicate rate is found under ``duplicate_policy =
+            "error"``, or the network or ``.jfunc`` file is
             malformed.
         TypeError
             If a *config* item is not a path, dict or ``JaffTomlConfig``.
@@ -394,12 +373,11 @@ class Network:
             strict=strict,
             label=label,
             funcfile=funcfile,
-            duplicate_policy=duplicate_policy,
             expand_nuclei=expand_nuclei,
-            use_proxy_photoreaction=use_proxy_photoreaction,
-            radiation=radiation_props,
-            dust=dust_props,
-            eos=eos_props,
+            reactions=reactions,
+            radiation=radiation,
+            dust=dust,
+            thermodynamics=thermodynamics,
         )
         self.config: NetworkConfig = load_network_config(
             Path(fname),
@@ -1260,7 +1238,7 @@ class Network:
 
         Examples
         --------
-        >>> net = Network("h_photoionization", radiation_props={"bands": [13.6, 20.0]})
+        >>> net = Network("h_photoionization", radiation={"bands": [13.6, 20.0]})
         >>> len(net.sradodes(order=2))
         2
         """

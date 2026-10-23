@@ -38,7 +38,7 @@ def test_without_radiation_ignored(emissive_network):
 
 def test_without_function_is_none(emissive_network):
     rad = emissive_network(
-        jfunc="", radiation_props=RadiationConfig(bands=BANDS)
+        jfunc="", radiation=RadiationConfig(bands=BANDS)
     ).radiation
 
     assert rad.emissivity is None
@@ -49,21 +49,21 @@ def test_without_function_is_none(emissive_network):
 def test_plain_emissivity_name_is_not_reserved(emissive_network):
     jfunc = "@function emissivity()\n@return 1e-20\n"
     rad = emissive_network(
-        jfunc=jfunc, radiation_props=RadiationConfig(bands=BANDS)
+        jfunc=jfunc, radiation=RadiationConfig(bands=BANDS)
     ).radiation
 
     assert rad.emissivity is None
 
 
 def test_spectral_expression_stored(emissive_network):
-    rad = emissive_network(radiation_props=RadiationConfig(bands=BANDS)).radiation
+    rad = emissive_network(radiation=RadiationConfig(bands=BANDS)).radiation
 
     assert float(rad.emissivity) == pytest.approx(1e-20, rel=1e-6, abs=0)
 
 
 def test_energy_mode_group_integrals(emissive_network):
     rad = emissive_network(
-        radiation_props=RadiationConfig(bands=BANDS, **U_MODE)
+        radiation=RadiationConfig(bands=BANDS, **U_MODE)
     ).radiation
 
     expected = [1e-20 * (13.6 - 6.0), 1e-20 * (100.0 - 13.6)]
@@ -76,7 +76,7 @@ def test_energy_mode_group_integrals(emissive_network):
 
 
 def test_photon_mode_group_integrals(emissive_network):
-    rad = emissive_network(radiation_props=RadiationConfig(bands=BANDS)).radiation
+    rad = emissive_network(radiation=RadiationConfig(bands=BANDS)).radiation
 
     expected = [
         1e-20 * math.log(13.6 / 6.0) / EV2ERG,
@@ -89,7 +89,7 @@ def test_photon_mode_group_integrals(emissive_network):
 
 def test_density_symbols_are_standardized(emissive_network):
     jfunc = "@function globalEmissivity(n_H, tgas)\n@return 1e-30*n_H*tgas\n"
-    net = emissive_network(jfunc=jfunc, radiation_props=RadiationConfig(bands=BANDS))
+    net = emissive_network(jfunc=jfunc, radiation=RadiationConfig(bands=BANDS))
 
     nden = net.symbols.ndens[net.species["H"].index]
     for group in net.radiation.groups:
@@ -100,13 +100,13 @@ def test_density_symbols_are_standardized(emissive_network):
 
 def test_symbols_reported_in_network_variables(emissive_network):
     jfunc = "@function globalEmissivity(tgas)\n@return 1e-30*tgas\n"
-    net = emissive_network(jfunc=jfunc, radiation_props=RadiationConfig(bands=BANDS))
+    net = emissive_network(jfunc=jfunc, radiation=RadiationConfig(bands=BANDS))
 
     assert net.symbols.tgas in net.symbols.variables
 
 
 def test_enters_density_equations_only(emissive_network):
-    net = emissive_network(radiation_props=RadiationConfig(bands=BANDS))
+    net = emissive_network(radiation=RadiationConfig(bands=BANDS))
     odes = net.sradodes(order=2)
     nb = net.radiation.nbands
 
@@ -116,13 +116,13 @@ def test_enters_density_equations_only(emissive_network):
 
 
 def test_jaff_round_trip_keeps_emissivity(emissive_network, tmp_path):
-    net = emissive_network(radiation_props=RadiationConfig(bands=BANDS))
+    net = emissive_network(radiation=RadiationConfig(bands=BANDS))
     net.to_jaff(tmp_path / "e.jaff")
 
     back = Network(
         str(tmp_path / "e.jaff"),
         funcfile=False,
-        radiation_props=RadiationConfig(bands=BANDS),
+        radiation=RadiationConfig(bands=BANDS),
     )
 
     assert back.radiation is not None

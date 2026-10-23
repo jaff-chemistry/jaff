@@ -143,7 +143,7 @@ This works in a network's `jaff.toml` as well as in a `jaffgen.toml`. See the
 full key list, and [Photochemistry](photochemistry.md) for the radiation setup
 that dust builds on.
 
-From Python, pass the same settings as `dust_props=` (a `DustConfig` or a
+From Python, pass the same settings as `dust=` (a `DustConfig` or a
 `dict`), together with radiation:
 
 ```python
@@ -153,15 +153,15 @@ from jaff.physics.photo_reactions.config import RadiationConfig
 
 net = Network(
     "GOW++",
-    radiation_props=RadiationConfig(
+    radiation=RadiationConfig(
         bands=[6.0, 11.2, 13.6],   # band edges in eV
         background_field="draine",  # reference field for chi_pe
     ),
-    dust_props=DustConfig(u_reduction="extinction", f_reduction="extinction"),
+    dust=DustConfig(u_reduction="extinction", f_reduction="extinction"),
 )
 ```
 
-Without a `[network.dust]` table or `dust_props`, the dust module is off.
+Without a `[network.dust]` table or `dust`, the dust module is off.
 
 ---
 
@@ -172,8 +172,8 @@ from jaff import Network
 
 net = Network(
     "GOW++",
-    radiation_props={"bands": [6.0, 11.2, 13.6]},
-    dust_props={"rv": 3.1},
+    radiation={"bands": [6.0, 11.2, 13.6]},
+    dust={"rv": 3.1},
 )
 
 # The dust container and its sub-objects

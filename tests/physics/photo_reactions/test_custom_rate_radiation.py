@@ -46,27 +46,27 @@ def test_without_radiation_custom_rate_is_kept(custom_network):
 
 
 def test_under_radiation_custom_rate_is_kept(custom_network):
-    rxn = _photo(custom_network(radiation_props=RadiationConfig(bands=BANDS)))
+    rxn = _photo(custom_network(radiation=RadiationConfig(bands=BANDS)))
 
     assert rxn.photo.custom_rad_rate is True
     assert float(rxn.rate_coefficient) == pytest.approx(1e-10, rel=1e-6, abs=0)
 
 
 def test_under_radiation_has_no_band_data(custom_network):
-    rxn = _photo(custom_network(radiation_props=RadiationConfig(bands=BANDS)))
+    rxn = _photo(custom_network(radiation=RadiationConfig(bands=BANDS)))
 
     assert rxn.photo.rgrouped is None
     assert rxn.band_xsecs.empty
 
 
 def test_under_radiation_removes_no_photons(custom_network):
-    net = custom_network(radiation_props=RadiationConfig(bands=BANDS))
+    net = custom_network(radiation=RadiationConfig(bands=BANDS))
 
     assert all(ode.is_zero for ode in net.sradodes(order=2))
 
 
 def test_under_radiation_warns_naming_the_reaction(custom_network, warnings):
-    custom_network(radiation_props=RadiationConfig(bands=BANDS))
+    custom_network(radiation=RadiationConfig(bands=BANDS))
 
     msgs = [m for m in warnings() if "chemRate0" in m]
     assert len(msgs) == 1
@@ -83,7 +83,7 @@ def test_without_radiation_no_warning(custom_network, warnings):
 
 def test_overridden_custom_rate_does_not_warn(custom_network, warnings):
     custom_network(
-        radiation_props=RadiationConfig(bands=BANDS),
+        radiation=RadiationConfig(bands=BANDS),
         config={"network": {"reactions": {"photo": {"override_custom_rate": True}}}},
     )
 

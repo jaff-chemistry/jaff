@@ -1,5 +1,5 @@
 # ABOUTME: Dust built from its DustConfig (R_V, reductions, photoelectric band) and
-# ABOUTME: enabled from the network config ([network.dust] table or dust_props)
+# ABOUTME: enabled from the network config ([network.dust] table or the dust keyword)
 
 from unittest.mock import MagicMock, patch
 
@@ -54,26 +54,26 @@ class TestNetworkDust:
     def test_no_dust_table_means_no_dust(self, make_network):
         assert make_network(NET, name="n.dat", funcfile=False).dust is None
 
-    def test_dust_props_accepts_a_dict(self, make_network):
+    def test_dust_keyword_accepts_a_dict(self, make_network):
         with patch(TABULAR):
             net = make_network(
                 NET,
                 name="n.dat",
                 funcfile=False,
-                dust_props={"pe": {"threshold_high": 12.0}},
+                dust={"pe": {"threshold_high": 12.0}},
             )
 
         assert net.dust is not None
         assert net.dust.pe.E_high.to_value(u.eV) == pytest.approx(12.0)
 
-    def test_dust_props_beats_jaff_toml(self, make_network, tmp_path):
+    def test_dust_keyword_beats_jaff_toml(self, make_network, tmp_path):
         (tmp_path / "jaff.toml").write_text(
             '[network.dust]\nrv = 5.5\nf_reduction = "none"\n'
         )
 
         with patch(TABULAR):
             net = make_network(
-                NET, name="n.dat", funcfile=False, dust_props=DustConfig(rv=4.0)
+                NET, name="n.dat", funcfile=False, dust=DustConfig(rv=4.0)
             )
 
         assert net.dust is not None

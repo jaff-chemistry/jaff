@@ -148,15 +148,21 @@ For an open set of plugins, let each plugin declare its settings instead — the
 shielding models return a `ShieldingParams` subclass from `config_model()` (see
 [Adding a Custom Shielding Function](adding-shielding-functions.md)).
 
-## Optional: a keyword argument or a command-line option
+## `Network` keyword arguments and command-line options
 
-Most settings need neither: users set them in a file, with `Network(config=...)`
-or with `--set`. To add a shortcut:
+`Network`'s keyword arguments are the keys of the `[network]` table, named and
+nested as in the file (`reactions=`, `radiation=`, `dust=`, `thermodynamics=`,
+...), and `_keyword_layer` passes them through unchanged. So:
 
-- **`Network` keyword argument**: add the parameter (default `None`, meaning
-  not given) and map it in `_keyword_layer` (`core/network/network.py`);
-- **`jaffgen`/`jaffx` option**: add the typer option and an entry in
-  `CLI_KEYS` (`cli/_helper.py`) mapping it to its key path.
+- **a new top-level `[network]` table or key** (a new field of `NetworkConfig`)
+  needs a `Network` parameter of the same name (default `None`, meaning not
+  given), typed as the model or a `dict`, and documented in `__init__`;
+  `tests/core/network/test_network_config.py` fails until it exists;
+- **a key inside an existing table** needs nothing: it is reached through that
+  table's keyword (`reactions={"photo": {...}}`), a `config=` layer or `--set`.
+
+A command-line shortcut is optional: add the typer option and an entry in
+`CLI_KEYS` (`cli/_helper.py`) mapping it to its key path.
 
 ## Regenerate and test
 
@@ -178,6 +184,7 @@ building the docs.
 - [x] Module has `__all__` and is listed in both `CONFIG_MODULES`
       (`tests/config/test_config_modules.py`, `src/jaff/_utils/api_docs.py`)
 - [x] The consuming class takes `(network, config)`; `Network` builds it
+- [x] A new top-level `[network]` key has a same-named `Network` keyword
 - [x] Checks placed by kind (type / validator / network build)
 - [x] Type-selected tables: `_atomic`, one model per type, discriminated union
 - [x] Schemas and reference regenerated; tests for defaults, bad values and

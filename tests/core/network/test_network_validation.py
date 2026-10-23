@@ -346,7 +346,7 @@ class TestNetworkValidation:
         try:
             with patch("builtins.print"):
                 with pytest.raises(ParserError, match="Duplicate reaction"):
-                    Network(temp_file, duplicate_policy="error")
+                    Network(temp_file, reactions={"duplicate_policy": "error"})
         finally:
             os.unlink(temp_file)
 

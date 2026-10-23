@@ -127,7 +127,7 @@ class GroupedPhotoReactionProps:
     >>> from jaff import Network
     >>> net = Network(
     ...     "h_photoionization",
-    ...     radiation_props={"bands": [1, 13.6, 100, "inf"]},
+    ...     radiation={"bands": [1, 13.6, 100, "inf"]},
     ... )
     >>> props = net.reactions.photo_reactions()[0].photo.rgrouped[1]
     >>> props.k

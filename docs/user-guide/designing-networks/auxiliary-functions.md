@@ -382,7 +382,7 @@ $$
 \langle\alpha\rangle_i = \frac{\int_\text{group} \alpha(E)\, w(E)\, dE}{\int_\text{group} w(E)\, dE}
 $$
 
-with $w(E) = E\,n(E)$ in `"u"` mode (the energy density loses each photon's energy) and $w(E) = n(E)$ in `"nph"` mode (the photon density loses photons). The averages are stored on `group.absorption_coefficient` (with `n_X` symbols resolved to the species densities) and the spectrum on `net.radiation.absorption_coefficient`. Absorption removes radiation from every direction in proportion to the intensity, so it also attenuates the flux $F_i$ (`rflux[i]`), with the same $\langle\alpha\rangle_i$. Set `absorption_attenuates_flux = false` (in [`[network.radiation]`](../configuration/reference.md#networkradiation), or `radiation_props={..., "absorption_attenuates_flux": False}` from Python) to apply it to the density equations only. Other symbols such as `tgas` stay symbolic, which needs a closed-form integral over every group (else `ValueError`). Without radiation it has no effect. A `.jaff` file stores it.
+with $w(E) = E\,n(E)$ in `"u"` mode (the energy density loses each photon's energy) and $w(E) = n(E)$ in `"nph"` mode (the photon density loses photons). The averages are stored on `group.absorption_coefficient` (with `n_X` symbols resolved to the species densities) and the spectrum on `net.radiation.absorption_coefficient`. Absorption removes radiation from every direction in proportion to the intensity, so it also attenuates the flux $F_i$ (`rflux[i]`), with the same $\langle\alpha\rangle_i$. Set `absorption_attenuates_flux = false` (in [`[network.radiation]`](../configuration/reference.md#networkradiation), or `radiation={..., "absorption_attenuates_flux": False}` from Python) to apply it to the density equations only. Other symbols such as `tgas` stay symbolic, which needs a closed-form integral over every group (else `ValueError`). Without radiation it has no effect. A `.jaff` file stores it.
 
 <!-- prettier-ignore -->
 !!! warning "Dust module"
@@ -392,7 +392,7 @@ with $w(E) = E\,n(E)$ in `"u"` mode (the energy density loses each photon's ener
 
 ## Radiation Moment Equations
 
-When a network is loaded with radiation transport enabled (a [`[network.radiation]`](../configuration/reference.md#networkradiation) table in its config, or `radiation_props=` passed to `Network`), JAFF builds a set of **radiation moment equations** alongside the chemical ODEs. Photo-reactions remove radiation from each band they absorb in.
+When a network is loaded with radiation transport enabled (a [`[network.radiation]`](../configuration/reference.md#networkradiation) table in its config, or `radiation=` passed to `Network`), JAFF builds a set of **radiation moment equations** alongside the chemical ODEs. Photo-reactions remove radiation from each band they absorb in.
 
 ### Radiation density variable — `radeden` / `photden`
 

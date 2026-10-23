@@ -15,7 +15,7 @@ TWO_SPECIES = "@format:idx,R,R,P,rate\n1,H,H,H2,1\n2,H2,H,H,1\n"
 @pytest.fixture
 def net(make_network):
     return make_network(
-        TWO_SPECIES, funcfile=False, eos_props=IdealEosConfig(gamma=GAMMA)
+        TWO_SPECIES, funcfile=False, thermodynamics={"eos": IdealEosConfig(gamma=GAMMA)}
     )
 
 
@@ -25,7 +25,7 @@ def test_eos_is_cached_internal_energy(net):
     assert net.thermodynamics.eos is eos
 
 
-def test_eos_uses_network_eos_props(net):
+def test_eos_uses_network_eos_config(net):
     sym = net.symbols
     expected = sym.ntot * k_B.cgs.value * sym.tgas / (GAMMA - 1.0)
     assert sp.simplify(net.thermodynamics.eos.volumetric - expected) == 0

@@ -269,3 +269,104 @@ class TestNetworkUsesConfig:
         }
 
         assert self._net(make_network, config=config).config.reactions.reaction
+
+
+class TestNetworkKeywordSections:
+    """Network's keywords are the [network] keys, named and nested as in the file."""
+
+    NET = "H + H -> H2 [10,1000] 1e-10\nH2 -> H + H [10,1000] 1e-10\n"
+
+    def _net(self, make_network, **kwargs):
+        return make_network(self.NET, name="n.dat", funcfile=False, **kwargs)
+
+    def test_signature_mirrors_network_table(self):
+        import inspect
+
+        from jaff import Network
+
+        params = list(inspect.signature(Network.__init__).parameters)
+
+        assert params[1:] == [
+            "fname",
+            "config",
+            "strict",
+            "label",
+            "funcfile",
+            "expand_nuclei",
+            "reactions",
+            "radiation",
+            "dust",
+            "thermodynamics",
+            "use_jaff_toml",
+            "_from_cli",
+        ]
+
+    def test_every_network_key_is_a_keyword(self):
+        import inspect
+
+        from jaff import Network
+
+        params = inspect.signature(Network.__init__).parameters
+
+        assert set(NetworkConfig.model_fields) <= set(params)
+
+    def test_reactions_dict(self, make_network):
+        net = self._net(
+            make_network,
+            reactions={"t_cutoff": "clip", "photo": {"use_proxy_photoreaction": False}},
+        )
+
+        assert net.config.reactions.t_cutoff == "clip"
+        assert net.config.reactions.photo.use_proxy_photoreaction is False
+
+    def test_reactions_model(self, make_network):
+        net = self._net(make_network, reactions=ReactionsConfig(t_cutoff="clip"))
+
+        assert net.config.reactions.t_cutoff == "clip"
+
+    def test_reactions_keyword_merges_over_jaff_toml(self, make_network, tmp_path):
+        (tmp_path / "jaff.toml").write_text(
+            '[network.reactions]\nduplicate_policy = "preserve-last"\n'
+        )
+
+        net = self._net(make_network, reactions={"t_cutoff": "clip"})
+
+        assert net.config.reactions.duplicate_policy == "preserve-last"
+        assert net.config.reactions.t_cutoff == "clip"
+
+    def test_thermodynamics_dict(self, make_network):
+        net = self._net(make_network, thermodynamics={"eos": {"gamma": 1.4}})
+
+        assert net.config.thermodynamics.eos.gamma == pytest.approx(1.4)
+
+    def test_thermodynamics_model_keeps_eos_type(self, make_network, tmp_path):
+        from jaff.physics.thermodynamics.eos.config import IdealEosConfig
+
+        (tmp_path / "jaff.toml").write_text(
+            '[network.thermodynamics.eos]\ntype = "multi_gamma"\n'
+        )
+
+        net = self._net(
+            make_network,
+            thermodynamics=ThermodynamicsConfig(eos=IdealEosConfig(gamma=1.4)),
+        )
+
+        assert net.config.thermodynamics.eos.type == "ideal"
+        assert net.config.thermodynamics.eos.gamma == pytest.approx(1.4)
+
+    def test_dust_model(self, make_network):
+        assert self._net(make_network, dust=DustConfig(rv=4.0)).config.dust.rv == 4.0
+
+    @pytest.mark.parametrize(
+        "old",
+        [
+            "radiation_props",
+            "dust_props",
+            "eos_props",
+            "duplicate_policy",
+            "use_proxy_photoreaction",
+        ],
+    )
+    def test_old_keywords_are_gone(self, make_network, old):
+        with pytest.raises(TypeError, match=old):
+            self._net(make_network, **{old: None})
