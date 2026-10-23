@@ -144,6 +144,7 @@ nav = [
       ] },
       { "core.Reactions" = [
         "reference/core/reactions/index.md",
+        "reference/core/reactions/photochemistry.md",
         "reference/core/reactions/add.md",
         "reference/core/reactions/add_rate.md",
         "reference/core/reactions/check_config.md",

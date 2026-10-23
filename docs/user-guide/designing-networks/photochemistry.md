@@ -446,7 +446,7 @@ for rxn in photo:
 rxn = photo[0]
 rxn.photo.xsec.photon_energy       # eV grid
 rxn.photo.xsec.photodecay          # cm² array (or None)
-rxn.photo.xsec.total               # spectrum-averaged σ (cm²); None without radiation
+rxn.photo.xsec_total               # spectrum-averaged σ (cm²); None without radiation
 rxn.photo.band_xsecs               # per-band <σ> and fractions (DataFrame)
 rxn.rate_coefficient               # Σ_i k_i, with the radiation density symbols
 rxn.photo.plot_xsecs()             # visualise σ(E)
@@ -456,15 +456,13 @@ print(net.sradodes())
 ```
 
 Cross-section lookup is also exposed directly via the
-`jaff.physics.Photochemistry` class. It takes the network the reactions belong
-to (for its config: the proxy look-up and the global `pi_database`). Constructing it downloads
+`jaff.physics.Photochemistry` class. The reactions catalogue owns one,
+`net.reactions.photochemistry`, built on first use; constructing one downloads
 the cross-section and line-shielding data files on first use (cached
-thereafter), so instantiate once and reuse:
+thereafter), so reuse it:
 
 ```python
-from jaff.physics import Photochemistry
-
-photo = Photochemistry(net)
+photo = net.reactions.photochemistry
 photo.get_xsec(rxn)         # XsecProps from the tabulated databases
 photo.get_verner_xsec(rxn)  # analytic Verner σ(E) (sympy) or None
 ```

@@ -10,6 +10,7 @@ Reactions can be looked up by verbatim string
 
 from __future__ import annotations
 
+from functools import cached_property
 from typing import TYPE_CHECKING, Any, Sequence, SupportsIndex, cast, overload
 
 from sympy import Basic, Expr
@@ -25,6 +26,8 @@ from .types import RateSegment
 
 if TYPE_CHECKING:
     import matplotlib.pyplot as plt
+
+    from ...physics import Photochemistry
 
 
 class Reactions(Catalogue[Reaction]):
@@ -117,8 +120,27 @@ class Reactions(Catalogue[Reaction]):
 
         ``Network`` freezes its catalogue before running the parsers'
         post-processing hooks, which may change reactions but not add them.
+        Logs the :attr:`photochemistry` database fallbacks, if any.
         """
         self.__frozen = True
+        if "photochemistry" in self.__dict__:
+            self.photochemistry.log_fallback_summary()
+
+    @cached_property
+    def photochemistry(self) -> Photochemistry:
+        """The cross-section lookup service of the photo reactions.
+
+        Built on first use (it downloads the cross-section and shielding data on
+        first use); its database fallbacks are logged once, when the catalogue
+        is frozen.
+
+        Returns
+        -------
+        Photochemistry
+        """
+        from ...physics import Photochemistry
+
+        return Photochemistry(self.config)
 
     @overload
     def __getitem__(self, key: str) -> Reaction | list[Reaction]: ...

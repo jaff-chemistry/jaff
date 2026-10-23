@@ -44,7 +44,6 @@ from ...io import JaffLogger, jaff_progress
 from ...io._io import to_jaff_file, write_data_table
 from ...physics import (
     Dust,
-    Photochemistry,
     Radiation,
     Thermodynamics,
     get_sfluxes,
@@ -399,7 +398,6 @@ class Network:
             if self.config.radiation is not None
             else None
         )
-        self._photochemistry: None | Photochemistry = None
         self.dust: Dust | None = (
             Dust(self, self.config.dust) if self.config.dust is not None else None
         )
@@ -460,9 +458,6 @@ class Network:
         special_species = self.__build_species(rows)
         self.elements: Elements = Elements(self.species._list)
         self.__build_reactions(rows, global_vars, special_species)
-
-        if self._photochemistry is not None:
-            self._photochemistry.log_fallback_summary()
 
         self.logger.info(f"Loaded {self.reactions.count} reactions")
         self.logger.info(

@@ -74,3 +74,39 @@ class TestExports:
         assert not hasattr(jaff.core, "PhotoReactionProps")
         assert not hasattr(jaff.core.reaction, "PhotoReactionProps")
         assert jaff.core.PhotoReaction is PhotoReaction
+
+
+class TestPhotochemistryOwner:
+    def test_reactions_own_one(self, make_network):
+        from jaff.physics import Photochemistry
+
+        net = _net(make_network)
+
+        assert isinstance(net.reactions.photochemistry, Photochemistry)
+        assert net.reactions.photochemistry is net.reactions.photochemistry
+        assert not hasattr(net, "_photochemistry")
+
+    def test_built_from_the_reactions_config(self, make_network):
+        from jaff.physics import Photochemistry
+
+        net = _net(make_network)
+        rxn = _photo_reaction(net)
+
+        assert Photochemistry(net.reactions.config).get_xsec(rxn).database == "norad"
+
+
+class TestXsecTotal:
+    def test_set_with_radiation(self, make_network):
+        rxn = _photo_reaction(_net(make_network, radiation=BANDS))
+
+        assert float(rxn.photo.xsec_total) > 0.0
+
+    def test_none_without_radiation(self, make_network):
+        rxn = _photo_reaction(_net(make_network))
+
+        assert rxn.photo.xsec_total is None
+
+    def test_not_on_the_database_record(self, make_network):
+        rxn = _photo_reaction(_net(make_network, radiation=BANDS))
+
+        assert not hasattr(rxn.photo.xsec, "total")

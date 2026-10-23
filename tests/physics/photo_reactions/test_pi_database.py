@@ -35,7 +35,7 @@ class TestReactionAttribute:
 
 
 def _net(pi_database=None, own=None):
-    """Minimal network stand-in: config (no proxy lookups, global pi_database).
+    """Reactions settings: no proxy lookups, the global ``pi_database``.
 
     *own* maps a serialized reaction to the ``pi_database`` set for it alone.
     """
@@ -48,19 +48,15 @@ def _net(pi_database=None, own=None):
         {"reactions": {"photo": photo, "reaction": entries}}
     )
 
-    return SimpleNamespace(
-        config=config,
-        reactions=SimpleNamespace(config=config.reactions),
-        radiation=None,
-    )
+    return config.reactions
 
 
-def _rxn(key, net):
-    """Reaction stand-in with its settings resolved from *net*'s config."""
+def _rxn(key, config):
+    """Reaction stand-in with its settings resolved from the reactions *config*."""
     return SimpleNamespace(
         serialized=key,
         normalized_proxy_reaction_str=lambda: key,
-        photo=stub_photo(config=net.config.reactions.resolve(key).photo),
+        photo=stub_photo(config=config.resolve(key).photo),
     )
 
 
@@ -69,10 +65,10 @@ def pc_and_warn():
     """Photochemistry factory whose logger.warning is a mock."""
     logger = logging.getLogger("pi-database-test")
 
-    def _make(net):
+    def _make(config):
         with patch("jaff.physics.photo_reactions._photochemistry.JaffLogger") as jl:
             jl.return_value.get_logger.return_value = logger
-            return Photochemistry(net)
+            return Photochemistry(config)
 
     with patch.object(logger, "warning") as warn:
         yield _make, warn
@@ -81,7 +77,7 @@ def pc_and_warn():
 class TestResolution:
     def test_default_norad_without_radiation(self, pc_and_warn):
         make, warn = pc_and_warn
-        x = (pc := make(_net())).get_xsec(_rxn("He._PHOTON__He+.e-", pc.net))
+        x = (pc := make(_net())).get_xsec(_rxn("He._PHOTON__He+.e-", pc.config))
         assert x.database == "norad"
         assert x.photodecay is not None and x.photodecay_expr is None
         warn.assert_not_called()
@@ -89,13 +85,13 @@ class TestResolution:
     @pytest.mark.parametrize("db", ["norad", "verner", "leiden"])
     def test_global_choice(self, pc_and_warn, db):
         make, warn = pc_and_warn
-        x = (pc := make(_net(db))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.net))
+        x = (pc := make(_net(db))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.config))
         assert x.database == db
         warn.assert_not_called()
 
     def test_verner_dict_is_symbolic(self, pc_and_warn):
         make, _ = pc_and_warn
-        x = (pc := make(_net("verner"))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.net))
+        x = (pc := make(_net("verner"))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.config))
         assert isinstance(x.photodecay_expr, sp.Basic)
         assert x.photodecay_expr.free_symbols == {NetworkSymbols.ph_E}
         assert x.photon_energy is None and x.photodecay is None
@@ -103,13 +99,13 @@ class TestResolution:
 
     def test_per_reaction_override_beats_global(self, pc_and_warn):
         make, _ = pc_and_warn
-        x = (pc := make(_net("verner", own={"C._PHOTON__C+.e-": "leiden"}))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.net))
+        x = (pc := make(_net("verner", own={"C._PHOTON__C+.e-": "leiden"}))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.config))
         assert x.database == "leiden"
 
     def test_leiden_missing_falls_back_to_norad(self, pc_and_warn):
         make, warn = pc_and_warn
         pc = make(_net("leiden"))
-        x = pc.get_xsec(_rxn("P+._PHOTON__P++.e-", pc.net))
+        x = pc.get_xsec(_rxn("P+._PHOTON__P++.e-", pc.config))
         assert x.database == "norad"
         warn.assert_not_called()
         assert pc.fallbacks == [("P+._PHOTON__P++.e-", "leiden", "norad")]
@@ -117,7 +113,7 @@ class TestResolution:
     def test_norad_missing_falls_back_to_verner(self, pc_and_warn):
         make, warn = pc_and_warn
         pc = make(_net())
-        x = pc.get_xsec(_rxn("Ca+++++._PHOTON__Ca++++++.e-", pc.net))
+        x = pc.get_xsec(_rxn("Ca+++++._PHOTON__Ca++++++.e-", pc.config))
         assert x.database == "verner"
         warn.assert_not_called()
         assert pc.fallbacks == [("Ca+++++._PHOTON__Ca++++++.e-", "norad", "verner")]
@@ -125,28 +121,28 @@ class TestResolution:
     def test_molecule_falls_back_to_leiden(self, pc_and_warn):
         make, warn = pc_and_warn
         pc = make(_net())
-        x = pc.get_xsec(_rxn("CO._PHOTON__CO+.e-", pc.net))
+        x = pc.get_xsec(_rxn("CO._PHOTON__CO+.e-", pc.config))
         assert x.database == "leiden"
         warn.assert_not_called()
         assert pc.fallbacks == [("CO._PHOTON__CO+.e-", "norad", "leiden")]
 
     def test_norad_never_reports_leiden_absorption(self, pc_and_warn):
         make, _ = pc_and_warn
-        x = (pc := make(_net("norad"))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.net))
+        x = (pc := make(_net("norad"))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.config))
         assert x.process.absorption is False and x.photo_absorption is None
 
     def test_missing_everywhere_returns_none_when_not_required(self, pc_and_warn):
         make, _ = pc_and_warn
-        assert (pc := make(_net())).get_xsec(_rxn("C9H9._PHOTON__C9H9+.e-", pc.net)) is None
+        assert (pc := make(_net())).get_xsec(_rxn("C9H9._PHOTON__C9H9+.e-", pc.config)) is None
 
     def test_missing_everywhere_raises_when_required(self, pc_and_warn):
         make, _ = pc_and_warn
         with pytest.raises(ParserError, match="C9H9"):
-            (pc := make(_net())).get_xsec(_rxn("C9H9._PHOTON__C9H9+.e-", pc.net), required=True)
+            (pc := make(_net())).get_xsec(_rxn("C9H9._PHOTON__C9H9+.e-", pc.config), required=True)
 
     def test_dissociation_ignores_pi_database(self, pc_and_warn):
         make, warn = pc_and_warn
-        x = (pc := make(_net("verner"))).get_xsec(_rxn("CO._PHOTON__C.O", pc.net))
+        x = (pc := make(_net("verner"))).get_xsec(_rxn("CO._PHOTON__C.O", pc.config))
         assert x.database == "leiden"
         assert x.process.decay_type == "dissociation"
         warn.assert_not_called()
@@ -154,7 +150,7 @@ class TestResolution:
     def test_override_on_dissociation_raises(self, pc_and_warn):
         make, _ = pc_and_warn
         with pytest.raises(ParserError, match="photoionization"):
-            (pc := make(_net(own={"CO._PHOTON__C.O": "verner"}))).get_xsec(_rxn("CO._PHOTON__C.O", pc.net))
+            (pc := make(_net(own={"CO._PHOTON__C.O": "verner"}))).get_xsec(_rxn("CO._PHOTON__C.O", pc.config))
 
 
 class _FakeReaction:
@@ -179,7 +175,7 @@ class TestVernerIntegration:
     @pytest.mark.parametrize("bands", [BANDS, [6.0, 13.6, 100.0, "inf"]])
     def test_symbolic_matches_dense_tabulation(self, pc_and_warn, bands):
         make, _ = pc_and_warn
-        sym = (pc := make(_net("verner"))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.net))
+        sym = (pc := make(_net("verner"))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.config))
         E = NetworkSymbols.ph_E
         # The fit is zero above E_max, so a dense grid up to E_max suffices.
         e_max = float(get_bounds(sym.photodecay_expr, E)[-1])
@@ -301,7 +297,7 @@ class TestFallbackSummary:
             "Ca+++++._PHOTON__Ca++++++.e-",
             "C._PHOTON__C+.e-",
         ):
-            pc.get_xsec(_rxn(key, pc.net))
+            pc.get_xsec(_rxn(key, pc.config))
         warn.assert_not_called()
         pc.log_fallback_summary()
         warn.assert_called_once()
@@ -314,7 +310,7 @@ class TestFallbackSummary:
     def test_no_fallbacks_no_warning(self, pc_and_warn):
         make, warn = pc_and_warn
         pc = make(_net())
-        pc.get_xsec(_rxn("C._PHOTON__C+.e-", pc.net))
+        pc.get_xsec(_rxn("C._PHOTON__C+.e-", pc.config))
         pc.log_fallback_summary()
         warn.assert_not_called()
 
@@ -384,7 +380,7 @@ class TestJaffgenWiring:
 class TestPlotSampling:
     def test_expression_sampled_on_threshold_range(self, pc_and_warn):
         make, _ = pc_and_warn
-        x = (pc := make(_net("verner"))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.net))
+        x = (pc := make(_net("verner"))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.config))
         s = _sampled_xsecs(x)
         E = s.photon_energy
         assert E[0] == pytest.approx(11.26, rel=1e-3)
@@ -392,7 +388,7 @@ class TestPlotSampling:
 
     def test_tabulated_passthrough(self, pc_and_warn):
         make, _ = pc_and_warn
-        x = (pc := make(_net("norad"))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.net))
+        x = (pc := make(_net("norad"))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.config))
         assert _sampled_xsecs(x) is x
 
     def test_xsec_series_accepts_verner(self, pc_and_warn):
@@ -401,7 +397,7 @@ class TestPlotSampling:
         from jaff.plotting.adapters import xsec_series
 
         make, _ = pc_and_warn
-        x = (pc := make(_net("verner"))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.net))
+        x = (pc := make(_net("verner"))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.config))
         (s,) = xsec_series(
             SimpleNamespace(photo=stub_photo(xsec=x)), processes="photodecay"
         )

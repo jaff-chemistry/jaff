@@ -40,6 +40,7 @@ from .shielding import _get_shielding_function
 if TYPE_CHECKING:
     from ...core import Reaction
     from ...core.network import Network
+    from ...core.reaction.config import ReactionsConfig
 
 
 #: Photoionization cross-section databases, in fallback order after the user's choice.
@@ -91,12 +92,6 @@ class XsecProps:
     photodecay_expr : sympy.Expr or None
         Photodecay cross section (cm²) as an expression in ``ph_E`` (eV);
         ``None`` for a tabulated one.
-    total : float or sympy.Expr or None
-        Photodecay cross section averaged over the whole radiation spectrum
-        (cm²), set when the reaction's rate is computed from the bands (see
-        :meth:`Radiation.get_reaction_rate_props`).  ``0.0`` until then when
-        a radiation field is configured, ``None`` without one.  An expression
-        when a ``photoCrossSection`` uses other symbols (e.g. ``tgas``).
 
     Examples
     --------
@@ -110,8 +105,6 @@ class XsecProps:
     ('norad', 'ionization', False)
     >>> xsec.photon_energy.shape == xsec.photodecay.shape
     True
-    >>> float(xsec.total)
-    1.2403886126668026e-19
     """
 
     units: XsecUnits
@@ -121,10 +114,6 @@ class XsecProps:
     photo_absorption: np.ndarray | None
     photodecay: np.ndarray | None
     photodecay_expr: Expr | None
-    # Cross section averaged over the whole radiation spectrum (cm²); 0.0 until
-    # the rate is computed when radiation is enabled, None without radiation.
-    # An expression when a photoCrossSection uses other symbols (e.g. tgas).
-    total: float | Expr | None = None
 
 
 class Photochemistry:
@@ -134,18 +123,19 @@ class Photochemistry:
     cross sections from the tabulated Leiden and NORAD data files and the
     Verner (1996) fits in the JAFF database (``verner_cross_sections`` table).
 
-    The network creates one lazily, when its first photo reaction is built, and
-    every :class:`~jaff.core.reaction.Reaction` stores what it resolves as
-    ``reaction.photo.xsec`` (an :class:`XsecProps`).  Photodissociation always
+    The reactions catalogue builds one on first use
+    (:attr:`~jaff.core.reaction.Reactions.photochemistry`), and every photo
+    reaction stores what it resolves as ``reaction.photo.xsec`` (an
+    :class:`XsecProps`).  Photodissociation always
     comes from Leiden; photoionisation follows the reaction's ``pi_database``,
     then ``[network.reactions.photo] pi_database`` (``"norad"`` by default),
     then the other databases in the order ``norad``, ``verner``, ``leiden``.
 
     Attributes
     ----------
-    net : Network
-        The network the reactions belong to; its config supplies the
-        ``pi_database`` and ``use_proxy_photoreaction`` settings.
+    config : ReactionsConfig
+        The reactions catalogue's settings (read-only): a reaction's own
+        ``pi_database`` (``config.own``) must be a photoionisation.
     logger : logging.Logger
         The JAFF logger, used by :meth:`log_fallback_summary`.
     fallbacks : list of tuple of (str, str, str)
@@ -158,11 +148,11 @@ class Photochemistry:
     >>> from jaff.physics import Photochemistry
     >>> net = Network("h_photoionization")
     >>> rxn = net.reactions.photo_reactions()[0]
-    >>> Photochemistry(net).get_xsec(rxn).database
+    >>> Photochemistry(net.reactions.config).get_xsec(rxn).database
     'norad'
     """
 
-    def __init__(self, network: Network):
+    def __init__(self, config: ReactionsConfig):
         """Ensure the cross-section and shielding data files are available locally.
 
         Constructing a :class:`Photochemistry` triggers
@@ -174,10 +164,10 @@ class Photochemistry:
 
         Parameters
         ----------
-        network : Network
-            The network whose photo reactions are resolved.
+        config : ReactionsConfig
+            The settings of the reactions catalogue that owns it.
         """
-        self.net = network
+        self.config: ReactionsConfig = config
         self.logger: logging.Logger = JaffLogger().get_logger()
         # (key, requested, used) for photoionizations resolved from a fallback
         # database; reported once by log_fallback_summary().
@@ -250,7 +240,7 @@ class Photochemistry:
 
     def _pi_override(self, reaction: Reaction) -> str | None:
         """The ``pi_database`` set for the reaction itself, or ``None``."""
-        own = self.net.reactions.config.own(reaction.serialized)
+        own = self.config.own(reaction.serialized)
 
         return (
             own.photo.pi_database if own is not None and own.photo is not None else None
@@ -263,14 +253,8 @@ class Photochemistry:
 
         return list(dict.fromkeys([chosen, *PI_DATABASES]))
 
-    def _default_total(self) -> float | None:
-        """Initial :attr:`XsecProps.total`: ``0.0`` with radiation, else ``None``."""
-        return 0.0 if self.net.radiation is not None else None
-
     @staticmethod
-    def _tabulated_xsec(
-        db: str, loc: str, row: dict[str, Any], total: float | None
-    ) -> XsecProps:
+    def _tabulated_xsec(db: str, loc: str, row: dict[str, Any]) -> XsecProps:
         """Read one tabulated (Leiden / NORAD) HDF5 group into an XsecProps."""
         pr_xsec = HDF5().to_dict(str(JAFF_DIR.resolve() / loc))
         photo_absorption = pr_xsec.get("photoabsorption", {}).get("_data", None)
@@ -286,7 +270,6 @@ class Photochemistry:
             photo_absorption=photo_absorption,
             photodecay=pr_xsec.get("photodecay", {}).get("_data", None),
             photodecay_expr=None,
-            total=total,
         )
 
     def _load(self, db: str, key: str, row: dict[str, Any] | None) -> XsecProps | None:
@@ -305,13 +288,12 @@ class Photochemistry:
                 photo_absorption=None,
                 photodecay=None,
                 photodecay_expr=expr,
-                total=self._default_total(),
             )
 
         if row is None or not row[db]:
             return None
 
-        return self._tabulated_xsec(db, row[db], row, self._default_total())
+        return self._tabulated_xsec(db, row[db], row)
 
     def get_custom_xsec(self, reaction: Reaction, expr: Expr) -> XsecProps:
         """Cross sections from a ``.jfunc`` ``photoCrossSection`` function.
@@ -344,7 +326,6 @@ class Photochemistry:
             photo_absorption=None,
             photodecay=None,
             photodecay_expr=expr,
-            total=self._default_total(),
         )
 
     def get_xsec(self, reaction: Reaction, required: bool = False) -> XsecProps | None:

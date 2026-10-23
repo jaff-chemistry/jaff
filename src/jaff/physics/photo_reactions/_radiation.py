@@ -357,7 +357,7 @@ class Radiation:
     photden_tot : sympy.Expr or float
         Integral of ``nph_profile`` over the full band range (the sum of the
         per-band ``grp.photden``), used to normalise the full-spectrum
-        cross section ``reaction.photo.xsec.total``.
+        cross section ``reaction.photo.xsec_total``.
     emissivity : sympy.Expr or None
         The network ``.jfunc`` ``globalEmissivity``: the *volume* emissivity,
         i.e. radiation energy emitted per unit volume, time and photon energy
@@ -396,7 +396,7 @@ class Radiation:
     ``<E>_i`` the band-average photon energy (``grp.eavg``, erg).  The
     :class:`~jaff.core.reaction.Reaction` constructor calls
     :meth:`get_reaction_rate_props` and stores the results on
-    ``reaction.rate_coefficient``, ``reaction.photo.xsec.total`` and
+    ``reaction.rate_coefficient``, ``reaction.photo.xsec_total`` and
     ``reaction.photo.rgrouped``.  :func:`~jaff.physics.get_sradodes` builds the
     radiation-moment equations from them, laid out by :meth:`ordered_index`.
 
@@ -609,7 +609,7 @@ class Radiation:
             over bands, the cross section averaged over the whole spectrum
             (cm²), and one entry per band in ``self.groups`` order.  The
             caller stores them on ``reaction.rate_coefficient``,
-            ``reaction.photo.xsec.total`` and ``reaction.photo.rgrouped``.
+            ``reaction.photo.xsec_total`` and ``reaction.photo.rgrouped``.
 
         Raises
         ------

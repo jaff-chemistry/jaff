@@ -41,8 +41,12 @@ class PhotoReaction:
         ``use_proxy_photoreaction`` and ``shielding``.
     xsec : XsecProps or None
         Cross sections of the reaction's single decay channel, or ``None``
-        when no database has an entry.  ``xsec.total`` holds the cross
-        section averaged over the whole radiation spectrum (cm²).
+        when no database has an entry.
+    xsec_total : float or sympy.Expr or None
+        The photodecay cross section averaged over the whole radiation
+        spectrum (cm²); ``None`` without a radiation field, and for a
+        ``custom_rad_rate`` reaction.  An expression when a
+        ``photoCrossSection<N>`` uses other symbols (e.g. ``tgas``).
     custom_rad_rate : bool
         ``True`` when the rate comes from a ``.jfunc`` ``chemRate<N>``
         function rather than from the cross sections; such a reaction is not
@@ -92,6 +96,7 @@ class PhotoReaction:
         self.reaction: Reaction = reaction
         self.config: PhotoConfig = config
         self.xsec: XsecProps | None = None
+        self.xsec_total: float | Expr | None = None
         self.custom_rad_rate: bool = False
         self.rgrouped: List[GroupedPhotoReactionProps] | None = None
         self.band_rate: Expr | None = None
@@ -145,11 +150,8 @@ class PhotoReaction:
 
     def _set_xsec(self) -> None:
         """Set :attr:`xsec` from a ``photoCrossSection<N>`` or the databases."""
-        from ...physics import Photochemistry
-
         reaction, net = self.reaction, self.reaction.net
-        if net._photochemistry is None:
-            net._photochemistry = Photochemistry(net)
+        photochemistry = net.reactions.photochemistry
 
         custom = reaction.function("photoCrossSection")
         if custom is not None and not self._overrides_custom_cross_section():
@@ -161,11 +163,11 @@ class PhotoReaction:
                     "comes from a photoCrossSection function"
                 )
 
-            self.xsec = net._photochemistry.get_custom_xsec(reaction, custom)
+            self.xsec = photochemistry.get_custom_xsec(reaction, custom)
             return
 
         # A cross section is mandatory only when radiation sets the rate.
-        self.xsec = net._photochemistry.get_xsec(
+        self.xsec = photochemistry.get_xsec(
             reaction,
             required=net.radiation is not None and not self.custom_rad_rate,
         )
@@ -205,8 +207,7 @@ class PhotoReaction:
 
         k_tot, xsec_tot, grouped = net.radiation.get_reaction_rate_props(reaction)
 
-        assert self.xsec is not None
-        self.xsec.total = xsec_tot
+        self.xsec_total = xsec_tot
         self.rgrouped = grouped
         self.band_rate = k_tot
 
@@ -214,7 +215,7 @@ class PhotoReaction:
         """The expressions the component holds.
 
         Its :attr:`band_rate`, each band's rate coefficient ``k`` and symbolic
-        band cross section, and a symbolic spectrum-averaged ``xsec.total``.
+        band cross section, and a symbolic :attr:`xsec_total`.
 
         Returns
         -------
@@ -226,8 +227,8 @@ class PhotoReaction:
             exprs.append(band.k)
             if isinstance(band.xsec, Expr):
                 exprs.append(band.xsec)
-        if self.xsec is not None and isinstance(self.xsec.total, Expr):
-            exprs.append(self.xsec.total)
+        if isinstance(self.xsec_total, Expr):
+            exprs.append(self.xsec_total)
 
         return exprs
 
@@ -245,8 +246,8 @@ class PhotoReaction:
             band.k = cast(Expr, band.k.xreplace(mapping))
             if isinstance(band.xsec, Expr):
                 band.xsec = cast(Expr, band.xsec.xreplace(mapping))
-        if self.xsec is not None and isinstance(self.xsec.total, Expr):
-            self.xsec.total = cast(Expr, self.xsec.total.xreplace(mapping))
+        if isinstance(self.xsec_total, Expr):
+            self.xsec_total = cast(Expr, self.xsec_total.xreplace(mapping))
 
     @property
     def band_xsecs(self) -> pd.DataFrame:
@@ -274,7 +275,7 @@ class PhotoReaction:
               cm² (``NaN`` when it is not a number, e.g. a
               ``photoCrossSection<N>`` that depends on ``tgas``).
             - ``xsec_frac`` : the band-average cross section divided by the
-              spectrum-averaged one (``xsec.total``); ``0`` when that is zero.
+              spectrum-averaged one (:attr:`xsec_total`); ``0`` when that is zero.
               Not normalised to sum to 1 over the bands.
 
             Empty (with the columns above) when the reaction contributes to no

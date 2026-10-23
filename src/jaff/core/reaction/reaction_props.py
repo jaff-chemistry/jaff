@@ -38,7 +38,7 @@ class GroupedPhotoReactionProps:
         ``tgas``).
     xsec_frac : float or sympy.Expr
         ``xsec`` divided by the photodecay cross section averaged over the
-        whole spectrum (``reaction.photo.xsec.total``); ``0.0`` when that
+        whole spectrum (``reaction.photo.xsec_total``); ``0.0`` when that
         average is zero.  Not a fraction of the rate: the values need not sum
         to 1 over the bands and a band where σ is above its spectrum average
         exceeds 1.

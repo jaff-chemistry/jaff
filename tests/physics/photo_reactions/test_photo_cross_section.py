@@ -66,7 +66,7 @@ class TestCustomCrossSection:
         props = RadiationConfig(bands=BANDS)
         rxn = _photo(xsec_network(radiation=props))
 
-        assert float(rxn.photo.xsec.total) == pytest.approx(1e-18, rel=1e-6, abs=0)
+        assert float(rxn.photo.xsec_total) == pytest.approx(1e-18, rel=1e-6, abs=0)
         bands = [float(band.xsec) for band in rxn.photo.rgrouped]
         assert bands == pytest.approx([1e-18, 1e-18], rel=1e-6, abs=0)
         assert rxn.rate_coefficient.has(rxn.net.radiation.den[0])
@@ -91,7 +91,7 @@ class TestCustomCrossSection:
         rxn = _photo(net)
         tgas = net.symbols.tgas
 
-        assert float(rxn.photo.xsec.total / tgas) == pytest.approx(1e-18, rel=1e-6, abs=0)
+        assert float(rxn.photo.xsec_total / tgas) == pytest.approx(1e-18, rel=1e-6, abs=0)
         assert all(band.xsec.has(tgas) for band in rxn.photo.rgrouped)
         assert rxn.rate_coefficient.has(tgas)
 
@@ -103,7 +103,7 @@ class TestCustomCrossSection:
         raw = sp.Symbol("n_C")
         nden = net.symbols.ndens[net.species["C"].index]
 
-        exprs = [rxn.photo.xsec.total, *net.sradodes(order=2)]
+        exprs = [rxn.photo.xsec_total, *net.sradodes(order=2)]
         for band in rxn.photo.rgrouped:
             exprs += [band.k, band.xsec]
         assert not any(sp.sympify(e).has(raw) for e in exprs)
