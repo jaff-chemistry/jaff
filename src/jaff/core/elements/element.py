@@ -20,14 +20,20 @@ class Element:
     same object.  The first construction populates all attributes from the
     mass dictionary; subsequent constructions are no-ops.
 
+    Elements compare, sort and hash by :attr:`symbol`; comparing an
+    ``Element`` with any other type raises :exc:`TypeError`.  ``str(element)``
+    returns the symbol.
+
     Attributes
     ----------
     symbol : str
         Periodic-table symbol (e.g. ``"H"``, ``"He"``).
     name : str
-        Full element name (e.g. ``"hydrogen"``).
+        Full element name as stored in the mass dictionary (e.g.
+        ``"Hydrogen"``).
     mass : float
-        Mass of the most common isotope in grams (CGS).
+        Mass of the element in grams (CGS), i.e. the standard atomic weight
+        expressed in grams.
     atomic_mass : float
         Standard atomic weight in atomic mass units.
     protons : int
@@ -36,6 +42,25 @@ class Element:
         Number of neutrons in the most common isotope.
     electrons : int
         Number of electrons in the neutral atom.
+
+    Notes
+    -----
+    The mass dictionary also holds pseudo-elements such as ``"e-"`` and
+    ``"GRAIN"``; for these only ``name`` and ``mass`` are set and the other
+    numeric attributes are ``None``.
+
+    Examples
+    --------
+    >>> from jaff.core import Element
+    >>> h = Element("H")
+    >>> h.name, h.protons, h.atomic_mass
+    ('Hydrogen', 1, 1.008)
+    >>> Element("H") is h
+    True
+    >>> str(Element("He"))
+    'He'
+    >>> sorted([Element("O"), Element("C")])
+    [ElementObject(symbol='C'), ElementObject(symbol='O')]
     """
 
     _register: dict = {}
@@ -47,7 +72,7 @@ class Element:
 
         Call this before creating any ``Element`` instances if you need a
         custom mass table.  Calling it after elements have already been
-        registered has no effect on those existing instances.
+        registered has no effect on those existing flyweight instances.
 
         Parameters
         ----------

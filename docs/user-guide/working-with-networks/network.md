@@ -133,10 +133,10 @@ net = Network(
 | `elements`        | `Elements`        | [`Elements`](elements.md) catalogue derived from the species                                                        |
 | `reactant_matrix` | `np.ndarray`      | Integer stoichiometry, shape `(n_reactions, n_species)` — reactant counts                                           |
 | `product_matrix`  | `np.ndarray`      | Integer stoichiometry, same shape — product counts                                                                  |
-| `thermodynamics`  | `Thermodynamics`  | Thermal equations: `eos`, `dEdt_chemical`, `dEdt_extra`, `dEdt_tot`, `dTdt_chemical`, `dTdt_extra`, `dTdt_tot`; see [thermodynamics](../../api/core/network/thermodynamics.md) |
+| `thermodynamics`  | `Thermodynamics`  | Thermal equations: `eos`, `dEdt_chemical`, `dEdt_extra`, `dEdt_tot`, `dTdt_chemical`, `dTdt_extra`, `dTdt_tot`; see [thermodynamics](../../reference/physics/thermodynamics/index.md) |
 | `radiation`       | `Radiation\|None` | Radiation field object; `None` when the config has no `[network.radiation]` table                                   |
 | `mass_dict`       | `dict`            | Element mass dictionary used to build the species                                                                   |
-| `symbols`         | `NetworkSymbols`  | Canonical symbols, densities (`ndens`, `ntot`, `rho`, `n_hnuc`), introspection sets and `standardize`; see [symbols](../../api/core/network/symbols.md) |
+| `symbols`         | `NetworkSymbols`  | Canonical symbols, densities (`ndens`, `ntot`, `rho`, `n_hnuc`), introspection sets and `standardize`; see [symbols](../../reference/core/networksymbols/index.md) |
 
 ```python
 net = Network("networks/h_photoionization/h_photo.jet")
@@ -246,8 +246,8 @@ net.sradodes(0)     # list[Expr] — radiation moment ODEs (order 0), if radiati
 ```
 
 A flux is just the reaction rate times its reactant densities; the species ODEs
-are signed sums of these. See [`sfluxes`](../../api/core/network/sfluxes.md) and
-[`sradodes`](../../api/core/network/sradodes.md) for details.
+are signed sums of these. See [`sfluxes`](../../reference/core/network/sfluxes.md) and
+[`sradodes`](../../reference/core/network/sradodes.md) for details.
 
 ---
 
@@ -324,8 +324,8 @@ net.write_table("rates.hdf5", format="auto")  # general form; format from extens
 ```
 
 `err_tol` drives adaptive temperature sampling (set it to `None` for a fixed
-grid). See [`to_hdf5`](../../api/core/network/to_hdf5.md) and
-[`to_txt`](../../api/core/network/to_txt.md).
+grid). See [`to_hdf5`](../../reference/core/network/to_hdf5.md) and
+[`to_txt`](../../reference/core/network/to_txt.md).
 
 ### JAFF binary format
 

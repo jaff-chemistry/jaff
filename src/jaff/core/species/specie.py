@@ -32,14 +32,21 @@ if TYPE_CHECKING:
 class Specie:
     """A single chemical species in a JAFF reaction network.
 
+    A ``Specie`` represents an atom, molecule, ion, grain or special
+    pseudo-species.  On construction the name is parsed to determine the
+    elemental composition, total mass, net charge and LaTeX formatting.  An
+    independent ``Specie`` can be created outside of a network; the *index*
+    then only matters when it belongs to a :class:`Species` catalogue.
+
     Attributes
     ----------
     name : str
         Species name as it appears in the network file (e.g. ``"H2O+"``,
         ``"e-"``).
     mass : float or None
-        Total mass in grams (CGS), summed over constituent atoms.  ``None``
-        before ``parse`` has been called.
+        Total mass in grams (CGS), summed over constituent atoms.  Populated
+        by the constructor, so it is always a ``float`` on a constructed
+        instance.
     exploded : list[str]
         Sorted list of atomic symbols with repetition
         (e.g. ``["H", "H", "O"]`` for H2O).  Charge tokens (``"+"``, ``"-"``)
@@ -61,6 +68,27 @@ class Specie:
         become ``"+/C/H/O"``).
     elements : Elements
         Lazy-loaded ``Elements`` collection for this single species.
+
+    Raises
+    ------
+    KeyError
+        If *name* contains a token that is not a known element symbol (or
+        stoichiometric number) in the mass dictionary.
+
+    Examples
+    --------
+    >>> from jaff.core.species import Specie
+    >>> sp = Specie("H2O+")
+    >>> sp.exploded
+    ['+', 'H', 'H', 'O']
+    >>> sp.serialized
+    '+/H/H/O'
+    >>> sp.charge
+    1
+    >>> sp.fidx
+    'idx_h2oj'
+    >>> Specie("HCO+").serialized == Specie("HOC+").serialized
+    True
     """
 
     _ATTRS: frozenset[str] = frozenset(
@@ -72,10 +100,16 @@ class Specie:
     def configure(cls, mass_dict: dict[str, ElementProps]) -> None:
         """Override the mass dictionary and propagate it to ``Elements``.
 
+        Class-level: the dictionary is shared by every ``Specie`` instance
+        created afterwards.  ``Network`` calls this (via
+        :meth:`Species.configure`) during construction, so it is only needed
+        when working with a custom mass table outside of a ``Network``.
+
         Parameters
         ----------
         mass_dict : dict[str, ElementProps]
-            Custom mass dictionary.
+            Custom mass dictionary, mapping element symbol to its
+            ``ElementProps`` (must contain at least the key ``"mass"``).
         """
         cls._mass_dict = mass_dict
         Elements.configure(mass_dict)
@@ -224,11 +258,25 @@ class Specie:
     def get_fidx(self) -> str:
         """Compute the flat index identifier string for generated code.
 
+        Since ``+`` and ``-`` are not valid in identifiers, they are replaced
+        with ``j`` and ``k`` respectively and the result is lower-cased, giving
+        a name usable in generated C, Fortran and Python source.  Electrons
+        (``e-``) are special-cased to ``"idx_e"``.
+
         Returns
         -------
         str
             ``"idx_e"`` for electrons; otherwise ``"idx_<name>"`` with
             ``"+"`` replaced by ``"j"`` and ``"-"`` replaced by ``"k"``.
+
+        Examples
+        --------
+        >>> Specie("HCO+").get_fidx()
+        'idx_hcoj'
+        >>> Specie("H2O+").get_fidx()
+        'idx_h2oj'
+        >>> Specie("e-").get_fidx()
+        'idx_e'
         """
         return (
             "idx_e"
@@ -267,12 +315,21 @@ class Specie:
         """Build and store the canonical serialized form of this species.
 
         The serialized form is ``"/".join(sorted(self.exploded))``, which
-        places isomers into the same equivalence class.
+        places isomers into the same equivalence class.  It is used for
+        lookups and comparisons that must not depend on how the species was
+        originally written.  Called automatically by the constructor.
 
         Returns
         -------
         str
             The serialized string (also stored in ``self.serialized``).
+
+        Examples
+        --------
+        >>> Specie("H2O").serialize()
+        'H/H/O'
+        >>> Specie("H2O+").serialize()
+        '+/H/H/O'
         """
         self.serialized = "/".join(sorted(self.exploded))
 
@@ -293,7 +350,18 @@ class Specie:
             LaTeX string with subscript digits, superscript charges, and
             ``\\rm`` roman font for element names.  Suffixes ``_ORTHO``,
             ``_PARA``, ``_META`` become ``o``, ``p``, ``m`` prefixes;
-            ``_DUST`` becomes an ``ice`` suffix; ``GRAIN`` becomes ``g``.
+            ``_DUST`` becomes an ``ice`` suffix; ``_GRAIN`` becomes ``g``.
+            Repeated charges are collapsed (``Fe++`` gives ``Fe^{2+}``) and
+            ``_PHOTON`` is rendered as ``\\gamma``.
+
+        Examples
+        --------
+        >>> print(Specie("H2O").latex())
+        {\\rm H_{2}O}
+        >>> print(Specie("H2O+").latex(dollars=True))
+        ${\\rm H_{2}O^{+}}$
+        >>> print(Specie("H2_ORTHO").latex())
+        {\\rm oH_{2}}
         """
         return f"${self.__latex}$" if dollars else self.__latex
 
@@ -305,7 +373,9 @@ class Specie:
         symbols are substrings of each other (e.g. ``"C"`` inside ``"Ca"``):
         each element symbol is temporarily replaced by a unique 4-character
         proxy drawn from the alphabet ``{q, z, x, j}``, the formula is
-        tokenized, then proxies are reversed back to real symbols.
+        tokenized, then proxies are reversed back to real symbols.  Symbols
+        are substituted longest-first so that multi-character symbols (e.g.
+        ``"He"``) match before single-character ones (e.g. ``"H"``).
 
         Parameters
         ----------

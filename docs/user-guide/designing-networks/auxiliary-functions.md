@@ -409,7 +409,7 @@ Each radiation band carries one density unknown in the generated equations. Its 
 
 Here `i` indexes the radiation band. The photo-reaction rate coefficient for band $i$ is $k_i = c \cdot den_i \cdot {\langle \sigma \rangle}_i$, where ${\langle \sigma \rangle}_i$ is the band-averaged photoionisation cross section and `c` is the speed of light.
 
-Reactions with a [`spectralYield<N>`](#spectral-yield-spectralyieldn) and the network [`globalEmissivity`](#global-emissivity-globalemissivity) add their emission to the density equations, and the network [`globalAbsorptionCoefficient`](#global-absorption-coefficient-globalabsorptioncoefficient) removes the absorbed radiation from them. The radiation moment equations themselves are available through [`Network.sradodes()`](../../api/core/network/sradodes.md).
+Reactions with a [`spectralYield<N>`](#spectral-yield-spectralyieldn) and the network [`globalEmissivity`](#global-emissivity-globalemissivity) add their emission to the density equations, and the network [`globalAbsorptionCoefficient`](#global-absorption-coefficient-globalabsorptioncoefficient) removes the absorbed radiation from them. The radiation moment equations themselves are available through [`Network.sradodes()`](../../reference/core/network/sradodes.md).
 
 ---
 

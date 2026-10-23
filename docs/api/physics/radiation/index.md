@@ -155,7 +155,7 @@ same order as `Radiation.groups` (`None` for a reaction with a `.jfunc`
 | `xsec_frac` | Tabulated reactions: $\langle\sigma\rangle_i$ divided by the full-spectrum average (`reaction.photo.xsec.total`), so values need not sum to 1. |
 
 The same values per reaction are available as a table through
-[`Reaction.band_xsecs`](../../core/reaction/band_xsecs.md) (there `eavg` is in eV).
+[`Reaction.band_xsecs`](../../../reference/core/reaction/band_xsecs.md) (there `eavg` is in eV).
 
 ---
 

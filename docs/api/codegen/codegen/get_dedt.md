@@ -8,7 +8,7 @@ tags:
 
 `#!python get_dedt(energy="volumetric")`
 
-Generates code for the internal energy time derivative (`dE/dt`). A thin printer over [`thermodynamics.dEdt_tot`](../../core/network/thermodynamics.md): it renders `net.thermodynamics.dEdt_tot.normaliser(energy)` as a target-language expression, where `normaliser(energy)` divides the volumetric rate by the normaliser of the chosen form (`den` below). For the temperature rate see [get_dtdt](get_dtdt.md).
+Generates code for the internal energy time derivative (`dE/dt`). A thin printer over [`thermodynamics.dEdt_tot`](../../physics/thermodynamics/index.md): it renders `net.thermodynamics.dEdt_tot.normaliser(energy)` as a target-language expression, where `normaliser(energy)` divides the volumetric rate by the normaliser of the chosen form (`den` below). For the temperature rate see [get_dtdt](get_dtdt.md).
 
 **Parameters**
 

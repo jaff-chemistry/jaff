@@ -153,7 +153,7 @@ JAFF will look up the matching cross section in its bundled database and integra
 
 JAFF bundles cross sections from three sources. At network-load time the
 serialized reaction key (`Reactant1.Reactant2__Product1.Product2`, the
-[serialized form of the reaction](../../api/core/reaction/index.md); photo
+[serialized form of the reaction](../../reference/core/reaction/index.md); photo
 reactions carry the `_PHOTON` agent, e.g. `H._PHOTON__H+.e-`) is looked
 up in `jaff.db`, and the cross-section arrays are attached to the reaction's
 [`photo.xsec`](../working-with-networks/reactions.md).

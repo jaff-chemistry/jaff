@@ -24,14 +24,36 @@ class Elements(Catalogue):
     ``Elements`` is also a flyweight: instances built from the same ordered
     species sequence are reused.  The internal element order follows
     alphabetical sort on element symbol, which fixes the row order of the
-    composition matrices; the column order follows the caller's species order.
+    composition matrices (:meth:`truth_matrix`, :meth:`density_matrix`) and
+    of every per-element accessor (:meth:`symbols`, :meth:`masses`, ...); the
+    column order follows the caller's species order.
+
+    Elements are extracted from the exploded atom list of each species; charge
+    tokens (``+``, ``-``) and the electron are ignored.  Items can be looked up
+    by position or by symbol (``elements[0]``, ``elements["H"]``), and by full
+    name via :meth:`from_name`.  A :class:`~jaff.core.Network` exposes the
+    collection for its species as ``net.elements``.
 
     Attributes
     ----------
     species : list[Specie]
-        The input species whose atoms were used to populate this collection.
+        The input species whose atoms were used to populate this collection,
+        stored as a list of ``Specie`` objects.
     count : int
         Number of unique elements present (inherited from ``Catalogue``).
+
+    Examples
+    --------
+    >>> from jaff.core import Elements
+    >>> elements = Elements(["CO", "H2O", "CH4"])
+    >>> elements.symbols()
+    ['C', 'H', 'O']
+    >>> elements.count
+    3
+    >>> elements["H"].name
+    'Hydrogen'
+    >>> Elements(["CO", "H2O", "CH4"]) is elements
+    True
     """
 
     _register: dict = {}
@@ -41,10 +63,15 @@ class Elements(Catalogue):
     def configure(cls, mass_dict: dict[str, ElementProps]) -> None:
         """Override the mass dictionary for both ``Elements`` and ``Element``.
 
+        The dictionary is forwarded to ``Element.configure``.  Call this
+        before constructing any ``Specie`` or ``Elements`` objects; elements
+        that have already been created keep their existing properties.
+
         Parameters
         ----------
         mass_dict : dict[str, ElementProps]
-            Custom mass dictionary forwarded to ``Element.configure`` as well.
+            Custom mass dictionary mapping element symbol (e.g. ``"H"``) to
+            its :class:`~jaff.core.ElementProps`.
         """
         cls._mass_dict = mass_dict
         Element.configure(mass_dict)
@@ -114,6 +141,11 @@ class Elements(Catalogue):
         species : Specie | list[Specie] | str | list[str]
             One or more species whose constituent atoms define the element set.
             Plain strings are converted to ``Specie`` objects on the fly.
+
+        Raises
+        ------
+        KeyError
+            If a species (or one of its atoms) is not in the mass dictionary.
         """
         if getattr(self, "_initialized", False):
             return
@@ -159,6 +191,14 @@ class Elements(Catalogue):
         The result is cached after the first call (via ``functools.cache``).
         Row order matches the sorted element list; column order matches the
         order of *species* passed to ``__init__``.
+
+        Examples
+        --------
+        >>> elements = Elements(["CO", "H2O", "CH4"])
+        >>> elements.symbols()
+        ['C', 'H', 'O']
+        >>> elements.truth_matrix()
+        [[1, 0, 1], [0, 1, 1], [1, 1, 0]]
         """
         element_truth_matrix: list[list[int]] = [
             [0] * len(self.species) for _ in range(self.count)
@@ -184,6 +224,16 @@ class Elements(Catalogue):
         Notes
         -----
         The result is cached after the first call (via ``functools.cache``).
+        Row order matches the sorted element list; column order matches the
+        order of *species* passed to ``__init__``.
+
+        Examples
+        --------
+        >>> elements = Elements(["CO", "H2O", "CH4"])
+        >>> elements.symbols()
+        ['C', 'H', 'O']
+        >>> elements.density_matrix()
+        [[1, 0, 1], [0, 2, 4], [1, 1, 0]]
         """
         element_density_matrix: list[list[int]] = [
             [0] * len(self.species) for _ in range(self.count)
@@ -196,16 +246,28 @@ class Elements(Catalogue):
         return element_density_matrix
 
     def from_name(self, name: str) -> Element:
-        """Return the ``Element`` with the given full name (e.g. ``"hydrogen"``).
+        """Return the ``Element`` with the given full name (e.g. ``"Hydrogen"``).
 
         Parameters
         ----------
         name : str
-            Full element name as stored in the mass dictionary.
+            Full element name as stored in the mass dictionary (case-sensitive,
+            capitalised, e.g. ``"Hydrogen"``, ``"Carbon"``).
 
         Returns
         -------
         Element
+            The ``Element`` flyweight for the requested element.
+
+        Raises
+        ------
+        KeyError
+            If no element of this collection has that name.
+
+        Examples
+        --------
+        >>> Elements(["CO", "H2O"]).from_name("Oxygen")
+        ElementObject(symbol='O')
         """
         return self._by_serialized[name]
 
@@ -215,29 +277,43 @@ class Elements(Catalogue):
         Parameters
         ----------
         symbol : str
-            Element symbol (e.g. ``"H"``).
+            Element symbol (case-sensitive, e.g. ``"H"``, ``"He"``).
 
         Returns
         -------
         Element
+            The ``Element`` flyweight for the requested element.
+
+        Raises
+        ------
+        KeyError
+            If no element of this collection has that symbol.
         """
         return self._by_prop[symbol]
 
     def get_list(self) -> list[Element]:
         """Return the underlying ordered list of ``Element`` objects.
 
+        The order is alphabetical by symbol and matches the row order of the
+        composition matrices (:meth:`truth_matrix`, :meth:`density_matrix`).
+
         Returns
         -------
         list[Element]
+            All unique elements, sorted alphabetically by symbol.
         """
         return self._list
 
     def symbols(self) -> Vector[str]:
         """Return a ``Vector`` of element symbols in sorted order.
 
+        This alphabetical order is the canonical order shared by all other
+        per-element accessors and by the composition matrices.
+
         Returns
         -------
         Vector[str]
+            Periodic-table symbols (e.g. ``["C", "H", "O"]``).
         """
         return Vector([e.symbol for e in self])
 
@@ -247,24 +323,34 @@ class Elements(Catalogue):
         Returns
         -------
         Vector[str]
+            Full element names in the order of :meth:`symbols` (e.g.
+            ``["Carbon", "Hydrogen", "Oxygen"]``).
         """
         return Vector([e.name for e in self])
 
     def masses(self) -> Vector[float]:
         """Return a ``Vector`` of element masses in grams (CGS).
 
+        Unlike :meth:`atomic_masses`, values are in grams rather than atomic
+        mass units.
+
         Returns
         -------
         Vector[float]
+            Mass per element in grams, in the order of :meth:`symbols`.
         """
         return Vector([e.mass for e in self])
 
     def atomic_masses(self) -> Vector[float]:
         """Return a ``Vector`` of standard atomic weights in atomic mass units.
 
+        Unlike :meth:`masses`, values are in atomic mass units rather than
+        grams.
+
         Returns
         -------
         Vector[float]
+            Standard atomic weight per element, in the order of :meth:`symbols`.
         """
         return Vector([e.atomic_mass for e in self])
 
@@ -274,6 +360,7 @@ class Elements(Catalogue):
         Returns
         -------
         Vector[int]
+            Atomic number per element, in the order of :meth:`symbols`.
         """
         return Vector([e.protons for e in self])
 
@@ -283,6 +370,7 @@ class Elements(Catalogue):
         Returns
         -------
         Vector[int]
+            Neutron count per element, in the order of :meth:`symbols`.
         """
         return Vector([e.neutrons for e in self])
 
@@ -292,5 +380,6 @@ class Elements(Catalogue):
         Returns
         -------
         Vector[int]
+            Electron count per element (equal to the atomic number), in the order of :meth:`symbols`.
         """
         return Vector([e.electrons for e in self])

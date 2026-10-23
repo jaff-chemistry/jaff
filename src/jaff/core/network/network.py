@@ -199,7 +199,13 @@ class IsomerReport:
 class Network:
     """Astrochemical reaction network loaded from a file.
 
-    After construction the following public attributes are available:
+    ``Network`` is the main entry point of JAFF.  It reads a reaction network
+    file, auto-detects its format (KIDA, UDFA, PRIZMO, KROME, UCLCHEM, or a
+    ``.jaff`` file written by :meth:`to_jaff`), validates mass and charge
+    conservation, and assembles the species and reaction catalogues together
+    with the stoichiometry matrices.  It also handles the optional radiation
+    field, photochemistry cross-sections, dust, and the auxiliary ``.jfunc``
+    functions file.
 
     Attributes
     ----------
@@ -215,7 +221,8 @@ class Network:
     reactions : Reactions
         Ordered catalogue of all reactions in the network.
     elements : Elements
-        Unique elements derived from all species.
+        Unique elements derived from all species; used for composition
+        matrices.
     reactant_matrix : np.ndarray
         Integer stoichiometry matrix, shape ``(n_reactions, n_species)``.
         Entry ``[i, j]`` counts how many times species *j* appears as a
@@ -223,21 +230,56 @@ class Network:
     product_matrix : np.ndarray
         Integer stoichiometry matrix for products, same shape.
     thermodynamics : Thermodynamics
-        Heating/cooling terms: ``dEdt_chemical`` (accumulated over all
-        reactions) and ``dEdt_extra`` (from the ``heatingcoolingrate``
-        auxiliary function, if present), both in erg cm⁻³ s⁻¹.
+        Equation of state and thermal rates, built lazily: ``eos`` (internal
+        energy for the configured EOS, an ideal gas by default),
+        ``dEdt_chemical`` (accumulated over all reactions), ``dEdt_extra``
+        (from the ``heatingcoolingrate`` auxiliary function, if present) and
+        ``dEdt_tot``, all in erg cm⁻³ s⁻¹, plus the matching temperature rates
+        ``dTdt_chemical``, ``dTdt_extra`` and ``dTdt_tot`` in K s⁻¹.
     symbols : NetworkSymbols
-        Canonical symbols, density expressions, introspection sets and symbol
-        standardization for this network.
-    radiation : Radiation | None
-        Radiation field object; ``None`` when no radiation bands are specified.
+        Canonical symbols, density expressions (``ndens``, ``ntot``, ``rho``,
+        ``n_hnuc``), introspection sets and symbol standardization for this
+        network.
+    radiation : Radiation or None
+        Radiation field object; ``None`` when no ``network.radiation`` config
+        (or ``radiation_props``) is given.
+    dust : Dust or None
+        Dust module; ``None`` when no ``network.dust`` config (or
+        ``dust_props``) is given.
     mass_dict : dict[str, ElementProps]
-        Element mass dictionary used during species construction.
+        Element mass dictionary used during species construction and the
+        conservation checks.
     spec : NetworkSpec
-        The normalized construction parameters this network was built from.
+        The normalized construction parameters this network was built from
+        (resolved ``fname``, ``funcfile``, parsed ``aux_funcs``, ...).
     config : NetworkConfig
         The validated config: the ``jaff.toml`` next to the network, the
         ``config`` layers, then the keyword arguments.
+    logger : logging.Logger
+        The JAFF logger this network reports to.
+
+    Examples
+    --------
+    Load a predefined network by name and inspect it:
+
+    >>> from jaff import Network
+    >>> net = Network("COthin")
+    >>> net.label
+    'react_COthin'
+    >>> net.species.count, net.reactions.count
+    (37, 238)
+    >>> net.reactant_matrix.shape
+    (238, 37)
+
+    Config layers and keyword arguments stack over the ``jaff.toml``:
+
+    >>> net = Network(
+    ...     "h_photoionization",
+    ...     config={"network": {"label": "hphoto"}},
+    ...     radiation_props={"bands": [13.6, 20.0, 50.0]},
+    ... )
+    >>> net.config.label, net.radiation.nbands
+    ('hphoto', 2)
     """
 
     def __init__(
@@ -264,8 +306,10 @@ class Network:
             Path to the network file, or the name of a predefined network (a
             sub-directory of :data:`~jaff.config.NETWORKS_DIR` containing a
             single ``.jet`` file).  A predefined network name wins over a
-            same-named path on disk.  Supported extensions: any text format
-            auto-detected by ``NetworkParser``, plus ``.jaff`` binary files.
+            same-named path on disk.  Supported formats: any text format
+            auto-detected by ``NetworkParser`` (KIDA, UDFA, PRIZMO, KROME,
+            UCLCHEM), plus ``.jaff`` / ``.jaff.gz`` files written by
+            :meth:`to_jaff`.
         config : ConfigLayer or sequence of them, optional
             Config layers stacked over the ``jaff.toml`` next to the network
             file: a TOML file path, a ``dict`` shaped like a ``jaff.toml``
@@ -837,13 +881,25 @@ class Network:
         return written
 
     def to_jaff(self, filename: str | Path):
-        """Serialise this network to a binary ``.jaff`` file.
+        """Serialise this network to a gzip-compressed ``.jaff`` JSON file.
+
+        The file reloads fast with ``Network(filename)``.  It uses the
+        ``jaff.network_json`` format marker and ``schema_version = 1``.
 
         Parameters
         ----------
         filename : str | Path
-            Output file path.  The ``.jaff`` extension is conventional but
-            not enforced.
+            Output file path.  Unless it already ends with ``.jaff`` or
+            ``.jaff.gz``, its suffix is replaced by ``.jaff`` (``net.txt``
+            becomes ``net.jaff``).
+
+        Raises
+        ------
+        ValueError
+            If a reaction rate contains an undefined SymPy function, which
+            cannot be serialised.
+        TypeError
+            If a rate is neither a SymPy expression, a ``str`` nor ``None``.
         """
         to_jaff_file(filename, self)
 
@@ -856,7 +912,12 @@ class Network:
             Network to compare against.
         verbosity : int, optional
             When ``1`` (default), print the reaction sets for common and
-            unique reactions.  Other values suppress output.
+            unique reactions.  Other values log only the counts.
+
+        Notes
+        -----
+        Reactions are matched by their serialized form, so the same reaction
+        with a different mechanism or rate still counts as common.
         """
         self.logger.info(f'Comparing networks "{self.label}" and "{other.label}"...')
 
@@ -902,7 +963,8 @@ class Network:
         other : Network
             Network to compare against.
         verbosity : int, optional
-            When ``1`` (default), print the species sets.
+            When ``1`` (default), print the common and unique species sets.
+            Other values log only the counts.
         """
         self.logger.info(
             f'Comparing species in networks "{self.label}" and "{other.label}"...'
@@ -943,7 +1005,9 @@ class Network:
 
         A *sink* species appears as a reactant in at least one reaction but
         is never produced.  A *source* species is produced but never consumed.
-        The special species ``"_DUMMY"`` is excluded from the check.
+        The special species ``"_DUMMY"`` is excluded from the check.  Each sink
+        and source is logged, followed by a warning.  Run automatically on
+        construction with ``errors`` set to the network's ``strict`` setting.
 
         Parameters
         ----------
@@ -984,6 +1048,11 @@ class Network:
 
     def check_recombinations(self, errors: bool) -> RecombinationReport:
         """Report (and warn, or abort) cations lacking an electron recombination.
+
+        Every positively charged species should be a reactant, alongside
+        ``e-``, in at least one reaction; a warning is logged for each one that
+        is not.  Run automatically on construction with ``errors`` set to the
+        network's ``strict`` setting.
 
         Parameters
         ----------
@@ -1028,7 +1097,9 @@ class Network:
 
         Isomers are detected by comparing ``Specie.exploded`` tuples.  For
         example, HCO+ and HOC+ both have ``["C", "H", "O", "+"]`` and would
-        be reported here.
+        be reported here.  A warning is logged for each group.  Run
+        automatically on construction with ``errors`` set to the network's
+        ``strict`` setting.
 
         Parameters
         ----------
@@ -1039,6 +1110,12 @@ class Network:
         -------
         IsomerReport
             Groups of two or more species names sharing a composition.
+
+        Examples
+        --------
+        >>> net = Network("COthin")
+        >>> net.check_isomers(errors=False).groups
+        (('HOC+', 'HCO+'),)
         """
         buckets: dict[tuple, list[str]] = {}
 
@@ -1080,12 +1157,28 @@ class Network:
         """Return symbolic flux expressions for all reactions.
 
         The flux of reaction *i* is ``rate_i * nden[r1] * nden[r2] * ...``,
-        where the product runs over all reactant species.
+        where the product runs over all reactant species.  A reactant that
+        appears several times enters with its stoichiometric power:
+
+        ```
+        F_i = k_i * prod_j nden[R_j] ** alpha_j
+        ```
+
+        with ``k_i`` the rate coefficient, ``R_j`` the core reactants and
+        ``alpha_j`` their stoichiometric coefficients.
 
         Returns
         -------
         list[Expr]
             One SymPy expression per reaction, in reaction-index order.
+
+        Examples
+        --------
+        >>> net = Network("COthin")
+        >>> str(net.reactions[0])
+        'H + e- -> H+ + e- + e-'
+        >>> net.sfluxes()[0].has(net.symbols.ndens[0] * net.symbols.ndens[1])
+        True
         """
         return get_sfluxes(self.reactions, self.species, self.symbols.ndens)
 
@@ -1094,7 +1187,14 @@ class Network:
 
         Each entry is the net rate of change of a species number density
         (cm⁻³ s⁻¹), formed by summing flux contributions over all reactions
-        in which the species participates as a reactant or product.
+        in which the species participates as a reactant or product:
+
+        ```
+        dn_s/dt = sum_{i: s in products(i)} F_i - sum_{i: s in reactants(i)} F_i
+        ```
+
+        where ``F_i`` are the fluxes from :meth:`sfluxes`.  A species appearing
+        several times on one side contributes the flux once per occurrence.
 
         Returns
         -------
@@ -1106,16 +1206,46 @@ class Network:
     def sradodes(self, order: int = 0) -> list[Expr]:
         """Return symbolic radiation moment ODE right-hand sides.
 
+        Each radiation band has two moments: the energy or photon density
+        ``rd_i`` (depending on ``radiation.mode``) and the flux ``f_i``.  Each
+        density equation removes what photo reactions absorb and adds what
+        reactions with a ``spectralYield<N>`` auxiliary function emit, plus the
+        network ``globalEmissivity``, and removes what the network
+        ``globalAbsorptionCoefficient`` absorbs.  The flux equations carry the
+        photo-reaction absorption and, unless
+        ``network.radiation.absorption_attenuates_flux`` is off, the
+        ``globalAbsorptionCoefficient`` absorption too.  With dust enabled the
+        dust reductions are applied to both.
+
         Parameters
         ----------
         order : int, optional
-            Radiation moment order (0 = number/energy density, 1 = flux),
-            by default ``0``.
+            Layout of the returned list, one of ``0`` (default), ``1``, ``2``
+            or ``3``:
+
+            - ``0``: ``[rd_0, f_0, rd_1, f_1, ...]``
+            - ``1``: ``[f_0, rd_0, f_1, rd_1, ...]``
+            - ``2``: ``[rd_0, rd_1, ..., f_0, f_1, ...]``
+            - ``3``: ``[f_0, f_1, ..., rd_0, rd_1, ...]``
 
         Returns
         -------
         list[Expr]
-            One SymPy expression per radiation band.
+            Two SymPy expressions (density and flux) per radiation band, so
+            ``2 * radiation.nbands`` in total, laid out as *order* says.
+
+        Raises
+        ------
+        RuntimeError
+            If the network has no radiation field.
+        ValueError
+            If *order* is not one of ``0``, ``1``, ``2``, ``3``.
+
+        Examples
+        --------
+        >>> net = Network("h_photoionization", radiation_props={"bands": [13.6, 20.0]})
+        >>> len(net.sradodes(order=2))
+        2
         """
         return get_sradodes(self, order)
 
@@ -1135,35 +1265,57 @@ class Network:
     ) -> None:
         """Write a pre-tabulated rate coefficient table to an HDF5 file.
 
+        The table is tabulated on a temperature grid and written in the layout
+        read by the quokka hydro code.
+
         Parameters
         ----------
         fname : str | Path
-            Output file path.  The ``.hdf5`` extension is recommended.
+            Output file path.  Unless it ends with ``.hdf5`` or ``.hdf``, its
+            suffix is replaced by ``.hdf5``.
         label : str | None, optional
-            Dataset label stored inside the file.  Defaults to
-            ``self.label``.
+            Network label.  Unused in HDF5 output (see :meth:`to_txt`).
         T_min : float | None, optional
-            Minimum temperature for the tabulation grid (K).
+            Minimum temperature of the grid (K).  Defaults to the smallest
+            ``reaction.tmin`` of the network.
         T_max : float | None, optional
-            Maximum temperature for the tabulation grid (K).
+            Maximum temperature of the grid (K).  Defaults to the largest
+            ``reaction.tmax`` of the network.
         nT : int, optional
-            Number of temperature grid points, by default 64.
-        err_tol : float, optional
-            Maximum allowed relative error in rate interpolation, default
-            0.01 (1 %).
+            Initial number of temperature grid points, default 64.  The
+            adaptive refinement may increase it significantly.
+        err_tol : float | None, optional
+            Maximum permitted relative interpolation error, default 0.01
+            (1 %).  ``None`` skips the adaptive refinement and returns exactly
+            ``nT`` points.
         rate_min : float, optional
-            Rates below this threshold are clamped to ``rate_min``,
-            default ``1e-30``.
+            Small positive floor added to the relative-error denominator, so
+            near-zero rates do not divide by zero, default ``1e-30``.  Rates
+            are not clamped to it.
         rate_max : float, optional
-            Rates above this threshold are clamped to ``rate_max``,
-            default ``1e100``.
+            Upper clamp applied to each rate before storing, preventing
+            overflow in the log-rate arithmetic, default ``1e100``.
         fast_log : bool, optional
-            Use a fast logarithm approximation, default ``False``.
+            Make the temperature grid uniform in ``fast_log2`` space rather
+            than ``log10`` space, default ``False``.
         include_all : bool, optional
-            Include all reactions, even those with temperature bounds,
-            default ``False``.
+            Include every reaction, even those whose tabulated rate contains
+            ``NaN`` or is constant, default ``False``.
         verbose : bool, optional
-            Print per-reaction tabulation progress, default ``False``.
+            Log the grid size and worst-case error after each refinement step,
+            default ``False``.
+
+        Notes
+        -----
+        Only rates that depend solely on ``tgas`` can be tabulated (``av`` is
+        set to ``0`` and ``crate`` to ``1`` first); other rates come out as
+        ``NaN`` and are dropped unless *include_all* is set.  Starting from
+        ``nT`` points, the grid is doubled by inserting midpoints until the
+        maximum relative interpolation error falls below *err_tol*.
+
+        The file holds one ``reaction_coeff`` group with the attributes
+        ``input_names``, ``input_units``, ``xlo``, ``xhi`` and ``spacing``
+        and the datasets ``output_names``, ``output_units`` and ``data``.
         """
         if isinstance(fname, str):
             fname = Path(fname)
@@ -1205,32 +1357,66 @@ class Network:
         """Write a pre-tabulated rate coefficient table to a plain-text file.
 
         Parameters are identical to ``to_hdf5``, except the output format is
-        a whitespace-separated text table.
+        a whitespace-separated text table compatible with quokka.
 
         Parameters
         ----------
         fname : str | Path
-            Output file path.  The ``.txt`` extension is recommended.
+            Output file path.  Unless it ends with ``.txt``, its suffix is
+            replaced by ``.txt``.
         label : str | None, optional
-            Dataset label stored in the file header.
+            Network label written into the file header.  Defaults to
+            the network's ``label``.
         T_min : float | None, optional
-            Minimum temperature (K).
+            Minimum temperature of the grid (K).  Defaults to the smallest
+            ``reaction.tmin`` of the network.
         T_max : float | None, optional
-            Maximum temperature (K).
+            Maximum temperature of the grid (K).  Defaults to the largest
+            ``reaction.tmax`` of the network.
         nT : int, optional
-            Number of temperature grid points, default 64.
-        err_tol : float, optional
-            Maximum allowed relative interpolation error, default 0.01.
+            Initial number of temperature grid points, default 64.  The
+            adaptive refinement may increase it significantly.
+        err_tol : float | None, optional
+            Maximum permitted relative interpolation error, default 0.01
+            (1 %).  ``None`` skips the adaptive refinement and returns exactly
+            ``nT`` points.
         rate_min : float, optional
-            Lower rate clamp, default ``1e-30``.
+            Small positive floor added to the relative-error denominator, so
+            near-zero rates do not divide by zero, default ``1e-30``.  Rates
+            are not clamped to it.
         rate_max : float, optional
-            Upper rate clamp, default ``1e100``.
+            Upper clamp applied to each rate before storing, preventing
+            overflow in the log-rate arithmetic, default ``1e100``.
         fast_log : bool, optional
-            Use fast logarithm approximation, default ``False``.
+            Make the temperature grid uniform in ``fast_log2`` space rather
+            than ``log10`` space, default ``False``.
         include_all : bool, optional
-            Include temperature-bounded reactions, default ``False``.
+            Include every reaction, even those whose tabulated rate contains
+            ``NaN`` or is constant, default ``False``.
         verbose : bool, optional
-            Print tabulation progress, default ``False``.
+            Log the grid size and worst-case error after each refinement step,
+            default ``False``.
+
+        Notes
+        -----
+        Only rates that depend solely on ``tgas`` can be tabulated (``av`` is
+        set to ``0`` and ``crate`` to ``1`` first); other rates come out as
+        ``NaN`` and are dropped unless *include_all* is set.  Starting from
+        ``nT`` points, the grid is doubled by inserting midpoints until the
+        maximum relative interpolation error falls below *err_tol*.
+
+        After a ``#``-commented header naming the network and listing the
+        tabulated reactions, the file has the quokka 1-D table layout:
+
+        ```
+        1              # table dimensionality
+        <nReact>       # number of outputs per entry
+        2 or 3         # axis spacing (2 = log10, 3 = fast_log)
+        <nTemp>        # number of temperature points
+        <T_min> <T_max>
+        <coeff row 0>
+        ...
+        ```
         """
         if isinstance(fname, str):
             fname = Path(fname)
@@ -1273,34 +1459,62 @@ class Network:
         """Write a pre-tabulated rate coefficient table in the specified format.
 
         This is the general-purpose version of ``to_hdf5`` / ``to_txt``.
+        Unlike them it does not change the suffix of *fname*.
 
         Parameters
         ----------
         fname : str | Path
             Output file path.
         label : str | None, optional
-            Dataset label.  Defaults to ``self.label``.
+            Network label written into a text file header.  Defaults to
+            the network's ``label``; unused in HDF5 output.
         T_min : float | None, optional
-            Minimum temperature (K).
+            Minimum temperature of the grid (K).  Defaults to the smallest
+            ``reaction.tmin`` of the network.
         T_max : float | None, optional
-            Maximum temperature (K).
+            Maximum temperature of the grid (K).  Defaults to the largest
+            ``reaction.tmax`` of the network.
         nT : int, optional
-            Number of temperature grid points, default 64.
-        err_tol : float, optional
-            Maximum allowed relative interpolation error, default 0.01.
+            Initial number of temperature grid points, default 64.  The
+            adaptive refinement may increase it significantly.
+        err_tol : float | None, optional
+            Maximum permitted relative interpolation error, default 0.01
+            (1 %).  ``None`` skips the adaptive refinement and returns exactly
+            ``nT`` points.
         rate_min : float, optional
-            Lower rate clamp, default ``1e-30``.
+            Small positive floor added to the relative-error denominator, so
+            near-zero rates do not divide by zero, default ``1e-30``.  Rates
+            are not clamped to it.
         rate_max : float, optional
-            Upper rate clamp, default ``1e100``.
+            Upper clamp applied to each rate before storing, preventing
+            overflow in the log-rate arithmetic, default ``1e100``.
         fast_log : bool, optional
-            Use fast logarithm approximation, default ``False``.
+            Make the temperature grid uniform in ``fast_log2`` space rather
+            than ``log10`` space, default ``False``.
         format : str, optional
             Output format: ``"hdf5"``, ``"txt"``, or ``"auto"`` (inferred
-            from the file extension), default ``"auto"``.
+            from the file extension: ``.txt`` gives text, ``.hdf`` / ``.hdf5``
+            give HDF5), default ``"auto"``.
         include_all : bool, optional
-            Include temperature-bounded reactions, default ``False``.
+            Include every reaction, even those whose tabulated rate contains
+            ``NaN`` or is constant, default ``False``.
         verbose : bool, optional
-            Print tabulation progress, default ``False``.
+            Log the grid size and worst-case error after each refinement step,
+            default ``False``.
+
+        Raises
+        ------
+        ValueError
+            If *format* is not one of the supported strings, or if
+            ``format="auto"`` and the file extension is not recognised.
+
+        Notes
+        -----
+        Only rates that depend solely on ``tgas`` can be tabulated (``av`` is
+        set to ``0`` and ``crate`` to ``1`` first); other rates come out as
+        ``NaN`` and are dropped unless *include_all* is set.  Starting from
+        ``nT`` points, the grid is doubled by inserting midpoints until the
+        maximum relative interpolation error falls below *err_tol*.
         """
         write_data_table(
             reactions=self.reactions,

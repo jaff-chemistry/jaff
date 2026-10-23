@@ -273,12 +273,18 @@ def _package_page(package: _Package) -> str:
     return "\n".join(part for part in parts if part)
 
 
+#: Class docstring sections shown after the constructor and attributes.
+_CLASS_SECTIONS_BELOW = ("admonition", "examples")
+
+
 def _class_page(name: str, public_path: str, cls: Any) -> str:
     parts = [
         f"{_front_matter('Api', name)}\n# {name}\n",
         f"`{public_path}`\n",
         _GENERATED + "\n",
-        _sections(cls.docstring, skip=("attributes", "parameters"))
+        _sections(
+            cls.docstring, skip=_CLASS_SECTIONS_BELOW + ("attributes", "parameters")
+        )
         if cls.docstring
         else "",
     ]
@@ -299,6 +305,14 @@ def _class_page(name: str, public_path: str, cls: Any) -> str:
         parts.append(
             f"## Attributes\n\n| Attribute | Type | Description |\n| --- | --- | --- |\n{rows}\n"
         )
+
+    for section in cls.docstring.parsed if cls.docstring else []:
+        if section.kind.value == "admonition":
+            text = _markdown(section.value.description)
+            parts.append(f"## {section.title}\n\n{text}\n")
+        elif section.kind.value == "examples":
+            body = "\n\n".join(_example(e) for e in section.value)
+            parts.append(f"## Examples\n\n{body}\n")
 
     members = _public_members(cls)
     for title, column, is_property in (
@@ -511,7 +525,13 @@ def _italic(text: str) -> str:
 
 
 def _code(annotation: Any) -> str:
-    return f"`{annotation}`" if annotation else ""
+    """A type as inline code for a table cell (``|`` escaped)."""
+    if not annotation:
+        return ""
+
+    escaped = str(annotation).replace("|", "\\|")
+
+    return f"`{escaped}`"
 
 
 def _cell(text: str) -> str:

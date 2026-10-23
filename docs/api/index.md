@@ -17,7 +17,7 @@ This is a complete reference for all public APIs in JAFF.
 
     Primary data-model classes: `Network`, `Species`, `Reaction`, `Elements`.
 
-    [:octicons-arrow-right-24: jaff.core](core/index.md)
+    [:octicons-arrow-right-24: jaff.core](../reference/core/index.md)
 
 - :phosphor-brackets-angle:{ .sm .middle } **Codegen**
 

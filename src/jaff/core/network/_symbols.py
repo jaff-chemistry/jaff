@@ -28,6 +28,13 @@ if TYPE_CHECKING:
 class NetworkSymbols:
     """Canonical symbols and symbolic quantities of a network.
 
+    Reached as ``net.symbols``.  It owns the fixed physics symbols
+    (class attributes, also usable as ``NetworkSymbols.<name>`` without a
+    network), the cached density expressions (:attr:`ndens`, :attr:`ntot`,
+    :attr:`rho`, :attr:`n_hnuc`, :meth:`element_sum`), the introspection sets
+    filled after loading (:attr:`variables`, :attr:`interp_functions`,
+    :attr:`undefined_functions`) and :meth:`standardize`.
+
     Attributes
     ----------
     tgas, tdust : Symbol
@@ -56,6 +63,17 @@ class NetworkSymbols:
     parsed with ``parse_expr``, which creates assumption-free symbols, and SymPy
     only treats two symbols as equal when name *and* assumptions match.  Adding
     e.g. ``positive=True`` here would silently break substitution and ``diff``.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> net = Network("h_photoionization")
+    >>> net.symbols.ntot
+    nden[0] + nden[1] + nden[2]
+    >>> net.symbols.variables
+    frozenset({tgas})
+    >>> net.symbols.tgas
+    tgas
     """
 
     tgas: ClassVar[Symbol] = Symbol("tgas")

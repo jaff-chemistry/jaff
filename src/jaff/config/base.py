@@ -157,13 +157,16 @@ def format_validation_errors(
 
 
 #: A Sphinx cross-reference role, e.g. ``:class:`~pkg.mod.Name```.
-_ROLE = re.compile(r":\w+:`~?(?:[\w.]+\.)?(\w+)`")
+# As in Sphinx: ``~a.b.c`` shows ``c``, ``a.b.c`` shows the whole path.
+_ROLE = re.compile(r":\w+:`(?:~[\w.]*?([\w]+)|([\w.]+))`")
 _LITERAL = re.compile(r"``(.+?)``")
 
 
 def _markdown(text: str) -> str:
     """Turn the reST markup used in docstrings into the markdown editors render."""
-    return _LITERAL.sub(r"`\1`", _ROLE.sub(r"`\1`", text))
+    roles = _ROLE.sub(lambda m: f"`{m.group(1) or m.group(2)}`", text)
+
+    return _LITERAL.sub(r"`\1`", roles)
 
 
 def attribute_descriptions(doc: str | None) -> Tuple[str, Dict[str, str]]:

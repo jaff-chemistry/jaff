@@ -4,6 +4,7 @@
 import pytest
 
 import importlib
+import re
 
 from jaff._utils.api_docs import (
     CONFIG_MODULES,
@@ -83,6 +84,21 @@ class TestClassPage:
         assert "| [`label`](label.md) |" in page[page.index("## Properties") :]
         assert "[`label`]" not in methods
 
+    def test_union_types_do_not_split_the_table(self):
+        from jaff._utils.api_docs import _code
+
+        assert _code("Radiation | None") == "`Radiation \\| None`"
+
+    def test_examples_follow_the_attributes(self, page):
+        assert page.index("## Attributes") < page.index("## Examples")
+        assert page.index("## Examples") < page.index("## Methods")
+
+    def test_notes_follow_the_attributes(self, pages):
+        page = pages["reference/core/reaction/index.md"]
+
+        assert page.index("## Constructor") < page.index("## Attributes")
+        assert page.index("## Attributes") < page.index("## Notes")
+
     def test_private_parameters_hidden(self, page):
         assert "_from_cli" not in page
 
@@ -147,7 +163,9 @@ class TestConfigModules:
 
 
 def test_rest_markup_becomes_markdown(pages):
-    assert all("``" not in text and ":class:`" not in text for text in pages.values())
+    prose = [re.sub(r"```.*?```", "", text, flags=re.S) for text in pages.values()]
+
+    assert all("``" not in text and ":class:`" not in text for text in prose)
 
 
 def test_nav_groups_each_class(pages):
@@ -182,3 +200,18 @@ def test_committed_nav_matches():
     assert section == api_nav(), (
         "Run `python -m jaff._utils.api_docs` to regenerate the nav"
     )
+
+
+@pytest.mark.parametrize(
+    "rest, markdown",
+    [
+        (":meth:`~jaff.core.Element.configure`", "`configure`"),
+        (":meth:`Element.configure`", "`Element.configure`"),
+        (":class:`Network`", "`Network`"),
+        ("``net.config``", "`net.config`"),
+    ],
+)
+def test_cross_references_follow_sphinx(rest, markdown):
+    from jaff.config.base import _markdown
+
+    assert _markdown(rest) == markdown

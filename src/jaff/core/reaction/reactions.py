@@ -23,11 +23,38 @@ class Reactions(Catalogue[Reaction]):
     """Ordered, doubly-indexed catalogue of ``Reaction`` objects.
 
     Reactions can be looked up by verbatim string (``reactions["H + H2O+ -> H2 + OH+"]``)
-    or by serialized form (``reactions["H_H2O+__H2_OH+"]``).
+    or by serialized form (``reactions["H.H2O+__H2.OH+"]``), and by position
+    (``reactions[0]``).  The vector accessors (:meth:`verbatim`,
+    :meth:`rate_coefficients`, :meth:`tmins`, ...) return one entry per
+    reaction, in catalogue order.  A network's catalogue is ``net.reactions``.
 
     Both indexes map a key to a *list* of reactions: several reactions may
     share a verbatim string or serialized form when they differ only by
-    mechanism/``type`` (e.g. thermal vs cosmic-ray desorption).
+    mechanism/``type`` (e.g. thermal vs cosmic-ray desorption).  String
+    indexing is therefore *scalar-or-list*: it returns a single
+    :class:`Reaction` when the key is unique, or a ``list[Reaction]`` when
+    several mechanisms share it (a missing key raises ``KeyError``).  Use the
+    ``(id, type)`` tuple form to always pick exactly one, or
+    :meth:`from_serialized` / :meth:`all` for a result that is always a
+    collection.
+
+    Attributes
+    ----------
+    count : int
+        Number of reactions in the catalogue.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> net = Network("h_photoionization")
+    >>> net.reactions.verbatim()
+    ['H + _PHOTON -> H+ + e-', 'H+ + e- -> H']
+    >>> net.reactions["H+ + e- -> H"] is net.reactions["H+.e-__H"]
+    True
+    >>> net.reactions["H+.e-__H", "unknown"].index
+    1
+    >>> ("H+.e-__H", "photo") in net.reactions
+    False
     """
 
     _by_prop: dict[str, list[Reaction]]  # type: ignore[assignment]
@@ -147,16 +174,26 @@ class Reactions(Catalogue[Reaction]):
     def add(self, reaction: Reaction) -> None:
         """Append a reaction to the catalogue (duplicates are not checked here).
 
+        Updates the verbatim, serialized and source-number indexes, so the
+        reaction can be looked up at once, and sets its ``catalogue_index``
+        to its dense ``0..count-1`` position (distinct from
+        ``Reaction.index``, the gapped file-side source number).  Duplicates
+        over the same temperature range are resolved earlier, during network
+        construction, by the ``duplicate_policy`` reaction setting.  Clears
+        the cached filter results.
+
         Parameters
         ----------
         reaction : Reaction
+            The reaction to append.
 
         Raises
         ------
         ValueError
             If *reaction* is not a ``Reaction`` instance.
         RuntimeError
-            If the catalogue has been frozen (see :meth:`freeze`).
+            If the catalogue has been frozen; ``Network`` freezes it once
+            parsing is done, before the parsers' post-processing hooks.
         """
         if not isinstance(reaction, Reaction):
             raise ValueError(f"'{reaction}' must be an instance of 'Reaction'")
@@ -232,11 +269,13 @@ class Reactions(Catalogue[Reaction]):
         Parameters
         ----------
         serialized : str
-            Canonical form ``"<sorted_reactants>__<sorted_products>"``.
+            Canonical form ``"<sorted_reactants>__<sorted_products>"``, e.g.
+            ``"H.H2O+__H2.OH+"``.
 
         Returns
         -------
         list[Reaction]
+            Every reaction with that serialized form.
 
         Raises
         ------
@@ -254,11 +293,13 @@ class Reactions(Catalogue[Reaction]):
         Parameters
         ----------
         serialized : str
-            Canonical ``"<sorted_reactants>__<sorted_products>"`` form.
+            Canonical ``"<sorted_reactants>__<sorted_products>"`` form, e.g.
+            ``"H.H2O+__H2.OH+"``.
 
         Returns
         -------
         Vector[Reaction]
+            Every reaction with that serialized form, or an empty ``Vector``.
         """
         return Vector(self._by_serialized.get(serialized, []))
 
@@ -276,6 +317,7 @@ class Reactions(Catalogue[Reaction]):
         Returns
         -------
         Reaction or None
+            The first matching reaction, or ``None`` if not found.
         """
         for rea in self._by_prop.get(verbatim, []):
             if type is None or rea.type == type:
@@ -289,6 +331,7 @@ class Reactions(Catalogue[Reaction]):
         Returns
         -------
         list[Reaction]
+            The catalogue's own list (not a copy), in catalogue order.
         """
         return self._list
 
@@ -297,18 +340,26 @@ class Reactions(Catalogue[Reaction]):
 
         When *type* is supplied and *reaction* is a serialized form shared by
         several mechanisms, the exact ``(serialized, type)`` match is returned.
-        Never raises: a missing or ambiguous lookup yields ``None``.
+        Never raises: a missing lookup, or one with a *type* that does not
+        match exactly one reaction, yields ``None``.
 
         Parameters
         ----------
         reaction : str
-            Verbatim string or serialized form.
+            Verbatim string (e.g. ``"H + H2O+ -> H2 + OH+"``) or serialized
+            form (e.g. ``"H.H2O+__H2.OH+"``).
         type : str or None, optional
             If given, return ``None`` when the reaction type does not match.
 
         Returns
         -------
         Reaction or None
+            The matching reaction, or ``None`` if not found.
+
+        Notes
+        -----
+        Without *type*, a key shared by several mechanisms returns the
+        ``list`` of them, as ``reactions[key]`` does.
         """
         if type is not None and (
             reaction in self._by_serialized or reaction in self._by_prop
@@ -354,7 +405,10 @@ class Reactions(Catalogue[Reaction]):
         Parameters
         ----------
         format : str
-            Parser name, e.g. ``"prizmo"``, ``"krome"``, ``"kida"``.
+            Parser name, e.g. ``"prizmo"``, ``"krome"``, ``"kida"``,
+            ``"udfa"``, ``"uclchem"``; compared against the reaction's private
+            ``_format`` field.  Reactions loaded from a ``.jaff`` file written
+            before the format was stored have no format and never match.
 
         Returns
         -------
@@ -374,6 +428,8 @@ class Reactions(Catalogue[Reaction]):
         Returns
         -------
         Vector[str]
+            The ``"R1 + R2 -> P1 + P2"`` string of each reaction, in catalogue
+            order.
         """
         return Vector([r.verbatim for r in self])
 
@@ -383,6 +439,8 @@ class Reactions(Catalogue[Reaction]):
         Returns
         -------
         Vector[str]
+            The type label (e.g. ``"photo"``, ``"cosmic_ray"``) of each
+            reaction, in catalogue order.
         """
         return Vector([r.type for r in self])
 
@@ -407,6 +465,11 @@ class Reactions(Catalogue[Reaction]):
     def rate_coefficients(self) -> Vector[Basic]:
         """Return a ``Vector`` of rate-coefficient SymPy expressions.
 
+        ``Reaction.rate_coefficient`` of each reaction, in catalogue order.
+        Units depend on the reaction order (e.g. cm³ s⁻¹ for two-body
+        reactions).  For the full rates, including the reactant densities,
+        use :meth:`rates`.
+
         Returns
         -------
         Vector[Basic]
@@ -415,6 +478,10 @@ class Reactions(Catalogue[Reaction]):
 
     def rates(self) -> Vector[Basic]:
         """Return a ``Vector`` of reaction rates, ``rate_coefficient · Π nden``.
+
+        ``Reaction.rate`` of each reaction (the rate per unit volume: the rate
+        coefficient times each core reactant's number density), in catalogue
+        order.  For the coefficients alone use :meth:`rate_coefficients`.
 
         Returns
         -------
@@ -428,6 +495,8 @@ class Reactions(Catalogue[Reaction]):
         Returns
         -------
         Vector[float | None]
+            Lower bound of each reaction in Kelvin, ``None`` where there is
+            none, in catalogue order.
         """
         return Vector([r.tmin for r in self])
 
@@ -437,6 +506,8 @@ class Reactions(Catalogue[Reaction]):
         Returns
         -------
         Vector[float | None]
+            Upper bound of each reaction in Kelvin, ``None`` where there is
+            none, in catalogue order.
         """
         return Vector([r.tmax for r in self])
 
@@ -446,29 +517,44 @@ class Reactions(Catalogue[Reaction]):
         Returns
         -------
         Vector[Basic]
+            ``Reaction.dE`` of each reaction (energy released per reaction
+            event), in catalogue order.
         """
         return Vector([r.dE for r in self])
 
     def serialized(self) -> Vector[str]:
         """Return a ``Vector`` of name-level serialized reaction strings.
 
+        These keys index the catalogue and are used for duplicate detection.
+
         Returns
         -------
         Vector[str]
+            ``"<sorted_reactants>__<sorted_products>"`` of each reaction, in
+            catalogue order.
         """
         return Vector([r.serialized for r in self])
 
     def serialized_exploded(self) -> Vector[str]:
         """Return a ``Vector`` of atom-level (isomer-insensitive) serialized strings.
 
+        Built from ``Specie.serialized`` forms, so two reactions that differ
+        only in isomers (e.g. HCO+ vs HOC+) share a key.
+
         Returns
         -------
         Vector[str]
+            ``Reaction.serialized_exploded`` of each reaction, in catalogue
+            order.
         """
         return Vector([r.serialized_exploded for r in self])
 
     def radiation_emitters(self) -> Vector[Reaction]:
         """Return all reactions that emit radiation (have a ``spectralYield``).
+
+        A reaction emits when it has a ``.jfunc`` ``spectralYield<N>``
+        function (``reaction.rad.spectral_yield`` is set); any reaction type
+        can emit, not only photo reactions.
 
         Returns
         -------
@@ -491,24 +577,34 @@ class Reactions(Catalogue[Reaction]):
         Returns
         -------
         Vector[Reaction]
+            In catalogue order.  Unlike :meth:`with_type`, not cached.
         """
         return Vector([r for r in self if r.type == "photo"])
 
     def photo_reaction_truths(self) -> Vector[int]:
         """Return a binary ``Vector`` marking photo-reactions with ``1``.
 
+        Useful as a mask over the other vector accessors.
+
         Returns
         -------
         Vector[int]
+            ``1`` for a photo-reaction, ``0`` otherwise; one entry per
+            reaction, in catalogue order.
         """
         return Vector([int(reaction.type == "photo") for reaction in self])
 
     def photo_reaction_indices(self) -> Vector[int]:
         """Return the integer indices of photo-reactions within this catalogue.
 
+        Use these to pick the photo-reaction entries out of the other vector
+        accessors.
+
         Returns
         -------
         Vector[int]
+            Zero-based catalogue position (``Reaction.catalogue_index``) of
+            each photo-reaction, in ascending order.
         """
         return Vector([i for i, reaction in enumerate(self) if reaction.type == "photo"])
 
