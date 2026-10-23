@@ -203,7 +203,7 @@ class Thermodynamics:
         """
         dEdt = Float(0.0)
         if "heatingcoolingrate" in self.net.functions:
-            dEdt = self.net.symbols.resolve_rate_references(
+            dEdt = self.net.reactions.resolve_rate_references(
                 self.net.functions.value("heatingcoolingrate")
             )
 

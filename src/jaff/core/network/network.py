@@ -415,7 +415,7 @@ class Network:
 
         self.reactions.check_config()
         self.__post_process(parsers)
-        self.__resolve_rate_references()
+        self.reactions.link()
         self.__set_emissivity()
         self.__set_absorption_coefficient()
         self.thermodynamics: Thermodynamics = Thermodynamics(
@@ -512,7 +512,7 @@ class Network:
 
         Each row's rate is resolved (global variables, ``.jfunc`` calls) and
         standardized before its reaction is built; ``rc_<N>`` references are
-        left for :meth:`__resolve_rate_references`.
+        left for :meth:`Reactions.link`.
 
         Parameters
         ----------
@@ -590,7 +590,7 @@ class Network:
         reactions but not add any (``add()`` raises once frozen).  Rates are
         already standardised, so a hook writing a shorthand symbol (``n_X``,
         ...) must standardise it itself (``network.symbols.standardize``).
-        Runs before :meth:`__resolve_rate_references`, so ``rc_<N>`` in what a
+        Runs before :meth:`Reactions.link`, so ``rc_<N>`` in what a
         hook writes is resolved like every other rate.
 
         Parameters
@@ -603,21 +603,6 @@ class Network:
 
         for parser in parsers:
             parser.post_process(self)
-
-    def __resolve_rate_references(self) -> None:
-        """Resolve ``rc_<N>`` references once every reaction is built.
-
-        Replaces ``rc_<N>`` (another reaction's rate coefficient; see
-        :meth:`NetworkSymbols.resolve_rate_references`) in every rate segment,
-        ``dE`` and radiation group yield.  Everything else is standardized
-        before the reactions are built.
-        """
-        resolve = self.symbols.resolve_rate_references
-        for r in self.reactions:
-            r.rate_segments.map_rates(resolve)
-            r.dE = resolve(r.dE)
-            if r.rad.group_yields is not None:
-                r.rad.group_yields = [resolve(g) for g in r.rad.group_yields]
 
     def __set_emissivity(self) -> None:
         """Integrate the ``globalEmissivity`` over the radiation groups.
@@ -636,7 +621,7 @@ class Network:
         for group, value in zip(
             groups, self.radiation.integrate_over_groups(emissivity), strict=True
         ):
-            group.emissivity = self.symbols.resolve_rate_references(value)
+            group.emissivity = self.reactions.resolve_rate_references(value)
 
     def __set_absorption_coefficient(self) -> None:
         """Average the ``globalAbsorptionCoefficient`` over the radiation groups.
@@ -657,7 +642,7 @@ class Network:
         for group, value in zip(
             groups, self.radiation.average_over_groups(coefficient), strict=True
         ):
-            group.absorption_coefficient = self.symbols.resolve_rate_references(value)
+            group.absorption_coefficient = self.reactions.resolve_rate_references(value)
 
     def __parse_rate(
         self,

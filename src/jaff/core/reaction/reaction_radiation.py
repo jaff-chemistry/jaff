@@ -3,9 +3,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Mapping, cast
 
-from sympy import Expr
+from sympy import Basic, Expr
 
 if TYPE_CHECKING:
     from .reaction import Reaction
@@ -76,3 +76,26 @@ class ReactionRadiation:
             return
 
         self.group_yields = radiation.integrate_over_groups(spectral_yield)
+
+    def expressions(self) -> list[Expr]:
+        """The expressions the component holds: its :attr:`group_yields`.
+
+        Returns
+        -------
+        list[Expr]
+            The group yields; empty when there are none.
+        """
+        return list(self.group_yields or [])
+
+    def substitute(self, mapping: Mapping[Basic, Basic]) -> None:
+        """Apply *mapping* (``xreplace``) to every expression the component holds.
+
+        Parameters
+        ----------
+        mapping : Mapping[Basic, Basic]
+            Old symbol or expression to its replacement.
+        """
+        if self.group_yields is not None:
+            self.group_yields = [
+                cast(Expr, g.xreplace(mapping)) for g in self.group_yields
+            ]

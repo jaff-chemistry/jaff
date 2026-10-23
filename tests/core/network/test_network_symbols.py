@@ -156,7 +156,7 @@ def test_standardize_keeps_non_integer_rc(make_network):
 def test_resolve_rate_references_missing_target_raises(make_network):
     net = make_network(TWO_SPECIES, funcfile=False)
     with pytest.raises(ParserError, match="not in the network"):
-        net.symbols.resolve_rate_references(Symbol("rc_99"))
+        net.reactions.resolve_rate_references(Symbol("rc_99"))
 
 
 def test_standardize_leaves_rate_references(make_network):

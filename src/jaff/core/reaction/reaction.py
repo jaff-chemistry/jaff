@@ -52,7 +52,7 @@ from __future__ import annotations
 
 import sys
 from functools import cache, cached_property
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Mapping, cast
 
 import numpy as np
 from sympy import (
@@ -422,6 +422,39 @@ class Reaction:
         functions = self.net.functions
 
         return functions.value(name) if name in functions else None
+
+    def expressions(self) -> list[Expr]:
+        """Every expression the reaction and its components hold.
+
+        Its rate segments, :attr:`dE`, then those of :attr:`rad` and
+        :attr:`photo` (see their ``expressions``).  :meth:`substitute` changes
+        exactly these.
+
+        Returns
+        -------
+        list[Expr]
+            The expressions.
+        """
+        exprs = [seg.rate for seg in self.rate_segments] + [self.dE]
+        exprs += self.rad.expressions()
+        if self.photo is not None:
+            exprs += self.photo.expressions()
+
+        return exprs
+
+    def substitute(self, mapping: Mapping[Basic, Basic]) -> None:
+        """Apply *mapping* (``xreplace``) to every expression in :meth:`expressions`.
+
+        Parameters
+        ----------
+        mapping : Mapping[Basic, Basic]
+            Old symbol or expression to its replacement.
+        """
+        self.rate_segments.map_rates(lambda rate: cast(Expr, rate.xreplace(mapping)))
+        self.dE = cast(Expr, self.dE.xreplace(mapping))
+        self.rad.substitute(mapping)
+        if self.photo is not None:
+            self.photo.substitute(mapping)
 
     def __check_functions(self) -> None:
         """Reject a reaction with both a custom rate and a custom cross section."""

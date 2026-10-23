@@ -13,7 +13,7 @@ package's initialisation (``io``, ``core.reaction``, ``physics``) must therefore
 from __future__ import annotations
 
 from functools import cached_property, reduce
-from typing import TYPE_CHECKING, ClassVar, Collection, Sequence, cast
+from typing import TYPE_CHECKING, ClassVar, Collection, Sequence
 
 from sympy import Basic, Expr, Float, Function, IndexedBase, S, Symbol
 from sympy.core.function import AppliedUndef, UndefinedFunction
@@ -368,7 +368,7 @@ class NetworkSymbols:
         radiation and dust).  Name matching is case-insensitive, except ``n_e``,
         which is recognised only in lower case.  ``rc_<int>`` references to
         another reaction's rate are left alone: see
-        :meth:`resolve_rate_references`.
+        :meth:`~jaff.core.reaction.Reactions.link`.
 
         Parameters
         ----------
@@ -400,53 +400,6 @@ class NetworkSymbols:
                 reps[fs] = repl
 
         return expr.xreplace(reps)
-
-    def resolve_rate_references(self, expr: Basic) -> Expr:
-        """Replace each ``rc_<int>`` with the rate coefficient of that reaction.
-
-        ``<int>`` is the reaction's file-side number, looked up via
-        ``reactions.by_source_index`` (not the catalogue position, so it stays
-        dedup-safe and consistent with ``chemRateN``).  Run once the reactions
-        are built.
-
-        Parameters
-        ----------
-        expr : Basic
-            Expression to resolve.
-
-        Returns
-        -------
-        Expr
-            *expr* with every ``rc_<int>`` replaced.
-
-        Raises
-        ------
-        ParserError
-            If an ``rc_`` target is not in the network.
-        """
-        net = self._net
-        reps = {}
-        for fs in expr.free_symbols:
-            name = str(fs)
-            if not name.lower().startswith("rc_"):
-                continue
-            try:
-                num = int(name[3:])
-            except ValueError:
-                net.logger.error(
-                    f"The 'rc_' keyword in {net.spec.jfunc_path} must be followed by "
-                    f"an integer\ndenoting the reaction number. Found {name}"
-                )
-                continue
-
-            rxn = net.reactions.by_source_index(num)
-            if rxn is None:
-                raise ParserError(
-                    f"'{name}' references reaction {num}, which is not in the network"
-                )
-            reps[fs] = rxn.rate_coefficient
-
-        return cast(Expr, expr.xreplace(reps))
 
     def _replacement(self, name: str) -> Basic | None:
         """Replacement for the convenience symbol *name*, or ``None`` to keep it.

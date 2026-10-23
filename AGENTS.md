@@ -225,7 +225,12 @@ To add a setting, follow `docs/development/adding-configuration.md`. In short:
    component holding its photo settings, computed photo state and the photo logic
    (`compute()`, `band_xsecs`, `plot_xsecs()`); every reaction's `reaction.rad` is a
    `ReactionRadiation(reaction)` component (its `.jfunc` spectral yield, read not
-   copied, and the computed `group_yields`). Checks against the network
+   copied, and the computed `group_yields`). A reaction component lists every
+   expression it holds in `expressions()` and rewrites them in
+   `substitute(mapping)`: `Reactions.link()` resolves `rc_<N>` through them and
+   `tests/e2e/test_no_shorthand_survives.py` checks them. `.jfunc` functions are
+   read through `net.functions` (`value(name)` / `call(name, args)`) or
+   `reaction.function(kind)`, already standardized. Checks against the network
    raise `ParserError` with the key path.
 4. `Network`'s keyword arguments are exactly the `[network]` keys: a new top-level
    field of `NetworkConfig` needs a keyword of the same name (a test enforces it);

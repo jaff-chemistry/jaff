@@ -10,9 +10,9 @@ Reactions can be looked up by verbatim string
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, SupportsIndex, cast, overload
+from typing import TYPE_CHECKING, Any, Sequence, SupportsIndex, cast, overload
 
-from sympy import Basic
+from sympy import Basic, Expr
 
 from ...config.base import dotted
 from ...errors import ParserError
@@ -313,6 +313,108 @@ class Reactions(Catalogue[Reaction]):
             for key in unknown
         )
         raise ParserError(f"Invalid config:\n  {problems}")
+
+    def link(self) -> None:
+        """Resolve every ``rc_<N>`` reference to reaction *N*'s final rate coefficient.
+
+        Run once every reaction is built.  ``<N>`` is the reaction's file-side
+        number (:meth:`by_source_index`).  Rate coefficients are resolved in
+        dependency order, so ``rc_<N>`` may point at a reaction whose own rate
+        uses another ``rc_``; every other expression a reaction holds (``dE``,
+        radiation group yields, ...; see :meth:`Reaction.expressions`) then
+        gets the final rates.
+
+        Raises
+        ------
+        ParserError
+            If an ``rc_`` is not followed by a number, names a reaction that is
+            not in the network, or the rate coefficients reference each other in
+            a cycle (the message shows it, e.g. ``rc_0 → rc_1 → rc_0``).
+        """
+        references = {id(r): self._references(r.expressions()) for r in self}
+        done: set[int] = set()
+        for reaction in self:
+            self._link(reaction, [], done)
+
+        for reaction in self:
+            refs = references[id(reaction)]
+            if refs:
+                reaction.substitute({s: t.rate_coefficient for s, t in refs.items()})
+
+    def _link(self, reaction: Reaction, path: list[Reaction], done: set[int]) -> None:
+        """Resolve the ``rc_`` references of *reaction*'s rate, depth first."""
+        if id(reaction) in done:
+            return
+
+        if any(r is reaction for r in path):
+            start = next(i for i, r in enumerate(path) if r is reaction)
+            cycle = " → ".join(f"rc_{r.index}" for r in [*path[start:], reaction])
+            raise ParserError(
+                f"Rate coefficients reference each other in a cycle: {cycle}"
+            )
+
+        refs = self._references([reaction.rate_coefficient])
+        for target in refs.values():
+            self._link(target, [*path, reaction], done)
+        if refs:
+            reaction.substitute({s: t.rate_coefficient for s, t in refs.items()})
+
+        done.add(id(reaction))
+
+    def resolve_rate_references(self, expr: Expr) -> Expr:
+        """Replace each ``rc_<N>`` in *expr* with reaction *N*'s rate coefficient.
+
+        For expressions outside the reactions (e.g. a ``.jfunc``
+        ``heatingCoolingRate``), once :meth:`link` has run.
+
+        Parameters
+        ----------
+        expr : Expr
+            Expression to resolve.
+
+        Returns
+        -------
+        Expr
+            *expr* with every ``rc_<N>`` replaced.
+
+        Raises
+        ------
+        ParserError
+            If an ``rc_`` is not followed by a number or names a reaction that
+            is not in the network.
+        """
+        refs = self._references([expr])
+
+        return cast(Expr, expr.xreplace({s: t.rate_coefficient for s, t in refs.items()}))
+
+    def _references(self, exprs: Sequence[Basic]) -> dict[Basic, Reaction]:
+        """The ``rc_<N>`` symbols in *exprs*, each with its target reaction."""
+        refs: dict[Basic, Reaction] = {}
+        for expr in exprs:
+            symbols = getattr(expr, "free_symbols", set())
+            for symbol in sorted(symbols, key=str):
+                name = str(symbol)
+                if name.lower().startswith("rc_"):
+                    refs[symbol] = self._reference_target(name)
+
+        return refs
+
+    def _reference_target(self, name: str) -> Reaction:
+        """The reaction an ``rc_<N>`` symbol called *name* points at."""
+        try:
+            number = int(name[3:])
+        except ValueError:
+            raise ParserError(
+                f"'{name}': 'rc_' must be followed by a reaction number, e.g. rc_3"
+            ) from None
+
+        target = self.by_source_index(number)
+        if target is None:
+            raise ParserError(
+                f"'{name}' references reaction {number}, which is not in the network"
+            )
+
+        return target
 
     def by_source_index(self, n: int) -> Reaction | None:
         """Return the reaction whose file-side number (``source_index``) is *n*.

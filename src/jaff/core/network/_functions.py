@@ -37,7 +37,7 @@ class NetworkFunctions:
     parameters, on first use, so a function the network never uses may name a
     species it does not have.  Calls between functions were already inlined by
     the ``.jfunc`` parser.  ``rc_<N>`` references are left for
-    :meth:`NetworkSymbols.resolve_rate_references`.
+    :meth:`~jaff.core.reaction.Reactions.link`.
 
     Names are case-insensitive.
 

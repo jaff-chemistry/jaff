@@ -155,13 +155,16 @@ Arrhenius expression.
 ```
 
 `rc_<N>` refers to reaction _N_'s final rate coefficient, so it is resolved
-once every reaction is built. It is not allowed in a `photoCrossSection<N>`: a
-cross section cannot depend on another reaction's rate (`ParserError`).
+once every reaction is built (`network.reactions.link()`), in dependency order:
+reaction _N_'s own rate may use another `rc_`. Rate coefficients that reference
+each other in a cycle raise a `ParserError` showing it (e.g.
+`rc_0 → rc_1 → rc_0`); a `deltaE<N>` or `spectralYield<N>` may use its own
+reaction's `rc_<N>`, since no rate depends on it. `rc_` is not allowed in a
+`photoCrossSection<N>`: a cross section cannot depend on another reaction's
+rate (`ParserError`).
 
-If no reaction carries number `N`, loading raises a `ParserError`. A malformed
-index (`rc_` not followed by an integer, e.g. `rc_x`) only logs an error naming
-the offending symbol and the `.jfunc` file; the symbol is left in the expression
-as a free variable.
+If no reaction carries number `N`, or `rc_` is not followed by a number (e.g.
+`rc_x`), loading raises a `ParserError`.
 
 ---
 

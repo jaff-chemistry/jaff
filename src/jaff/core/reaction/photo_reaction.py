@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, cast
 
 from astropy import units as u
-from sympy import Expr
+from sympy import Basic, Expr
 
 from ...errors import ParserError
 from ._helper import to_float_or_none
@@ -209,6 +209,44 @@ class PhotoReaction:
         self.xsec.total = xsec_tot
         self.rgrouped = grouped
         self.band_rate = k_tot
+
+    def expressions(self) -> list[Expr]:
+        """The expressions the component holds.
+
+        Its :attr:`band_rate`, each band's rate coefficient ``k`` and symbolic
+        band cross section, and a symbolic spectrum-averaged ``xsec.total``.
+
+        Returns
+        -------
+        list[Expr]
+            The expressions; empty without radiation.
+        """
+        exprs: list[Expr] = [] if self.band_rate is None else [self.band_rate]
+        for band in self.rgrouped or []:
+            exprs.append(band.k)
+            if isinstance(band.xsec, Expr):
+                exprs.append(band.xsec)
+        if self.xsec is not None and isinstance(self.xsec.total, Expr):
+            exprs.append(self.xsec.total)
+
+        return exprs
+
+    def substitute(self, mapping: Mapping[Basic, Basic]) -> None:
+        """Apply *mapping* (``xreplace``) to every expression the component holds.
+
+        Parameters
+        ----------
+        mapping : Mapping[Basic, Basic]
+            Old symbol or expression to its replacement.
+        """
+        if self.band_rate is not None:
+            self.band_rate = cast(Expr, self.band_rate.xreplace(mapping))
+        for band in self.rgrouped or []:
+            band.k = cast(Expr, band.k.xreplace(mapping))
+            if isinstance(band.xsec, Expr):
+                band.xsec = cast(Expr, band.xsec.xreplace(mapping))
+        if self.xsec is not None and isinstance(self.xsec.total, Expr):
+            self.xsec.total = cast(Expr, self.xsec.total.xreplace(mapping))
 
     @property
     def band_xsecs(self) -> pd.DataFrame:
