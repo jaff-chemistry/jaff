@@ -52,41 +52,51 @@ After this, the network is a fully assembled, queryable model.
 Network(
     fname,
     config=None,
-    errors=False,
+    strict=None,
     label=None,
-    funcfile=True,
+    funcfile=None,
     duplicate_policy=None,
-    expand_nuclei=True,
+    expand_nuclei=None,
     radiation_props=None,
     dust_props=None,
-    use_proxy_photoreaction=True,
+    use_proxy_photoreaction=None,
+    eos_props=None,
+    use_jaff_toml=True,
 )
 ```
 
-| Parameter                 | Type                     | Default | Description                                                                                                                        |
-| ------------------------- | ------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `fname`                   | `str or Path`            | —       | Path to the network file (required); `.jaff` files are loaded as binary                                                            |
-| `config`                  | `str or Path or None`    | `None`  | Path to a `jaff.toml` config file; `None` auto-detects one in the network file's dir                                               |
-| `errors`                  | `bool`                   | `False` | Treat conservation violations / duplicates as fatal (exit) instead of warning                                                      |
-| `label`                   | `str or None`            | `None`  | Human-readable network name (defaults to the file stem)                                                                            |
-| `funcfile`                | `bool or str or Path`    | `True`  | Path to a `.jfunc` auxiliary file; `True` scans the network dir; `False` skips loading                                             |
-| `duplicate_policy`        | `str or None`            | `None`  | Resolve duplicate rate coefficients: `preserve-first`, `preserve-last`, or `error`; `None` reads `jaff.toml` (default first-wins)  |
-| `expand_nuclei`           | `bool`                   | `True`  | Expand `n_<element>_nuc` element-nucleus tokens into sums of `nden[i]` over the element-bearing species                            |
-| `radiation_props`         | `RadiationProps or None` | `None`  | Radiation-field configuration (bands, spectral index, mode, speed of light, background field); `None` disables radiation transport |
-| `dust_props`              | `DustProps or None`      | `None`  | Dust-module configuration (Rv, radiation reductions, photoelectric band edges); `None` disables the dust module                    |
-| `use_proxy_photoreaction` | `bool`                   | `True`  | Look up cross-sections under the proxy key (`CHx`→`CH`, `OHx`→`OH`); a custom `.jfunc` rate still wins                             |
+Settings come from the network's [configuration](../configuration/index.md):
+the `jaff.toml` next to the network file, then the `config` layers, then the
+keyword arguments. Every keyword argument defaults to `None` — *not given* — so
+it only overrides the config when you pass it. The validated result is
+`net.config`.
+
+| Parameter                 | Type                                 | Description                                                                                                                         |
+| ------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `fname`                   | `str or Path`                        | Path to the network file (required), or a predefined network name; `.jaff` files are loaded as binary                              |
+| `config`                  | path, `dict`, `JaffTomlConfig`, or a list of them | Config layers over the network's `jaff.toml`; a `dict` is shaped like a `jaff.toml` (`{"network": {...}}`)            |
+| `strict`                  | `bool`                               | Treat validation problems (conservation, sinks/sources, ...) as fatal (`network.strict`; default `False`)                          |
+| `label`                   | `str`                                | Human-readable network name (`network.label`; default the file stem)                                                               |
+| `funcfile`                | `bool or str or Path`                | `.jfunc` auxiliary file; `True` scans the network dir, `False` skips loading (`network.funcfile`; default `True`)                  |
+| `duplicate_policy`        | `str`                                | `preserve-first`, `preserve-last` or `error` (`network.reactions.duplicate_policy`; default `preserve-first`)                      |
+| `expand_nuclei`           | `bool`                               | Expand `n_<element>_nuc` into the element-nucleus sum (`network.expand_nuclei`; default `True`)                                    |
+| `radiation_props`         | `RadiationConfig` or `dict`          | Radiation field (`network.radiation`); enables radiation transport and photochemistry                                              |
+| `dust_props`              | `DustConfig` or `dict`               | Dust (`network.dust`); enables the dust module                                                                                      |
+| `use_proxy_photoreaction` | `bool`                               | Look up cross-sections under the proxy key (`CHx`→`CH`, `OHx`→`OH`) (`network.reactions.photo.use_proxy_photoreaction`; default `True`) |
+| `eos_props`               | EOS config model or `dict`           | Equation of state (`network.thermodynamics.eos`); replaces a configured EOS whole                                                   |
+| `use_jaff_toml`           | `bool`                               | Stack the `jaff.toml` next to the network file under the `config` layers (default `True`)                                          |
 
 ### Examples
 
 ```python
 from jaff import Network
-from jaff.physics import RadiationProps
+from jaff.physics.photo_reactions.config import RadiationConfig
 
-# Minimal load
+# Minimal load (with the network's jaff.toml, if any)
 net = Network("networks/GOW/GOW.jet")
 
 # Strict validation — abort on the first conservation failure
-net = Network("networks/GOW/GOW.jet", errors=True)
+net = Network("networks/GOW/GOW.jet", strict=True)
 
 # Custom label and explicit auxiliary-function file
 net = Network(
@@ -95,10 +105,16 @@ net = Network(
     funcfile="networks/GOW/GOW.jfunc",
 )
 
+# Config layers: a file, then a dict
+net = Network(
+    "networks/GOW/GOW.jet",
+    config=["tuned.toml", {"network": {"reactions": {"t_cutoff": "clip"}}}],
+)
+
 # With radiation bands (needed for photochemistry during code generation)
 net = Network(
     "networks/h_photoionization/h_photo.jet",
-    radiation_props=RadiationProps(bands=[13.6, "inf"], mode="nph"),
+    radiation_props=RadiationConfig(bands=[13.6, "inf"], mode="nph"),
 )
 ```
 
@@ -110,14 +126,15 @@ net = Network(
 | ----------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `filename`        | `Path`            | Absolute path to the source file                                                                                    |
 | `label`           | `str`             | Network name                                                                                                        |
-| `spec`            | `NetworkSpec`     | Normalized construction params (resolved `fname`, parsed `config`, `aux_funcs`)                                     |
+| `config`          | `NetworkConfig`   | The validated [configuration](../configuration/index.md) the network was built from                                |
+| `spec`            | `NetworkSpec`     | Normalized construction params (resolved `fname`, `aux_funcs`)                                                      |
 | `species`         | `Species`         | Ordered [`Species`](species.md) catalogue                                                                           |
 | `reactions`       | `Reactions`       | Ordered [`Reactions`](reactions.md) catalogue                                                                       |
 | `elements`        | `Elements`        | [`Elements`](elements.md) catalogue derived from the species                                                        |
 | `reactant_matrix` | `np.ndarray`      | Integer stoichiometry, shape `(n_reactions, n_species)` — reactant counts                                           |
 | `product_matrix`  | `np.ndarray`      | Integer stoichiometry, same shape — product counts                                                                  |
 | `thermodynamics`  | `Thermodynamics`  | Thermal equations: `eos`, `dEdt_chemical`, `dEdt_extra`, `dEdt_tot`, `dTdt_chemical`, `dTdt_extra`, `dTdt_tot`; see [thermodynamics](../../api/core/network/thermodynamics.md) |
-| `radiation`       | `Radiation\|None` | Radiation field object; `None` when no `radiation_props` are configured                                             |
+| `radiation`       | `Radiation\|None` | Radiation field object; `None` when the config has no `[network.radiation]` table                                   |
 | `mass_dict`       | `dict`            | Element mass dictionary used to build the species                                                                   |
 | `symbols`         | `NetworkSymbols`  | Canonical symbols, densities (`ndens`, `ntot`, `rho`, `n_hnuc`), introspection sets and `standardize`; see [symbols](../../api/core/network/symbols.md) |
 
@@ -238,24 +255,24 @@ are signed sums of these. See [`sfluxes`](../../api/core/network/sfluxes.md) and
 
 Each reaction's rate is only valid within a temperature range `[Tmin, Tmax]`.
 Whether `tgas` is clamped to that range (`clip`, the default) or left to
-extrapolate beyond it is configured per network in a
-[`jaff.toml`](../configuration/index.md) — see [Network Configuration](../configuration/index.md) for the
-full schema and precedence rules.
+extrapolate beyond it is the `t_cutoff` setting, for every reaction in
+`[network.reactions]` or for one reaction in its own table — see the
+[configuration reference](../configuration/reference.md#networkreactions).
 
 ---
 
 ## Validation
 
-JAFF validates the network during loading. With `errors=False` (default) each
-problem is logged as a warning; with `errors=True` the process exits on the
+JAFF validates the network during loading. With `strict=False` (default) each
+problem is logged as a warning; with `strict=True` the process exits on the
 first one. The individual checks can also be re-run by hand — each takes an
-`errors` flag and **logs** its findings (it returns `None`, it does not return a
-list):
+`errors` flag (exit when it finds a problem), logs its findings and returns a
+report whose `.ok` is `True` when nothing was found:
 
 ```python
-net.check_sink_sources(errors=False)     # species never produced, or never consumed
-net.check_recombinations(errors=False)   # cations lacking an electron recombination
-net.check_isomers(errors=False)          # species sharing one atomic composition
+net.check_sink_sources(errors=False).sinks     # species never produced
+net.check_recombinations(errors=False).missing  # cations lacking an electron recombination
+net.check_isomers(errors=False).groups          # species sharing one atomic composition
 ```
 
 Duplicate reactions (same species, mechanism/`type`, and temperature range) are
@@ -326,7 +343,7 @@ net2 = Network("gow.jaff")     # reload — same species, reactions, and ODEs
 <!-- prettier-ignore -->
 !!! warning "Networks with undefined functions can't be serialized"
     If any rate contains an undefined SymPy function — most commonly an
-    unresolved `photorates(...)` (a photo-reaction loaded without `radiation_props`)
+    unresolved `photorates(...)` (a photo-reaction loaded without radiation)
     or a custom `interp(...)` — `to_jaff` raises `ValueError`, because such
     expressions cannot be round-tripped through the JSON schema. Resolve the
     radiation/interpolation first, or keep those networks in their text form.

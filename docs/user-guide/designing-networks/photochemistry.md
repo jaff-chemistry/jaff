@@ -38,14 +38,14 @@ where $\rho_i$ is the radiation energy or photon density in band $i$ and $k_i$ i
 
 ## Radiation Field Discretisation
 
-The radiation field is divided into contiguous energy bands. You specify the band boundaries in `jaffgen.toml` (see [Configuration File](../configuration/index.md)):
+The radiation field is divided into contiguous energy bands. You specify the band boundaries in the `[network.radiation]` table of a `jaff.toml` or `jaffgen.toml` (see the [configuration reference](../configuration/reference.md#networkradiation)); the table enables radiation:
 
 ```toml
 [network.radiation]
 bands             = [13.6, "inf"]   # band edges in eV; "inf" for open upper bound
 profile_index   = 0               # photon-number spectrum index α (or one per band, e.g. [0, 1])
 mode    = "nph"           # photon number density ("nph") or energy density ("u")
-rsl               = 2.99792458e10   # speed of light (cm/s)
+c                 = 2.99792458e10   # speed of light (cm/s), or a symbol name such as "c_hat"
 ```
 
 ### Photon spectrum
@@ -62,7 +62,7 @@ where $\alpha$ is `profile_index`. Setting $\alpha = 0$ gives $n(E) \propto E^{-
 
 ### Valid band / index combinations
 
-`RadiationProps` checks the configuration when it is constructed:
+The configuration is checked when it loads, the spectrum when the radiation field is built:
 
 | Condition | Result |
 | --- | --- |
@@ -194,8 +194,9 @@ queries at runtime (see [Codebase Structure](../../development/codebase-structur
 ### What lands on the reaction
 
 Which database supplies a photoionization reaction is governed by
-[`pi_database`](../configuration/reference.md#networkradiation)
-(`norad` by default, or `verner` / `leiden`, globally or per reaction). The
+[`pi_database`](../configuration/reference.md#networkreactionsphoto)
+(`norad` by default, or `verner` / `leiden`, for every reaction in
+`[network.reactions.photo]` or per reaction). The
 lookup order is the chosen database, then NORAD, then Verner, then Leiden
 (duplicates skipped); any fallback is logged once as a summary after loading.
 Photodissociation always uses Leiden.
@@ -248,26 +249,34 @@ $$
 
 ### Enabling shielding
 
-Shielding is opt-in per reaction, declared in `jaffgen.toml` under
-`[network.reactions."<serialized>".shielding]` (see the
+Shielding is opt-in: a `shielding` table in a reaction's `photo` settings
+(`[network.reactions.reaction."<serialized>".photo]`), or in
+`[network.reactions.photo]` for every photo reaction (see the
 [configuration reference](../configuration/reference.md#networkreactionsphotoshielding)).
 The reaction **must be a photo-reaction**; the `type` key selects the shielding
-function (default `"leiden"`). The serialized key contains `.` separators and so
-**must be quoted** in the TOML header.
+function (default `"leiden"`), and a per-reaction table replaces the global one
+whole. The serialized key contains `.` separators and so **must be quoted** in
+the TOML header.
 
 ```toml
 # Leiden tabulated line shielding for CO photodissociation
-[network.reactions."CO._PHOTON__C.O".shielding]
+[network.reactions.reaction."CO._PHOTON__C.O".photo.shielding]
 type        = "leiden"
 radiation   = "ISRF"           # radiation-field subgroup (default "ISRF")
 shielded_by = ["self", "H2"]   # shielding species; "self" = the reactant (CO)
 
 # H2 self-shielding via the Hartwig et al. (2015) fit
-[network.reactions."H2._PHOTON__H.H".shielding]
+[network.reactions.reaction."H2._PHOTON__H.H".photo.shielding]
 type      = "hg2015"
 min_ncol  = 1.0e-35            # optional floors (see below)
 min_vdisp = 1.0e-20
 ```
+
+The settings are checked against the chosen model when the config loads; a
+model bound to one reaction (`db1996`, `hg2015`) is only valid in that
+reaction's table. The Leiden model keeps its per-reaction table on the reaction;
+`jaffgen` writes it to its output directory as `shielding_<reaction>.hdf5`
+(`Network.write_shielding_tables(directory)` from Python).
 
 ### Shielding types
 
@@ -335,10 +344,9 @@ band** — from the grain work function (`6 eV`) up to the hydrogen ionisation
 edge (`13.6 eV`). Rate and heating expressions parametrise this by `chi_pe`: the
 local radiation field in that band, scaled to a reference (Draine/ISRF) field.
 
-The band edges are configurable via
-`DustProps(pe_threshold_low=..., pe_threshold_high=...)` (defaults `6.0` and
-`13.6` eV), or the matching `pe_threshold_low` / `pe_threshold_high` keys in the
-`[network.dust]` table.
+The band edges are the `threshold_low` / `threshold_high` keys of the
+[`[network.dust.pe]`](../configuration/reference.md#networkdustpe) table
+(defaults `6.0` and `13.6` eV).
 
 Whereas the plain [`chi`](network-formats.md#rate-expression-variables) symbol is
 a runtime input (an assumed external field), `chi_pe` is computed **from the
@@ -367,24 +375,25 @@ Both are energy densities in `erg cm⁻³`, so `chi_pe` is dimensionless.
 `chi_pe` needs **radiation transport and the dust module** both on. From Python:
 
 ```python
-from jaff.physics import RadiationProps, DustProps
+from jaff.physics.dust.config import DustConfig
+from jaff.physics.photo_reactions.config import RadiationConfig
 
 net = Network(
     "networks/GOW/GOW.jet",
-    radiation_props=RadiationProps(
+    radiation_props=RadiationConfig(
         bands=[6.0, 11.2, 13.6, "inf"],   # band edges in eV
         background_field="draine",         # reference field for the scaling
     ),
-    dust_props=DustProps(),                # enables the dust module
+    dust_props=DustConfig(),               # enables the dust module
 )
 ```
 
-From a [`jaffgen.toml`](../configuration/reference.md#networkdust)
-add a `[network.dust]` table and a `background_field` key under
-`[network.radiation]`. If either radiation or dust is missing when a rate
+In a `jaff.toml` or `jaffgen.toml`, add a
+[`[network.dust]`](../configuration/reference.md#networkdust) table and a
+`background_field` key under `[network.radiation]`. If either radiation or dust is missing when a rate
 references `chi_pe`, generation aborts with a `ParserError`.
 
-Under a reduced speed of light (`rsl` / `RadiationProps(c="c_hat")`), `chi_pe`
+Under a reduced speed of light (`c = "c_hat"` in `[network.radiation]`), `chi_pe`
 is scaled by `c_reduced / c` so the photoelectric field stays consistent with
 the reduced-speed radiation transport (commit `cddf25d`).
 
@@ -397,12 +406,12 @@ substitutes the computed expression when the network is built.
 
 ```python
 from jaff import Network
-from jaff.physics import RadiationProps
+from jaff.physics.photo_reactions.config import RadiationConfig
 
 # Enable photochemistry by declaring radiation bands
 net = Network(
     "networks/h_photoionization/h_photo.jet",
-    radiation_props=RadiationProps(
+    radiation_props=RadiationConfig(
         bands=[13.6, "inf"],   # band edges in eV
         profile_index=0,
         mode="nph",
@@ -412,7 +421,7 @@ net = Network(
 # One spectral index per band (here two bands: 13.6–20 eV and 20–100 eV)
 net_pb = Network(
     "networks/h_photoionization/h_photo.jet",
-    radiation_props=RadiationProps(bands=[13.6, 20.0, 100.0], profile_index=[0, 1]),
+    radiation_props=RadiationConfig(bands=[13.6, 20.0, 100.0], profile_index=[0, 1]),
 )
 [grp.profile_idx for grp in net_pb.radiation.groups]   # [0, 1]
 
@@ -436,7 +445,7 @@ print(net.sradodes())
 
 Cross-section lookup is also exposed directly via the
 `jaff.physics.Photochemistry` class. It takes the network the reactions belong
-to (for the look-up key and the global `pi_database`). Constructing it downloads
+to (for its config: the proxy look-up and the global `pi_database`). Constructing it downloads
 the cross-section and line-shielding data files on first use (cached
 thereafter), so instantiate once and reuse:
 

@@ -121,7 +121,7 @@ net.reactions[0].rate_coefficient  # photorates(1, 13.6, 1.0e+99)
 | `serialized`          | `str`                        | Canonical **name-level** identity (isomer-sensitive)                                                                                                                                                                                                                                                                                                                                                                                       |
 | `serialized_exploded` | `str`                        | Canonical **atom-level** identity (isomer-insensitive)                                                                                                                                                                                                                                                                                                                                                                                     |
 | `type`                | `str`                        | Reaction type concluded by the parser (verbatim): gas-phase `"photo"`/`"cosmic_ray"`/`"3_body"`/`"unknown"`, or a grain surface-mechanism type — see [Reaction types](#reaction-types)                                                                                                                                                                                                                                                     |
-| `photo`               | `PhotoReactionProps or None` | Photo-reaction state, `None` for non-photo reactions: `xsec` (cross sections; `xsec.total` is the spectrum-averaged σ), `pi_database`, `override_custom_rate` (per-reaction override, or `None`), `override_custom_cross_section` (per-reaction override, or `None`), `custom_rad_rate` (rate from a `.jfunc`, not cross-sections), `rgrouped` (per-band data) and `shielding` — see [Photo-reactions](#photo-reactions-a-special-citizen) |
+| `photo`               | `PhotoReactionProps or None` | Photo-reaction state, `None` for non-photo reactions: `xsec` (cross sections; `xsec.total` is the spectrum-averaged σ), `pi_database`, `override_custom_rate` (per-reaction override, or `None`), `override_custom_cross_section` (per-reaction override, or `None`), `custom_rad_rate` (rate from a `.jfunc`, not cross-sections), `rgrouped` (per-band data) and `shielding` (model, settings and any data `tables`) — see [Photo-reactions](#photo-reactions-a-special-citizen) |
 
 <!-- prettier-ignore -->
 !!! tip "`reactants` and `products` are `Species` Catalogues"
@@ -144,7 +144,7 @@ rxn.index                    # 0
 
 Every `Reaction` validates mass and charge conservation when it is built — a
 violation is logged as a warning (or aborts the load when the network is opened
-with `errors=True`). You can re-run the checks yourself:
+with `strict=True`). You can re-run the checks yourself:
 
 ```python
 rxn.check_mass()    # True  — mass balances within one electron mass
@@ -283,7 +283,7 @@ a single **piecewise** rate expression on `net.reactions[i].rate_coefficient`:
   positive, so rates spanning several decades stay smooth, and linearly in $k$
   otherwise (e.g. a zero, negative, or symbolic boundary rate);
 - behaviour past the outermost bounds follows the reaction's
-  [`T_cutoff`](../configuration/reference.md#networkreactions) (`clip` holds the boundary
+  [`t_cutoff`](../configuration/reference.md#networkreactions) (`clip` holds the boundary
   value; `extrapolate` lets the end segments run on).
 
 The individual pieces live on `rxn.rate_segments`; `rxn.tmin` / `rxn.tmax` span

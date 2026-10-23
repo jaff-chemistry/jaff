@@ -17,10 +17,10 @@ treats the table lookup as an **interpolation function** that:
 2. JAFF **preserves verbatim** through code generation (it never invents a
    formula for it), and
 3. you **implement** at runtime, backed by a data table that the
-   [`[[table]]`](../configuration/data-tables.md) config emits alongside the generated
+   [`[[jaffgen.table]]`](../configuration/data-tables.md) config emits alongside the generated
    code.
 
-The three pieces — the `.jfunc` call, the generated code, and the `[[table]]`
+The three pieces — the `.jfunc` call, the generated code, and the `[[jaffgen.table]]`
 output — are the whole feature.
 
 ---
@@ -103,28 +103,28 @@ psigd_coll_interp2d_partial_1(..., tgas)   // ∂ psi  / ∂ tgas
 ## Emitting the table data
 
 The generated code needs the table itself. The
-[`[[table]]`](../configuration/data-tables.md) section of `jaffgen.toml` converts a
+[`[[jaffgen.table]]`](../configuration/data-tables.md) entries of `jaffgen.toml` convert a
 source table (the network's own `.hdf5` rate table, or a CSV) into the HDF5/CSV
 file your interpolation routines read at runtime — produced in the same
 `jaffgen` run that writes the source. For example, turning a CO cooling CSV into
 an HDF5 dataset:
 
 ```toml
-[[table]]
-[table.source]
+[[jaffgen.table]]
+[jaffgen.table.source]
 delimiter = " "
 comment   = "#"
 path      = "networks/GOW/co_1d.csv"
 
-[table.target]
+[jaffgen.table.target]
 path          = "GOW.hdf5"
 default_group = "/"
 
-[table.target."/co/1d/Temp"]
+[jaffgen.table.target."/co/1d/Temp"]
 col = "T0"
 ```
 
-See [`jaffgen.toml` → `[[table]]`](../configuration/data-tables.md) for the full
+See [Data tables](../configuration/data-tables.md) for the full
 conversion syntax.
 
 ---
@@ -185,7 +185,7 @@ double name_interp2d_partial_1(double x, double y) {
 ```
 
 A 1-D table is the same idea with one argument: `name_interp1d(x)` and a single
-`name_interp1d_partial_0(x)`. The `[[table]]` block ships the grid (`xs`, `ys`,
+`name_interp1d_partial_0(x)`. The `[[jaffgen.table]]` entry ships the grid (`xs`, `ys`,
 `z`) into the HDF5 file `name_table()` reads.
 
 ---

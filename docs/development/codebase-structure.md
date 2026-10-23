@@ -15,10 +15,10 @@ src/jaff/
 ├── core/                       # Domain model
 │   ├── network/                # network.py (Network — main entry point)
 │   │   ├── _spec.py            # NetworkSpec — normalized Network params
-│   │   └── _args.py            # NetworkArgs — raw CLI arg accumulator
+│   │   └── config.py           # NetworkConfig ([network]), JaffTomlConfig, load_network_config
 │   ├── reaction/               # reaction.py (Reaction) · reactions.py (Reactions)
 │   │                           #   reaction_props.py (PhotoReactionProps, GroupedPhotoReactionProps,
-│   │                           #   ShieldingProps)
+│   │                           #   ShieldingProps) · config.py ([network.reactions] models)
 │   ├── species/                # specie.py (Specie) · species.py (Species)
 │   ├── elements/               # element.py (Element) · elements.py (Elements)
 │   ├── parsers/                # File parsers (network + auxiliary)
@@ -44,10 +44,14 @@ src/jaff/
 │   ├── photo_reactions/        # Photochemistry: cross sections, radiation, shielding
 │   │   ├── _photochemistry.py  # XsecProps; get_xsec / get_verner_xsec / shielding — lookups
 │   │   ├── _radiation.py       # Radiation moment equations
+│   │   ├── config.py           # RadiationConfig ([network.radiation])
 │   │   └── shielding/          # Shielding-function registry (@_register, by photo.shielding.type)
-│   │       ├── _base.py        # ShieldingFunction ABC (name, reaction attrs)
+│   │       ├── _base.py        # ShieldingFunction ABC (name, reaction, config_model, params)
+│   │       ├── config.py       # ShieldingConfig, ShieldingParams (plugin settings base)
 │   │       ├── global_/        # Global models, reaction=None (e.g. leiden.py)
 │   │       └── H2__PHOTON__H_H/ # Local H2 self-shielding (db1996, hg2015) + shared _utils
+│   ├── dust/                   # Dust (config.py: DustConfig, [network.dust])
+│   ├── thermodynamics/         # Thermodynamics + eos/ (config.py: EOS models)
 │   └── constants.py            # Physical constants (astropy Quantities)
 │
 ├── plotting/                   # Spec-driven matplotlib plotting
@@ -97,8 +101,12 @@ src/jaff/
 │   ├── _io.py                  # .jaff gzip-JSON read/write; data table export
 │   └── _logger.py              # JaffLogger + progress bars
 │
-├── config/                     # Package-wide path constants
-│   └── _config.py              # SRC_DIR, DATA_DIR, XSECS/SHIELDING dirs, ...
+├── config/                     # Path constants + the config machinery
+│   ├── _config.py              # SRC_DIR, DATA_DIR, XSECS/SHIELDING dirs, ...
+│   ├── base.py                 # ConfigModel base, LowerStr, PathLike, docstring descriptions
+│   ├── loader.py               # Layers: load_layer, deep_merge, load_config, dump_config
+│   ├── json_schema.py          # Editor JSON Schemas (schemas/*.schema.json)
+│   └── reference.py            # Generated configuration reference page
 │
 ├── drivers/                    # Config / data format adapters
 │   ├── toml.py                 # TOML config reader
@@ -108,11 +116,12 @@ src/jaff/
 │   └── pooch.py                # Download/cache remote cross-section data files
 │
 ├── cli/                        # Command-line entry points (Typer)
-│   ├── _helper.py              # Shared argument helpers (funcfile_arg)
+│   ├── _helper.py              # CLI_KEYS (option → config key), --set, funcfile_arg
 │   ├── jaffgen/                # jaffgen — template-driven code generation
 │   │   ├── _engine.py          # JaffGen pipeline + Typer `generate` command
 │   │   ├── _structs.py         # State / ResolvedPath
-│   │   └── _config_table.py    # [[table]] config → HDF5/CSV output
+│   │   ├── config.py           # JaffgenConfig ([jaffgen]), load_jaffgen_config
+│   │   └── _config_table.py    # [[jaffgen.table]] config → HDF5/CSV output
 │   └── jaffx/                  # jaffx — network inspection / export
 │       └── _engine.py          # JaffX handlers + nested Typer commands
 │
@@ -187,7 +196,7 @@ flowchart TD
     subgraph input_sg ["Input"]
         NF["Network file\nKROME · PRIZMO · UDFA\nKIDA · UCLChem · .jaff"]
         JF[".jfunc\nauxiliary functions"]
-        CFG["jaffgen.toml / CLI"]
+        CFG["jaff.toml · jaffgen.toml · CLI\nconfig layers → validated config"]
     end
 
     subgraph parse_sg ["Parsing  —  core.parsers"]
@@ -211,7 +220,7 @@ flowchart TD
 
     NF --> NE
     JF --> AE
-    CFG --> NE
+    CFG --> NET
 
     NE --> NET
     AE --> NET
@@ -228,7 +237,7 @@ The table below traces a single `jaffgen` invocation from command line to output
 
 | Step | Component                                | What happens                                                                                       |
 | ---- | ---------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| 1    | `cli/jaffgen/_engine.py`                 | Parse CLI args (Typer), read `jaffgen.toml`, resolve config: CLI > jaffgen.toml > Network defaults |
+| 1    | `cli/jaffgen/_engine.py`, `config/`      | Parse CLI args (Typer); merge jaff.toml < jaffgen.toml < CLI < `--set` into one validated config   |
 | 2    | `core/parsers/network/_engine.py`        | Auto-detect format via registered plugins; convert each reaction line to a `parsedListProps` dict  |
 | 3    | `core/parsers/auxiliary_func/_engine.py` | Parse `.jfunc` file (if present); resolve `@var`/`@function` blocks into SymPy expressions         |
 | 4    | `core/network/network.py`                | Build `Species`, `Reactions`, `Elements` catalogues; validate duplicates, sinks, isomers           |

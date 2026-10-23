@@ -20,18 +20,20 @@ jaffgen --network <file> [options]
 
 ## How it works
 
-A `jaffgen` run is four phases:
+A `jaffgen` run is five phases:
 
-1. **Resolve configuration** — merge three sources by priority (see
-   [below](#configuration-priority)): explicit CLI flags, a
-   [`jaffgen.toml`](../configuration/index.md) file, then `Network` constructor defaults.
+1. **Resolve configuration** — merge the network's `jaff.toml`, a
+   [`jaffgen.toml`](../configuration/index.md) and the command line (see
+   [below](#configuration-priority)), then validate the result.
 2. **Gather template files** — from `--indir`, `--files`, and `--template`.
    These **combine** — a single run can pull from all three.
 3. **Load the network** — exactly one `Network`, built from the resolved
    network/label/funcfile/radiation settings.
 4. **Generate** — run [`TemplateParser`](template-syntax.md) on every gathered
    file and write the result to `--outdir`, preserving each file's path
-   relative to its source directory.
+   relative to its source directory, together with any data tables
+   ([`[[jaffgen.table]]`](../configuration/data-tables.md), shielding tables).
+5. **Record** — write the run's whole config to `config.toml` in `--outdir`.
 
 The mental model: _jaffgen is the template engine driven over a file set with
 one loaded network behind it._
@@ -61,12 +63,12 @@ appended — so the generator always wins on a path collision.
 | Argument       | Description                                                                        |
 | -------------- | ---------------------------------------------------------------------------------- |
 | `--network`    | Network file path **or** a built-in network name; required (CLI or `jaffgen.toml`) |
-| `--network-config` | Path to a network [`jaff.toml`](../configuration/index.md) (temperature cutoffs); defaults to `<network_dir>/jaff.toml` |
+| `--network-config` | Path to the network's [`jaff.toml`](../configuration/index.md) to use instead of `<network_dir>/jaff.toml` |
 | `--label`      | Override the network label (defaults to the file stem)                             |
 | `--funcfile`   | Path to a `.jfunc` auxiliary file; `true` scans the network dir; `false` skips     |
 | `--expand-nuclei` | `--expand-nuclei` / `--no-expand-nuclei` — expand `n_<element>_nuc` element-nucleus sums (default: on) |
-| `--errors`     | `--errors` / `--no-errors` — exit on conservation violations instead of warning    |
-| `--duplicate-policy` | Resolve duplicate rate coefficients over the same temperature range: `preserve-first` (default), `preserve-last`, or `error`. Overrides `jaffgen.toml` and the network `jaff.toml` |
+| `--strict`     | `--strict` / `--no-strict` — exit on conservation violations instead of warning    |
+| `--duplicate-policy` | Resolve duplicate rate coefficients over the same temperature range: `preserve-first` (default), `preserve-last`, or `error` |
 
 When `--network` is a built-in network name (a sub-directory of `networks/`),
 it resolves to the single `.jet` file inside that directory — the directory
@@ -93,7 +95,8 @@ performs this resolution.
 
 | Argument   | Description                                                                                                  |
 | ---------- | ------------------------------------------------------------------------------------------------------------ |
-| `--config` | Path to a [`jaffgen.toml`](../configuration/index.md); also auto-detected if a `jaffgen.toml` is among the gathered files |
+| `--config` | Path to a [`jaffgen.toml`](../configuration/index.md); without it, a `jaffgen.toml` bundled with `--template` is used |
+| `--set`    | `--set key.path=value` (repeatable) — set any [config key](../configuration/reference.md), e.g. `--set network.reactions.t_cutoff=clip`; wins over the other options |
 
 ---
 
@@ -101,13 +104,20 @@ performs this resolution.
 
 Each setting is resolved highest-wins:
 
-1. Explicit CLI flag (e.g. `--network`)
-2. [`jaffgen.toml`](../configuration/index.md) value (from `--config`, or auto-detected)
-3. `Network` constructor default
+1. `--set key.path=value` items
+2. Other command-line options (e.g. `--network`, `--strict`)
+3. [`jaffgen.toml`](../configuration/index.md) value (from `--config`, or bundled with the template)
+4. The network's `jaff.toml` (or `--network-config`)
+5. The config defaults
 
-Paths taken from a `jaffgen.toml` are resolved **relative to the config file's
+Paths taken from a config file are resolved **relative to that file's
 directory**; paths given on the CLI are resolved relative to the current
-directory.
+directory. Each option sets one config key; see the
+[option table](../configuration/index.md#from-the-command-line).
+
+The output directory also receives `config.toml`: the run's whole config after
+merging, every key and default included — an exact record of what the run used,
+loadable again with `--config`. (The `jaffgen.toml` itself is not copied.)
 
 ---
 
@@ -184,8 +194,8 @@ jaffgen --config jaffgen.toml
 
 A bundled template can even supply its own config. The `microphysics` collection
 ships a `jaffgen.toml` with a `[network.radiation]` block, so `--template microphysics`
-auto-detects it and turns on photochemistry without any extra flags. See
-[`jaffgen.toml`](../configuration/index.md) for the full schema.
+uses it and turns on photochemistry without any extra flags. See the
+[configuration reference](../configuration/reference.md) for every key.
 
 ---
 

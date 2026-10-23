@@ -290,7 +290,7 @@ A `photoCrossSection<N>` function replaces the database cross section of photo-r
 
 The reaction stores it as `photo.xsec` with `database = "custom"` and no photo-absorption cross section. With radiation enabled it is averaged over each band and over the whole spectrum exactly like a Verner fit, and the band averages set the photo rate. A reaction cannot have both a `chemRate<N>` and a `photoCrossSection<N>` (`ParserError`), nor a per-reaction `pi_database` while its custom cross section is in use.
 
-Setting `override_custom_cross_section = true` (globally in [`jaffgen.toml`](../configuration/reference.md#networkradiation) or `RadiationProps`, or per reaction in `jaffgen.toml` / [`jaff.toml`](../configuration/reference.md#networkreactionsphoto)) ignores the function and uses the database cross section instead. A per-reaction value applies with or without radiation. A `.jaff` file stores the custom cross section, so it survives a reload without the `.jfunc`.
+Setting [`override_custom_cross_section`](../configuration/reference.md#networkreactionsphoto) `= true` (for every photo reaction in `[network.reactions.photo]`, or for one in its own `photo` table) ignores the function and uses the database cross section instead. A per-reaction value applies with or without radiation. A `.jaff` file stores the custom cross section, so it survives a reload without the `.jfunc`.
 
 ### Spectral yield — `spectralYield<N>`
 
@@ -304,7 +304,7 @@ A `spectralYield<N>` function gives the radiation that reaction _N_ emits: the e
 
 With radiation transport enabled, JAFF integrates the yield over each radiation group and stores the result on `rxn.rad.group_yields`, in the units of the group density per event:
 
-| `RadiationProps.mode` | Group yield                                  | Units  |
+| radiation `mode`      | Group yield                                  | Units  |
 | --------------------- | -------------------------------------------- | ------ |
 | `"u"`                 | $\int_\text{group} Y(E)\,dE$                  | erg    |
 | `"nph"` (default)     | $\int_\text{group} Y(E)\,/\,E\;dE$ (`E` in erg) | photons |
@@ -386,7 +386,7 @@ $$
 \langle\alpha\rangle_i = \frac{\int_\text{group} \alpha(E)\, w(E)\, dE}{\int_\text{group} w(E)\, dE}
 $$
 
-with $w(E) = E\,n(E)$ in `"u"` mode (the energy density loses each photon's energy) and $w(E) = n(E)$ in `"nph"` mode (the photon density loses photons). The averages are stored on `group.absorption_coefficient` (with `n_X` symbols resolved to the species densities) and the spectrum on `net.radiation.absorption_coefficient`. Absorption removes radiation from every direction in proportion to the intensity, so it also attenuates the flux $F_i$ (`rflux[i]`), with the same $\langle\alpha\rangle_i$. Set `absorption_attenuates_flux = false` (in `[network.radiation]` of [`jaffgen.toml`](../configuration/reference.md#networkradiation), or `RadiationProps(..., absorption_attenuates_flux=False)`) to apply it to the density equations only. Other symbols such as `tgas` stay symbolic, which needs a closed-form integral over every group (else `ValueError`). Without radiation it has no effect. A `.jaff` file stores it.
+with $w(E) = E\,n(E)$ in `"u"` mode (the energy density loses each photon's energy) and $w(E) = n(E)$ in `"nph"` mode (the photon density loses photons). The averages are stored on `group.absorption_coefficient` (with `n_X` symbols resolved to the species densities) and the spectrum on `net.radiation.absorption_coefficient`. Absorption removes radiation from every direction in proportion to the intensity, so it also attenuates the flux $F_i$ (`rflux[i]`), with the same $\langle\alpha\rangle_i$. Set `absorption_attenuates_flux = false` (in [`[network.radiation]`](../configuration/reference.md#networkradiation), or `radiation_props={..., "absorption_attenuates_flux": False}` from Python) to apply it to the density equations only. Other symbols such as `tgas` stay symbolic, which needs a closed-form integral over every group (else `ValueError`). Without radiation it has no effect. A `.jaff` file stores it.
 
 <!-- prettier-ignore -->
 !!! warning "Dust module"
@@ -396,13 +396,13 @@ with $w(E) = E\,n(E)$ in `"u"` mode (the energy density loses each photon's ener
 
 ## Radiation Moment Equations
 
-When a network is loaded with radiation transport enabled (by passing `radiation_props=RadiationProps(bands=...)` to `Network`), JAFF builds a set of **radiation moment equations** alongside the chemical ODEs. Photo-reactions remove radiation from each band they absorb in.
+When a network is loaded with radiation transport enabled (a [`[network.radiation]`](../configuration/reference.md#networkradiation) table in its config, or `radiation_props=` passed to `Network`), JAFF builds a set of **radiation moment equations** alongside the chemical ODEs. Photo-reactions remove radiation from each band they absorb in.
 
 ### Radiation density variable — `radeden` / `photden`
 
-Each radiation band carries one density unknown in the generated equations. Its symbolic name depends on how the field is tracked, set by the `mode` of the `RadiationProps` object passed to `Network` (`radiation_props=RadiationProps(bands=..., mode="nph"|"u")`):
+Each radiation band carries one density unknown in the generated equations. Its symbolic name depends on how the field is tracked, set by the radiation `mode` (`"nph"` or `"u"`):
 
-| `RadiationProps.mode` | Density variable | Quantity tracked         | Units    |
+| radiation `mode`      | Density variable | Quantity tracked         | Units    |
 | --------------------- | ---------------- | ------------------------ | -------- |
 | `"u"`                 | `radeden[i]`     | Radiation energy density | erg cm⁻³ |
 | `"nph"` (default)     | `photden[i]`     | Photon number density    | cm⁻³     |

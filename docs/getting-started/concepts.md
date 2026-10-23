@@ -95,11 +95,12 @@ A loaded `Network` carries:
 
 <!-- prettier-ignore -->
 !!! tip "Validate while you load"
-    Pass `errors=True` to turn on chemistry checks — missing sinks and sources,
-    duplicate reactions, isomer clashes, and element-conservation violations are
-    reported as warnings:
+    Chemistry checks run on every load — missing sinks and sources, isomer
+    clashes, missing recombinations and element-conservation violations are
+    reported as warnings. Pass `strict=True` to stop at the first problem
+    instead:
     ```python
-    net = Network("mynetwork.dat", errors=True)
+    net = Network("mynetwork.dat", strict=True)
     ```
 
 ---
@@ -316,18 +317,23 @@ $$JAFF END
 
 ---
 
-## Driving runs with `jaffgen.toml`
+## Configuration files
 
-Spelling out the network, inputs, output, and radiation on every `jaffgen` line
-gets old. A [`jaffgen.toml`](../user-guide/configuration/index.md) declares
-the run once, so the command collapses to:
+Settings live in two TOML files with [one schema](../user-guide/configuration/index.md):
+a `jaff.toml` next to a network file describes how that network is built
+(temperature cutoffs, radiation, dust, the equation of state, …) and is picked
+up by every `Network(...)` that loads it; a `jaffgen.toml` declares a
+code-generation run once, so the command collapses to:
 
 ```bash
 jaffgen --config jaffgen.toml
 ```
 
-CLI flags still win over the file when both set the same thing, so a `jaffgen.toml`
-is a baseline you can override per run.
+Command-line options (and `--set key.path=value`) still win over the files, so
+a file is a baseline you can override per run. Each run writes its complete
+config to `config.toml` in the output directory. Editors can
+[complete and check](../user-guide/configuration/editor-setup.md) these files
+as you type.
 
 ---
 
@@ -338,7 +344,7 @@ A first analysis pass touches only the model — no code generation at all:
 ```python
 from jaff import Network
 
-net = Network("networks/h_photoionization/h_photo.jet", errors=True)
+net = Network("networks/h_photoionization/h_photo.jet", strict=True)
 
 for sp in net.species:
     print(f"{sp.name}: {sp.mass:.3e} g  charge {sp.charge:+d}")

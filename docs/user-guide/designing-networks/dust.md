@@ -91,64 +91,39 @@ grid used for photochemistry also controls dust extinction.
 
 ## Parameters
 
-The dust module is configured with a `DustProps` model:
+The dust module is configured by the `[network.dust]` table (in Python, a
+`DustConfig` or a `dict` of the same keys); its photoelectric band by the
+`[network.dust.pe]` sub-table:
 
-```python
-from jaff.physics import DustProps
+```toml
+[network.dust]
+rv          = 3.1
+u_reduction = "absorption"
+f_reduction = "transport"
 
-DustProps(
-    rv=3.1,
-    u_reduction="absorption",
-    f_reduction="transport",
-    pe_threshold_low=6.0,
-    pe_threshold_high=13.6,
-)
+[network.dust.pe]
+threshold_low  = 6.0    # eV
+threshold_high = 13.6   # eV
 ```
 
-| Parameter           | Type          | Default          | Description                                                                                                                               |
-| ------------------- | ------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `rv`                | `float`       | `3.1`            | Milky-Way grain model, selected by $R_V$. One of `3.1`, `4.0`, `5.5`; picks the `mw_rv{rv}` table in `dust.hdf5`.                          |
-| `u_reduction`       | `str \| None` | `"absorption"`   | Cross-section kind used to attenuate the radiation **density** (u) moment. One of `extinction`, `absorption`, `scattering`, `transport`, or `none`/`None` to disable. |
-| `f_reduction`       | `str \| None` | `"transport"`    | Cross-section kind used to attenuate the radiation **flux** (f) moment; same choices as `u_reduction`.                                    |
-| `pe_threshold_low`  | `float`       | `6.0`            | Lower edge of the photoelectric band (eV) — the grain work function.                                                                      |
-| `pe_threshold_high` | `float`       | `13.6`           | Upper edge of the photoelectric band (eV) — the hydrogen ionisation edge.                                                                 |
+| Key                 | Type    | Default        | Description                                                                                                                               |
+| ------------------- | ------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `rv`                | `float` | `3.1`          | Milky-Way grain model, selected by $R_V$. One of `3.1`, `4.0`, `5.5`; picks the `mw_rv{rv}` table in `dust.hdf5`.                          |
+| `u_reduction`       | `str`   | `"absorption"` | Cross-section kind used to attenuate the radiation **density** (u) moment. One of `extinction`, `absorption`, `scattering`, `transport`, or `none` to disable. |
+| `f_reduction`       | `str`   | `"transport"`  | Cross-section kind used to attenuate the radiation **flux** (f) moment; same choices as `u_reduction`.                                    |
+| `pe.threshold_low`  | `float` | `6.0`          | Lower edge of the photoelectric band (eV) — the grain work function.                                                                      |
+| `pe.threshold_high` | `float` | `13.6`         | Upper edge of the photoelectric band (eV) — the hydrogen ionisation edge.                                                                 |
 
-The `[pe_threshold_low, pe_threshold_high]` window is the band over which
+The `[threshold_low, threshold_high]` window is the band over which
 `chi_pe` is integrated; the defaults span the classic 6–13.6 eV FUV band.
 
 ---
 
 ## Enabling dust
 
-### From Python
-
-Pass a `DustProps` instance as `dust_props=` to the `Network` constructor,
-together with a `radiation_props=` so the radiation field exists:
-
-```python
-from jaff import Network
-from jaff.physics import RadiationProps, DustProps
-
-net = Network(
-    "GOW++",
-    radiation_props=RadiationProps(
-        bands=[6.0, 11.2, 13.6],   # band edges in eV
-        background_field="draine",  # reference field for chi_pe
-    ),
-    dust_props=DustProps(
-        rv=3.1,
-        u_reduction="extinction",
-        f_reduction="extinction",
-    ),
-)
-```
-
-Omitting `dust_props` (leaving it `None`) leaves the dust module off.
-
-### From `jaffgen.toml`
-
-For code generation, the mere **presence** of a `[network.dust]` table enables
-the module. Its keys mirror `DustProps`:
+The **presence** of a `[network.dust]` table enables the module; all its keys
+are optional, so an empty table is enough. Dust attenuates the radiation field,
+so configure `[network.radiation]` too:
 
 ```toml
 [network.radiation]
@@ -156,18 +131,34 @@ bands            = [6, 11.2, 13.6]
 background_field = "draine"
 
 [network.dust]
-rv                = 3.1
-u_reduction       = "extinction"
-f_reduction       = "extinction"
-pe_threshold_low  = 6      # eV
-pe_threshold_high = 13.6   # eV
+u_reduction = "extinction"
+f_reduction = "extinction"
 ```
 
-All keys are optional and fall back to the `DustProps` defaults; an empty
-`[network.dust]` table is enough to turn the module on. See the
-[`[network.dust]` reference](../configuration/reference.md#networkdust)
-in the configuration guide for the full key list, and
-[Photochemistry](photochemistry.md) for the radiation setup that dust builds on.
+This works in a network's `jaff.toml` as well as in a `jaffgen.toml`. See the
+[`[network.dust]` reference](../configuration/reference.md#networkdust) for the
+full key list, and [Photochemistry](photochemistry.md) for the radiation setup
+that dust builds on.
+
+From Python, pass the same settings as `dust_props=` (a `DustConfig` or a
+`dict`), together with radiation:
+
+```python
+from jaff import Network
+from jaff.physics.dust.config import DustConfig
+from jaff.physics.photo_reactions.config import RadiationConfig
+
+net = Network(
+    "GOW++",
+    radiation_props=RadiationConfig(
+        bands=[6.0, 11.2, 13.6],   # band edges in eV
+        background_field="draine",  # reference field for chi_pe
+    ),
+    dust_props=DustConfig(u_reduction="extinction", f_reduction="extinction"),
+)
+```
+
+Without a `[network.dust]` table or `dust_props`, the dust module is off.
 
 ---
 
@@ -175,12 +166,11 @@ in the configuration guide for the full key list, and
 
 ```python
 from jaff import Network
-from jaff.physics import RadiationProps, DustProps
 
 net = Network(
     "GOW++",
-    radiation_props=RadiationProps(bands=[6.0, 11.2, 13.6]),
-    dust_props=DustProps(rv=3.1),
+    radiation_props={"bands": [6.0, 11.2, 13.6]},
+    dust_props={"rv": 3.1},
 )
 
 # The dust container and its sub-objects
