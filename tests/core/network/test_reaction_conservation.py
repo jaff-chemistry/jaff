@@ -5,6 +5,8 @@ import logging
 
 import pytest
 
+from jaff.core.network import ConservationReport
+
 
 # H <-> H2 conserves every species (no sink/source), but each reaction breaks
 # mass conservation (1 H vs 2 H).  This isolates the per-reaction check from the
@@ -43,10 +45,26 @@ class TestNetworkCheck:
         with pytest.raises(SystemExit):
             net.check_conservation(strict=True)
 
-    def test_non_strict_check_returns(self, make_network):
+    def test_report_lists_violations(self, make_network):
         net = make_network(_MASS_VIOLATION, strict=False)
+        report = net.check_conservation(strict=False)
 
-        assert net.check_conservation(strict=False) is None
+        assert isinstance(report, ConservationReport)
+        assert report.mass == ("H -> H2", "H2 -> H")
+        assert report.charge == ()
+        assert not report.ok
+
+    def test_report_lists_charge_violations(self, make_network):
+        net = make_network(["H -> H+ [10,1000] 1", "H+ -> H [10,1000] 1"], strict=False)
+
+        assert net.check_conservation(strict=False).charge == ("H -> H+", "H+ -> H")
+
+    def test_clean_network_is_ok(self, make_network):
+        net = make_network(
+            ["H + H -> H2 [10,1000] 1", "H2 -> H + H [10,1000] 1"], strict=False
+        )
+
+        assert net.check_conservation(strict=False).ok
 
     def test_constructor_does_not_check(self, make_network):
         # A hand-built reaction is checked by the network, not on construction.

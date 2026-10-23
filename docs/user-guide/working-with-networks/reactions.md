@@ -159,7 +159,7 @@ is not checked; run the checks yourself:
 ```python
 rxn.check_mass()    # True  — mass balances within one electron mass
 rxn.check_charge()  # True  — net charge identical on both sides
-net.check_conservation(strict=False)  # every reaction; logs each violation
+net.check_conservation(strict=False)  # ConservationReport(mass=(...), charge=(...))
 ```
 
 `check_mass` deliberately tolerates a one-electron-mass discrepancy
@@ -614,15 +614,13 @@ figure-spec format, themes and legends.
 ### Conservation audit
 
 ```python
-bad = [r.verbatim for r in net.reactions
-       if not (r.check_mass() and r.check_charge())]
+report = net.check_conservation(strict=False)
 
-if bad:
-    print(f"Conservation failures ({len(bad)}):")
-    for v in bad:
-        print(f"  {v}")
-else:
+if report.ok:
     print("All reactions conserve mass and charge.")
+else:
+    print(f"Mass not conserved: {report.mass}")
+    print(f"Charge not conserved: {report.charge}")
 ```
 
 ### Formation and destruction pathways

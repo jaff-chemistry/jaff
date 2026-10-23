@@ -286,10 +286,11 @@ JAFF validates the network during loading. With `strict=False` (default) each
 problem is logged as a warning; with `strict=True` the process exits at the
 first check that finds a problem. The individual checks can also be re-run by
 hand — each takes a `strict` flag (exit when it finds a problem), logs its
-findings and returns a report (`SinkSourceReport`, `RecombinationReport`,
-`IsomerReport`) whose `.ok` is `True` when nothing was found:
+findings and returns a report (`ConservationReport`, `SinkSourceReport`,
+`RecombinationReport`, `IsomerReport`) whose `.ok` is `True` when nothing was found:
 
 ```python
+net.check_conservation(strict=False).mass      # reactions not conserving mass
 net.check_sink_sources(strict=False).sinks     # species never produced
 net.check_recombinations(strict=False).missing  # cations lacking an electron recombination
 net.check_isomers(strict=False).groups          # species sharing one atomic composition
@@ -303,14 +304,14 @@ check.
 On `h_photo` all three come back clean:
 
 ```python
+net.check_conservation(strict=False)    # ConservationReport(mass=(), charge=())
 net.check_sink_sources(strict=False)    # SinkSourceReport(sinks=frozenset(), sources=frozenset())
 net.check_recombinations(strict=False)  # RecombinationReport(missing=frozenset())
 net.check_isomers(strict=False)         # IsomerReport(groups=())
 ```
 
-Mass and charge conservation are checked for every reaction by
-`net.check_conservation(strict=False)`, also run on construction —
-see [Reactions](reactions.md#conservation-is-checked-by-the-network).
+`check_conservation` lists the reactions that break mass or charge
+conservation — see [Reactions](reactions.md#conservation-is-checked-by-the-network).
 
 ---
 

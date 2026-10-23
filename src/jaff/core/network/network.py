@@ -101,6 +101,28 @@ def _keyword_layer(**kwargs: Any) -> Dict[str, Any]:
 
 
 @dataclass(frozen=True)
+class ConservationReport:
+    """Structured result of :meth:`Network.check_conservation`.
+
+    Attributes
+    ----------
+    mass : tuple[str, ...]
+        Reactions (``verbatim`` form, network order) whose reactant and
+        product masses differ by more than one electron mass.
+    charge : tuple[str, ...]
+        Reactions (``verbatim`` form, network order) whose net charge changes.
+    """
+
+    mass: tuple[str, ...]
+    charge: tuple[str, ...]
+
+    @property
+    def ok(self) -> bool:
+        """``True`` when every reaction conserves mass and charge."""
+        return not self.mass and not self.charge
+
+
+@dataclass(frozen=True)
 class SinkSourceReport:
     """Structured result of :meth:`Network.check_sink_sources`.
 
@@ -806,27 +828,50 @@ class Network:
         self.logger.info(f'{len(not_in_self)} species are missing in "{self.label}"')
         self.logger.info(f'{len(not_in_other)} species are missing in "{other.label}"')
 
-    def check_conservation(self, strict: bool) -> None:
-        """Check every reaction for mass and charge conservation.
+    def check_conservation(self, strict: bool) -> ConservationReport:
+        """Report (and warn, or abort) reactions that do not conserve mass or charge.
 
-        Runs :meth:`~jaff.core.reaction.Reaction.check` on each reaction: a
-        violation is logged as a warning, or is fatal with *strict*.  Run
-        automatically on construction with ``strict`` set to the network's
-        ``strict`` setting.
+        Uses :meth:`~jaff.core.reaction.Reaction.check_mass` and
+        :meth:`~jaff.core.reaction.Reaction.check_charge` on every reaction and
+        logs a warning naming each violation.  Run automatically on
+        construction with ``strict`` set to the network's ``strict`` setting.
 
         Parameters
         ----------
         strict : bool
-            If ``True``, call ``sys.exit(1)`` on the first violation.
+            If ``True``, call ``sys.exit(1)`` when a violation is found.
 
-        Raises
-        ------
-        SystemExit
-            If *strict* is ``True`` and a reaction does not conserve mass or
-            charge.
+        Returns
+        -------
+        ConservationReport
+            The reactions that violate mass or charge conservation.
+
+        Examples
+        --------
+        >>> net = Network("COthin")
+        >>> net.check_conservation(strict=False).ok
+        True
         """
-        for reaction in self.reactions:
-            reaction.check(strict)
+        mass = [r for r in self.reactions if not r.check_mass()]
+        charge = [r for r in self.reactions if not r.check_charge()]
+
+        for r in mass:
+            self.logger.warning(f"Mass not conserved in reaction {r.index}: {r.verbatim}")
+        for r in charge:
+            self.logger.warning(
+                f"Charge not conserved in reaction {r.index}: {r.verbatim}"
+            )
+
+        report = ConservationReport(
+            mass=tuple(r.verbatim for r in mass),
+            charge=tuple(r.verbatim for r in charge),
+        )
+
+        if not report.ok and strict:
+            self.logger.error("Conservation errors found")
+            sys.exit(1)
+
+        return report
 
     def check_sink_sources(self, strict: bool) -> SinkSourceReport:
         """Report (and warn, or abort) species never produced or never consumed.

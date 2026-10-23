@@ -4,6 +4,7 @@
 from ._spec import NetworkSpec
 from ._symbols import NetworkSymbols
 from .network import (
+    ConservationReport,
     IsomerReport,
     Network,
     RecombinationReport,
@@ -11,6 +12,7 @@ from .network import (
 )
 
 __all__ = [
+    "ConservationReport",
     "IsomerReport",
     "Network",
     "NetworkSpec",
