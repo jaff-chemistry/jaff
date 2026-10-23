@@ -61,7 +61,7 @@ from ..reaction import (
 from ...physics.photo_reactions.shielding.config import ShieldingConfig
 from ..species import Specie, Species
 from ._spec import NetworkSpec
-from ...config.base import ConfigModel
+from ...config.base import ConfigModel, dotted
 from ...physics.dust.config import DustConfig
 from ...physics.thermodynamics.eos.config import EosConfig
 from ...physics.photo_reactions.config import RadiationConfig
@@ -433,6 +433,7 @@ class Network:
         else:
             self.__load_network_from_jaff_file(jaff_props)
 
+        self.__check_reaction_settings()
         self.elements: Elements = Elements(self.species._list)
         self.__post_process(parsers)
         self.__normalize_network_extras(loaded_from_jaff_file)
@@ -663,6 +664,27 @@ class Network:
 
         if self._photochemistry is not None:
             self._photochemistry.log_fallback_summary()
+
+    def __check_reaction_settings(self) -> None:
+        """Check every per-reaction config entry names a reaction of the network.
+
+        Raises
+        ------
+        ParserError
+            Listing each ``[network.reactions.reaction."<serialized>"]`` entry
+            whose reaction is not in the network.
+        """
+        known = {reaction.serialized for reaction in self.reactions}
+        unknown = [key for key in self.config.reactions.reaction if key not in known]
+        if not unknown:
+            return
+
+        problems = "\n  ".join(
+            f"{dotted(('network', 'reactions', 'reaction', key))}: "
+            "no such reaction in the network"
+            for key in unknown
+        )
+        raise ParserError(f"Invalid config:\n  {problems}")
 
     def __post_process(self, parsers: list[Parser]) -> None:
         """Freeze the catalogues and run each parser's ``post_process`` hook.

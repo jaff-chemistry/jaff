@@ -241,3 +241,31 @@ class TestNetworkUsesConfig:
 
         with pytest.raises(ParserError, match="only valid for photo reactions"):
             self._net(make_network, config=config)
+
+    def test_settings_for_unknown_reaction_are_reported(self, make_network):
+        config = {
+            "network": {
+                "reactions": {
+                    "reaction": {
+                        "H.H__H2": {"t_cutoff": "extrapolate"},
+                        "He.H__HeH": {"t_cutoff": "clip"},
+                        "C.O__CO": {"t_cutoff": "clip"},
+                    }
+                }
+            }
+        }
+
+        with pytest.raises(ParserError) as info:
+            self._net(make_network, config=config)
+
+        message = str(info.value)
+        assert 'network.reactions.reaction."He.H__HeH"' in message
+        assert 'network.reactions.reaction."C.O__CO"' in message
+        assert "H.H__H2" not in message
+
+    def test_settings_for_known_reactions_pass(self, make_network):
+        config = {
+            "network": {"reactions": {"reaction": {"H.H__H2": {"t_cutoff": "clip"}}}}
+        }
+
+        assert self._net(make_network, config=config).config.reactions.reaction
