@@ -72,8 +72,9 @@ def _(mo):
     JAFF matches species and reactions by their **serialized** identity, never by
     position in the file:
 
-    - a species' `serialized` form is its canonical name, so `E` and `e-` are the
-      same species;
+    - a species' `serialized` form is its sorted atomic composition (`CO+`
+      becomes `+/C/O`), so `E` and `e-` are the same species. Isomers such as
+      `HCN` and `HNC` share one serialized form, so they compare as equal;
     - a reaction's `serialized` form sorts the species names on each side, so the
       order the file lists them in does not matter. `demo1` writes
       `CO+ + E -> CO` while `demo2` writes `E + CO+ -> CO`; both serialize to

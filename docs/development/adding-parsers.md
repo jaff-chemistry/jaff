@@ -63,17 +63,17 @@ A **handler** is a plain class — it does not subclass anything — living in i
 | `name: str`                  | Unique handler identifier; the `Record.format` tag used to look the handler back up in `process`.               |
 | `priority: int`               | Match order across **all** handlers of **all** parsers. Use the gap-spaced scheme below so new formats slot in cleanly. |
 | `is_reaction: bool`           | `True` for a reaction line-type (implements `parse`); `False` for a directive (implements `apply`).             |
-| `global_re`                   | Fast, broad filter — a compiled `re.Pattern` (or a method returning one). Identifies lines that _could_ belong to this handler. Matched first, across all handlers, in priority order. |
+| `global_re`                   | Fast, broad filter — a compiled `re.Pattern` attribute (the engine reads it once and calls `.match` on it, so it cannot be a method). Identifies lines that _could_ belong to this handler. Matched first, across all handlers, in priority order. |
 | `local_re`                    | Detailed extractor — uses **named groups** to capture every field. Matched inside `parse`/`apply`.               |
 | `default_state() -> dict`     | Optional. Initial values this handler contributes to the parser's shared `state` dict (only for state-carrying handlers). |
-| `parse(line, nline, state, file) -> dict` | Reaction handlers only. Extracts the reaction fields dict (`r`, `p`, `tmin`, `tmax`, `rate`, `type`, `string`) from *line*. |
+| `parse(line, nline, state, file) -> dict` | Reaction handlers only. Extracts the reaction fields dict (`r`, `p`, `tmin`, `tmax`, `rate`, `type`, `string`) from *line*. The handler is called by its own parser's `process`, so a parser may agree a different shape with its handler — UDFA's returns a `list[dict]`, one per temperature range of a multi-range line. |
 | `apply(line, nline, state, globals, file, logger) -> None` | Directive handlers only. Mutates the parser's local `state` and/or the `globals` dict in place. |
 
-Most `global_re`/`local_re` are static compiled patterns (module-level or class attributes), since they no longer need to depend on a shared context object. A handler whose extraction pattern depends on live state (like KROME's reaction line, whose column layout depends on an earlier `@format:` header) instead defines `local_re` as a **method** that rebuilds the pattern from the current `state`.
+`global_re` is always a static compiled pattern; most `local_re` are too (module-level or class attributes), since they no longer need to depend on a shared context object. A handler whose extraction pattern depends on live state (like KROME's reaction line, whose column layout depends on an earlier `@format:` header) instead defines `local_re` as a **method** that rebuilds the pattern from the current `state`.
 
 ### The Parsed Reaction Dict
 
-A reaction handler's `parse` returns a dict with exactly these keys (the same shape `ParsedRecord` is built from):
+A reaction handler's `parse` returns a dict with exactly these keys (the same shape `ParsedRecord` is built from), or a list of such dicts if its parser's `process` expects one per segment (UDFA):
 
 | Key        | Type            | Description                                         |
 | ---------- | --------------- | ---------------------------------------------------- |
@@ -85,7 +85,7 @@ A reaction handler's `parse` returns a dict with exactly these keys (the same sh
 | `"type"`   | `str`           | Reaction type concluded by the parser: `"photo"`, `"cosmic_ray"`, `"3_body"`, or `"unknown"` (or a more specific structural type, see `kida/reaction.py`) |
 | `"string"` | `str`           | Original network-file line (for error reporting)    |
 
-The parser's `process` wraps this dict in a `ParsedRecord` (from `_formats/_record.py`), adding `source_index` and `sub_order` from the `Record` the engine handed it. `ParsedRecord.as_parsed_props()` converts it back to this same dict (+ `source_index`) for `Network` to consume, and the engine adds the parser's `name` as `"format"`.
+The parser's `process` wraps this dict in a `ParsedRecord` (from `_formats/_record.py`), adding `source_index` and `sub_order` from the `Record` the engine handed it. The engine then calls `ParsedRecord.as_parsed_props(name)` with the parser's `name`, which converts it back to this same dict plus `source_index`, `format` (that name) and `metadata` for `Network` to consume.
 
 `ParsedRecord` also takes an optional `metadata` dict for format-private data. `Network` stores the parser name and that dict on each `Reaction` as the private fields `_format` and `_metadata`, so the parser's [post-processing hook](#post-processing-hook) can find its own reactions (`network.reactions.with_format(self.name)`) and read back what it recorded.
 
@@ -138,7 +138,7 @@ Give the placeholder a name unique to your format (KROME uses `krome_photo`), so
 
 ### 1. Create the format subpackage
 
-Add a folder under `src/jaff/core/parsers/network/_formats/`, e.g. `my_format/`, with a `reaction.py` handler module and a `parser.py` that registers the `Parser` subclass. Multi-line-type formats (like KROME's `@format:` header, `@var:`, and reaction lines) get one module per line type — see `krome/` (`header.py`, `var.py`, `reaction.py`).
+Add a folder under `src/jaff/core/parsers/network/_formats/`, e.g. `my_format/` (the name must not start with `_`: subpackages starting with an underscore are not imported, so their parser would never register), with a `reaction.py` handler module and a `parser.py` that registers the `Parser` subclass. Multi-line-type formats (like KROME's `@format:` header, `@var:`, and reaction lines) get one module per line type — see `krome/` (`header.py`, `var.py`, `reaction.py`).
 
 The simplest shape — a single reaction handler and no shared state — mirrors `kida/`:
 
@@ -320,11 +320,12 @@ After all parsers have run, `__normalize_rates` lowercases every rate string. Ea
 | `invte`        | `1e0 / te`             |
 | `invtgas`      | `1e0 / tgas`           |
 | `sqrtgas`      | `#!python sqrt(tgas)`  |
-| `user_tdust`   | `tdust`                |
-| `user_av`      | `av`                   |
+| `user_tdust`   | `tdust` (KROME-only)   |
+| `user_av`      | `av` (KROME-only)      |
 | `get_hnuclei(n)` | `n_H_nuc` (KROME-only) |
 | `n(idx_h)`     | `n_H` (KROME-only)     |
 | `n(idx_h2)`    | `n_H2` (KROME-only)    |
+| `n_global(idx_h2)` | `n_H2` (KROME-only) |
 
 If your format introduces additional shorthand symbols, add them to your parser's own globals dict (e.g. a `BASE_GLOBALS`-style class attribute), following the same pattern. Compound aliases (those that reference simpler ones) must be listed **before** the simpler aliases they depend on so that `resolve_symbolic_dependencies` substitutes correctly.
 
@@ -332,10 +333,10 @@ If your format introduces additional shorthand symbols, add them to your parser'
 
 ## Checklist
 
-- [x] New subpackage under `core/parsers/network/_formats/` with handler class(es) (plain, no base class) and a `parser.py` holding a `@register`-ed `Parser` subclass whose `handlers` lists them
+- [x] New subpackage (name not starting with `_`) under `core/parsers/network/_formats/` with handler class(es) (plain, no base class) and a `parser.py` holding a `@register`-ed `Parser` subclass whose `handlers` lists them
 - [x] Each handler's `priority` chosen so it matches at the correct point relative to every other handler (see the priority table above)
 - [x] Each reaction handler's `global_re` is a fast filter; `local_re` uses named groups for all fields (`reactants`, `products`, `tmin`, `tmax`, `rate`)
-- [x] Static `global_re`/`local_re` are plain compiled patterns; a state-dependent `local_re` is a method that rebuilds the pattern from `state`
+- [x] `global_re` is a plain compiled pattern attribute; `local_re` is too, unless it depends on state, in which case it is a method that rebuilds the pattern from `state`
 - [x] A reaction handler's `parse` returns a valid reaction-fields dict (all seven keys, including `"type"`); a directive handler's `apply` mutates `state`/`globals` in place and returns `None`
 - [x] Reaction `"type"` concluded structurally; agent pseudo-species (`_PHOTON`/`_CR`) injected when the format implies one
 - [x] Errors raised as `ParserError` with a descriptive message (line, `nline`, `file`)

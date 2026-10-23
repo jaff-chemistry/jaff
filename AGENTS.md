@@ -1,6 +1,6 @@
 # AGENTS.md - Agent Guidelines for JAFF
 
-JAFF (Just Another Fancy Format) is an astrochemical network parser that parses chemical reaction network files and generates code in multiple languages (C++, C, Fortran, Python).
+JAFF (Just Another Fancy Format) is an astrochemical network parser that parses chemical reaction network files and generates code in multiple languages (C, C++, Fortran, Python, Rust, Julia, R).
 
 ## Build, Lint, and Test Commands
 
@@ -10,28 +10,30 @@ JAFF (Just Another Fancy Format) is an astrochemical network parser that parses 
 uv sync --extra dev                     # Install with dev dependencies
 ```
 
-Always run tools as `uv run --extra dev ...` (plain `uv run` drops the dev extras).
+Always run tools as `uv run --extra dev ...`. Plain `uv run` does an inexact sync: it
+leaves already-installed dev extras in place but will not install them, so on a fresh
+environment `pytest`, `ruff`, `ty` or `zensical` may be missing.
 Data tables download on first use; set `JAFF_OFFLINE=1` to forbid network access.
 
 ### Running Tests
 
 ```bash
-uv run pytest                           # Run all tests
-uv run pytest -v                        # Verbose output
-uv run pytest tests/core/network                     # Run one package's tests
-uv run pytest tests/core/network/test_network.py     # Run specific test file
-uv run pytest tests/core/network/test_network.py::TestConstruction  # Run one class
-uv run pytest -k "network"              # Run tests matching pattern
-uv run pytest --cov=jaff                # Run with coverage
+uv run --extra dev pytest                # Run all tests
+uv run --extra dev pytest -v             # Verbose output
+uv run --extra dev pytest tests/core/network                  # One package's tests
+uv run --extra dev pytest tests/core/network/test_network.py  # One test file
+uv run --extra dev pytest tests/core/network/test_network.py::TestConstruction  # One class
+uv run --extra dev pytest -k "network"   # Run tests matching pattern
+uv run --extra dev pytest --cov=jaff     # Run with coverage
 ```
 
 ### Code Formatting & Linting
 
 ```bash
-ruff format <files>                     # Format the files you changed
-ruff format --check src/                # Check formatting without modifying
-ruff check src/                         # Lint code
-uv run --extra dev ty check <files>     # Type check (part of linting; ruff misses type errors)
+uv run --extra dev ruff format --check <files>  # Check formatting without modifying
+uv run --extra dev ruff format <files>          # Format the files you changed
+uv run --extra dev ruff check <files>           # Lint code
+uv run --extra dev ty check <files>             # Type check (ruff misses type errors)
 ```
 
 Only format and fix the files you touched, and only if they were already formatted:
@@ -43,7 +45,8 @@ files. Pre-existing `ty` errors exist; make sure you add none.
 ### Python Version
 
 - Support Python 3.11+
-- Use `List`, `Dict` from `typing` (not built-in generics)
+- Start modules with `from __future__ import annotations`; use built-in generics
+  (`list[str]`, `dict[str, Any]`) and `X | None`, not `List`/`Dict`/`Optional`
 
 ### Formatting (Ruff)
 
@@ -60,28 +63,34 @@ files. Pre-existing `ty` errors exist; make sure you add none.
 ### Type Hints
 
 - Always use type hints for function signatures
-- Import from `typing`: `List`, `Dict`, `Optional`, `Union`, `Tuple`, `Any`
+- Built-in generics and PEP 604 unions; import only what has no built-in form
+  (`Any`, `Callable`, `Mapping`, `Sequence`, ...) from `typing`
 - Use `pathlib.Path` for file paths
+- Older modules still use `List`/`Dict`/`Optional`; convert them when you touch them
 
 ```python
-from typing import List, Dict, Optional, Union, Tuple, Any
+from __future__ import annotations
+
 from pathlib import Path
+from typing import Any
+
 import numpy as np
 
 def process_species(
-    names: List[str],
+    names: list[str],
     masses: np.ndarray,
-    options: Optional[Dict[str, Any]] = None
-) -> Tuple[List[str], np.ndarray]:
+    options: dict[str, Any] | None = None,
+) -> tuple[list[str], np.ndarray]:
     pass
 ```
 
 ### Docstrings (numpydoc)
 
 Docstrings are the only source of the API reference (`docs/reference/`, generated
-by `python -m jaff._utils.api_docs`) and of the config key descriptions (schemas and
-`docs/user-guide/configuration/reference.md`). Use numpydoc sections; document
-config keys in an `Attributes` section, worded for someone editing a TOML file.
+by `uv run --extra dev python -m jaff._utils.api_docs`) and of the config key
+descriptions (schemas and `docs/user-guide/configuration/reference.md`). Use numpydoc
+sections; document config keys in an `Attributes` section, worded for someone
+editing a TOML file.
 
 ```python
 def compute_rates(network: Network, temperature: float) -> np.ndarray:
@@ -139,10 +148,14 @@ except ValueError as e:
 1. Standard library, 2. Third-party packages, 3. Local imports
 
 ```python
+from __future__ import annotations
+
 import os
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Any
+
 import numpy as np
+
 from jaff import Network
 ```
 
@@ -173,7 +186,10 @@ schema and reference machinery. Every folder has an `__init__.py`.
   `sample_network`; an autouse fixture silences the banner and logging.
 - **Regenerating references**: `JAFF_UPDATE_GOLDEN=1` (golden code in `tests/golden/`),
   `JAFF_UPDATE_SNAPSHOTS=1` (snapshots); review the diff before keeping it.
-- **Opt-in slow tests**: `JAFF_TEST_REPO_NETWORKS=1` (round-trip every bundled network).
+- **Opt-in slow tests**: `JAFF_TEST_REPO_NETWORKS=1` (round-trip every bundled network;
+  add `JAFF_TEST_REPO_NETWORKS_STRICT=1` to fail on networks that do not parse).
+- **Reproducing a rendered-code failure**: `JAFF_GOLDEN_SEED=<seed>` (the seed is in
+  the failure message).
 
 ## Configuration
 
@@ -196,7 +212,8 @@ To add a setting, follow `docs/development/adding-configuration.md`. In short:
    the whole config. Checks against the network raise `ParserError` with the key path.
 4. Optional shortcuts: a `Network` keyword (map it in `_keyword_layer`) or a CLI
    option (an entry in `CLI_KEYS`, `src/jaff/cli/_helper.py`).
-5. Regenerate the committed editor schemas: `python -m jaff.config.json_schema`
+5. Regenerate the committed editor schemas:
+   `uv run --extra dev python -m jaff.config.json_schema`
    (`tests/config/test_config_json_schema.py` fails when they are stale).
 
 There are no aliases for old keys: a renamed key is a hard break.
@@ -210,8 +227,8 @@ There are no aliases for old keys: a renamed key is a hard break.
   build or serve:
 
   ```bash
-  python -m jaff._utils.api_docs      # API pages + the API nav in zensical.toml
-  python -m jaff.config.reference     # configuration reference
+  uv run --extra dev python -m jaff._utils.api_docs   # API pages + API nav in zensical.toml
+  uv run --extra dev python -m jaff.config.reference  # configuration reference
   ```
 
 - The API nav section of `zensical.toml` *is* committed; regenerate it when exports
@@ -228,6 +245,8 @@ There are no aliases for old keys: a renamed key is a hard break.
     # ABOUTME: <short description>
     # ABOUTME: <optional second line>
     ```
+    Not every existing module has one yet and nothing checks it; add the header to
+    new files and to files you edit.
 2. **Coverage goals**: >80% overall, >90% for critical modules
 3. **Preserve existing comments** unless demonstrably false
 4. **TDD approach**: Write tests BEFORE implementing new features

@@ -63,7 +63,7 @@ def _(COTHIN, JAFFGEN, run, scratch):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    Three files come out:
+    Four files come out:
 
     - `chemistry_ode.hpp` defines a `ChemistryODE` struct: species indices,
       `rhs()` (rate coefficients, then $\mathrm{d}n_i/\mathrm{d}t$) and
@@ -73,7 +73,8 @@ def _(mo):
       temporaries;
     - `chemistry_ode.cpp` is the driver: it sets initial conditions, calls the
       integrator, prints the result and checks conservation;
-    - `CMakeLists.txt` fetches the integrators library and builds the driver.
+    - `CMakeLists.txt` fetches the integrators library and builds the driver;
+    - `config.toml` records the settings `jaffgen` was run with.
     """)
     return
 

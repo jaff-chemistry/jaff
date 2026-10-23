@@ -1,9 +1,41 @@
+# ABOUTME: Builder plugin for the kokkos_ode template (C++ header-only VODE).
+# ABOUTME: Fills chemistry_ode.hpp/.cpp PREPROCESS markers incl. conservation data.
+"""Builder plugin for the ``kokkos_ode`` preprocessor template.
+
+Generates C++ code for a network and splices it into the templates in
+``jaff/templates/preprocessor/kokkos_ode/`` (a driver for header-only
+integrators such as VODE).  Run through :class:`~jaff.codegen.Builder` with
+``template="kokkos_ode"``.
+"""
+
 import re
 
 from jaff import Codegen, Network, Preprocessor
 
 
 def main(network: Network, path_template, path_build=None):
+    """Generate the C++ header-only-integrator project for *network*.
+
+    Fills the ``// PREPROCESS_<KEY>`` markers of ``chemistry_ode.hpp`` and
+    ``chemistry_ode.cpp`` with the species indices and default environment
+    constants (``COMMONS``), rate coefficients (``RATES``), ODEs (``ODE``),
+    analytical Jacobian (``JACOBIAN``), array sizes and the temperature
+    variables.  ``chemistry_ode.cpp`` also gets element/charge conservation
+    metadata (``CONSERVATION_METADATA``), left empty when no species contains
+    an element.  ``CMakeLists.txt`` is passed a ``NUM_SPECIES`` value but has no
+    matching marker, so it only gains the generated-file header.
+
+    Parameters
+    ----------
+    network : Network
+        Chemical network to generate code for.
+    path_template : str or path-like
+        Directory holding the template files.
+    path_build : str, path-like or None, optional
+        Existing output directory; ``None`` (default) writes into the current
+        working directory.  Every other regular file in *path_template* is
+        copied there unchanged.
+    """
     p = Preprocessor()
     cg = Codegen(network=network, lang="cxx")
 
@@ -128,5 +160,5 @@ const double crate = DEFAULT_CRATE;  // Cosmic ray ionization rate
 
 
 if __name__ == "__main__":
-    net = Network("networks/test.dat")
+    net = Network("COthin")
     main(net, path_template="src/jaff/templates/preprocessor/kokkos_ode")

@@ -58,7 +58,8 @@ struct ChemistryODE {
             }
         }
 
-        // Compute reaction rates (needed for Jacobian evaluation)
+        // Compute reaction rates (k[] is not read below: the Jacobian expressions
+        // inline the rate coefficients)
         // PREPROCESS_NUM_REACTIONS
         double k[0];
         // PREPROCESS_END

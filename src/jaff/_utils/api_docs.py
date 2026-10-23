@@ -1,3 +1,5 @@
+# ABOUTME: Generates the API reference pages and their nav from the numpydoc docstrings
+# ABOUTME: (via griffe); run by CI before building the docs site.
 """Generate the API reference pages and their nav from the docstrings.
 
 The pages follow JAFF's API page design: a page per documented package (tables

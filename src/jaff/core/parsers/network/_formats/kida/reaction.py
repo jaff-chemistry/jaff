@@ -1,3 +1,6 @@
+# ABOUTME: KIDA fixed-width column reaction handler
+# ABOUTME: Maps the KIDA itype column to a JAFF reaction type and agent species
+
 """KIDA format: fixed-width column reaction handler."""
 
 import re

@@ -1,3 +1,5 @@
+# ABOUTME: JAFF package root: astrochemical network parser and multi-language code
+# ABOUTME: generator; re-exports the public API (Network, Codegen, Builder, ...).
 """JAFF - Just Another Fancy Format
 
 Astrochemical reaction network parser supporting KROME, PRIZMO, UDFA, KIDA, and UCLChem formats.

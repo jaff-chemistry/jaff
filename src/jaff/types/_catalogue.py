@@ -1,3 +1,5 @@
+# ABOUTME: Catalogue: generic list + name-keyed collection base for Species, Reactions and
+# ABOUTME: Elements, with O(1) lookup by index, slice, name or serialized alias.
 """
 Generic indexed catalogue collection.
 

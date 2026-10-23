@@ -8,15 +8,18 @@ or shows, and it applies the style's rcParams only inside
 :func:`matplotlib.pyplot.rc_context`, so global matplotlib state is
 untouched.
 
-Order of work: draw every panel's data; settle labels (outer / sup labels,
-x tick labels on the lowest panel of each column); put titles inside (or
-above when too wide) and leave headroom above the data for inside text;
-final y ticks; inside y tick labels and the clear strip they need on the
-left of the x range; final x ticks; band bars; legends; the manual tight
-layout (:mod:`jaff.plotting._layout`); finally hollow markers, spaced from the
-final layout.  Markers and the fixed exponent ticks are therefore chosen from
-the limits at render time: changing limits afterwards does not re-space or
-re-tick them.
+Order of work: draw every panel's data (band bars and hollow markers are
+only queued); place outer / sup labels and each panel's x tick-label role;
+put titles inside (or above when too wide) and leave headroom above the
+data for inside text; settle ticks (final exponent ticks, inside x labels on
+middle panels, inside y labels); legends; the manual tight layout
+(:mod:`jaff.plotting._layout`); widen y ranges downward to clear inside x
+labels (re-ticking y); widen x ranges to clear the inside y label strip
+(final x ticks); a second layout pass when the first widening moved outside
+y labels; trim x labels that would cross an edge; draw the queued band bars;
+finally hollow markers, spaced from the final layout.  Markers and the fixed
+exponent ticks are therefore chosen from the limits at render time: changing
+limits afterwards does not re-space or re-tick them.
 """
 
 from __future__ import annotations
@@ -51,7 +54,7 @@ from .themes import (
 #: Headroom above the data for inside panel text, as a fraction of the data
 #: span (log axes: of at least two decades).
 HEADROOM: float = 0.25
-#: Autoscale margin of a log y axis (fraction of its span), as in pdr.
+#: Autoscale margin of a log y axis (fraction of its span).
 LOG_MARGIN: float = 0.08
 #: Points between an inside title and the tag under it.
 TAG_GAP_PT: float = 3.0
@@ -157,7 +160,7 @@ def render(spec: FigureSpec) -> tuple[Figure, np.ndarray]:
 
 
 def _block(grid: tuple[int, int], n_used: int) -> tuple[int, int]:
-    """Rows and columns of the grid that hold used panels (spec §16.1).
+    """Rows and columns of the grid that hold used panels.
 
     Panels fill row-major, so only trailing rows (and, with a single row,
     trailing columns) can be empty.
@@ -168,7 +171,7 @@ def _block(grid: tuple[int, int], n_used: int) -> tuple[int, int]:
 
 
 def effective_style(spec: FigureSpec) -> Style:
-    """The spec's style, scaled for its column count (spec §17).
+    """The spec's style, scaled for its column count.
 
     With ``k = max(1, used columns / style.ref_cols)`` every visual size is
     scaled by ``k`` (:func:`jaff.plotting.themes.scaled`); an explicit
@@ -458,7 +461,7 @@ def _common(labels: list[str]) -> str:
     return labels[0] if labels and all(lb == labels[0] for lb in labels) else ""
 
 
-#: X-axis role of a panel within its column (spec §15).
+#: X-axis role of a panel within its column (see :func:`_x_roles`).
 TOP, BOTTOM, SAME, INSIDE = "top", "bottom", "same", "inside"
 
 

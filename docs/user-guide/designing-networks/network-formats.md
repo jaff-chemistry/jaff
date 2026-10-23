@@ -28,19 +28,30 @@ JAFF can currently parse five file formats that are standard in the astrochemica
 
 ## Rate Expression Variables
 
-All rate expressions are parsed as SymPy expressions. The following physical symbols are available across all formats:
+All rate expressions are parsed as SymPy expressions. The following physical symbols are canonical across all formats (they are the fixed symbols of `NetworkSymbols`):
 
 | Symbol  | Description                                      | Units         |
 | ------- | ------------------------------------------------ | ------------- |
 | `tgas`  | Gas temperature                                  | K             |
+| `tdust` | Dust grain temperature                           | K             |
 | `av`    | Visual extinction                                | magnitudes    |
 | `crate` | Primary cosmic-ray ionisation rate per H nucleus | s⁻¹           |
 | `chi`   | Radiation field strength (Draine 1978 units)     | dimensionless |
 | `chi_pe`| Local field scaled to the photoelectric band (6–13.6 eV), from self-consistent radiation transport + dust. See [Photochemistry](photochemistry.md#self-consistent-photoelectric-field-chi_pe) | dimensionless |
-| `ntot`  | Total number density                             | cm⁻³          |
-| `n_H_nuc` | H nucleus number density                       | cm⁻³          |
-| `d2g`   | Dust-to-gas mass ratio                           | dimensionless |
-| `tdust` | Dust grain temperature                           | K             |
+| `Zd`    | Grain charge                                     | dimensionless |
+| `vdisp` | Velocity dispersion                              | cm s⁻¹        |
+| `ph_E`  | Photon energy (variable of cross sections and spectral profiles) | eV |
+
+The following convenience symbols are replaced by density expressions after loading (names are matched case-insensitively):
+
+| Symbol             | Replaced by                                                          |
+| ------------------ | -------------------------------------------------------------------- |
+| `ntot`             | Total number density (sum of all species densities), cm⁻³            |
+| `n_<species>`      | That species' number density, e.g. `n_H2`, `n_e`; charges are written `j` (+) and `k` (−), e.g. `n_Hj` for H⁺ |
+| `n_<element>_nuc`  | Nucleus number density of an element, e.g. `n_H_nuc`, cm⁻³          |
+| `rc_<N>`           | Rate coefficient of reaction number `<N>` in the network file (see [Auxiliary Functions](auxiliary-functions.md)) |
+
+Any other symbol (for example a dust-to-gas ratio `d2g`) is left as a free variable that you supply at run time.
 
 Format-specific shorthand variables (e.g. `t32`, `te`, `invtgas` from KROME files) are automatically rewritten to the canonical symbols above during parsing.
 
@@ -63,8 +74,26 @@ KIDA (Kinetic Database for Astrochemistry) distributes networks as **fixed-width
 ### Column layout
 
 ```text
-Reactant1  Reactant2          Product1   Product2   α         β         γ        F    g   err  ni  Tmin  Tmax  frml  ID  ...
+R1 R2 R3 | P1 P2 P3 P4 P5 | α  β  γ  F  g  err  itype  Tmin  Tmax  frml  ID  ni  r
 ```
+
+Reactants occupy columns 1–34 and products columns 35–91; the remaining fields are
+whitespace-separated. JAFF reads `α`, `β`, `γ`, `itype`, `Tmin`, `Tmax` and `frml`;
+`F`, `g`, `err`, `ID`, `ni` and `r` are skipped.
+
+`frml` selects the rate formula. Only formulas 1–5 produce a rate expression:
+
+| `frml` | Formula                     | Rate                                              |
+| ------ | --------------------------- | ------------------------------------------------- |
+| 1      | Cosmic-ray ionisation       | `α · crate` (times `2 n_H2/n_H_nuc` when a reactant is `CRP`) |
+| 2      | Photodissociation (Draine)  | `α · chi · exp(−γ · av)`                          |
+| 3      | Kooij                       | `α (tgas/300)^β exp(−γ/tgas)`                     |
+| 4      | ionpol1                     | `α β (0.62 + 0.4767 γ √(300/tgas))`              |
+| 5      | ionpol2                     | `α β (1 + 0.0967 γ √(300/tgas) + γ² · 300/(10.526 tgas))` |
+
+Any other `frml` (e.g. `6` Troe fall-off, `7` custom) gives a rate of `0.0`; supply the
+rate yourself through a `chemRate<N>` function in an
+[auxiliary function file](auxiliary-functions.md), as `networks/GOW/GOW.jfunc` does.
 
 ### Example
 
@@ -73,12 +102,12 @@ A comprehensive example of the KIDA format implementation can be found in `netwo
 ```text
 ! comment lines start with '!'
 ! alpha, beta, gamma: Arrhenius coefficients
-! frml: rate-formula index (see KIDA documentation)
+! itype: reaction type; frml: rate-formula index (see KIDA documentation)
 ! Tmin, Tmax: valid temperature range
 
-H          CR                     H+         e-        0.000e+00  0.000e+00  0.000e+00 2.00e+00 0.00e+00 logn  1  -9999   9999  7     1 1  1
-H2         CR                     H2+        e-        0.000e+00  0.000e+00  0.000e+00 2.00e+00 0.00e+00 logn  1  -9999   9999  7     2 1  1
-He         CR                     He+        e-        1.100e+00  0.000e+00  0.000e+00 2.00e+00 0.00e+00 logn  1  -9999   9999  1     3 1  1
+H          CR                     H+         e-                                            0.000e+00  0.000e+00  0.000e+00 2.00e+00 0.00e+00 logn  1  -9999   9999  7     1 1  1
+H2         CR                     H2+        e-                                            0.000e+00  0.000e+00  0.000e+00 2.00e+00 0.00e+00 logn  1  -9999   9999  7     2 1  1
+He         CR                     He+        e-                                            1.100e+00  0.000e+00  0.000e+00 2.00e+00 0.00e+00 logn  1  -9999   9999  1     3 1  1
 ```
 
 ### Temperature bounds
@@ -104,24 +133,36 @@ The UMIST Database for Astrochemistry (Rate22) uses a colon-delimited format wit
 ### Column layout
 
 ```text
-ID:type:R1:R2:P1:P2:P3:P4:α:β:γ:Tmin:Tmax:...
+ID:type:R1:R2:P1:P2:P3:P4:NTR:α:β:γ:Tmin:Tmax:<extra>...[:α:β:γ:Tmin:Tmax:<extra>...]
 ```
 
-| Field       | Description                                       |
-| ----------- | ------------------------------------------------- |
-| `ID`        | Integer reaction index                            |
-| `type`      | Reaction class code (e.g. `AD`, `IN`, `RA`, `DR`) |
-| `R1–R2`     | Reactants (empty if fewer than 2)                 |
-| `P1–P4`     | Products (empty if fewer than 4)                  |
-| `α β γ`     | Arrhenius parameters                              |
-| `Tmin Tmax` | Valid temperature range (K)                       |
+| Field       | Description                                                   |
+| ----------- | ------------------------------------------------------------- |
+| `ID`        | Integer reaction index                                        |
+| `type`      | Reaction class code (e.g. `AD`, `IN`, `RA`, `DR`, `CP`, `CR`, `PH`) |
+| `R1–R2`     | Reactants (empty if fewer than 2)                             |
+| `P1–P4`     | Products (empty if fewer than 4)                              |
+| `NTR`       | Number of temperature ranges (parameter blocks) that follow   |
+| `α β γ`     | Arrhenius parameters of one block                             |
+| `Tmin Tmax` | Valid temperature range (K) of one block                      |
+| `<extra>`   | Per-block metadata (accuracy, references, …); ignored         |
+
+Each of the `NTR` parameter blocks becomes one temperature segment of the reaction, so
+a reaction with several ranges is written on a single line. All blocks must have the
+same number of fields; double-quoted metadata may contain `:`.
+
+The rate expression depends on `type`: `CP` (direct cosmic-ray ionisation) gives
+`α/ζ₀ · crate`, `CR` (cosmic-ray-induced photoreaction) gives
+`α γ/(1−ω) (tgas/300)^β / ζ₀ · crate` with `ζ₀ = 1.36×10⁻¹⁷ s⁻¹` and `ω = 0.5`, `PH`
+gives `α exp(−γ · av)`, and every other type uses the Kooij form
+`α (tgas/300)^β exp(−γ/tgas)`.
 
 A `Tmin` of zero or below means no lower bound, and a `Tmax` of `41000` K or
 above (UMIST's upper limit) means no upper bound; both become `None`.
 
 ### Example
 
-A comprehensive example of the UDFA format implementation can be found in `networks/rate22_final/rate22_final.rates.jet`
+A comprehensive example of the UDFA format implementation can be found in `networks/rate22_final/rate22_final.rates.jet` (that file currently fails to load as a whole; see [Predefined Networks](predefined-networks.md)). In the lines below the `1` after the products is `NTR`.
 
 ```text
 1:AD:C-:C:C2:e-:::1:5.00e-10:0.00:0.0:10:41000:L:C:"10.1086/190665":"Prasad and Huntress 1980":
@@ -135,7 +176,7 @@ A comprehensive example of the UDFA format implementation can be found in `netwo
 
 **Source:** [jaff-chemistry.prizmo](https://github.com/jaff-chemistry/prizmo)
 
-PRIZMO networks are Fortran-flavoured text files with an optional `VARIABLES{}` block at the top. Inside the block, shorthand aliases are defined and then used in the rate expressions on subsequent reaction lines. JAFF converts Fortran double-precision literals (`d` exponent) and exponent operators (`**`) to Python/SymPy automatically.
+PRIZMO networks are Fortran-flavoured text files with an optional `VARIABLES{}` block at the top. Inside the block, shorthand aliases are defined and then used in the rate expressions on subsequent reaction lines. Comment lines start with `#` or `!`.
 
 ### `VARIABLES{}` block
 
@@ -146,21 +187,40 @@ VARIABLES{
 }
 ```
 
-Variables can reference each other and the standard physical symbols (`tgas`, `av`, etc.).
+Variables can reference each other and the standard physical symbols (`tgas`, `av`, etc.). Inside the block, Fortran double-precision literals (`1d0`, `3d2`) and `**` are converted to SymPy automatically; an expression that still fails to parse is skipped with a warning. Assignments outside the block are an error.
 
 ### Reaction line syntax
 
 ```text
-Reactant1 [+ Reactant2] -> Product1 [+ Product2 ...]    rate_expression
+Reactant1 [+ Reactant2 ...] -> Product1 [+ Product2 ...]    [tmin, tmax]    rate_expression
 ```
+
+The square-bracketed temperature range is mandatory; leave it empty (`[]`) or leave
+either bound empty (`[, 300]`) for no limit. A `tmin` of zero or below and a `tmax` of
+`1e8` or above also mean no limit. Species are separated by ` + ` (spaces around
+the `+`).
+
+<!-- prettier-ignore -->
+!!! warning "No Fortran literals in reaction rates"
+    The `d` exponent conversion only applies inside `VARIABLES{}`. In a reaction's
+    rate expression write `1.2e-10`, not `1.2d-10` — the latter fails to parse. The
+    bracketed temperature bounds accept either form.
 
 ### Photoreaction syntax
 
-Photo reactions can be specified by using the `PHOTO` keyword in the rate expression separated by a comma. The `PHOTO` keyword is case sensitive. The value after the comma is the photon energy threshold in eV.
+Photo reactions are specified with the `PHOTO` keyword (case-insensitive) as the rate.
+It accepts an optional photon-energy band in eV, in any of these forms:
 
 ```text
 H -> H+ + E    []    PHOTO, 13.60
+H -> H+ + E    []    PHOTO, 13.60, 100.0
+H -> H+ + E    []    photo(13.60, 100.0)
+H -> H+ + E    []    PHOTO
 ```
+
+The first value is the lower band edge (the photon energy threshold) and the second the
+upper edge; a missing edge defaults to `1e99`. A `_PHOTON` pseudo-reactant is added to
+the reaction. See [Photochemistry](photochemistry.md) for how the band is used.
 
 ### Example
 
@@ -172,8 +232,9 @@ VARIABLES{
     sqrtt = sqrt(Tgas)
 }
 
-H + O -> OH        1.2d-10 * sqrtt
-CO -> C + O        1.0d-10 * exp(-3.53d0 * av)
+H + O -> OH        [10, 1e4]    1.2e-10 * sqrtt
+CO -> C + O        []           1.0e-10 * exp(-3.53 * av)
+H -> H+ + E        []           PHOTO, 13.60
 ```
 
 ---
@@ -182,7 +243,7 @@ CO -> C + O        1.0d-10 * exp(-3.53d0 * av)
 
 **Source:** [kromepackage.org](https://kromepackage.org/)
 
-KROME files open with a `@format:` header that specifies column semantics, followed by comma-separated reaction lines. Global Fortran-style variable aliases can be defined with `@var:`. Other KROME declaratives are ignored.
+KROME files are comma-separated reaction lines whose column semantics are set by an optional `@format:` header. Global Fortran-style variable aliases can be defined with `@var:`. Other KROME declaratives (e.g. `@common:`, `@noTabNext`) are ignored. Comment lines start with `#` or `!`.
 
 ### `@format:` header
 
@@ -190,15 +251,23 @@ KROME files open with a `@format:` header that specifies column semantics, follo
 @format:idx,R,R,R,P,P,P,P,tmin,tmax,rate
 ```
 
-Tokens: `idx` (index), `R` (reactant), `P` (product), `tmin`/`tmax` (temperature bounds, K), `rate` (reaction rate coefficient).
+Tokens: `idx` (index), `R` (reactant), `P` (product), `tmin`/`tmax` (temperature bounds, K), `rate` (reaction rate coefficient). Tokens are case-insensitive. A header applies to every following reaction line until the next header; lines before any header use the default layout shown above (`idx,R,R,R,P,P,P,P,tmin,tmax,rate`). Each line must have exactly as many reactant and product slots as the active layout declares; empty slots are left blank between commas.
+
+Temperature bounds may be written `NONE` (no limit) and may carry Fortran comparison prefixes such as `.LE.` or `>`, which are stripped. Fortran double-precision literals (`1d4`) are accepted in bounds and rates.
 
 ### Variable aliases
 
 ```text
-@var:te      = tgas * 8.617343e-5    ! electron temperature in eV
+@var:te      = tgas * 8.617343e-5
 @var:invtgas = 1e0 / tgas
 @var:t32     = tgas / 3e2
 ```
+
+<!-- prettier-ignore -->
+!!! warning "No inline comments on `@var` lines"
+    A trailing comment such as `@var:x = tgas / 3e2   ! note` makes the expression
+    unparseable: the variable is skipped with a warning and `x` is left as a free
+    symbol in every rate that uses it. Put comments on their own line.
 
 ### Example
 
@@ -207,13 +276,18 @@ A comprehensive example can be found at `networks/COthin/react_COthin.jet`
 ```text
 #rates for CO network similar to Glover+2010
 @var:Hnuclei = get_Hnuclei(n(:))
-@common: user_crate, user_Av, user_Tdust
+@common: user_crate,user_Av,user_Tdust
 
-@var:Te = Tgas * 8.617343d-5
+@var: Te = Tgas*8.617343d-5
+@var: invT = 1d0/Tgas
 
-1,H,,,OH,,,, 10,1e4, 1.2e-10 * (tgas/300)**0.5
-2,H2,O,,OH,H,, 10,1e4, 3.4e-11 * exp(-500/tgas)
+@format:idx,R,R,R,P,P,P,Tmin,Tmax,rate
+9,He,H+,,He+,H,,NONE,1d4,1.26d-9*Tgas**(-.75)*exp(-127500d0*invT)
+10,He,H+,,He+,H,,1d4,NONE,4d-37*Tgas**4.74
 ```
+
+The two lines cover adjacent temperature ranges of the same reaction, so JAFF merges
+them into one reaction with a piecewise rate.
 
 ---
 
@@ -236,13 +310,18 @@ R1,R2,R3,P1,P2,P3,P4,α,β,γ,Tmin,Tmax,reduced_mass,extrapolate
 | `α β γ`        | Arrhenius parameters                                   |
 | `Tmin Tmax`    | Valid temperature range (K)                            |
 | `reduced_mass` | Reduced mass of the reactants                          |
-| `extrapolate`  | `True`/`False` — allow rate use outside `[Tmin, Tmax]` |
+| `extrapolate`  | `True`/`False` — in UCLCHEM, allow rate use outside `[Tmin, Tmax]` |
 
 UCLCHEM switches a rate off only when the gas temperature falls outside
 `[Tmin, Tmax]`, and gives the reactions it generates itself (freeze-out,
 desorption, ice swaps, …) the placeholder range `0`–`10000` K. A `Tmin` of zero or
 below therefore never applies, and JAFF treats it as no lower bound (`None`).
-Rows with `extrapolate = True` are given the range `3`–`10⁶` K.
+
+<!-- prettier-ignore -->
+!!! warning "`extrapolate` is currently not honoured"
+    Due to a known parser issue the flag is never read as `True`: every row keeps
+    its own `[Tmin, Tmax]` whatever its `extrapolate` value. The `reduced_mass`
+    column is not used either.
 
 ### Example
 
@@ -266,8 +345,11 @@ UCLCHEM encodes the reaction *mechanism* as a keyword in a reactant slot
 (`CRP`, `CRPHOT`, `PHOTON`, `FREEZE`, `THERM`, `DESCR`, `DEUVCR`, `DESOH2`,
 `LH`, `LHDES`, `ER`, `ERDES`, `H2FORM`, `BULKSWAP`, `SURFSWAP`). JAFF reads this
 keyword to (a) set the reaction [`type`](../working-with-networks/reactions.md#reaction-types)
-and (b) select the rate-coefficient formula; the keyword itself is not kept as a
-reactant. Reactions with no keyword are two-body gas-phase reactions using the
+and (b) select the rate-coefficient formula. The radiation and cosmic-ray keywords
+`CRP`, `CRPHOT` and `PHOTON` are kept as the pseudo-species `_CRP`, `_CRPHOT` and
+`_PHOTON` (e.g. `H,CRP,…` becomes `H + _CRP -> H+ + e-`); the grain-mechanism
+keywords (`FREEZE`, `THERM`, `LH`, `BULKSWAP`, …) are dropped from the species
+list. Reactions with no keyword are two-body gas-phase reactions using the
 Kooij/Arrhenius form.
 
 Not every mechanism has a closed-form, per-line rate. The gas-phase and grain

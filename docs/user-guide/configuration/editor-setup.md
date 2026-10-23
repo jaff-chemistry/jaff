@@ -121,15 +121,18 @@ print them again with `--path`.
 The schema checks each value on its own. These checks need more than that and run
 when JAFF loads the config (see [errors](index.md#errors)):
 
+- radiation band edges must increase, with at least two of them;
 - a `profile_index` list needs one entry per radiation band;
 - `"inf"` is allowed as the last band edge only;
+- `[network.dust.pe]` `threshold_low` must be below `threshold_high`;
 - a shielding model bound to one reaction (e.g. `hg2015`) is only valid in that
   reaction's table;
 - a `[network.reactions.reaction."…"]` key must name a reaction of the network,
   and `photo` settings belong to photo reactions.
 
 The editor is also stricter about letter case: it suggests lower-case choices
-(`"leiden"`), while JAFF accepts any case.
+(`"leiden"`), while JAFF accepts these choices in any case. Species names, such
+as the entries of a Leiden `shielded_by` list, are case-sensitive in both.
 
 ---
 

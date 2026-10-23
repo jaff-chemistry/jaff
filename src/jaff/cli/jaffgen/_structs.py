@@ -1,3 +1,5 @@
+# ABOUTME: Dataclasses holding a jaffgen run's state (config, files, output dir)
+# ABOUTME: and the default output directory <repo_root>/generated.
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -39,8 +41,8 @@ class State:
         Directory the generated files are written to (defaults to
         :data:`DEFAULT_OUTPUT`).
     output_files : list of ResolvedPath
-        Every file to render, gathered from the template, the input
-        directory and files, and the config file.
+        Every file to render, gathered from the template (minus its bundled
+        ``jaffgen.toml``), the input directory and the individual input files.
     """
 
     config_file: Path | None = None

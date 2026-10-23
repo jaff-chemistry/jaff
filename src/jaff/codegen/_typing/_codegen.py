@@ -1,3 +1,5 @@
+# ABOUTME: TypedDict definitions for the structured values Codegen methods return.
+# ABOUTME: ExtrasDict (CSE temporaries etc.) and IndexedReturn (extras + expressions).
 """TypedDict definitions for Codegen structured return values."""
 
 from typing import TypedDict
@@ -58,7 +60,7 @@ Examples
 >>> out = Codegen(network=Network("COthin"), lang="python").get_indexed_rates()
 >>> sorted(out)
 ['expressions', 'extras']
->>> out["extras"]["cse"][0]
+>>> print(out["extras"]["cse"][0])
 [0] -> (tgas < 2.73)
 >>> out["expressions"][5].indices, out["expressions"][5].value
 ([5], '3.00351426766844e-16*tgas**0.25')

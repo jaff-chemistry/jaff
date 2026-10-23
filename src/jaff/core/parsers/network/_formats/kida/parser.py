@@ -1,3 +1,6 @@
+# ABOUTME: KIDA parser: processes the bucket of fixed-width KIDA reaction lines
+# ABOUTME: Registered with the format-parser registry
+
 """KIDA parser: a single fixed-width reaction line-type."""
 
 from .._parser import Parser, register

@@ -1,3 +1,5 @@
+# ABOUTME: Radiation and RadiationGroup: the radiation bands and the band-averaged
+# ABOUTME: symbolic photo-reaction rate coefficients
 """
 Radiation band groups and frequency-integrated rate coefficients.
 
@@ -12,18 +14,22 @@ This module defines two classes:
 
 Photon spectrum assumption
 --------------------------
-The photon number spectrum is assumed to follow a power law in photon energy::
+The photon number spectrum is assumed to follow a power law in photon energy:
 
-    n(E) ∝ E^(α - 2)
+```text
+n(E) ∝ E^(α - 2)
+```
 
 where ``α`` is the spectral index ``profile_idx`` (from
 ``RadiationConfig.profile_index``).  ``α`` may be a single global value or one
 value per band, in which case the spectrum is a piecewise power law (a
 histogram, intentionally discontinuous at band edges): each band ``i`` uses its
 own ``α_i`` and is normalised independently.  The energy-integrated version
-(energy density per unit energy interval) is therefore::
+(energy density per unit energy interval) is therefore:
 
-    u(E) = E * n(E) ∝ E^(α - 1)
+```text
+u(E) = E * n(E) ∝ E^(α - 1)
+```
 
 This form is used when computing band-average cross sections and average
 photon energies.
@@ -31,16 +37,20 @@ photon energies.
 Rate coefficient derivation
 ----------------------------
 For a reaction with tabulated cross section σ(E) the *photon-flux-weighted*
-average cross section in band *i* is::
+average cross section in band *i* is:
 
-    <σ>_i = ∫_{E_lo}^{E_hi} σ(E) n(E) dE  /  ∫_{E_lo}^{E_hi} n(E) dE
+```text
+<σ>_i = ∫_{E_lo}^{E_hi} σ(E) n(E) dE  /  ∫_{E_lo}^{E_hi} n(E) dE
+```
 
 The symbolic rate coefficient stored in the radiation density variable
 ``den[i]`` (either energy density *u_i* in erg/cm³ or photon density *n_i*
-in cm⁻³) is::
+in cm⁻³) is:
 
-    k_i = c * den[i] * <σ>_i          (photon density mode)
-    k_i = c * den[i] * <σ>_i / <E>_i  (energy density mode)
+```text
+k_i = c * den[i] * <σ>_i          (photon density mode)
+k_i = c * den[i] * <σ>_i / <E>_i  (energy density mode)
+```
 
 where *c* is the speed of light and ``<E>_i`` is the band-average photon
 energy (``eavg``).  The rate counts photons, so ``<σ>_i`` is photon-number
@@ -48,9 +58,11 @@ weighted.
 
 The radiation a band *loses* is a different quantity in energy-density mode:
 each absorbed photon takes its own energy ``E``, so the energy loss weights
-the (absorption) cross section by photon energy::
+the (absorption) cross section by photon energy:
 
-    du_i/dt ⊃ -c * u_i * <σ>_i^(E),   <σ>_i^(E) = ∫ σ E n dE / ∫ E n dE
+```text
+du_i/dt ⊃ -c * u_i * <σ>_i^(E),   <σ>_i^(E) = ∫ σ E n dE / ∫ E n dE
+```
 
 In photon-density mode the band loses photons at the reaction rate, so the
 photon-number weighting applies to both.
@@ -225,7 +237,7 @@ class RadiationGroup:
             raise ValueError(
                 f"Radiation group lower bound must be a float or int. Found {self.lower}"
             )
-        # Band width; may be symbolic when upper is sp.oo.
+        # Band width; None for the open band (upper is sp.oo).
         self.dE: float | None = (
             self.upper - self.lower  # type: ignore
             if all(isinstance(val, (int, float)) for val in [self.upper, self.lower])
@@ -309,7 +321,7 @@ class Radiation:
     mode : str
         ``"nph"`` -- field tracked as photon number density (cm⁻³) -- or
         ``"u"`` -- field tracked as energy density (erg cm⁻³).  Controls the
-        name of the symbolic density variable (``"radeden"`` vs. ``"photden"``)
+        name of the symbolic density variable (``"photden"`` vs. ``"radeden"``)
         and the normalisation of rate coefficients.
     c : float or sympy.Symbol
         Speed of light in cm/s (CGS), used in rate-coefficient expressions as
@@ -510,10 +522,9 @@ class Radiation:
         ends_at_inf = bands[-1] == sp.oo
 
         if self.mode == "u":
-            # The average-energy integral uses the *energy-density* spectrum
-            # u(E) ∝ E^(α-1), so the integral ∫ E · u(E) dE ∝ ∫ E^α dE.
-            # The effective power-law index for the ∫ E·n(E) dE integral is
-            # pl_index = (α-2) + 1 = α - 1.
+            # The average-energy numerator ∫ E·n(E) dE is the integral of the
+            # energy-density spectrum u(E) = E·n(E) ∝ E^(α-1), i.e. a power law
+            # with index pl_index = (α-2) + 1 = α - 1.
             # pl_index + 1 = α: α < 0 diverges at E → 0, α > 0 diverges at
             # E → ∞, and α == 0 (pl_index == -1) log-diverges at both ends.
             if starts_at_zero and alpha_lo <= 0.0:
@@ -573,8 +584,9 @@ class Radiation:
 
         1. Computes the photon-number-weighted band-average cross section
            ``<σ>_i = ∫ σ n dE / ∫ n dE``.
-        2. Computes the band-average photon energy
-           ``<E>_i = ∫ E n dE / ∫ n dE`` (stored once per band).
+        2. Uses the band-average photon energy ``<E>_i = ∫ E n dE / ∫ n dE``
+           computed once per band by :class:`RadiationGroup` (``grp.eavg``,
+           in erg).
         3. Assembles the symbolic rate coefficient
            ``k_i = c * den[i] * <σ>_i`` (photon-density mode) or
            ``k_i = c * den[i] * <σ>_i / <E>_i`` (energy-density mode).
@@ -587,8 +599,7 @@ class Radiation:
            (``xsec_frac``) into one :class:`GroupedPhotoReactionProps` per band.
 
         After iterating over all bands the total symbolic rate coefficient
-        (sum over bands, in units of s⁻¹ or cm³ s⁻¹ depending on reaction
-        type) is returned as ``k_tot``.  Nothing is stored on the reaction.
+        (sum over bands, in s⁻¹ in both modes) is returned as ``k_tot``.  Nothing is stored on the reaction.
 
         Parameters
         ----------
@@ -690,7 +701,7 @@ class Radiation:
         if photo.shielding is not None:
             shielding = Photochemistry.shielding(reaction, self.network)
 
-        # Reset any back-references from a previous run before repopulating.
+        # Per-band rate data, one entry per group in self.groups order.
         grouped: List[GroupedPhotoReactionProps] = []
 
         for grp in self.groups:
@@ -717,7 +728,8 @@ class Radiation:
             )
 
             # Photon-counting rate coefficient: k_rate = c · den[i] · <σ>_i
-            # (units: s⁻¹ for photon-density mode, cm³ s⁻¹ for two-body)
+            # (s⁻¹ in photon-density mode; in energy-density mode it is divided
+            # by <E>_i below to give s⁻¹)
             k_rate: sp.Expr = self.c * self.den[grp.index] * rad_xsec_avg
             # Band loss coefficient: what get_sradodes removes from den[i].
             k: sp.Expr = self.c * self.den[grp.index] * loss_xsec_avg
@@ -734,8 +746,9 @@ class Radiation:
             )
             grouped.append(rgroup)
 
-            # In energy-density mode, convert from "per eV" to "per photon"
-            # by dividing by the band-average energy <E>_i.
+            # In energy-density mode, turn the energy density den[i] (erg cm⁻³)
+            # into a photon density by dividing by the band-average photon
+            # energy <E>_i (erg).
             k_tot += (
                 k_rate
                 * (

@@ -98,7 +98,7 @@ _RADODES = {"RADIATION": {"ORDER": Setting("order", parse_int)}}
   regenerate and review the snapshots:
 
 ```bash
-JAFF_UPDATE_SNAPSHOTS=1 uv run pytest tests/codegen/templating/test_template_engine_snapshots.py
+JAFF_UPDATE_SNAPSHOTS=1 uv run --extra dev pytest tests/codegen/templating/test_template_engine_snapshots.py
 git diff tests/snapshots/template_engine
 ```
 
@@ -154,7 +154,9 @@ int total = ((1) + (2) + (2) + (4) + (3));
   `commands/sub/props.py`. Used as `$token$` in a `$$JAFF SUB token` block.
 - **`HAS`**: add `"kind": lambda c: collection` to `KINDS` in
   `commands/has/props.py`; the collection must support `entity in collection`.
-  `GET` checks its entities against the same table.
+  `GET` checks its `element`, `specie` and `reaction` entities against the same
+  table; `aux` is not in `KINDS` — `GET` special-cases it and checks the name
+  against the network's auxiliary functions.
 
 Cover each with a case in `tests/codegen/templating/test_templating_simple_commands.py` and, where
 useful, a fixture block plus regenerated snapshots.

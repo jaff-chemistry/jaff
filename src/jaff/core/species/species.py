@@ -1,3 +1,6 @@
+# ABOUTME: Species: ordered, name-indexed catalogue of a network's Specie objects
+# ABOUTME: Lookup by name, serialized form or index
+
 """Ordered, name-indexed :class:`Species` catalogue for JAFF networks.
 
 ``Species`` supports look-up by name (``species["H2O"]``), by serialized form

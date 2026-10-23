@@ -10,27 +10,36 @@ JAFF ships a set of ready-to-use reaction networks in the `networks/` directory.
 
 ## Overview
 
-| Network                                   | Format      | Reactions | Description                               |
-| ----------------------------------------- | ----------- | --------- | ----------------------------------------- |
-| [`h_photoionization`](#h_photoionization) | JAFF native | 2         | Minimal hydrogen photoionisation          |
-| [`demos`](#demos)                         | Mixed       | —         | Format demonstrations                     |
-| [`cie_h`](#cie_h)                         | PRIZMO      | 2         | Collisional ionization equilibrium of H   |
-| [`h2form`](#h2form)                       | PRIZMO      | 1         | H₂ formation with an analytic solution    |
-| [`GOW`](#gow)                             | KIDA        | ~50       | Gong, Ostriker & Wolfire (2017)           |
-| [`GOW++`](#gow_1)                         | KIDA        | ~50       | GOW with self-consistent photochemistry   |
-| [`COthin`](#cothin)                       | KROME       | ~287      | CO chemistry (Glover+2010)                |
-| [`popsicle_semenov`](#popsicle_semenov)   | KROME       | ~116      | Primordial + metal chemistry for POPSICLE |
-| [`uclchem_small_gas`](#uclchem_small_gas) | UCLCHEM     | ~563      | Small gas-phase network from UCLCHEM      |
-| [`kida_uva_2024`](#kida_uva_2024)         | KIDA        | ~8 275    | Full KIDA UVA 2024 gas-phase database     |
-| [`rate22_final`](#rate22_final)           | UDFA        | ~8 767    | Full UMIST Rate22 database                |
+Load a bundled network by its directory name, e.g. `Network("COthin")`. A matching
+`.jfunc` [auxiliary function file](auxiliary-functions.md) and a `jaff.toml` in the
+same directory are picked up automatically.
+
+| Network                                   | Format      | Reactions | File rows | Description                               |
+| ----------------------------------------- | ----------- | --------- | --------- | ----------------------------------------- |
+| [`h_photoionization`](#h_photoionization) | PRIZMO      | 2         | 2         | Minimal hydrogen photoionisation          |
+| [`demos`](#demos)                         | Mixed       | —         | —         | Format demonstrations (not loadable by name) |
+| [`cie_h`](#cie_h)                         | PRIZMO      | 2         | 2         | Collisional ionization equilibrium of H   |
+| [`h2form`](#h2form)                       | PRIZMO      | 1         | 1         | H₂ formation with an analytic solution    |
+| [`GOW`](#gow)                             | KIDA        | 50        | 50        | Gong, Ostriker & Wolfire (2017)           |
+| [`GOW++`](#gow_1)                         | KIDA        | 50        | 50        | GOW with self-consistent photochemistry   |
+| [`COthin`](#cothin)                       | KROME       | 238       | 285       | CO chemistry (Glover+2010)                |
+| [`popsicle_semenov`](#popsicle_semenov)   | KROME       | 99        | 116       | Primordial + metal chemistry for POPSICLE |
+| [`uclchem_small_gas`](#uclchem_small_gas) | UCLCHEM     | 562       | 563       | Small gas-phase network from UCLCHEM      |
+| [`kida_uva_2024`](#kida_uva_2024)         | KIDA        | 7 646     | 8 275     | Full KIDA UVA 2024 gas-phase database     |
+| [`rate22_final`](#rate22_final)           | UDFA        | —         | 8 767     | Full UMIST Rate22 database (does not load) |
+
+**Reactions** is `len(net.reactions)` after loading: rows describing the same reaction
+over different temperature ranges are merged into one reaction with a piecewise rate
+(and exact duplicates are resolved by the duplicate policy), so it can be smaller than
+**File rows**, the number of reaction lines in the `.jet` file.
 
 ---
 
 ## h_photoionization
 
-**File:** `networks/h_photoionization/h_photo.jet`
+**Files:** `networks/h_photoionization/h_photo.jet`, `networks/h_photoionization/h_photo.jet.jfunc`
 
-A two-reaction JAFF native network illustrating the photochemistry pipeline. It contains one photoionisation reaction with a 13.6 eV threshold and one radiative recombination reaction, making it the smallest self-contained network for testing photochemistry.
+A two-reaction PRIZMO-format network illustrating the photochemistry pipeline. It contains one photoionisation reaction with a 13.6 eV threshold and one radiative recombination reaction, making it the smallest self-contained network for testing photochemistry.
 
 ```text
 H -> H+ + E          []         PHOTO, 13.60
@@ -43,22 +52,24 @@ H+ + E -> H          []         2.63e-13*(Tgas/1e4)**(-0.7)
 
 **Files:** `networks/demos/demo1.jet`, `networks/demos/demo2.jet`
 
-Demonstration files, not intended for scientific use.
+Demonstration files, not intended for scientific use. The directory holds two `.jet`
+files, so `Network("demos")` raises a `ParserError`; load a file by path instead, e.g.
+`Network("networks/demos/demo1.jet")`.
 
 - **`demo1.jet`** — A mixed-format file containing reactions written in PRIZMO, KIDA, UDFA, and KROME syntax side-by-side. Useful for checking format auto-detection and as a format cheat-sheet.
-- **`demo2.jet`** — A two-reaction JAFF native snippet used in the documentation examples.
+- **`demo2.jet`** — A two-reaction PRIZMO snippet used in the documentation examples.
 
 ---
 
 ## cie_h
 
-**File:** `networks/cie_h/react_cie_h.jet`
+**Files:** `networks/cie_h/react_cie_h.jet`, `networks/cie_h/react_cie_h.jfunc`
 
-Collisional ionization and radiative recombination of hydrogen, in PRIZMO format. The electron density cancels out of the steady-state balance, so the equilibrium ionization fraction is a closed-form function of temperature, which makes the network useful as a small validation case.
+Collisional ionization and radiative recombination (case A) of hydrogen, in PRIZMO format, with rates from Cen (1992). The electron density cancels out of the steady-state balance, so the equilibrium ionization fraction is a closed-form function of temperature, which makes the network useful as a small validation case. `react_cie_h.jfunc` adds the thermal energy change per reaction (`deltaE0`, `deltaE1`).
 
 ```text
-H + E -> H+ + E + E   []   5.85e-11*sqrt(Tgas)*exp(-157809.1/Tgas)
-H+ + E -> H           []   2.6e-13*(Tgas/1e4)**(-0.8)
+H + E -> H+ + E + E   []   5.85e-11*sqrt(Tgas)*exp(-157809.1/Tgas)/(1+sqrt(Tgas/1e5))
+H+ + E -> H           []   8.40e-11/sqrt(Tgas)*(Tgas/1e3)**(-0.2)/(1+(Tgas/1e6)**0.7)
 ```
 
 Ionization only proceeds above ~10⁴ K, and only if a seed electron is present.
@@ -93,21 +104,24 @@ The Gong, Ostriker & Wolfire (2017) diffuse-ISM chemistry network in KIDA format
 
 **Used by:** [GOW Equilibrium test](../testing-networks/gow.md)
 
-The GOW directory ships three files:
+The GOW directory ships four files:
 
 ```text
 GOW/
 ├── GOW.jet      reaction network (KIDA format)
 ├── GOW.jfunc    custom rate and heating/cooling function definitions
-└── GOW.hdf5     interpolation tables consumed by those functions
+├── GOW.hdf5     interpolation tables consumed by those functions
+└── jaff.toml    per-network defaults (temperature-cutoff behaviour)
 ```
 
 ### `GOW.hdf5` data tables
 
 `GOW.jfunc` defines several heating/cooling functions that are not closed-form —
 they call interpolation functions whose grids live in `GOW.hdf5`. The file is
-organised into three top-level groups, one per physical process. All datasets
-are stored in log-scaled form following the Omukai+2010 / Gong+2017 fits.
+organised into three top-level groups, one per physical process. The datasets
+are stored in log-scaled form following the Omukai+2010 / Gong+2017 fits, except
+`co/TCO` (temperature in K) and `co/alphaCO` (a dimensionless exponent), which are
+linear.
 
 ```text
 GOW.hdf5
@@ -179,7 +193,7 @@ for the physics behind `chi_pe`.
 
 ## COthin
 
-**File:** `networks/COthin/react_COthin.jet`
+**Files:** `networks/COthin/react_COthin.jet`, `networks/COthin/react_COthin.jfunc` (shielding functions)
 
 A CO-chemistry network in KROME format based on Glover+2010 and additional literature sources. It is designed for optically thin environments and is well-suited for simulations of diffuse molecular clouds where CO formation and destruction rates are needed without full grain-surface chemistry.
 
@@ -228,6 +242,12 @@ The complete KIDA UVA 2024 gas-phase reaction database in KIDA format. It covers
 **File:** `networks/rate22_final/rate22_final.rates.jet`
 
 The complete UMIST Database for Astrochemistry Rate22 release in UDFA format. It is the largest network included and covers gas-phase reactions for over 500 species across a wide temperature range.
+
+<!-- prettier-ignore -->
+!!! warning "Currently fails to load"
+    `Network("rate22_final")` raises a `ValueError` because some reactions are
+    listed over overlapping temperature ranges (e.g. `H2CCO+ + e- -> CO + CH2`),
+    which JAFF rejects. The file is kept as a UDFA format reference.
 
 **Reference:** [Millar et al., A&A 682, A109 (2024)](https://doi.org/10.1051/0004-6361/202346908)
 

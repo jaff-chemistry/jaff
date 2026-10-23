@@ -1,9 +1,11 @@
+# ABOUTME: TOML driver: Toml parses a TOML file once with tomllib and exposes
+# ABOUTME: top-level key lookup; usable as a context manager.
 """
 TOML configuration file reader.
 
 This module provides :class:`Toml`, a lightweight wrapper around the standard
 library :mod:`tomllib` module that parses a TOML file on construction and
-exposes key-level accessors for use by the CLI configuration engine.
+exposes top-level key lookup.
 """
 
 from pathlib import Path
@@ -28,7 +30,8 @@ class Toml:
     Attributes
     ----------
     file : Path
-        Resolved path to the TOML source file.
+        Path to the TOML source file, as given (a ``str`` is converted to
+        :class:`~pathlib.Path`; it is not resolved).
     data : dict
         Parsed contents of the TOML file as a nested dictionary.
 

@@ -97,8 +97,12 @@ reaction is classified as photochemical by the parser (via its `_PHOTON`
 reactant), not by inspecting the rate — see [reaction types](#reaction-types):
 
 ```python
-net.reactions[0].rate_coefficient  # photorates(1, 13.6, 1.0e+99)
+net.reactions[0].rate_coefficient  # photorates(1, 13.6, 1000…000.0)
 ```
+
+The open upper band edge is the float `1e99`; SymPy's `str` prints it in full
+as a 100-digit number (abbreviated above), while
+[`get_code`](#code-generation) writes it as `1.0e+99`.
 
 <!-- prettier-ignore -->
 !!! note "Photo-reactions during code generation"
@@ -116,12 +120,18 @@ net.reactions[0].rate_coefficient  # photorates(1, 13.6, 1.0e+99)
 | `tmax`                | `float or None`              | Upper temperature bound of rate validity (K); `None` = unbounded                                                                                                                                                                                                                                                                                                                                                                           |
 | `dE`                  | `sympy.Basic`                | Energy released per reaction event (erg), from a `.jfunc` aux function                                                                                                                                                                                                                                                                                                                                                                     |
 | `verbatim`            | `str`                        | Human-readable equation `"R1 + R2 -> P1 + P2"`                                                                                                                                                                                                                                                                                                                                                                                             |
-| `index`               | `int`                        | File-side source number (`source_index`): file-order row number, **gapped** when rows merge. Not an array subscript                                                                                                                                                                                                                                                                                                                        |
+| `index`               | `int`                        | File-side source number: file-order row number, **gapped** when rows merge (look one up with `net.reactions.by_source_index(n)`). Not an array subscript                                                                                                                                                                                                                                                                                  |
 | `catalogue_index`     | `int`                        | Dense `0..count-1` position inside `net.reactions`; the array subscript used by generated code                                                                                                                                                                                                                                                                                                                                             |
 | `serialized`          | `str`                        | Canonical **name-level** identity (isomer-sensitive)                                                                                                                                                                                                                                                                                                                                                                                       |
 | `serialized_exploded` | `str`                        | Canonical **atom-level** identity (isomer-insensitive)                                                                                                                                                                                                                                                                                                                                                                                     |
-| `type`                | `str`                        | Reaction type concluded by the parser (verbatim): gas-phase `"photo"`/`"cosmic_ray"`/`"3_body"`/`"unknown"`, or a grain surface-mechanism type — see [Reaction types](#reaction-types)                                                                                                                                                                                                                                                     |
+| `type`                | `str`                        | Reaction type concluded by the parser (verbatim): gas-phase `"photo"`/`"cosmic_ray"`/`"3_body"`/`"unknown"`, a KIDA `itype` type (`"two_body"`, `"recombination"`, …), or a grain surface-mechanism type — see [Reaction types](#reaction-types)                                                                                                                                                                                          |
 | `photo`               | `PhotoReactionProps or None` | Photo-reaction state, `None` for non-photo reactions: `xsec` (cross sections; `xsec.total` is the spectrum-averaged σ), `pi_database`, `override_custom_rate` (per-reaction override, or `None`), `override_custom_cross_section` (per-reaction override, or `None`), `custom_rad_rate` (rate from a `.jfunc`, not cross-sections), `rgrouped` (per-band data) and `shielding` (model, settings and any data `tables`) — see [Photo-reactions](#photo-reactions-a-special-citizen) |
+| `t_cutoff`            | `str`                        | Behaviour past the outermost temperature bounds: `"clip"` or `"extrapolate"` (from [`t_cutoff`](../configuration/reference.md#networkreactions))                                                                                                                                                                                                                                                                                             |
+| `rate_segments`       | `RateSegments`               | The per-temperature-range pieces merged into `rate_coefficient` — see [Temperature ranges](#temperature-ranges-and-piecewise-rates)                                                                                                                                                                                                                                                                                                         |
+| `rad`                 | `ReactionRadiationProps`     | Radiation the reaction emits: `spectral_yield` (from a `.jfunc` `spectralYield`, or `None`) and `group_yields` (per radiation group, or `None`)                                                                                                                                                                                                                                                                                             |
+| `species`             | `Species`                    | Unique species on either side (reactants ∪ products), cached                                                                                                                                                                                                                                                                                                                                                                               |
+| `elements`            | `Elements`                   | Unique elements across reactants and products, cached                                                                                                                                                                                                                                                                                                                                                                                      |
+| `band_xsecs`          | `pandas.DataFrame`           | Band-averaged cross sections, one row per radiation band (`lower`, `upper`, `eavg`, `xsec`, `xsec_frac`); empty without band data                                                                                                                                                                                                                                                                                                          |
 
 <!-- prettier-ignore -->
 !!! tip "`reactants` and `products` are `Species` Catalogues"
@@ -211,8 +221,10 @@ sorted([r1, r0])       # [ReactionObject(H+ + e- -> H), ReactionObject(H + _PHOT
     Comparing against a non-`Reaction` (e.g. a string) raises `TypeError`.
 
 Because equality is by `serialized`, reactions can be used in `set`s and as
-`dict` keys, and `==` is the basis for the duplicate-reaction check the network
-runs at load time.
+`dict` keys. The duplicate-reaction handling at load time is stricter than `==`:
+two rows are duplicates only when they share the serialized form, the `type`
+_and_ the temperature range (see
+[Temperature ranges](#temperature-ranges-and-piecewise-rates)).
 
 Printing a reaction gives its human-readable equation; `repr` wraps it:
 
@@ -246,6 +258,20 @@ Generic gas-phase types:
 | `"cosmic_ray"` | Cosmic-ray driven                               |
 | `"3_body"`     | Three-body reaction                             |
 | `"unknown"`    | Unclassified                                    |
+
+The KIDA parser instead maps each reaction's `itype` to a type (a reaction with
+three or more real reactants is still `"3_body"`):
+
+| KIDA `itype` | Type                                                |
+| ------------ | --------------------------------------------------- |
+| 1, 2         | `"cosmic_ray"`                                      |
+| 3            | `"photo"`                                           |
+| 4, 5         | `"two_body"`                                        |
+| 6            | `"radiative_association"`                           |
+| 7            | `"associative_detachment"`                          |
+| 8            | `"recombination"`                                   |
+| 9            | `"grain"`                                           |
+| 10           | `"special"`                                         |
 
 Grain/ice surface-mechanism types (gas-grain networks):
 
@@ -317,10 +343,10 @@ carries a cross-section table instead of an analytic rate:
 ```python
 rxn = net.reactions[0]
 
-rxn.rate_coefficient                    # photorates(1, 13.6, 1.0e+99)
-rxn.photo.xsec                          # XsecProps: units, process, photon_energy,
-                                        #   photo_absorption, photodecay,
-                                        #   database, photodecay_expr
+rxn.rate_coefficient                    # photorates(1, 13.6, 1000…000.0)
+rxn.photo.xsec                          # XsecProps: units, process, database,
+                                        #   photon_energy, photo_absorption,
+                                        #   photodecay, photodecay_expr, total
 len(rxn.photo.xsec.photon_energy)       # number of grid points (energies in eV)
 rxn.photo.xsec.photodecay               # cross sections in cm^2 (or None)
 rxn.photo.pi_database                   # per-reaction PI database override (or None)
@@ -349,7 +375,7 @@ where `n` is its 1-based position in `net.reactions.with_type("photo")` and `lo`
 are the band edges:
 
 ```python
-photo.get_code(lang="cxx")   # 'photorates(1, 13.6, 1.0e+99)'
+net.reactions[0].get_code(lang="cxx")   # 'photorates(1, 13.6, 1.0e+99)'
 ```
 
 ---
@@ -371,10 +397,12 @@ net.reactions["H + _PHOTON -> H+ + e-"]  # by verbatim string
 net.reactions["H._PHOTON__H+.e-"]        # by serialized form
 ```
 
-String lookup returns a **single** `Reaction`. Because several reactions can
-share one serialized form or verbatim string when they differ only by
-mechanism/`type` (e.g. thermal vs cosmic-ray desorption), an ambiguous string
-key **raises** `KeyError`. Disambiguate with a `(serialized, type)` tuple:
+String lookup returns a **single** `Reaction` when the key is unique, and
+raises `KeyError` when it is absent. Several reactions can share one serialized
+form or verbatim string when they differ only by mechanism/`type` (e.g. thermal
+vs cosmic-ray desorption); for such an ambiguous key the lookup returns a
+**`list`** of all of them. To always get one reaction, use a
+`(serialized, type)` tuple:
 
 ```python
 net.reactions["C_DUST__C", "desorption_thermal"]   # exact reaction
@@ -385,15 +413,18 @@ The typed helpers:
 
 ```python
 net.reactions.from_verbatim("H + _PHOTON -> H+ + e-")      # Reaction or None
-net.reactions.from_serialized("H._PHOTON__H+.e-")          # list[Reaction] (all types)
+net.reactions.from_serialized("H._PHOTON__H+.e-")          # list[Reaction] (all types); KeyError if none
 net.reactions.all("H._PHOTON__H+.e-")                      # Vector[Reaction], [] if none
 net.reactions.get("H + _PHOTON -> H+ + e-", type="photo")  # Reaction or None; never raises
+net.reactions.by_source_index(0)                           # by file-side number (Reaction.index), or None
 ```
 
 `from_serialized` always returns a **list** (every reaction with that serialized
-form); `all` is the same but yields an empty `Vector` instead of raising when the
-key is absent. `get` resolves a `(serialized, type)` pair and returns `None`
-rather than raising on a miss or ambiguity.
+form) and raises `KeyError` when there is none; `all` is the same but yields an
+empty `Vector` instead of raising when the key is absent. `get` resolves a
+`(serialized, type)` pair and returns `None` rather than raising on a miss or
+ambiguity; called without `type`, a key shared by several mechanisms returns
+their `list`, as `net.reactions[key]` does.
 
 ### Iteration and count
 
@@ -444,8 +475,9 @@ net.reactions.radiation_emitters()          # reactions with a spectralYield<N>
 ```
 
 The type key is whatever string the parser stored — the gas-phase set
-`"photo"`, `"cosmic_ray"`, `"3_body"`, `"unknown"` (there is no `"CR"`), plus any
-grain surface-mechanism type (see [Reaction types](#reaction-types)).
+`"photo"`, `"cosmic_ray"`, `"3_body"`, `"unknown"` (there is no `"CR"`), the
+KIDA `itype` types (`"two_body"`, `"recombination"`, …), plus any grain
+surface-mechanism type (see [Reaction types](#reaction-types)).
 
 ---
 
@@ -472,8 +504,8 @@ rec.has_any_species("e-")         # True  — on either side
 rxn = net.reactions[0]
 
 rxn.verbatim                # 'H + _PHOTON -> H+ + e-'   (also rxn.get_verbatim())
-rxn.get_latex()             # '${\\rm H} + {\\rm _PHOTON}\\,\\to\\,{\\rm H^{+}} + {\\rm e^{-}}$'
-rxn.serialize()             # 'H._PHOTON__H+.e-'
+rxn.get_latex()             # '${\\rm H} + {\\rm \\gamma}\\,\\to\\,{\\rm H^{+}} + {\\rm e^{-}}$'
+rxn.serialized              # 'H._PHOTON__H+.e-'
 rxn.serialize_exploded()    # 'H._PHOTON__+/H.e-'
 ```
 
@@ -485,10 +517,10 @@ keys: `python`, `c`, `cxx`, `fortran`, `rust`, `julia`, `r`.
 ```python
 rec = net.reactions[1]
 
-rec.get_code(lang="python")    # '1.65941781598291e-10*tgas**(-0.7)'
-rec.get_code(lang="cxx")       # '...*std::pow(tgas, -0.7...)'
-rec.get_code(lang="fortran")   # '1.65941781598291d-10*tgas**(-0.7d0)'
-rec.get_code(lang="julia")     # '1.65941781598291e-10 * tgas .^ (-0.7)'
+rec.get_code(lang="python")    # '2.63e-13*(tgas/10000.0)**(-0.7)'
+rec.get_code(lang="cxx")       # '2.6299999999999999e-13*std::pow(tgas/10000.0, -0.69999999999999996)'
+rec.get_code(lang="fortran")   # '2.63d-13*(tgas/10000.0d0)**(-0.7d0)'
+rec.get_code(lang="julia")     # '2.63e-13 * (tgas / 10000.0) .^ (-0.7)'
 ```
 
 `get_flux_expression` builds the reaction flux `k[i] * y[idx_R1] * y[idx_R2]…`
@@ -513,7 +545,7 @@ saved / shown (`fig.savefig(...)` still works); pass `close=False` to keep it
 open.
 
 ```python
-rec.plot_rate_coefficient()         # κ vs temperature (log–log), navy curve
+rec.plot_rate_coefficient()         # κ vs temperature (log–log), one curve
 
 photo = net.reactions.photo_reactions()[0]
 photo.plot_xsecs()                                     # all processes, eV vs Mb
@@ -539,13 +571,14 @@ a panel and a nested list is overlaid on one panel:
 ```python
 from jaff.plotting import plot_rates, plot_xsecs
 
-r = list(net.reactions)
+big = Network("uclchem_small_gas")          # h_photo has only two reactions
+r = list(big.reactions.with_type("unknown"))
 plot_rates(r[:5])                                # five curves, one axes
 plot_rates([r[0], [r[1], r[2]]], grid=(1, 2))    # two panels
 plot_rates(r[:12], grid=(3, 4))                  # one panel per reaction (12 cells)
 plot_rates(r[:30])                               # auto grid (1, 3): 12 + 12 + 6 curves
 
-photo = [p for p in net.reactions.photo_reactions() if p.photo.xsec]
+photo = [p for p in big.reactions.photo_reactions() if p.photo.xsec]
 plot_xsecs(photo[:4], grid=(2, 2), bands=True)
 ```
 

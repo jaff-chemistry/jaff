@@ -5,7 +5,6 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import warnings
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,6 +13,7 @@ import sympy
 
 from jaff.core.reaction import PhotoReactionProps
 from jaff.plotting import plot, plot_rates, plot_xsecs
+from tests._paths import REPO_ROOT
 from tests.xsec_props import make_xsec_props
 
 TGAS = sympy.Symbol("tgas")
@@ -154,7 +154,7 @@ class TestSvgText:
         assert "<text" in path.read_text()
 
 
-NETWORKS = Path(__file__).resolve().parents[2] / "networks"
+NETWORKS = REPO_ROOT / "networks"
 
 
 @pytest.fixture(scope="module")

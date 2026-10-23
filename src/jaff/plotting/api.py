@@ -715,16 +715,18 @@ def plot_xsecs(
     KeyError
         Unknown process name.
     ValueError
-        A per-panel scale list of the wrong length, or more panels with data
-        than *grid* has cells.
+        A per-panel scale list of the wrong length, more panels with data
+        than *grid* has cells, or an unknown *energy_unit* / *xsec_unit*.
 
     Notes
     -----
     A panel holding one reaction is titled with its equation (inside the
     panel, or above it when too long) and its curves are labelled by
     process.  Several reactions on one panel are labelled
-    ``equation — process``.  One shared legend keys all panels, with one
-    colour per process across the figure.
+    ``equation — process``.  Unless the curves are split automatically, one
+    shared legend keys all panels, with one colour per process across the
+    figure; with the automatic split the legend switches to per-panel groups
+    as in :func:`plot_rates`.
 
     Examples
     --------

@@ -1,3 +1,6 @@
+# ABOUTME: Reaction class: one reaction's species, rate segments and photo props
+# ABOUTME: Serialization, conservation checks, flux strings and rate plotting
+
 """Single astrochemical :class:`Reaction` for JAFF chemical networks.
 
 A ``Reaction`` holds the symbolic rate expression, reactants, products, and
@@ -12,7 +15,9 @@ The serialized form of a reaction is::
 where species names are sorted alphabetically and joined with ``"."``, and
 the two sides are separated by ``"__"``.  For example
 ``H + H2O+ -> H2O + H+`` serializes as ``"H.H2O+__H+.H2O"``.  This canonical
-form is used for equality testing, hashing, and duplicate detection.
+form is used for hashing and duplicate detection.  Equality compares the
+``(serialized, type)`` pair, so the same reaction under two mechanisms is two
+distinct reactions; the hash uses ``serialized`` alone.
 
 The ``"."`` species joiner (rather than ``"_"``) is required because special
 pseudo-species names start with an underscore (e.g. ``_PHOTON``, ``_GRAIN``)
@@ -29,6 +34,10 @@ longer inspects the rate expression).  The generic gas-phase types are:
 - ``"cosmic_ray"``  — cosmic-ray driven
 - ``"3_body"``      — three-body reaction
 - ``"unknown"``     — unclassified
+
+KIDA networks map their ``itype`` column to ``"cosmic_ray"``, ``"photo"``,
+``"two_body"``, ``"radiative_association"``, ``"associative_detachment"``,
+``"recombination"``, ``"grain"`` and ``"special"``.
 
 Grain/ice networks (e.g. UCLCHEM) additionally classify by surface mechanism:
 ``"freeze"``, ``"desorption_thermal"``, ``"desorption_cr"``,
@@ -140,7 +149,10 @@ class Reaction:
     type : str
         Reaction type concluded by the parser and stored verbatim.  Generic
         gas-phase values are ``"photo"``, ``"cosmic_ray"``, ``"3_body"``,
-        ``"unknown"``; grain/ice networks (e.g. UCLCHEM) add surface-mechanism
+        ``"unknown"``; KIDA networks add ``"two_body"``,
+        ``"radiative_association"``, ``"associative_detachment"``,
+        ``"recombination"``, ``"grain"`` and ``"special"``; grain/ice networks
+        (e.g. UCLCHEM) add surface-mechanism
         types: ``"freeze"``, ``"desorption_thermal"``, ``"desorption_cr"``,
         ``"desorption_uvcr"``, ``"desorption_h2"``, ``"eley_rideal"``,
         ``"eley_rideal_desorption"``, ``"langmuir_hinshelwood"``,
@@ -305,7 +317,8 @@ class Reaction:
             )
         )
         self.original_string = original_string
-        # verbatim is kept for backward compatibility alongside original_string
+        # verbatim is the "R1 + R2 -> P1 + P2" form built from the species
+        # names; original_string keeps the raw source line
         self.verbatim: str = self.get_verbatim()
         self.catalogue_index: int = -1
 
@@ -351,7 +364,10 @@ class Reaction:
         return self.verbatim
 
     def __eq__(self, other):
-        """Check equality by comparing serialized (name-level) forms.
+        """Check equality by comparing serialized (name-level) forms and types.
+
+        Two reactions are equal when both :attr:`serialized` and :attr:`type`
+        match.
 
         Parameters
         ----------
@@ -376,6 +392,9 @@ class Reaction:
 
     def __hash__(self):
         """Return hash based on the serialized (name-level) form.
+
+        The type is not hashed, so reactions that differ only in type share a
+        hash (but compare unequal).
 
         Returns
         -------
@@ -691,29 +710,29 @@ class Reaction:
 
         return self.serialize(rs, ps)
 
-    def check(self, errors: bool) -> None:
+    def check(self, strict: bool) -> None:
         """Validate mass and charge conservation for this reaction.
 
         Compares the summed mass and net charge of the reactants against
         those of the products (see :meth:`check_mass` and
-        :meth:`check_charge`).  Violations are logged; with *errors* the
+        :meth:`check_charge`).  Violations are logged; with *strict* the
         first one is fatal.  The constructor runs it with
         ``net.spec.strict``.
 
         Parameters
         ----------
-        errors : bool
+        strict : bool
             When ``True``, terminate the process on any conservation failure;
             when ``False``, only emit a warning.
 
         Raises
         ------
         SystemExit
-            If *errors* is ``True`` and mass or charge is not conserved.
+            If *strict* is ``True`` and mass or charge is not conserved.
         """
         if not self.check_mass():
             message = f"Mass not conserved in reaction {self.index}: {self.verbatim}"
-            if errors:
+            if strict:
                 self.logger.error(message)
                 sys.exit(1)
 
@@ -721,7 +740,7 @@ class Reaction:
 
         if not self.check_charge():
             message = f"Charge not conserved in reaction {self.index}: {self.verbatim}"
-            if errors:
+            if strict:
                 self.logger.error(message)
                 sys.exit(1)
 

@@ -1,7 +1,7 @@
 # ABOUTME: Manual tight grid layout: equal absolute gaps, margins sized to labels
 # ABOUTME: Positions axes, sup labels and the legends kept in the right margin
 
-"""Tight uniform grid layout (spec §14.1), done by hand in inches.
+"""Tight uniform grid layout, done by hand in inches.
 
 After one draw, each used panel's decorations outside its box are measured:
 y tick labels + y label on the left/right, x tick labels + x label below, an

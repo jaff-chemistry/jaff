@@ -19,8 +19,10 @@ So a template is your real source code, with small generated regions created
 by directives. The directive lines themselves are written to the output as
 comments (see [Echo](#echo)).
 
-Templates are processed by the [`jaffgen`](jaffgen.md) CLI or the
-[builder API](../advanced-code-generation/builder.md).
+Templates are processed by the [`jaffgen`](jaffgen.md) CLI, or from Python with
+`TemplateParser` (`#!python TemplateParser(net, Path("rates.cpp")).parse_file()`
+returns the rendered text). The [`Builder`](../advanced-code-generation/builder.md)
+does not use this syntax; its templates use `PREPROCESS_` markers instead.
 
 ---
 
@@ -39,8 +41,9 @@ $$JAFF END
 
 It consists of these pieces:
 
-- **Header** — `$$JAFF`, the command name and its arguments. Arguments are
-  separated by commas or spaces.
+- **Header** — `$$JAFF`, the command name and its arguments. A list of names
+  is separated by commas (`SUB nspec, nreact`); a space-separated list such as
+  `SUB nspec nreact` is a `DirectiveSyntaxError`.
 - **Option block** — an optional `{ … }` after the arguments. The opening `{`
   must be on the header line; the block itself may continue over several
   lines. `#` starts a comment that runs to the end of the line (outside quoted
@@ -100,8 +103,7 @@ lines always end in `\n`, also for templates written with `\r\n`.
 | `HAS`     | Test whether a species, reaction, or element exists           |
 | `REDUCE`  | Build a summed expression over collections                   |
 | `END`     | Close the current directive block                             |
-| `DEFINE`  | Name a set of options for reuse with `USE` (no body)          |
-| `USE`     | Pull a `DEFINE`d option set into an option block              |
+| `DEFINE`  | Name a set of options for reuse with the `USE` option (no body) |
 | `LANG`    | Set the target language of the file (no body)                 |
 | `COMMENT` | Set the comment token used to echo directives (no body)       |
 
@@ -393,7 +395,7 @@ everywhere; see [Options](#options) for their general rules.
 | `THERMAL`   | `MODE`    | `none`, `dedt`, `dtdt`                       | Thermal ODE row: none, `dE/dt` or `dT/dt`. Default `dedt` for `rhses`, `none` for `jacobian`.     |
 | `THERMAL`   | `ENERGY`  | `volumetric`, `specific`, `per_particle`, `molar` | Internal-energy form used when `MODE` is `dedt` (default `volumetric`).                      |
 | `RADIATION` | `ENABLED` | `True`/`False`                               | Include radiation ODE / Jacobian terms (`rhses`, `jacobian`).                                     |
-| `RADIATION` | `ORDER`   | integer                                      | Order of the radiation moments (`rhses`, `jacobian`, `radodes`).                                  |
+| `RADIATION` | `ORDER`   | `0`–`3`                                      | Layout of the per-band density and flux equations (`rhses`, `jacobian`, `radodes`); see [Codegen](../advanced-code-generation/codegen.md#radiation-odes-get_radode_str). |
 | `SIGN`      | `POS`     | text                                         | String for the `+` charge marker (`species_with_normalized_sign`, default `j`).                   |
 | `SIGN`      | `NEG`     | text                                         | String for the `-` charge marker (`species_with_normalized_sign`, default `k`).                   |
 
@@ -417,7 +419,7 @@ $$JAFF END
 ```
 
 Output (abridged — the full block has 30 temporaries; the extra column `[5]` is
-the thermal row):
+the derivative with respect to the thermal variable):
 
 ```cpp
 // $$JAFF REPEAT idx, expr, cse IN jacobian {
@@ -822,6 +824,13 @@ block's local `REPLACE` pair runs after the one from `micro`, so `state.T` is
 renamed to `T_gas`; long lines abridged):
 
 ```cpp
+// $$JAFF DEFINE micro {
+    // REPLACE {
+        // "nden\[\s*(\d+)\s*\]" -> "state.xn[\1]"
+        // "tgas" -> "state.T"      # comments run to the end of the line
+    // }
+// }
+
 // $$JAFF REPEAT idx, rate IN rates { USE micro }
 rate[0] = 5.8500000000000005e-11*std::sqrt(state.T)*std::exp(-157809.10000000001/state.T);
 rate[1] = 2.6e-13*std::pow(state.T/10000.0, -0.80000000000000004);

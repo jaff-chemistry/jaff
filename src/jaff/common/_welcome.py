@@ -1,3 +1,5 @@
+# ABOUTME: JAFF welcome banner (MOTD): ASCII-art title with a random F-adjective,
+# ABOUTME: printed by the jaffgen/jaffx CLIs and on network load.
 """
 JAFF welcome banner (MOTD) generator.
 

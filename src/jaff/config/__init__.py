@@ -1,3 +1,5 @@
+# ABOUTME: jaff.config package: re-exports the package paths and the bundled
+# ABOUTME: network / template listings
 from ._config import (
     CONFIG_DIR,
     DATA_DIR,

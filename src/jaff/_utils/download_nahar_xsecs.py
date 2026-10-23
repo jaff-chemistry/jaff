@@ -1,10 +1,13 @@
+# ABOUTME: Downloads NORAD (Nahar/OSU) ground-state photoionisation cross sections
+# ABOUTME: and writes one serialized-name .dat file (eV, cm^2) per ion under op/.
 """Download NORAD (Nahar/OSU) ground-state photoionisation cross sections.
 
-For every ion of elements Z = 1..26 this fetches the *ground-state*
+For every ion of elements Z = 1..18 plus Ca (20) and Fe (26) this fetches the *ground-state*
 photoionisation cross section from the NORAD-Atomic-Data archive at Ohio State
 (S. N. Nahar), reformats it, and writes one text file per ion into
 ``data/xsecs/op/`` using the serialized reaction naming convention
-``<ion>__<ion+>.e-.dat`` (e.g. ``H__H+.e-.dat``, ``He+__He++.e-.dat``).
+``<ion>._PHOTON__<ion+>.e-.dat`` (e.g. ``H._PHOTON__H+.e-.dat``,
+``He+._PHOTON__He++.e-.dat``).
 
 Source URL scheme
 -----------------
@@ -143,8 +146,8 @@ def serialized_name(symbol: str, charge: int) -> str:
     Returns
     -------
     str
-        e.g. ``charge=0`` -> ``"He__He+.e-"``, ``charge=1`` ->
-        ``"He+__He++.e-"``.
+        e.g. ``charge=0`` -> ``"He._PHOTON__He+.e-"``, ``charge=1`` ->
+        ``"He+._PHOTON__He++.e-"``.
     """
     ion = symbol + "+" * charge
     product = symbol + "+" * (charge + 1)

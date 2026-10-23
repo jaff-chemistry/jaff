@@ -1,3 +1,5 @@
+# ABOUTME: ConfigModel base of the config models and shared helpers: overlay,
+# ABOUTME: lower-casing validators, Attributes-docstring parsing, error formatting
 """Shared building blocks of the module-owned config models.
 
 Each module that is configured from ``jaff.toml`` / ``jaffgen.toml`` defines

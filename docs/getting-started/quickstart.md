@@ -50,7 +50,7 @@ for s in net.species:
 
 ```text
 0: H   mass=1.67377e-24 g  charge=+0
-1: H+  mass=1.67377e-24 g  charge=+1
+1: H+  mass=1.67286e-24 g  charge=+1
 2: e-  mass=9.10938e-28 g  charge=-1
 ```
 
@@ -65,7 +65,7 @@ for r in net.reactions:
 ```
 
 ```text
-H -> H+ + e-
+H + _PHOTON -> H+ + e-
 H+ + e- -> H
 ```
 
@@ -87,22 +87,32 @@ write — run through the [`jaffgen`](../user-guide/code-generation/jaffgen.md) 
 
 ```bash
 jaffgen \
-    --network  networks/h_photoionization/h_photo.jet \
+    --network  networks/demos/demo2.jet \
     --template fortran_dlsodes \
     --outdir   generated/
 ```
 
 ```text
 INFO     Network loaded successfully!
+...
 INFO     Successfully generated files
 ```
 
-`generated/` now holds a complete, buildable Fortran solver:
+`generated/` now holds a complete Fortran solver that builds with `make`
+(using `gfortran`), plus `config.toml`, a record of the settings `jaffgen` ran
+with:
 
 ```text
 commons.f90  fluxes.f90  ode.f90  reactions.f90  main.f90  Makefile
-opkda1.f     opkda2.f    opkdmain.f
+opkda1.f     opkda2.f    opkdmain.f  config.toml
 ```
+
+<!-- prettier-ignore -->
+!!! note "Photochemical networks"
+    The same command works for `h_photo.jet`, but its photo-ionization rate is
+    emitted as a call to `photorates(...)`, which the `fortran_dlsodes`
+    template does not define. That solver does not compile until you supply a
+    `photorates` function yourself.
 
 Each template names its own language with a `$$JAFF LANG` line or by its file
 extension; see [jaffgen](../user-guide/code-generation/jaffgen.md) for the other

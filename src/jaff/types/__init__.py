@@ -1,3 +1,5 @@
+# ABOUTME: JAFF container types: Catalogue, Vector, IndexedList/IndexedValue and HDF5Dict.
+# ABOUTME: Re-exported for the core, codegen and drivers packages.
 from ._catalogue import Catalogue
 from ._hdf5 import HDF5Dict
 from ._indexed import IndexedList, IndexedValue

@@ -1,3 +1,6 @@
+# ABOUTME: UCLCHEM comma-delimited reaction handler with a NAN sentinel column
+# ABOUTME: Builds gas-phase and grain-surface rate expressions per mechanism
+
 """UCLCHEM format: comma-delimited reactions with a ``NAN`` sentinel column."""
 
 import math
@@ -143,7 +146,8 @@ class UclchemReaction:
             # UV photoreaction:  k = alpha * radfield * exp(-gama*Av) / 1.7
             # (the 1.7 converts the Draine field to Habing units).
             "PHOTON": f"{ka / 1.7:.2e} * chi * exp(-{kc:.2f} * av)",
-            # Freeze-out:  k = freezeFactor * alpha * v_th * sqrt(T/m) * sigma_grain
+            # Freeze-out:  k = (1 + beta * 1.671e-3/(T*asize)) * v_th * sigma_grain
+            #                  * sqrt(T/m); alpha (ka) is not applied here.
             "FREEZE": f"(1e0 + {kb:.2e} * 1.671e-3/tgas/asize)*nuth*sigmah*sqrt(tgas/m)",
             # CR thermal desorption (Hasegawa & Herbst 1993):
             #   k = 4*pi*zeta*1.64e-4 * surfaceArea * phi * alpha,

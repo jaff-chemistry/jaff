@@ -1,3 +1,5 @@
+# ABOUTME: Config model of the thermodynamics ([network.thermodynamics]): the
+# ABOUTME: equation of state table
 """Config of the thermodynamics (``[network.thermodynamics]``)."""
 
 from __future__ import annotations

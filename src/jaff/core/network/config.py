@@ -1,3 +1,5 @@
+# ABOUTME: Config models of the network ([network]) and of a jaff.toml file;
+# ABOUTME: NetworkConfig lists the per-module config models as its fields
 """Config of the network (``[network]``) and of a ``jaff.toml`` file.
 
 :class:`NetworkConfig` lists the models of the modules it configures as its

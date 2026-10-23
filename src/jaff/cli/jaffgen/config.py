@@ -1,3 +1,5 @@
+# ABOUTME: Config model of a code-generation run ([jaffgen]) and of a jaffgen.toml
+# ABOUTME: file, assembled from jaff.toml, jaffgen.toml and the command line
 """Config of a code-generation run (``[jaffgen]``) and of a ``jaffgen.toml`` file.
 
 :func:`load_jaffgen_config` assembles a run's config from the network's

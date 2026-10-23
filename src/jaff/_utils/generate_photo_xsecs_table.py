@@ -1,8 +1,10 @@
+# ABOUTME: Builds the photo_reaction_cross_sections table in jaff.db from the groups
+# ABOUTME: of the shipped leiden.hdf5 / norad.hdf5 cross-section files.
 """Build the ``photo_reaction_cross_sections`` table in ``jaff.db``.
 
 One row per serialized reaction found in the collapsed cross-section HDF5
 files (``data/xsecs/leiden.hdf5`` and ``data/xsecs/norad.hdf5``), keyed by the
-HDF5 group name (the serialized reaction stem, e.g. ``"CO__C.O"``).
+HDF5 group name (the serialized reaction stem, e.g. ``"CO._PHOTON__C.O"``).
 
 Each HDF5 group is a single decay channel carrying one ``photodecay`` dataset
 (plus an optional ``photoabsorption``) and a ``decay_type`` attribute, so a

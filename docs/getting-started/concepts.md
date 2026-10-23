@@ -18,7 +18,7 @@ yet still contains a neutral atom, a cation, the electron, and a genuine
 photo-reaction:
 
 ```text
-H -> H+ + e-
+H + _PHOTON -> H+ + e-
 H+ + e- -> H
 ```
 
@@ -96,7 +96,7 @@ A loaded `Network` carries:
 <!-- prettier-ignore -->
 !!! tip "Validate while you load"
     Chemistry checks run on every load — missing sinks and sources, isomer
-    clashes, missing recombinations and element-conservation violations are
+    clashes, missing recombinations and mass- or charge-conservation violations are
     reported as warnings. Pass `strict=True` to stop at the first problem
     instead:
     ```python
@@ -161,9 +161,11 @@ rxn.products      # species created
 ```
 
 - `reactants` / `products` — the species on each side, as `Species` catalogues;
-- `rate` — the rate coefficient as a **SymPy expression**, not a number; it
-  still contains the temperature symbol so it can be differentiated and emitted
-  as code;
+- `rate_coefficient` — the rate coefficient as a **SymPy expression**, not a
+  number; it still contains the temperature symbol so it can be differentiated
+  and emitted as code;
+- `rate` — `rate_coefficient` times the number density of each reactant (also a
+  SymPy expression; pseudo-species such as `_PHOTON` carry no density);
 - `type` — the classification (`photo`, `cosmic_ray`, `3_body`, `unknown`, or a
   grain surface-mechanism type such as `freeze`/`desorption_*` in gas-grain
   networks), concluded by the network-format parser as it reads the file;
@@ -243,14 +245,14 @@ const int NREACT = 2;
 
 void compute_rates(double* k, double T) {
     // $$JAFF REPEAT idx, rate IN rates
-    k[0] = photorates(0, …);
+    k[0] = photorates(1, 13.6, 1.0e+99);
     k[1] = …;
     // $$JAFF END
 }
 ```
 
 The directive language is small — `SUB`, `REPEAT`, `REDUCE`, `GET`, `HAS`,
-`END`, plus options such as `REPLACE`. The
+`DEFINE`, `LANG`, `COMMENT` and `END`, plus options such as `REPLACE` and `USE`. The
 [Template Syntax](../user-guide/code-generation/template-syntax.md) page is the
 full reference. Three ideas explain what the collections emit: indexing, CSE,
 and the ODE/Jacobian pair.

@@ -1,3 +1,5 @@
+# ABOUTME: Vector: list subclass with NumPy-style element-wise arithmetic and
+# ABOUTME: comparison operators (scalars broadcast; equal-length lists pair up).
 """
 Element-wise arithmetic vector type.
 
@@ -13,11 +15,11 @@ Examples
 --------
 >>> v = Vector([1, 2, 3])
 >>> v + 10
-Vector([11, 12, 13])
+[11, 12, 13]
 >>> v * Vector([2, 3, 4])
-Vector([2, 6, 12])
+[2, 6, 12]
 >>> -v
-Vector([-1, -2, -3])
+[-1, -2, -3]
 """
 
 import operator
@@ -51,11 +53,11 @@ class Vector(list, Generic[T]):
     --------
     >>> v = Vector([1, 2, 3])
     >>> v + 1
-    Vector([2, 3, 4])
+    [2, 3, 4]
     >>> v * Vector([10, 20, 30])
-    Vector([10, 40, 90])
+    [10, 40, 90]
     >>> v == 2
-    Vector([False, True, False])
+    [False, True, False]
     """
 
     # ------------------------------------------------------------------
@@ -300,6 +302,6 @@ class Vector(list, Generic[T]):
         Examples
         --------
         >>> Vector(["1", "2", "3"]).as_type(int)
-        Vector([1, 2, 3])
+        [1, 2, 3]
         """
         return Vector(typ(x) for x in self)

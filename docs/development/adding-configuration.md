@@ -161,9 +161,9 @@ or with `--set`. To add a shortcut:
 ## Regenerate and test
 
 ```bash
-python -m jaff.config.json_schema   # editor schemas, src/jaff/config/schemas/
-python -m jaff.config.reference     # docs/user-guide/configuration/reference.md (for local docs)
-uv run pytest tests/config
+uv run --extra dev python -m jaff.config.json_schema   # editor schemas, src/jaff/config/schemas/
+uv run --extra dev python -m jaff.config.reference     # docs/user-guide/configuration/reference.md (for local docs)
+uv run --extra dev pytest tests/config
 ```
 
 `tests/config/test_config_json_schema.py` fails when a committed schema is out of date

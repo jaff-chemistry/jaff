@@ -50,6 +50,7 @@ dev = [
   "pytest>=7.0",
   "pytest-cov",
   "ruff",
+  "ty",
   "check-jsonschema",
   "zensical",
   "griffelib>=2.3",

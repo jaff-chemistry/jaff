@@ -1,3 +1,6 @@
+# ABOUTME: Parser ABC for one network-file format, plus the parser registry
+# ABOUTME: all_parsers() discovers the format subpackages and sorts them by priority
+
 """The single ABC for a per-subpackage network parser plus its registry.
 
 Each format subpackage (``kida``, ``krome``, ``prizmo``, ``udfa``,
@@ -78,7 +81,7 @@ class Parser(ABC):
         Handlers that need mutable, file-order state (e.g. the KROME
         ``@format`` column layout, PRIZMO's ``parse_vars`` toggle) expose a
         ``default_state()``; their defaults are merged so a reaction line
-        before any directive uses the same defaults as before the refactor.
+        that precedes any directive is parsed with those defaults.
         """
         state: dict = {}
         for handler in self.handlers:

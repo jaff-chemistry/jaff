@@ -1,3 +1,5 @@
+# ABOUTME: Shared helpers: file-extension groups, mass table loading, Fortran literal
+# ABOUTME: conversion, symbolic dependency resolution and .jaff path detection.
 """
 Miscellaneous helper utilities shared across JAFF subsystems.
 
@@ -8,9 +10,13 @@ This module provides:
 * :func:`f90_convert` -- coerce Fortran-style numeric literals to Python/C.
 * :func:`resolve_symbolic_dependencies` -- topological substitution of a
   symbol dependency graph.
+* :func:`float_piecewise_branches` -- float the integer branch values of
+  every ``Piecewise`` in an expression.
 * :func:`resolve_dependencies` -- single-expression dependency resolution
   with special handling for built-in JAFF functions (``merge``, ``log10``).
 * :func:`is_jaff_file` -- quick path-based check for ``.jaff`` files.
+* :func:`load_module_from_path` and :func:`import_subpackages` -- dynamic
+  import helpers (currently not used elsewhere in JAFF).
 """
 
 from __future__ import annotations
@@ -248,14 +254,18 @@ def resolve_dependencies(
     Resolve undefined SymPy function calls inside a single expression.
 
     Walks all :class:`~sympy.core.function.AppliedUndef` atoms in *expr* and
-    replaces each with a concrete SymPy expression, drawing from three sources
-    (checked in priority order):
+    replaces each with a concrete SymPy expression, drawing from three sources:
 
-    1. **subs_dict** -- direct substitution table.
-    2. **Built-in shims** -- ``merge(a, b, cond)`` → ``Piecewise((a, cond), (b, True))``
-       and ``log10(x)`` → ``log(x)/log(10)``.
-    3. **aux_funcs** -- user-defined auxiliary functions provided by the
-       parser; arguments are recursively resolved before substitution.
+    * **Built-in shims** -- ``merge(a, b, cond)`` → ``Piecewise((a, cond), (b, True))``
+      and ``log10(x)`` → ``log(x)/log(10)``.
+    * **aux_funcs** -- user-defined auxiliary functions provided by the
+      parser; arguments are recursively resolved before substitution.
+    * **subs_dict** -- direct substitution table, matched case-insensitively
+      on the call's string form.
+
+    A ``subs_dict`` match is recorded first but is overwritten when the
+    function is also a built-in or an *aux_funcs* entry, so in effect the
+    built-ins win, then *aux_funcs*, then *subs_dict*.
 
     Parameters
     ----------
@@ -373,9 +383,11 @@ def import_subpackages(package_name: str) -> None:
     :func:`pkgutil.walk_packages` which calls :func:`__import__` internally
     for every package it encounters.
 
-    Args:
-        package_name: Fully-qualified package name
-                      (e.g. ``"jaff.core.parsers.network._formats"``).
+    Parameters
+    ----------
+    package_name : str
+        Fully-qualified package name
+        (e.g. ``"jaff.core.parsers.network._formats"``).
     """
     from importlib import import_module
 

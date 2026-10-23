@@ -33,25 +33,52 @@ def process(items: List[str]) -> Optional[Dict[str, int]]:
 
 ## Code Formatting
 
-Use Ruff for both formatting and linting. The formatter config lives in
-`pyproject.toml` under `[tool.ruff]`:
+Use Ruff for formatting and linting, and `ty` for type checking; all three are in
+the `dev` extra. The Ruff config lives in `pyproject.toml` under `[tool.ruff]`:
 
 - **Line length:** 90 characters
 - **Quote style:** double quotes
 - **Indent:** 4 spaces
 
-Run `ruff format` (it reads the config automatically — no need to pass flags):
+The tools read their config automatically — no need to pass flags:
 
 ```bash
-# Format all code
-ruff format src/ tests/
-
 # Check formatting without modifying
-ruff format --check src/
+uv run --extra dev ruff format --check src/jaff/core/network/network.py
 
-# Format specific file
-ruff format src/jaff/core/network/network.py
+# Format a file you changed
+uv run --extra dev ruff format src/jaff/core/network/network.py
+
+# Lint
+uv run --extra dev ruff check src/jaff/core/network/network.py
+
+# Type check (ruff does not catch type errors)
+uv run --extra dev ty check src/jaff/core/network/network.py
 ```
+
+Format and lint **only the files you touched**, and only reformat a file that was
+already formatted before your change (check with `ruff format --check` first).
+`tests/` is not lint-clean, and a repo-wide `ruff format` or `ruff check --fix`
+rewrites unrelated files. `ty` reports some pre-existing errors; make sure your
+change adds none.
+
+Ruff's lint selection is `E4`, `E7`, `E9` and `F` (pyflakes): it does not sort
+imports. Order them by hand: `from __future__ import annotations`, then the standard
+library, third-party packages and local (`jaff`) imports, each group separated by a
+blank line.
+
+## File Headers
+
+Each code file starts with a two-line `ABOUTME` comment, before the module
+docstring:
+
+```python
+# ABOUTME: <short description>
+# ABOUTME: <optional second line>
+```
+
+Not every existing module has one yet and nothing checks it; add the header to new
+files and to files you edit.
 
 ## Naming Conventions
 
@@ -142,6 +169,7 @@ def compute_rate(temperature, alpha):
 
 Use built-in generics and `X | None`. Only import from `typing` for names that
 have no built-in form (e.g. `Any`, `TypedDict`, `cast`, `TYPE_CHECKING`).
+Older modules still use `List`/`Dict`/`Optional`; convert them when you touch them.
 
 ```python
 from __future__ import annotations
@@ -184,80 +212,83 @@ Every public module, class, and function gets a docstring.
 ### NumPy Style
 
 Use **NumPy-style** (numpydoc) docstrings with underlined sections
-(`Parameters`, `Returns`, `Raises`, `Notes`, `Example`). Cross-reference other
+(`Parameters`, `Returns`, `Raises`, `Notes`, `Examples`). Cross-reference other
 objects with Sphinx roles — `:class:`, `:meth:`, `:func:` — so the rendered API
-docs link correctly.
+docs link correctly; a leading `~` (`:class:`~jaff.core.network.Network``) shows only
+the last name. Write inline code as ``` ``x`` ```, use fenced code blocks (never a
+reST `::` literal block), and put `>>>` lines only in the `Examples` section.
 
 ```python
-def compute_rates(network: Network, temperature: float) -> np.ndarray:
-    """Compute reaction rate coefficients.
+def species_masses(network: Network) -> np.ndarray:
+    """Return the mass of every species in a network.
 
-    Calculates rate coefficients for all reactions in the network at the
-    specified temperature using :meth:`~jaff.core.network.Network.calculate_rates`.
+    The masses follow the order of
+    :attr:`~jaff.core.network.Network.species`.
 
     Parameters
     ----------
     network : Network
         Chemical reaction network.
-    temperature : float
-        Gas temperature in Kelvin.
 
     Returns
     -------
     np.ndarray
-        Array of rate coefficients in cm³/s.
+        Species masses in g.
 
     Raises
     ------
     ValueError
-        If *temperature* is negative.
+        If the network has no species.
 
-    Example
-    -------
-    >>> net = Network("network.dat")
-    >>> rates = compute_rates(net, 100.0)
-    >>> print(rates[0])
-    1.2e-10
+    Examples
+    --------
+    >>> net = Network("COthin")
+    >>> masses = species_masses(net)
+    >>> print(masses[0])
+    1.673773e-24
     """
-    if temperature < 0:
-        raise ValueError("Temperature must be non-negative")
-    return network.calculate_rates(temperature)
+    if not network.species:
+        raise ValueError("Network has no species")
+
+    return np.array([sp.mass for sp in network.species])
 ```
 
 ### Class Docstrings
 
-Document constructor arguments in the **class** docstring under a `Parameters`
-section (not in `__init__`), matching :class:`~jaff.codegen.codegen.Codegen`.
+Describe the class in the **class** docstring and document the constructor
+arguments in the `__init__` docstring under a `Parameters` section, as
+:class:`~jaff.codegen.codegen.Codegen` and :class:`~jaff.core.network.Network` do.
+The API page generator builds a class page's "Constructor" section from the
+`__init__` docstring (falling back to the class docstring when `__init__` has none),
+and lists the class docstring's `Attributes` section as a table.
 
 ```python
 class Codegen:
-    """Multi-language code generator for chemical networks.
+    """Generate rates, fluxes, ODEs, and Jacobians from a Network in multiple languages.
 
-    Generates code for evaluating reaction rates, ODEs, and Jacobians in
-    multiple target languages.
-
-    Parameters
-    ----------
-    network : Network
-        Parsed chemical reaction network.
-    lang : str, optional
-        Target language alias (``"c++"``, ``"c"``, ``"fortran"``, ``"python"``,
-        …).  Default is ``"c++"``.
-
-    Raises
-    ------
-    ValueError
-        If *lang* is not a supported language.
-
-    Example
-    -------
-    >>> net = Network("network.dat")
+    Examples
+    --------
+    >>> net = Network("COthin")
     >>> cg = Codegen(network=net, lang="c++")
     >>> rates = cg.get_rates_str(use_cse=True)
     """
 
     def __init__(self, network: Network, lang: str = "c++") -> None:
-        ...
+        """Bind a network to a target language.
+
+        Parameters
+        ----------
+        network : Network
+            Parsed chemical reaction network.
+        lang : str, optional
+            Target language alias (``"c++"``, ``"c"``, ``"fortran"``,
+            ``"python"``, ...).  Default is ``"c++"``.
+
+        Raises
+        ------
+        InvalidLanguageError
+            If *lang* is not a supported language.
+        """
 ```
 
 ### Module Docstrings
@@ -271,10 +302,10 @@ Reference the key classes the module exposes with `:class:` roles.
 Exposes the :class:`~jaff.core.network.Network` class for loading and managing
 chemical reaction networks from various file formats.
 
-Example
--------
+Examples
+--------
 >>> from jaff import Network
->>> net = Network("network.dat")
+>>> net = Network("COthin")
 """
 ```
 
@@ -374,8 +405,8 @@ def process_network(filename: str) -> Network:
 ```python
 # Good - clear parameters
 def compute_ode(
-    species: List[str],
-    reactions: List[Reaction],
+    species: list[str],
+    reactions: list[Reaction],
     use_cse: bool = True
 ) -> str:
     pass
@@ -573,9 +604,11 @@ def process(value):
 
 Before submitting code:
 
-- [x] Code formatted with ruff
-- [x] Sort imports with ruff
-- [x] No linting errors (ruff)
+- [x] Changed files formatted with ruff (`ruff format --check`)
+- [x] Imports ordered: standard library, third-party, local
+- [x] No linting errors (`ruff check`) on changed files
+- [x] No new type errors (`ty check`) on changed files
+- [x] `ABOUTME` header on new files
 - [x] Type hints added
 - [x] Docstrings written
 - [x] Tests added/updated

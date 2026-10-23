@@ -22,7 +22,7 @@ JAFF exposes two programmatic interfaces for code generation that bypass the tem
 
     ***
 
-    One-call code generation using named plugin templates. Generates complete solver projects (Python `solve_ivp`, Fortran DLSODES, Kokkos ODE) from a loaded network.
+    One-call code generation using named plugin templates. Generates complete solver projects (Python `solve_ivp`, Fortran DLSODES, C++ VODE via the `kokkos_ode` template, AMReX Microphysics) from a loaded network.
 
     [:octicons-arrow-right-24: Builder](builder.md)
 

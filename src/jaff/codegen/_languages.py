@@ -1,3 +1,14 @@
+# ABOUTME: Target-language definitions (C++, C, Fortran, Python, Rust, Julia, R) for codegen.
+# ABOUTME: Per-language syntax tokens, SymPy printers and Fortran line wrapping/sanitising.
+"""Target-language definitions for the code generator.
+
+Each :class:`Language` subclass holds the syntax tokens (comment marker,
+array brackets, index base, line terminator, ...) and the SymPy printer used
+to render expressions for one target language.  The module also provides the
+Fortran helpers that re-wrap free-form source within the line limit and clamp
+real literals whose exponent overflows ``real*8``.
+"""
+
 from __future__ import annotations
 
 import copy
@@ -18,8 +29,8 @@ from ..errors import InvalidLanguageError
 # --------------------------------------------------------------------------- #
 
 # Significant column count for a free-form Fortran line (max 132 per F90+; we
-# wrap conservatively at 120).  Two columns are reserved on a wrapped line for
-# the trailing " &" marker.
+# wrap conservatively at 120).  One column is reserved on a wrapped line for
+# the trailing "&" marker.
 _FORTRAN_WIDTH = 120
 _FORTRAN_CONT_INDENT = "      "
 _FORTRAN_CONT_MARK = "&"
@@ -157,7 +168,7 @@ def _fortran_free_wrap(code: str, width: int = _FORTRAN_WIDTH) -> str:
         Equivalent code whose continuations never fall inside a token.
     """
     out: list[str] = []
-    # Room for the trailing " &" marker on any line that will be continued.
+    # Room for the trailing "&" marker on any line that will be continued.
     limit = width - len(_FORTRAN_CONT_MARK)
     for stmt in _fortran_fold(code):
         indent = stmt[: len(stmt) - len(stmt.lstrip())]
@@ -169,8 +180,10 @@ def _fortran_free_wrap(code: str, width: int = _FORTRAN_WIDTH) -> str:
             out.append(indent + content)
             continue
 
-        # Continuation lines begin with a leading "&" so a break inside a token
-        # (e.g. "**") rejoins exactly, with no inserted indentation blanks.
+        # Continuation lines begin with a leading "&" so the statement resumes
+        # right after it: the indentation before the "&" is not part of the
+        # statement, so no blanks are inserted at the join.  Breaks only fall
+        # between atoms (``**`` etc. are single atoms and never split).
         cont_prefix = indent + _FORTRAN_CONT_INDENT + _FORTRAN_CONT_LEAD
         tokens = _FORTRAN_ATOM.findall(content)
         line = indent

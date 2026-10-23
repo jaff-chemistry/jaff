@@ -12,7 +12,8 @@ model is a [`ShieldingFunction`](#the-shieldingfunction-contract) subclass that
 registers itself with the `@_register` decorator, declares its settings as a
 config model, and returns a [SymPy](https://www.sympy.org) expression that is
 multiplied into the photo-rate. Adding a new model means writing one such class
-and dropping it under `physics/photo_reactions/shielding/`.
+in a subpackage of `physics/photo_reactions/shielding/` and importing it from that
+subpackage's `__init__.py`.
 
 There are two flavours, distinguished by the class's `reaction` attribute:
 
@@ -60,9 +61,13 @@ flowchart TD
     H -.-> I[Network.write_shielding_tables\njaffgen writes them to its output]
 ```
 
-The registry is populated by importing every (non-underscore) module under
-`shielding/`, which runs the `@_register` decorators — so a new model is
-discovered automatically once its file is in place; no central list to edit.
+The registry is filled on the first lookup by importing every **subpackage**
+(folder) directly under `shielding/` whose name does not start with `_`
+(`import_subpackages`). Only the folder's `__init__.py` is imported, so a model
+registers — its `@_register` decorator runs — only if that `__init__.py` imports
+its module (`from .hg2015 import HG2015`). There is no central list to edit, but a
+module file that nothing imports is never registered, and a new folder needs an
+`__init__.py` that imports its models.
 
 ## The `ShieldingFunction` Contract
 
@@ -161,7 +166,7 @@ which holds the real (unsanitised) serialized string.
 ```text
 physics/photo_reactions/shielding/
 └── H2__PHOTON__H_H/         # sanitized folder for H2._PHOTON__H.H
-    ├── __init__.py
+    ├── __init__.py          # from .db1996 import DB1996; from .hg2015 import HG2015
     ├── hg2015.py            # name = "hg2015"
     ├── db1996.py            # name = "db1996"
     └── _utils/              # shared helpers (leading "_" → not imported as a model)
@@ -228,9 +233,9 @@ class HG2015(ShieldingFunction):
 !!! tip "Share maths between models"
     When several models in a folder differ only by a parameter (here `db1996.py`
     and `hg2015.py` differ only in `alpha`), put the expression builder in an
-    underscore-prefixed helper package (`_utils/`). Files and folders whose name
-    starts with `_` are **not** imported as selectable models, so they make
-    natural homes for shared code. Keep the params classes separate.
+    helper package such as `_utils/`. A model folder's `__init__.py` imports only
+    the model modules, so shared code there is never registered as a model.
+    Keep the params classes separate.
 
 ## Writing a Global Shielding Function
 
@@ -242,7 +247,7 @@ the reaction passed to `get_shielding`.
 ```text
 physics/photo_reactions/shielding/
 ├── global_/
-│   ├── __init__.py
+│   ├── __init__.py         # from .leiden import Leiden
 │   └── leiden.py           # name = "leiden", reaction = None
 └── H2__PHOTON__H_H/
     └── ...
@@ -265,6 +270,8 @@ the per-reaction table in `reaction.photo.shielding.tables`.
 - [x] `reaction` set to the serialized reaction (local) or left `None` (global)
 - [x] Local model placed under the **sanitised** folder
       (`shielding/<sanitized_reaction>/<type>.py`); global under `shielding/global_/`
+- [x] The folder's `__init__.py` imports the new class (a new folder needs one), and
+      the folder name does not start with `_`
 - [x] Its own `ShieldingParams` subclass with numpydoc `Attributes`, returned by
       `config_model()`
 - [x] `get_shielding(self, reaction, network) -> sympy.Expr` reads its settings
@@ -272,8 +279,10 @@ the per-reaction table in `reaction.photo.shielding.tables`.
 - [x] Returns a dimensionless expression using the `ncol_<species>` / `vdisp`
       symbol conventions; data tables go on `reaction.photo.shielding.tables`
 - [x] Shared maths factored into an underscore-prefixed helper (if reused)
-- [x] Schemas and reference regenerated (`python -m jaff.config.json_schema`,
-      `python -m jaff.config.reference`) so editors and docs know the new type
+- [x] Schemas and reference regenerated
+      (`uv run --extra dev python -m jaff.config.json_schema`,
+      `uv run --extra dev python -m jaff.config.reference`) so editors and docs know
+      the new type
 
 ## See Also
 

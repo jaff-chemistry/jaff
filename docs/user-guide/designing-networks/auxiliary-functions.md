@@ -70,7 +70,7 @@ Expressions may reference previously declared `@var` names:
 - Long expressions can be wrapped with a trailing backslash `\`.
 - `expressions` can contain sympy functions like `Piecewise`
 
-Functions may call other functions defined earlier in the same file.
+Functions may call any other function defined in the same file; the order of the definitions does not matter.
 
 ### Referencing species densities
 
@@ -109,10 +109,11 @@ Potassium `K`, tin `Sn`) are unambiguous.
 
 The non-density physical symbols are passed through unchanged and supplied by
 the solver at runtime. These are the same canonical symbols available in rate
-expressions — `tgas`, `av`, `crate`, `chi`, `d2g`, `tdust`, and so on — listed
+expressions — `tgas`, `av`, `crate`, `chi`, `tdust`, and so on — listed
 in [Rate Expression Variables](network-formats.md#rate-expression-variables).
-(`gradv`, the velocity gradient used by the CO cooling fit, is another such
-runtime-supplied symbol.)
+Any other symbol, such as the dust-to-gas ratio `d2g` or `gradv` (the velocity
+gradient used by the CO cooling fit) in the GOW example below, is left as a free
+variable that the host code supplies at run time.
 
 <!-- prettier-ignore -->
 !!! note "`n_<element>_nuc` expansion and `expand_nuclei`"
@@ -124,11 +125,13 @@ runtime-supplied symbol.)
 ### Referencing other rate coefficients — `rc_<N>`
 
 Inside a custom `@function` body you can reference the auto-generated rate
-coefficient of another reaction by index with the reserved symbol `rc_<N>`,
-where `N` is the 0-based reaction index. JAFF resolves `rc_<N>` to the computed
-rate coefficient (the `rate_coefficient` of `network.reactions[N]`), so you can build one
-reaction's rate or energy term out of another's without restating its Arrhenius
-expression.
+coefficient of another reaction with the reserved symbol `rc_<N>`, where `N` is
+the reaction's 0-based **file-order number** — the same number used by
+`chemRate<N>` (see [Reaction numbers](#reaction-numbers)). JAFF resolves `rc_<N>`
+to that reaction's `rate_coefficient` (looked up with
+`network.reactions.by_source_index(N)`, not `network.reactions[N]`), so you can
+build one reaction's rate or energy term out of another's without restating its
+Arrhenius expression.
 
 ```text
 @function chemRate7(tgas)
@@ -136,26 +139,10 @@ expression.
     @return 0.5 * rc_3
 ```
 
-A malformed index (`rc_` not followed by an integer) raises an error naming the
-offending symbol and the `.jfunc` file it came from.
-
-### Referencing other rate coefficients — `rc_<N>`
-
-Inside a custom `@function` body you can reference the auto-generated rate
-coefficient of another reaction by index with the reserved symbol `rc_<N>`,
-where `N` is the 0-based reaction index. JAFF resolves `rc_<N>` to the computed
-rate coefficient (the `rate_coefficient` of `network.reactions[N]`), so you can build one
-reaction's rate or energy term out of another's without restating its Arrhenius
-expression.
-
-```text
-@function chemRate7(tgas)
-    # Reuse the coefficient of reaction 3 (e.g. a shared temperature fit)
-    @return 0.5 * rc_3
-```
-
-A malformed index (`rc_` not followed by an integer) raises an error naming the
-offending symbol and the `.jfunc` file it came from.
+If no reaction carries number `N`, loading raises a `ParserError`. A malformed
+index (`rc_` not followed by an integer, e.g. `rc_x`) only logs an error naming
+the offending symbol and the `.jfunc` file; the symbol is left in the expression
+as a free variable.
 
 ---
 
@@ -165,9 +152,9 @@ JAFF recognises seven reserved naming conventions:
 
 | Pattern              | Role                                                                                                                                                                                                                                         |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chemRate<N>`        | Custom rate coefficient for reaction index _N_ (0-based). Replaces the Arrhenius expression in the network file.                                                                                                                             |
+| `chemRate<N>`        | Custom rate coefficient for reaction number _N_ (0-based, file order). Replaces the Arrhenius expression in the network file.                                                                                                                             |
 | `deltaE<N>`          | Change in gas thermal energy per occurrence of reaction _N_ (erg). Positive = exothermic.                                                                                                                                                    |
-| `photoCrossSection<N>` | Photodecay cross section (cm²) of photo-reaction _N_ as a function of photon energy `ph_E` (eV). Replaces the database cross section (see [Custom cross sections](#custom-cross-sections-photocrosssectionn)). |
+| `photoCrossSection<N>` | Photodecay cross section (cm²) of photo reaction number _N_ as a function of photon energy `ph_E` (eV). Replaces the database cross section (see [Custom cross sections](#custom-cross-sections-photocrosssectionn)). |
 | `spectralYield<N>`   | Radiation energy (erg) reaction _N_ adds to the field per event per unit photon energy `ph_E` (eV), integrated over solid angle (see [Spectral yield](#spectral-yield-spectralyieldn)). |
 | `globalEmissivity`   | **Volume** emissivity: radiation energy emitted per unit volume, time and photon energy `ph_E` (erg cm⁻³ s⁻¹ eV⁻¹) by processes not tied to a reaction, integrated over solid angle (see [Global emissivity](#global-emissivity-globalemissivity)). |
 | `globalAbsorptionCoefficient` | Absorption coefficient of the medium: fraction of the radiation absorbed per unit path length (cm⁻¹) as a function of photon energy `ph_E` (eV) (see [Global absorption coefficient](#global-absorption-coefficient-globalabsorptioncoefficient)). |
@@ -179,6 +166,16 @@ JAFF recognises seven reserved naming conventions:
     Once parsed, the functions are stored in lowercase formats to make them case-insensitive. This is to make sure that they are compatible with languages that are case-insensetive and must be kept in mind while naming functions.
 
     Note that this applies to **function names only**. `@var` constant names are **case-sensitive** — `kB` and `kb` are different symbols — so a constant must be referenced with the exact case it was declared with.
+
+### Reaction numbers
+
+The `<N>` in `chemRate<N>`, `deltaE<N>`, `photoCrossSection<N>`,
+`spectralYield<N>` and `rc_<N>` is the reaction's 0-based **file-order number**: its
+position among the reaction lines of the network file (`Reaction.index`). It counts
+every reaction, not only photo reactions. When several rows merge into one reaction
+(multiple temperature ranges, or duplicates), the merged reaction keeps the number of
+its first row and the later numbers are skipped, so `<N>` is not the position in
+`network.reactions`; use `network.reactions.by_source_index(N)` to look it up.
 
 ---
 
@@ -225,7 +222,7 @@ The GOW (Gong, Ostriker & Wolfire 2017) network ships with a detailed `.jfunc` f
 
 ### Custom rate coefficients — `chemRate<N>`
 
-Reactions whose rate cannot be written as a simple Arrhenius expression get a `chemRate<N>` function where `N` represents the 0-indexed reaction number. The arguments must match the symbolic free variables used in the expression.
+Reactions whose rate cannot be written as a simple Arrhenius expression get a `chemRate<N>` function where `N` is the 0-based file-order [reaction number](#reaction-numbers). The arguments must match the symbolic free variables used in the expression.
 
 ```text
 @function chemRate0(crate, n_H_nuc, n_H, n_H2)
@@ -257,7 +254,7 @@ With radiation transport enabled, a photo reaction with a `chemRate<N>` keeps th
 
 ### Thermal energy change — `deltaE<N>`
 
-Functions labeled by `deltaE<N>` are used for representing the internal energy change per reaction. `N` represents the 0-indexed reaction number. The expression returned by these functions are multiplied with the reaction rate and added together to obtain the rate of internal energy change.
+Functions labeled by `deltaE<N>` are used for representing the internal energy change per reaction. `N` is the 0-based file-order [reaction number](#reaction-numbers). The expression returned by these functions are multiplied with the reaction rate and added together to obtain the rate of internal energy change.
 
 $$
 \frac{dE}{dt} = \sum_{i} R_i \Delta E_i
@@ -273,14 +270,14 @@ where $R_i$ represents the rate of the $i^{th}$ reaction and $\Delta E_i$ repres
 @function deltaE13(tgas, n_H_nuc, n_H, n_H2, chi, av)
     # Reaction 13: H2 + photon -> H + H
     # Combined FUV-pumping + kinetic-energy heating (Visser+ 2018)
-    k_photo = 5.7e-11 * chi * exp(-4.18 * av)
+    k_photo = 5.7e-11 * chi * exp(-4.18 * av) * fshield_H2(ncol_H2)
     f = 1 / (1 + ncrH2(tgas, n_H_nuc, n_H, n_H2, k_photo) / n_H_nuc)
     @return (0.4 + 8 * 2 * f) * eV
 ```
 
 ### Custom cross sections — `photoCrossSection<N>`
 
-A `photoCrossSection<N>` function replaces the database cross section of photo-reaction _N_. Its body is the photodecay cross section in cm² as a function of the photon-energy symbol `ph_E` in eV (a bare `E` is Euler's number to SymPy):
+A `photoCrossSection<N>` function replaces the database cross section of photo reaction number _N_ (see [Reaction numbers](#reaction-numbers)). Its body is the photodecay cross section in cm² as a function of the photon-energy symbol `ph_E` in eV (a bare `E` is Euler's number to SymPy):
 
 ```text
 @function photoCrossSection5()
@@ -316,15 +313,14 @@ Each group yield times the reaction rate is added to that group's **density** eq
 The heating cooling function is used to add any non-chemical heating and cooling rates to the reaction network. The returned `expression` must be in terms of rate of internal energy change in units of $erg\ s^{-1}\ cm^{-3}$
 
 ```text
-@function heatingCoolingRate(chi, av, d2g, tgas, n_H_nuc, n_H, n_H2,
-                              n_Cj, n_C, n_O, n_CO, n_e, gradv)
+@function heatingCoolingRate(chi, av, d2g, tgas, n_H_nuc, n_H, n_H2, n_Cj, n_C, n_O, n_CO, n_e, gradv)
     @return heating_grainPE(chi, av, d2g, tgas, n_H_nuc, n_e) \
         - cooling_LyA(n_H, n_e, tgas) \
         - cooling_H2(n_H2, n_H, n_Hj, n_He_nuc, n_e, tgas) \
         - cooling_Cplus(n_Cj, n_H, n_H2, n_e, tgas) \
         - cooling_C0(n_C, n_H, n_H2, n_e, tgas) \
         - cooling_O0(n_O, n_H, n_H2, n_e, tgas) \
-        - cooling_CO(n_CO, n_H, n_H2, n_e, tgas, gradv) \
+        - cooling_CO(n_CO, n_H, n_H2, n_e, tgas, gradv, n_H_nuc) \
         - cooling_dust_coll(chi, av, d2g, tgas, n_H_nuc) \
         - cooling_dust_rec(chi, av, d2g, tgas, n_e)
 ```

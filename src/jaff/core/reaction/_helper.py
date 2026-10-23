@@ -1,3 +1,6 @@
+# ABOUTME: Small helpers shared by the reaction package
+# ABOUTME: to_float_or_none coerces band quantities for DataFrame output
+
 from typing import Any
 
 

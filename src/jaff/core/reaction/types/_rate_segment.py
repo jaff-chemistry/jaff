@@ -1,3 +1,6 @@
+# ABOUTME: RateSegment: one rate expression valid over one temperature range
+# ABOUTME: Dataclass of rate, tmin and tmax
+
 from dataclasses import dataclass
 
 from sympy import Expr

@@ -1,7 +1,11 @@
+# ABOUTME: Config models of the equation of state ([network.thermodynamics.eos]),
+# ABOUTME: one per EOS type, selected by type
 """Config of the equation of state (``[network.thermodynamics.eos]``).
 
 One model per EOS ``type``; :data:`EosConfig` picks the model from ``type``
-(case-insensitive, ``"ideal"`` when omitted).
+(case-insensitive, ``"ideal"`` when omitted).  The two Fermi-degenerate types
+are accepted but not implemented yet: building their EOS raises
+``NotImplementedError``.
 """
 
 from __future__ import annotations
@@ -32,6 +36,8 @@ class IdealEosConfig(ConfigModel):
 
     Attributes
     ----------
+    type : str
+        ``"ideal"`` (case-insensitive); the EOS used when ``type`` is omitted.
     gamma : float
         Adiabatic index, > 1.
     """
@@ -47,6 +53,8 @@ class MultiGammaEosConfig(ConfigModel):
 
     Attributes
     ----------
+    type : str
+        ``"multi_gamma"`` (case-insensitive); required.
     default_gamma : float
         Adiabatic index of species absent from ``gamma_map``, > 1.
     gamma_map : dict[str, float]
@@ -66,7 +74,16 @@ class MultiGammaEosConfig(ConfigModel):
 
 
 class FermiDegenerateEosConfig(ConfigModel):
-    """Non-relativistic degenerate Fermi gas (``type = "fermi_degenerate"``)."""
+    """Non-relativistic degenerate Fermi gas (``type = "fermi_degenerate"``).
+
+    Not implemented yet: the config is accepted, but building the EOS raises
+    ``NotImplementedError``.
+
+    Attributes
+    ----------
+    type : str
+        ``"fermi_degenerate"`` (case-insensitive); required.
+    """
 
     _atomic: ClassVar[bool] = True
 
@@ -81,7 +98,16 @@ class FermiDegenerateEosConfig(ConfigModel):
 
 
 class RelativisticFermiDegenerateEosConfig(ConfigModel):
-    """Relativistic degenerate Fermi gas (``type = "relativistic_fermi_degenerate"``)."""
+    """Relativistic degenerate Fermi gas (``type = "relativistic_fermi_degenerate"``).
+
+    Not implemented yet: the config is accepted, but building the EOS raises
+    ``NotImplementedError``.
+
+    Attributes
+    ----------
+    type : str
+        ``"relativistic_fermi_degenerate"`` (case-insensitive); required.
+    """
 
     _atomic: ClassVar[bool] = True
 

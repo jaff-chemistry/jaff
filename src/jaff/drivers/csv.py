@@ -1,3 +1,5 @@
+# ABOUTME: CSV driver: read CSV files into pandas DataFrames and convert them to
+# ABOUTME: HDF5 (per-column datasets, flattened coordinate axes or PyTables tables).
 """
 CSV file driver utilities.
 
@@ -10,8 +12,9 @@ format:
   Raises :class:`FileNotFoundError` if *file* (a :class:`~pathlib.Path`)
   does not exist.
 - ``csv_to_hdf5(file, outfile, ...)`` reads a CSV file and writes it to an
-  HDF5 file, appending if *outfile* exists (its suffix becomes ``.hdf5``
-  unless it is ``.hdf5``, ``.hdf`` or ``.h5``).  By default each column is
+  HDF5 file, adding to *outfile* if it exists (its suffix becomes ``.hdf5``
+  unless it is ``.hdf5``, ``.hdf`` or ``.h5``); writing a column into a
+  group that already holds it raises :class:`ValueError`.  By default each column is
   stored as a 1-D dataset in the group ``<group_path>/<hdf5_key>``
   (*hdf5_key* defaults to the CSV file stem).  Columns named in
   *flatten_columns* are stored as their sorted unique values instead, which
@@ -133,7 +136,9 @@ def csv_to_hdf5(
     Convert a CSV file to HDF5 format.
 
     Reads *file* with :func:`csv_to_df` and writes the result to *outfile*
-    (appending if the HDF5 file already exists).  Supports three storage
+    (adding to the HDF5 file if it already exists; other groups are kept, but
+    an existing dataset of the same name is not overwritten, see Raises).
+    Supports three storage
     modes, chosen by the arguments passed:
 
     * **Default** – Each DataFrame column is stored as a 1-D dataset inside
@@ -185,9 +190,15 @@ def csv_to_hdf5(
     FileNotFoundError
         If *file* does not exist.
     ValueError
-        If both *as_table* and *flatten_columns* are specified.
+        If both *as_table* and *flatten_columns* are specified, or (default
+        and flatten modes) if the target group already holds a dataset named
+        after one of the columns, e.g. when converting the same CSV into the
+        same file twice.
     RuntimeError
         If any name in *flatten_columns* is not a column in the DataFrame.
+        The message lists every name in *flatten_columns*, not only the
+        missing ones, and the target group has already been created in
+        *outfile* (left empty if it was new) when this is raised.
 
     Examples
     --------

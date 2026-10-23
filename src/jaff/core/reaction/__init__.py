@@ -1,3 +1,6 @@
+# ABOUTME: Reaction package: Reaction, the Reactions catalogue and reaction props
+# ABOUTME: Re-exports the public reaction classes
+
 from .reaction_props import PhotoReactionProps, ReactionRadiationProps, ShieldingProps
 from .reaction import Reaction
 from .reactions import Reactions

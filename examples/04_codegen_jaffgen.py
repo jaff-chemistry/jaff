@@ -156,7 +156,8 @@ def _(mo):
     indices and sizes, `rates.py` the rate coefficients, `fluxes.py` the
     reaction fluxes and `ode.py` the right-hand side of the rate equations;
     `main.py` is the hand-written driver that integrates them with SciPy's
-    `solve_ivp`.
+    `solve_ivp`. `jaffgen` also writes `config.toml`, a record of the settings
+    used for the run, which can be passed back with `--config` to repeat it.
     """)
     return
 

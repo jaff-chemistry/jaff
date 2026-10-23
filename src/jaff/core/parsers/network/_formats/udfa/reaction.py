@@ -1,3 +1,6 @@
+# ABOUTME: UDFA (UMIST) colon-delimited reaction handler
+# ABOUTME: Builds a rate per temperature range from the ka/kb/kc parameters
+
 """UDFA (UMIST) format: colon-delimited fixed-column reaction handler."""
 
 import re
@@ -43,8 +46,9 @@ class UdfaReaction:
         ``ka``, ``kb``, ``kc`` and temperature bounds) follows per range; each
         becomes its own segment record with shared participants and provenance.
         A rate expression is built per block based on the reaction type:
-        cosmic-ray (``"CR"``), photo-desorption (``"PH"``), or standard
-        Arrhenius.
+        direct cosmic-ray ionisation (``"CP"``), cosmic-ray-induced
+        photoreaction (``"CR"``), UV photoreaction (``"PH"``), or standard
+        Kooij/Arrhenius.
 
         Returns
         -------

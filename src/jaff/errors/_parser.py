@@ -1,3 +1,6 @@
+# ABOUTME: Exceptions for network-file parsing, .jaff file I/O and SymPy JSON
+# ABOUTME: ParserError carries file/line/function context in its message
+
 """
 Custom exception classes for the JAFF parser and serialization subsystems.
 
@@ -8,7 +11,7 @@ Classes
     a malformed input (bad syntax, cyclic dependencies, unknown symbols, …).
 :class:`NotJaffFileError`
     Raised when a file is supplied to a JAFF I/O function but does not have
-    a recognised ``.jaff`` extension.
+    a recognised ``.jaff`` or ``.jaff.gz`` extension.
 :class:`SympyJsonError`
     Raised by the :mod:`~jaff.common._sympy_json` module when a SymPy
     expression cannot be serialized or deserialized.

@@ -1,3 +1,6 @@
+# ABOUTME: ReactionProps: typed dict of one reaction as stored in a .jaff file
+# ABOUTME: Consumed when a Network is restored from a .jaff payload
+
 from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 
 from sympy import Expr
@@ -92,8 +95,9 @@ shielding : dict or None
     ``{"type": ..., "props": {...}}`` (the arguments of
     :class:`~jaff.core.reaction.ShieldingProps`).
 xsec_props : XsecProps or None
-    Optional key.  Cross sections of a photo reaction
-    (``Reaction.photo.xsec``).
+    Optional key.  Custom (``photoCrossSection``) cross sections of a photo
+    reaction (``Reaction.photo.xsec``); ``None`` for database cross sections,
+    which are looked up again on load.
 spectral_yield : Expr or None
     Optional key.  Emitted radiation per event
     (``Reaction.rad.spectral_yield``).

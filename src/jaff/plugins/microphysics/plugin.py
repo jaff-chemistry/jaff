@@ -1,3 +1,12 @@
+# ABOUTME: Builder plugin for the microphysics template (AMReX-Microphysics network).
+# ABOUTME: Fills actual_rhs.H ODE/JACOBIAN and the charge-conservation line.
+"""Builder plugin for the ``microphysics`` preprocessor template.
+
+Generates C++ code for a network and splices it into the AMReX-Microphysics
+network files in ``jaff/templates/preprocessor/microphysics/``.  Run through
+:class:`~jaff.codegen.Builder` with ``template="microphysics"``.
+"""
+
 import os
 import re
 
@@ -9,6 +18,27 @@ def main(
     path_template: os.PathLike | str,
     path_build: os.PathLike | None = None,
 ) -> None:
+    """Generate the AMReX-Microphysics network files for *network*.
+
+    Fills ``// PREPROCESS_<KEY>`` markers: ``actual_rhs.H`` gets the RHS
+    (``ODE``, written to ``ydot``, 1-based) and the analytical Jacobian
+    (``JACOBIAN``, with the ``dedt`` thermal row and column); both have
+    ``nden[i]`` rewritten to ``nden(i)``.  ``actual_network_data.cpp`` gets
+    ``CHARGE``, a statement setting the electron abundance from the other
+    charged species, left empty when the network has no ``e-``.
+    ``actual_network.H`` is processed with no substitutions.
+
+    Parameters
+    ----------
+    network : Network
+        Chemical network to generate code for.
+    path_template : str or path-like
+        Directory holding the template files.
+    path_build : str, path-like or None, optional
+        Existing output directory; ``None`` (default) writes into the current
+        working directory.  Every other regular file in *path_template* is
+        copied there unchanged.
+    """
     filenames = ["actual_network.H", "actual_network_data.cpp", "actual_rhs.H"]
     cg = Codegen(network=network, lang="cxx")
     pp = Preprocessor()
@@ -61,5 +91,5 @@ def main(
 
 
 if __name__ == "__main__":
-    net = Network("networks/test.dat")
+    net = Network("COthin")
     main(net, path_template="src/jaff/templates/preprocessor/microphysics")

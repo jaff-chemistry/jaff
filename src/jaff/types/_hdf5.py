@@ -1,3 +1,5 @@
+# ABOUTME: HDF5Dict: dict mirror of an HDF5 file's group/dataset hierarchy with
+# ABOUTME: leaf-dataset schema (_kind/_data/_dtype/_attrs), filters and flatten/nest.
 """
 HDF5 in-memory dictionary representation.
 
@@ -20,7 +22,8 @@ keys:
     For ``"compound"``: a ``{field_name: dtype_token}`` mapping.
 ``_attrs``
     ``{attr_name: attr_value}`` dictionary of HDF5 dataset attributes.
-    May be empty; omitted entirely if the dataset has no attributes.
+    Always present when read from a file; an empty dict if the dataset has
+    no attributes.
 ``_name``
     Optional human-readable name, read from the ``_name`` HDF5 attribute
     if it was previously stored by :class:`~jaff.drivers.HDF5`.
@@ -36,12 +39,18 @@ to NumPy dtypes.  :meth:`HDF5Dict._from_np` provides the inverse mapping.
 
 Examples
 --------
->>> from pathlib import Path
->>> hd = HDF5Dict(Path("rates.hdf5"))
->>> hd["/temperatures"]["_kind"]
+>>> import h5py
+>>> import numpy as np
+>>> with h5py.File("rates.hdf5", "w") as f:
+...     f["temperatures"] = np.logspace(1, 4, 5)
+...     f["rates/k1"] = np.ones(5)
+>>> hd = HDF5Dict("rates.hdf5")
+>>> hd["temperatures"]["_kind"]
 'linear'
->>> hd["/temperatures"]["_dtype"]
+>>> hd["temperatures"]["_dtype"]
 'f64'
+>>> hd["rates"]["k1"]["_attrs"]
+{}
 """
 
 import fnmatch
@@ -75,6 +84,14 @@ class HDF5Dict(dict):
           A ``"file.h5::/internal/group"`` string (``::`` delimiter) parses
           from the named internal group onward.
         * ``dict`` — use directly without any HDF5 parsing.
+    include : str, list of str, or None, optional
+        Keep only datasets whose bare name, or the bare name of any ancestor
+        group, matches one of these :func:`fnmatch.fnmatch` patterns
+        (default ``None``: keep all).  Ignored for a plain ``dict``.
+    exclude : str, list of str, or None, optional
+        Drop any dataset or group whose bare name, or any ancestor's, matches
+        one of these patterns; wins over *include* (default ``None``: drop
+        nothing).  Ignored for a plain ``dict``.
 
     Raises
     ------
@@ -194,10 +211,9 @@ class HDF5Dict(dict):
 
         Examples
         --------
-        >>> hd = HDF5Dict(Path("rates.hdf5"))
-        >>> flat = hd.flatten()
-        >>> list(flat.keys())
-        ['/temperatures', '/rates/k1', '/rates/k2']
+        >>> hd = HDF5Dict("rates.hdf5")  # the file from the module example
+        >>> list(hd.flatten().keys())
+        ['/rates/k1', '/temperatures']
         """
         if not d:
             d = self

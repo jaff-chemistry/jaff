@@ -1,3 +1,5 @@
+# ABOUTME: PhotoelectricEmission: the radiation field in the dust photoelectric
+# ABOUTME: band scaled to the reference background field (chi_pe)
 """Photoelectric emission: the scaled radiation field in the photoelectric band.
 
 Photoelectric heating by dust grains is driven by far-UV photons in the
@@ -16,7 +18,10 @@ densities in the photoelectric band:
 - **denominator**: the energy density of the reference background field
   (:attr:`Radiation.background_field`) in the same band.
 
-Both are in erg/cm³, so ``chi_pe`` is dimensionless.  The resulting symbol is
+Both are in erg/cm³, so their ratio is dimensionless; it is then multiplied
+by ``Radiation.c / c``, the configured speed of light (``[network.radiation]
+c``, possibly a reduced-speed symbol such as ``c_hat``) over the true one,
+which is 1 for the default ``c``.  The resulting symbol is
 substituted into rate expressions when a network is built with
 ``[network.dust]`` and radiation enabled.
 """
@@ -45,17 +50,20 @@ class PhotoelectricEmission:
     network : Network
         The parent network; its :attr:`~jaff.core.network.Network.radiation`
         supplies both the band densities and the reference background field.
+    config : PhotoelectricEmissionConfig
+        The ``[network.dust.pe]`` config: the photoelectric band edges
+        ``threshold_low`` and ``threshold_high``, in eV.
 
     Attributes
     ----------
     net : Network
         Back-reference to the parent network.
     E_low : astropy.units.Quantity
-        Lower edge of the photoelectric band (grain work function, default
-        6 eV).
+        Lower edge of the photoelectric band, ``threshold_low`` (grain work
+        function, default 6 eV).
     E_high : astropy.units.Quantity
-        Upper edge of the photoelectric band (H ionisation edge, default
-        13.6 eV).
+        Upper edge of the photoelectric band, ``threshold_high`` (H ionisation
+        edge, default 13.6 eV).
     """
 
     def __init__(self, network: Network, config: PhotoelectricEmissionConfig):
@@ -81,14 +89,19 @@ class PhotoelectricEmission:
 
         Computes the dimensionless ratio
 
-        ::
+        ```text
+        chi_pe = u_bands(E_low-E_high) / u_background(E_low-E_high) * c_rad / c
+        ```
 
-            chi_pe = u_bands(6-13.6 eV) / u_background(6-13.6 eV)
-
-        where ``u_bands`` is the energy density summed over the network's
-        radiation bands (each band weighted by the fraction of its energy that
-        falls in the photoelectric band) and ``u_background`` is the energy
-        density of the reference background field in the same band.
+        over the photoelectric band ``[E_low, E_high]`` (``threshold_low`` /
+        ``threshold_high``, default 6-13.6 eV), where ``u_bands`` is the energy
+        density summed over the network's radiation bands (each band weighted
+        by the fraction of its energy that falls in the photoelectric band) and
+        ``u_background`` is the energy density of the reference background
+        field in the same band.  ``c_rad`` is the radiation's speed of light
+        ``Radiation.c`` (``[network.radiation] c``, possibly a symbol such as
+        ``c_hat`` for a reduced speed of light) and ``c`` the true one, so the
+        factor is 1 for the default ``c``.
 
         The background field is tabulated as a photon-flux spectrum
         ``I(lambda)`` (photons s⁻¹ cm⁻² nm⁻¹).  Its energy density follows from

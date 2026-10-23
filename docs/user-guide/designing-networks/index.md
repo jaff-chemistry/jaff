@@ -19,6 +19,14 @@ This section covers everything you need to know to write and structure chemical 
 
     [:octicons-arrow-right-24: Network Formats](network-formats.md)
 
+- :phosphor-stack:{ .sm .middle } **Predefined Networks**
+
+    ***
+
+    Browse the reaction networks bundled with JAFF, load them by name, and see which format and physics each one demonstrates.
+
+    [:octicons-arrow-right-24: Predefined Networks](predefined-networks.md)
+
 - :phosphor-function:{ .sm .middle } **Auxiliary Function Files**
 
     ***
@@ -34,5 +42,13 @@ This section covers everything you need to know to write and structure chemical 
     Understand how JAFF handles photodissociation and photoionisation reactions, from cross-section databases to radiation field integration.
 
     [:octicons-arrow-right-24: Photochemistry](photochemistry.md)
+
+- :phosphor-circle-dashed:{ .sm .middle } **Dust**
+
+    ***
+
+    Enable the optional dust module for grain photoelectric heating (`chi_pe`) and dust attenuation of the radiation field.
+
+    [:octicons-arrow-right-24: Dust](dust.md)
 
 </div>

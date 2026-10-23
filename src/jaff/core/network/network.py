@@ -1,8 +1,11 @@
+# ABOUTME: Network class: loads, validates and queries a chemical reaction network
+# ABOUTME: Builds Species/Reactions catalogues and symbolic ODE/flux expressions
+
 """Top-level ``Network`` class for loading and querying JAFF reaction networks.
 
 A ``Network`` is the main entry point for users of the JAFF library.  It
 reads a reaction network file in any supported format (KROME, PRIZMO, UDFA,
-KIDA, UCLChem, or the binary ``.jaff`` serialisation), builds typed
+KIDA, UCLChem, or the gzip-compressed JSON ``.jaff`` serialisation), builds typed
 ``Species`` and ``Reactions`` catalogues, validates the network, and exposes
 symbolic ODE and flux expressions for downstream code generation.
 
@@ -11,9 +14,9 @@ custom rate coefficients, chemical heating/cooling rates, and radiation
 moment contributions using the ``@var`` / ``@function`` syntax parsed by
 ``AuxiliaryFunctionParser``.
 
-Number densities are represented as ``nden[i]`` — a reference into a SymPy
-``MatrixSymbol("nden", n_species, 1)``.  The symbol ``idx_X`` refers to the
-integer position of species ``X`` within the network.
+Number densities are represented as ``nden[i]`` — an entry of the SymPy
+``IndexedBase("nden", shape=(n_species,))`` returned by ``net.symbols.ndens``,
+where ``i`` is the integer index of the species within the network.
 """
 
 from __future__ import annotations
@@ -34,6 +37,7 @@ from sympy import (
 )
 
 from ...common import is_jaff_file, load_mass_dict, print_motd, resolve_dependencies
+from ...config.base import ConfigModel, dotted
 from ...drivers import HDF5
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
@@ -47,26 +51,25 @@ from ...physics import (
     get_sodes,
     get_sradodes,
 )
+from ...physics.dust.config import DustConfig
+from ...physics.photo_reactions.config import RadiationConfig
+from ...physics.photo_reactions.shielding.config import ShieldingConfig
+from ...physics.thermodynamics.eos.config import EosConfig
 from ..elements import Elements
 from ..parsers import NetworkParser
 from ..reaction import (
     PhotoReactionProps,
-    ReactionRadiationProps,
     RateSegment,
     RateSegments,
     Reaction,
+    ReactionRadiationProps,
     Reactions,
     ShieldingProps,
 )
-from ...physics.photo_reactions.shielding.config import ShieldingConfig
 from ..species import Specie, Species
 from ._spec import NetworkSpec
-from ...config.base import ConfigModel, dotted
-from ...physics.dust.config import DustConfig
-from ...physics.thermodynamics.eos.config import EosConfig
-from ...physics.photo_reactions.config import RadiationConfig
-from .config import ConfigLayer, NetworkConfig, load_network_config
 from ._symbols import NetworkSymbols
+from .config import ConfigLayer, NetworkConfig, load_network_config
 
 if TYPE_CHECKING:
     from .._typing import ElementProps
@@ -373,7 +376,17 @@ class Network:
             name, or a predefined network directory has no ``.jet`` file.
         ParserError
             If a predefined network directory has more than one ``.jet`` file,
-            or the config is invalid.
+            the config is invalid (including a per-reaction config entry that
+            names no reaction of the network, or photo settings on a non-photo
+            reaction), a duplicate rate is found under
+            ``duplicate_policy="error"``, or the network or ``.jfunc`` file is
+            malformed.
+        TypeError
+            If a *config* item is not a path, dict or ``JaffTomlConfig``.
+        SystemExit
+            If *strict* is enabled and a reaction does not conserve mass or
+            charge, or :meth:`check_sink_sources`, :meth:`check_recombinations`
+            or :meth:`check_isomers` finds a problem.
         """
         self.logger: logging.Logger = JaffLogger().get_logger()
 
@@ -399,7 +412,7 @@ class Network:
         jaff_props: JaffProps = {}  # type: ignore
         loaded_from_jaff_file = is_jaff_file(self.spec.fname)
         if loaded_from_jaff_file:
-            jaff_props = from_jaff_file(self.spec.fname, self.spec.strict)
+            jaff_props = from_jaff_file(self.spec.fname)
             self.spec.fname = jaff_props.get("file_name", self.spec.fname)
         # Finalize the label: a ``.jaff`` payload label wins, else the
         # configured label, else the file stem.
@@ -621,7 +634,7 @@ class Network:
         return parsers
 
     def __load_network_from_jaff_file(self, jaff_props: JaffProps):
-        """Restore species, reactions, and radiation state from a ``.jaff`` file payload.
+        """Restore species and reactions from a ``.jaff`` file payload.
 
         Parameters
         ----------
@@ -713,8 +726,10 @@ class Network:
     def __normalize_network_extras(self, loaded_from_jaff: bool = False):
         """Standardize convenience symbols in all rate and auxiliary expressions.
 
-        Replaces shorthand symbols (``n_X``, ``n_X_nuc``, ``n_e``, ``ntot``, …) with
-        ``nden[i]`` references in every reaction rate.
+        Replaces shorthand symbols (``n_X``, ``n_e``, ``ntot``, …, and ``n_X_nuc``
+        when ``expand_nuclei`` is enabled) with ``nden[i]`` references in every
+        reaction rate, in each reaction's radiation group yields, and in a photo
+        reaction's band data (cross sections and band rates).
 
         Parameters
         ----------
@@ -830,8 +845,8 @@ class Network:
         rate : str
             Raw rate string from the network file.
         aux_funcs : dict[str, AuxiliaryFunctionProps]
-            Parsed auxiliary functions, keyed by name.
-        global_vars : dict[str, Basic]
+            Parsed auxiliary functions, keyed by lower-cased name.
+        global_vars : dict[str, Expr]
             Resolved global variable map from the network file.
 
         Returns
@@ -1000,19 +1015,21 @@ class Network:
         self.logger.info(f'{len(not_in_self)} species are missing in "{self.label}"')
         self.logger.info(f'{len(not_in_other)} species are missing in "{other.label}"')
 
-    def check_sink_sources(self, errors: bool) -> SinkSourceReport:
+    def check_sink_sources(self, strict: bool) -> SinkSourceReport:
         """Report (and warn, or abort) species never produced or never consumed.
 
         A *sink* species appears as a reactant in at least one reaction but
         is never produced.  A *source* species is produced but never consumed.
-        The special species ``"_DUMMY"`` is excluded from the check.  Each sink
+        Special species (names starting with ``_``, such as ``_DUMMY``) are not
+        network species, so they never appear in the report.  Each sink
         and source is logged, followed by a warning.  Run automatically on
-        construction with ``errors`` set to the network's ``strict`` setting.
+        construction with ``strict`` set to the network's ``strict`` setting.
 
         Parameters
         ----------
-        errors : bool
-            If ``True``, call ``sys.exit()`` when sinks or sources are found.
+        strict : bool
+            If ``True``, call ``sys.exit()`` (exit status 0) when sinks or
+            sources are found.
 
         Returns
         -------
@@ -1040,23 +1057,23 @@ class Network:
         if report.sources:
             self.logger.warning("Source detected")
 
-        if not report.ok and errors:
-            self.logger.error("Exiting since errors are enabled")
+        if not report.ok and strict:
+            self.logger.error("Exiting since strict is enabled")
             sys.exit()
 
         return report
 
-    def check_recombinations(self, errors: bool) -> RecombinationReport:
+    def check_recombinations(self, strict: bool) -> RecombinationReport:
         """Report (and warn, or abort) cations lacking an electron recombination.
 
         Every positively charged species should be a reactant, alongside
         ``e-``, in at least one reaction; a warning is logged for each one that
-        is not.  Run automatically on construction with ``errors`` set to the
+        is not.  Run automatically on construction with ``strict`` set to the
         network's ``strict`` setting.
 
         Parameters
         ----------
-        errors : bool
+        strict : bool
             If ``True``, call ``sys.exit(1)`` when recombination reactions
             are missing.
 
@@ -1086,24 +1103,24 @@ class Network:
 
         report = RecombinationReport(missing=frozenset(missing))
 
-        if not report.ok and errors:
+        if not report.ok and strict:
             self.logger.error("Recombination errors found")
             sys.exit(1)
 
         return report
 
-    def check_isomers(self, errors: bool) -> IsomerReport:
+    def check_isomers(self, strict: bool) -> IsomerReport:
         """Report (and warn, or abort) species sharing the same atomic composition.
 
         Isomers are detected by comparing ``Specie.exploded`` tuples.  For
-        example, HCO+ and HOC+ both have ``["C", "H", "O", "+"]`` and would
+        example, HCO+ and HOC+ both have ``["+", "C", "H", "O"]`` and would
         be reported here.  A warning is logged for each group.  Run
-        automatically on construction with ``errors`` set to the network's
+        automatically on construction with ``strict`` set to the network's
         ``strict`` setting.
 
         Parameters
         ----------
-        errors : bool
+        strict : bool
             If ``True``, call ``sys.exit(1)`` when isomers are found.
 
         Returns
@@ -1114,7 +1131,7 @@ class Network:
         Examples
         --------
         >>> net = Network("COthin")
-        >>> net.check_isomers(errors=False).groups
+        >>> net.check_isomers(strict=False).groups
         (('HOC+', 'HCO+'),)
         """
         buckets: dict[tuple, list[str]] = {}
@@ -1131,7 +1148,7 @@ class Network:
 
         report = IsomerReport(groups=groups)
 
-        if not report.ok and errors:
+        if not report.ok and strict:
             self.logger.error("Isomer errors found")
             sys.exit(1)
 

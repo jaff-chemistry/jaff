@@ -1,3 +1,5 @@
+# ABOUTME: Dust: container of a network's dust physics (tabular grain cross
+# ABOUTME: sections and photoelectric emission)
 """Dust physics for a JAFF network.
 
 :class:`Dust` is the container for the network's dust-related physics.  It is

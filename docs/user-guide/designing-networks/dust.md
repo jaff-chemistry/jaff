@@ -17,8 +17,10 @@ to turn the module on.
 !!! note "Dust needs radiation"
     The dust module is built on top of the radiation subsystem — both
     `chi_pe` and the extinction terms are derived from the network's radiation
-    bands and its reference `background_field`. A network with dust but no
-    radiation configured aborts with a `ParserError`. See
+    bands and its reference `background_field`. A network can be loaded with dust
+    but no radiation, but anything that needs the radiation field then raises a
+    `ParserError`: replacing a `chi_pe` symbol in the network's rates, or
+    computing a band-averaged dust cross section (the extinction terms). See
     [Photochemistry](photochemistry.md) for how the radiation field is set up.
 
 ---
@@ -50,15 +52,16 @@ $n_\mathrm{H}$ is the total hydrogen-nucleus number density, $c$ the (reduced)
 speed of light, $Z_d$ a runtime dust-abundance scaling symbol supplied by the
 host code, and $\langle\sigma\rangle_i$ the band-averaged dust cross section per
 H nucleus. Which cross-section kind attenuates the density and the flux moment
-is chosen independently by `u_reduction` and `f_reduction` (set either to
-`"none"`/`None` to drop that term).
+is chosen independently by `u_reduction` and `f_reduction` (set either to the
+string `"none"` to drop that term; Python `None` is rejected).
 
 ---
 
 ## Grain model and cross sections
 
-Dust optical properties come from a bundled table
-(`src/jaff/data/dust/dust.hdf5`). The `rv` parameter selects a Milky-Way grain
+Dust optical properties come from a table, `src/jaff/data/dust/dust.hdf5`. It is
+not part of the repository: JAFF downloads it the first time a network with dust is
+loaded and reuses the local copy afterwards. The `rv` parameter selects a Milky-Way grain
 model by its total-to-selective extinction ratio $R_V$, reading the matching
 `mw_rv{rv}` group (`mw_rv3.1`, `mw_rv4.0`, or `mw_rv5.5`).
 

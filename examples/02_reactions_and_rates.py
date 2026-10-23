@@ -305,8 +305,8 @@ def _(mo):
     The fourth, collisional dissociation of H₂ by electrons, behaves completely
     differently. Its rate $5.6\times10^{-11}\,T^{1/2}\,e^{-102124/T}$ carries a
     Boltzmann factor for the 102 124 K (about 8.8 eV) energy barrier: at 10 K it
-    is around $10^{-316}$, about 300 orders of magnitude below the
-    recombinations. Plotted on the same axes it would squash them flat, so it gets
+    is around $10^{-4445}$, which underflows to exactly 0 in double precision,
+    thousands of orders of magnitude below the recombinations. Plotted on the same axes it would squash them flat, so it gets
     its own plot over the range where it matters. It climbs by about 18
     orders of magnitude between 2 000 K and 10 000 K.
     """)
@@ -478,9 +478,11 @@ def _(mo):
     `jaff.plotting.plot_xsecs` draws the cross-sections. Hydrogen photoionisation
     switches on at the 13.6 eV ionisation threshold and falls off steeply above
     it; its data (from the NORAD database) give only the ionisation (photodecay)
-    cross-section, so the panel has one curve. For
-    CH₂ photodissociation the two differ: photo-absorption counts every absorbed
-    photon, photodecay only those that actually break the molecule. Pass
+    cross-section, so the panel has one curve. For CH₂ photodissociation the
+    Leiden data give both: photo-absorption counts every absorbed photon,
+    photodecay only those that actually break the molecule. For CH₂ the two
+    tabulations happen to be identical, so the two curves lie on top of each
+    other; for other molecules they can differ. Pass
     `energy_unit="nm"` to plot against wavelength instead of photon energy.
     """)
     return

@@ -394,10 +394,12 @@ def scaled(style: Style, k: float) -> Style:
     """A copy of *style* with every visual size multiplied by *k*.
 
     Scales point sizes in ``rc`` (fonts, line widths, pads), ``lw``, tick
-    geometry, marker size and arc gaps, and the panel ``gap``.  Panel titles
-    and tags (``tag``) keep their size, and ``panel_size`` stays, so a wide figure shrunk to the page reads like a
-    ``ref_cols``-column one.  ``k == 1`` returns *style* itself; registered
-    styles are never modified.
+    geometry, marker size and arc gaps, and the panel ``gap``.  Titles and
+    tags drawn inside panels (sized by ``tag``) keep their size, while a title
+    too wide to fit inside goes above the panel at the scaled rc
+    ``axes.titlesize``; ``panel_size`` stays, so a wide figure shrunk to the
+    page reads like a ``ref_cols``-column one.  ``k == 1`` returns *style*
+    itself; registered styles are never modified.
     """
     if k == 1:
         return style
@@ -530,10 +532,11 @@ def register_style(name: str, style: dict) -> None:
           for (``"paper"`` 4, ``"talk"`` 3).  A figure with more used columns
           (after empty ones collapse) has every visual size (fonts, line
           widths, ticks, markers, gaps, pads) scaled by
-          ``columns / ref_cols``, except panel titles and tags, while
-          ``panel_size`` stays: a 6-column paper figure shrunk to the page
-          reads like a 4-column one.  An explicit ``figsize`` turns the
-          scaling off.
+          ``columns / ref_cols``, except titles and tags drawn inside panels
+          (a title placed above its panel uses the scaled rc
+          ``axes.titlesize``), while ``panel_size`` stays: a 6-column paper
+          figure shrunk to the page reads like a 4-column one.  An explicit
+          ``figsize`` turns the scaling off.
 
     Raises
     ------
@@ -584,7 +587,9 @@ def register_palette(name: str, colours: list | tuple | dict) -> None:
     Raises
     ------
     ValueError
-        If *name* is a built-in palette or *colours* is empty.
+        If *name* is a built-in palette, or *colours* is an empty list or
+        tuple (an empty dict is accepted: it maps no labels, so every series
+        uses the default cycle).
 
     Examples
     --------

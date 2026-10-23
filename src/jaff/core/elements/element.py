@@ -1,3 +1,6 @@
+# ABOUTME: Element: flyweight for one chemical element loaded from the JAFF mass table
+# ABOUTME: Exposes mass, atomic mass and proton/neutron/electron counts
+
 """Single chemical :class:`Element` flyweight for JAFF networks.
 
 An ``Element`` represents a single chemical element, loaded from the JAFF mass
@@ -159,7 +162,7 @@ class Element:
         Returns
         -------
         str
-            String including symbol and full element name.
+            String of the form ``"ElementObject(symbol='C')"``.
         """
         return f"ElementObject(symbol={self.symbol!r})"
 

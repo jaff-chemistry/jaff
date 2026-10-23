@@ -4,11 +4,13 @@
 """Tick helpers.
 
 Exponent-labelled log axes (``10**k`` shown as ``k``): :func:`final_exp_ticks`
-puts at most ~4 labelled decades on a log axis (every 1, 2, 3, 4, 5 or 10
-decades), one unlabelled minor tick per decade and no 2..9 sub-ticks.  A log
-axis spanning less than :data:`NARROW_DECADES` decades has at most one decade
-tick, so :func:`refine_exp_ticks` swaps in ticks at "nice" fractional
-exponents (``10**1.05`` shown as ``1.05``).
+puts at most 4 labelled decades on a log axis (every 1, 2, 3, 4, 5, 10, 20,
+25, 50 or 100 decades, see :func:`decade_ticks`), unlabelled minor ticks on
+decades every :func:`minor_every` (step) decades and no 2..9 sub-ticks.  A
+log axis spanning less than :data:`NARROW_DECADES` decades has too few decade
+ticks to read well, so :func:`refine_exp_ticks` swaps in ticks at "nice"
+fractional exponents (``10**1.05`` shown as ``1.05``) when it finds at least
+two distinct labels.
 
 Inside y tick labels (:func:`inside_y_labels`) sit just right of the left
 spine; a label that would stick out past the top or bottom of its panel is
@@ -52,7 +54,11 @@ def exp_label(value: float, _pos: int | None = None) -> str:
 
 
 def apply_exp_ticks(axis: Axis) -> None:
-    """Put decade major ticks with exponent labels on a log *axis*."""
+    """Put decade major ticks with exponent labels on a log *axis*.
+
+    Not used by the renderer, which sets exponent ticks with
+    :func:`final_exp_ticks`.
+    """
     axis.set_major_locator(LogLocator(base=10.0, numticks=6))
     axis.set_major_formatter(FuncFormatter(exp_label))
     axis.set_minor_formatter(NullFormatter())
@@ -161,8 +167,8 @@ def decade_ticks(
     """Labelled and minor decade exponents for a log range ``[lo, hi]``.
 
     Labelled decades are every ``step`` decades, the smallest step in
-    :data:`_DECADE_STEPS` giving at most *max_labels* (pdr uses 1..10; the
-    larger steps keep very wide axes readable).  Minor ticks fall on decades
+    :data:`_DECADE_STEPS` giving at most *max_labels* (the steps above 10
+    keep very wide axes readable).  Minor ticks fall on decades
     every :func:`minor_every` (step) decades, so a wide axis is not lined
     with one tick per decade.
     """
@@ -325,8 +331,9 @@ def inside_y_labels(
     """Draw *ax*'s y tick labels inside, just right of the inward ticks.
 
     *tick_pt* is the major tick length: the label starts that far plus
-    :data:`INSIDE_GAP_PT` (times *scale*, see §17) from the spine, so the tick never touches it (a
-    tick running into a "2" reads as "−2").
+    :data:`INSIDE_GAP_PT` (times *scale*, the style's column-count scale
+    factor, see :func:`~jaff.plotting.themes.scaled`) from the spine, so the
+    tick never touches it (a tick running into a "2" reads as "−2").
     """
     ax.tick_params(axis="y", which="major", pad=-(tick_pt + INSIDE_GAP_PT * scale))
     for label in ax.get_yticklabels():

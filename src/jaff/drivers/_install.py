@@ -166,6 +166,9 @@ def copy_hdf5(
 def decompress_hdf5(src: Path, dst: Path, source_sha256: str) -> None:
     """Write an uncompressed, contiguous copy of HDF5 *src* to *dst*.
 
+    Datasets with unlimited dimensions stay chunked (unfiltered), since HDF5
+    requires chunked storage for them.
+
     Parameters
     ----------
     src : Path

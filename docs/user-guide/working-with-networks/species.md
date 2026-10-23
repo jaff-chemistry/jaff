@@ -11,6 +11,12 @@ turned into a structured object. They are
 produced by the parser and can be accessed through `net.species`. This page is
 about what `net.species` actually contains and how to use it.
 
+Special pseudo-species — names starting with `_`, such as `_PHOTON` or `_CR` —
+are also built as `Specie` objects (with `index` `-1`), but they only appear in
+the reactions that mention them; they are **not** added to `net.species`. That is
+why `h_photo`, whose photo-ionization reaction reads `H + _PHOTON -> H+ + e-`,
+has three species, not four.
+
 There are **two layers**, and keeping them apart is the key to the whole API:
 
 - A single **`Specie`** — one atom, molecule, or ion, with its mass, charge,
@@ -76,6 +82,8 @@ those derived facts.
 | `serialized` | `str`       | Canonical identity string: `exploded` sorted and joined with `/`             |
 | `fidx`       | `str`       | Code-safe flat identifier used in generated C/Fortran/Python source          |
 | `elements`   | `Elements`  | Lazily built [`Elements`](elements.md) collection for this single specie     |
+| `is_special` | `bool`      | `True` for a pseudo-species (name starts with `_`, e.g. `_PHOTON`, `_CR`)    |
+| `is_core`    | `bool`      | `not is_special` — a real species taking part in the kinetics                |
 
 <!-- prettier-ignore -->
 !!! tip "Specie latex representation"
@@ -178,9 +186,11 @@ into f-strings and joins without touching `.name`.
 The electron is a species like any other in the catalogue, but it breaks enough
 rules to deserve its own section — and the catalogue API is built around that.
 
-**It must be named `e-`.** The parser rejects `E`, `E-`, `electron`, and
-similar spellings with a fatal error, so there is exactly one spelling for the
-electron everywhere in JAFF.
+**It must be named `e-`.** The parser rejects `E`, `E-`, and (in any case)
+`e`, `el`, `els`, `electrons` and the misspelling `eletron` with a fatal error.
+Other spellings are not caught by that check: `electron`, for example, is
+parsed as an ordinary formula and fails with `KeyError: 'e'`. Either way there
+is exactly one spelling for the electron everywhere in JAFF.
 
 **It does not decompose into atoms.** Where `H+` explodes to `['+', 'H']`, the
 electron stays whole:
@@ -189,7 +199,7 @@ electron stays whole:
 e = net.species["e-"]
 
 e.charge        # -1
-e.mass          # 9.109383e-28   ← the electron mass, in grams
+e.mass          # 9.10938371e-28 ← the electron mass, in grams
 e.exploded      # ['e-']         ← not split, not an atom token
 e.serialized    # 'e-'
 e.fidx          # 'idx_e'        ← special-cased, not 'idx_ek'
@@ -224,10 +234,10 @@ into bulk arrays. The ordering is fixed at load time and matches every
 ### Three ways to find a specie
 
 ```python
-net.species["H"]      # by name        → Specie('H')
-net.species["+/H"]    # by serialized  → Specie('H+')
-net.species[1]        # by index       → Specie('H+')
-net.species[-1]       # negative index → Specie('e-')
+net.species["H"]      # by name        → SpecieObject('H')
+net.species["+/H"]    # by serialized  → SpecieObject('H+')
+net.species[1]        # by index       → SpecieObject('H+')
+net.species[-1]       # negative index → SpecieObject('e-')
 ```
 
 Lookup by serialized form is what makes isomer-insensitive queries possible: any
@@ -261,15 +271,15 @@ for sp in net.species:
 ### Bulk accessors
 
 Each method returns a `Vector` — a flat, index-aligned sequence ready to feed
-the solver or code generator. Every method below takes the `ne` flag described
-in the electron section.
+the solver or code generator. Most take the `ne` flag described in the electron
+section; `normalized_names()`, `e_idx()` (and the `count` attribute) do not.
 
 | Method               | Returns             | h_photo result                        |
 | -------------------- | ------------------- | ------------------------------------- |
 | `count`              | `int` (attribute)   | `3`                                   |
 | `names()`            | `Vector[str]`       | `['H', 'H+', 'e-']`                   |
 | `normalized_names()` | `Vector[str]`       | `['h', 'hj', 'ek']`                   |
-| `masses()`           | `Vector[float]`     | `[1.674e-24, 1.674e-24, 9.109e-28]`   |
+| `masses()`           | `Vector[float]`     | `[1.674e-24, 1.673e-24, 9.109e-28]`   |
 | `charges()`          | `Vector[int]`       | `[0, 1, -1]`                          |
 | `charge_truths()`    | `Vector[int]`       | `[0, 1, 1]`                           |
 | `serialized()`       | `Vector[str]`       | `['H', '+/H', 'e-']`                  |
@@ -298,10 +308,10 @@ pass an attribute name — that attribute projected out of each match. `charged(
 also honours the `ne` flag.
 
 ```python
-net.species.neutral()              # [Specie('H')]
+net.species.neutral()              # [SpecieObject('H')]
 net.species.neutral("name")        # ['H']
 
-net.species.charged()              # [Specie('H+'), Specie('e-')]
+net.species.charged()              # [SpecieObject('H+'), SpecieObject('e-')]
 net.species.charged("name")        # ['H+', 'e-']
 net.species.charged("index")       # [1, 2]
 net.species.charged("name", ne=True)   # ['H+']   (electron excluded)

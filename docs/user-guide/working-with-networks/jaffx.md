@@ -24,13 +24,16 @@ jaffx <command> <subcommand> --network <file> [options]
 There is nothing in `jaffx` that you cannot do from Python — each subcommand is a
 one-line wrapper. Holding that mapping in mind is the whole mental model:
 
-| CLI invocation                | Equivalent Python                   |
-| ----------------------------- | ----------------------------------- |
-| `jaffx get num-species`       | `Network(...).species.count`        |
-| `jaffx get num-reactions`     | `Network(...).reactions.count`      |
-| `jaffx export hdf5 -f f.h5`   | `Network(...).to_hdf5("f.h5", ...)` |
-| `jaffx export txt -f f.txt`   | `Network(...).to_txt("f.txt", ...)` |
-| `jaffx export jaff -f f.jaff` | `Network(...).to_jaff("f.jaff")`    |
+| CLI invocation                | Equivalent Python                     |
+| ----------------------------- | ------------------------------------- |
+| `jaffx get num-species`       | `Network(...).species.count`          |
+| `jaffx get num-reactions`     | `Network(...).reactions.count`        |
+| `jaffx export hdf5 -f f.hdf5` | `Network(...).to_hdf5("f.hdf5", ...)` |
+| `jaffx export txt -f f.txt`   | `Network(...).to_txt("f.txt", ...)`   |
+| `jaffx export jaff -f f.jaff` | `Network(...).to_jaff("f.jaff")`      |
+
+As with `to_hdf5`, an HDF5 output path that does not end in `.hdf5` or `.hdf`
+has its suffix replaced: `-f f.h5` writes `f.hdf5`.
 
 Every run first loads the network (printing the JAFF banner and the usual load
 log), so the load-time validation warnings you'd see from `Network(...)` show up
@@ -45,11 +48,24 @@ options. These mirror the [`Network` constructor](network.md#constructor):
 
 | Argument       | Description                                                                      |
 | -------------- | -------------------------------------------------------------------------------- |
-| `--network`    | Path to the network file (**required** in practice)                              |
+| `--network`    | Path to the network file, or a predefined network name (**required**)           |
 | `--label`      | Override the network label (defaults to the file stem)                           |
 | `--funcfile`   | Path to a `.jfunc` auxiliary file; `true` scans the network dir (default); `false` skips loading |
 | `--expand-nuclei` | `--expand-nuclei` / `--no-expand-nuclei` — expand `n_<element>_nuc` element-nucleus density sums |
-| `--duplicate-policy` | Resolve duplicate rate coefficients over the same temperature range: `preserve-first` (default), `preserve-last`, or `error`. Overrides the network `jaff.toml` `[network].duplicate_policy` |
+| `--duplicate-policy` | Resolve duplicate rate coefficients over the same temperature range: `preserve-first` (default), `preserve-last`, or `error`. Overrides the network `jaff.toml` `[network.reactions] duplicate_policy` |
+| `--set`        | Set any network config key, `--set key.path=value` (repeatable; the value is TOML, a bare word is a string), e.g. `--set network.reactions.t_cutoff=clip` |
+
+There is no `--strict` option: strict validation is set through `--set`. With
+it, a validation problem ends the run with exit status 1:
+
+```bash
+jaffx get num-species --network networks/GOW/GOW.jet --set network.strict=true
+```
+
+```text
+WARNING  Electron recombination not found for H2+
+ERROR    Recombination errors found
+```
 
 ---
 
@@ -97,13 +113,13 @@ it straight to [`Network.to_hdf5`](network.md#export-and-caching) /
 | `--file`, `-f`    | Output file path (**required**)                                              |
 | `--tmin`          | Minimum tabulation temperature (default: minimum over reactions)             |
 | `--tmax`          | Maximum tabulation temperature (default: maximum over reactions)             |
-| `--nT`            | Initial number of temperature points (before adaptive refinement)            |
-| `--err-tol`       | Relative interpolation error tolerance; adaptive sampling is off when unset  |
-| `--rate-min`      | Adaptive refinement is not applied to rates below this floor                 |
-| `--rate-max`      | Rates above this ceiling are clipped to prevent overflow                     |
-| `--fast-log`      | Sample equally in `#!python fast_log2(T)` space instead of `#!python log(T)` |
-| `--include-all`   | Include every reaction, marking non-tabulatable ones `NaN`                   |
-| `--verbose`, `-v` | Print progress during adaptive refinement                                    |
+| `--nT`            | Initial number of temperature points (default 64; adaptive refinement may add more) |
+| `--err-tol`       | Relative interpolation error tolerance (default 0.01). Adaptive sampling is always applied: an unset or zero value uses 0.01 |
+| `--rate-min`      | Small floor added to the relative-error denominator so near-zero rates do not divide by zero (default 1e-30); rates are not clamped to it |
+| `--rate-max`      | Rates above this ceiling are clipped to prevent overflow (default 1e100)     |
+| `--fast-log` / `--no-fast-log` | Sample equally in `#!python fast_log2(T)` space instead of `#!python log(T)` |
+| `--include-all` / `--no-include-all` | Include every reaction, marking non-tabulatable ones `NaN`   |
+| `--verbose` / `--no-verbose`, `-v` | Print progress during adaptive refinement                      |
 
 ```bash
 # HDF5 table, adaptively refined to 0.1% interpolation error
@@ -115,7 +131,7 @@ jaffx export hdf5 \
     --nT      200                  \
     --err-tol 1e-3
 
-# Plain-text table, fixed 100-point grid (no --err-tol → no refinement)
+# Plain-text table starting from a 100-point grid (refined to the default 1%)
 jaffx export txt \
     --network networks/GOW/GOW.jet \
     --file    rates.txt            \
@@ -123,27 +139,35 @@ jaffx export txt \
 ```
 
 Only rates that depend solely on temperature are tabulated; reactions involving
-`av`, `crate`, or undefined functions are dropped (or set to `NaN` under
-`--include-all`).
+`av`, `crate`, or undefined functions are dropped, and so are rates that are
+constant in temperature (under `--include-all` every reaction is kept, the
+non-tabulatable ones as `NaN`).
+
+Unlike `Network.to_hdf5(..., err_tol=None)`, the CLI cannot switch adaptive
+sampling off: `--err-tol` always falls back to 0.01.
 
 ### `export jaff`
 
 Serialize the entire parsed network to a gzip-compressed JSON `.jaff` file —
-exactly [`Network.to_jaff`](network.md#jaff-binary-format). Re-loading it with
+exactly [`Network.to_jaff`](network.md#jaff-serialized-format). Re-loading it with
 `Network("...jaff")` skips parsing and the expensive SymPy assembly, so this is
 the recommended cache for large networks.
 
 ```bash
 jaffx export jaff \
-    --network networks/GOW/GOW.jet \
-    --file    GOW.jaff
+    --network uclchem_small_gas \
+    --file    uclchem.jaff
 ```
 
 <!-- prettier-ignore -->
 !!! warning "Same serialization limit as `Network.to_jaff`"
     Networks whose rates contain an undefined function — most often an
     unresolved `photorates(...)` (a photo-reaction loaded without `radiation_props`)
-    or a custom `interp(...)` — cannot be serialized and will raise an error.
+    or a custom `interp(...)` — cannot be serialized. GOW is one: `jaffx export
+    jaff --network networks/GOW/GOW.jet ...` currently stops with a Python
+    traceback ending in
+    `ValueError: Cannot serialize: expression contains undefined SymPy function(s)`
+    rather than a one-line `Error:` message.
 
 ---
 
@@ -168,6 +192,6 @@ jaffx export txt \
 
 # Cache the network for fast re-loading
 jaffx export jaff \
-    --network networks/GOW/GOW.jet \
-    --file    GOW.jaff
+    --network uclchem_small_gas \
+    --file    uclchem.jaff
 ```

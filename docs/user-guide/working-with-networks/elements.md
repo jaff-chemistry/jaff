@@ -68,7 +68,7 @@ This keeps element objects unique across the whole program, so identity
 | ------------- | ------- | ----------------------------------------------- |
 | `symbol`      | `str`   | Periodic-table symbol (`"H"`, `"C"`, `"O"`)     |
 | `name`        | `str`   | Full element name, capitalised (`"Hydrogen"`)   |
-| `mass`        | `float` | Most-common-isotope mass in **grams (CGS)**     |
+| `mass`        | `float` | Standard atomic weight in **grams (CGS)**       |
 | `atomic_mass` | `float` | Standard atomic weight in **atomic mass units** |
 | `protons`     | `int`   | Atomic number                                   |
 | `neutrons`    | `int`   | Neutron count of the most common isotope        |
@@ -183,7 +183,7 @@ net1.elements.symbols()         # ['C', 'H', 'He', 'Mg', 'O']
 net1.elements.names()           # ['Carbon', 'Hydrogen', 'Helium', 'Magnesium', 'Oxygen']
 net1.elements.atomic_masses()   # [12.011, 1.008, 4.003, 24.305, 15.999]
 net1.elements.protons()         # [6, 1, 2, 12, 8]
-net1.elements.masses()          # most-common-isotope masses, grams (CGS)
+net1.elements.masses()          # standard atomic weights in grams (CGS)
 net1.elements.neutrons()        # neutron counts
 net1.elements.electrons()       # electron counts
 ```

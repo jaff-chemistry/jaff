@@ -1,10 +1,12 @@
+# ABOUTME: jaffgen CLI: typer command and JaffGen engine that loads config, builds
+# ABOUTME: the network, writes data/shielding tables and renders template files.
 """
 JAFF Code Generator CLI Interface.
 
 This module provides the ``jaffgen`` command-line entry point for the JAFF
 code generator.  It reads one or more template files that contain JAFF
 directives, resolves a chemical reaction network, and writes language-specific
-source files (C, C++, Fortran, Python, Rust, Julia) to an output directory.
+source files (C, C++, Fortran, Python, Rust, Julia, R) to an output directory.
 
 Configuration comes from three layers, lowest precedence first (see
 :func:`~jaff.cli.jaffgen.config.load_jaffgen_config`):
@@ -62,9 +64,11 @@ class JaffGen:
        ``jaffgen.toml`` < command line, then collect the template files.
     2. Build the chemical reaction network once (``build_network``).
     3. Write any config-declared data tables (``handle_data_tables``).
-    4. Render every collected template file to the output directory
+    4. Write the network's shielding tables to the output directory
+       (:meth:`~jaff.Network.write_shielding_tables`).
+    5. Render every collected template file to the output directory
        (``process_files``).
-    5. Write the run's whole config as ``config.toml`` (``write_config``).
+    6. Write the run's whole config as ``config.toml`` (``write_config``).
 
     Parameters
     ----------
@@ -83,11 +87,12 @@ class JaffGen:
     Raises
     ------
     RuntimeError
-        If no valid input file/folder/template is supplied, or no network file
-        is provided.
+        If no file to render was collected (a nonexistent input directory
+        contributes no files rather than raising), or no network file is
+        provided.
     FileNotFoundError
-        If a specified config, network, input, or network-config path does not
-        exist.
+        If a specified config, network, individual input file, or
+        network-config path does not exist.
     ParserError
         If the config is invalid.
     ValueError
@@ -362,7 +367,8 @@ class JaffGen:
         if not tables:
             return
 
-        # Imported lazily: pulls the cli package + pandas only when tables exist.
+        # Imported lazily: pandas, the HDF5 driver and ConfigTable load only when
+        # tables exist.
         import pandas as pd
 
         from ...drivers import HDF5
@@ -442,10 +448,11 @@ def generate(
         None,
         "--network",
         metavar="FILE",
-        help="Path to chemical reaction network file (required)",
+        help="Path to chemical reaction network file (or a bundled network name). "
+        "Required unless jaffgen.network_file is set in the config",
     ),
     config: Optional[str] = typer.Option(
-        None, "--config", metavar="FILE", help="Path to jaff config file"
+        None, "--config", metavar="FILE", help="Path to a jaffgen.toml config file"
     ),
     label: Optional[str] = typer.Option(
         None,
@@ -470,7 +477,8 @@ def generate(
     expand_nuclei: Optional[bool] = typer.Option(
         None,
         "--expand-nuclei/--no-expand-nuclei",
-        help="Standardizes symbols when true",
+        help="Expand n_<element>_nuc into the sum over species bearing that element "
+        "when true (else keep the free symbol n<element>_nuc)",
     ),
     strict: Optional[bool] = typer.Option(
         None,
@@ -488,7 +496,7 @@ def generate(
         None,
         "--outdir",
         metavar="DIR",
-        help="Output directory for generated files (default: jaff/generated)",
+        help="Output directory for generated files (default: <repo_root>/generated)",
     ),
     indir: Optional[str] = typer.Option(
         None,
@@ -539,7 +547,7 @@ def generate(
       jaffgen --network networks/test.dat --files rates.rs,odes.rs --outdir output/
 
       # Combine template and custom files
-      jaffgen --network networks/test.dat --template base --files custom.cpp --outdir output/
+      jaffgen --network GOW --template rosenbrock_cpp --files custom.cpp --outdir output/
 
     Each template's language comes from its `$$JAFF LANG` line or its file
     extension. Supported languages: c, cxx (c++, cpp), fortran (f90),
@@ -555,7 +563,7 @@ def generate(
         network=network,
         config=config,
         label=label,
-        # Map "true"/"false" onto booleans, matching the old argparse type.
+        # Map "true"/"false" onto booleans (see funcfile_arg).
         funcfile=funcfile_arg(funcfile) if funcfile is not None else None,
         duplicate_policy=duplicate_policy.value if duplicate_policy is not None else None,
         expand_nuclei=expand_nuclei,

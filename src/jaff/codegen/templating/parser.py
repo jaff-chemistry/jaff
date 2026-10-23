@@ -1,4 +1,4 @@
-# ABOUTME: TemplateParser facade of the new $$JAFF engine: renders one template file
+# ABOUTME: TemplateParser facade of the $$JAFF engine: renders one template file
 # ABOUTME: Language from $$JAFF LANG or the file extension; echo comment from COMMENT
 
 from __future__ import annotations

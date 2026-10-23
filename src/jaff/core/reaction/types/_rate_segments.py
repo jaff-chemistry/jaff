@@ -1,3 +1,6 @@
+# ABOUTME: RateSegments: a reaction's ordered per-temperature-range rate pieces
+# ABOUTME: Collapses the segments into one Piecewise rate in tgas
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -84,6 +87,11 @@ class RateSegments(Catalogue[RateSegment]):
         range open on one side (e.g. ``tmin`` set, ``tmax`` ``None``) clamps its
         closed side and extrapolates the open side.  Interior bounds of a
         multi-range rate must always be defined.
+
+        Parameters
+        ----------
+        r : Reaction
+            The reaction these segments belong to; used only in error messages.
 
         Returns
         -------

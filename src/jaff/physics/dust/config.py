@@ -1,3 +1,5 @@
+# ABOUTME: Config models of the dust module: [network.dust] (R_V, reduction kinds)
+# ABOUTME: and [network.dust.pe] (photoelectric band edges)
 """Config of the dust module (``[network.dust]``)."""
 
 from __future__ import annotations

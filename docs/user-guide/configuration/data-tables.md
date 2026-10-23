@@ -67,8 +67,9 @@ The engine loads the source into a flat tree, builds a target tree from your
     `.<property>` for one of the supported property names; every other string
     (including `"log"` and `"K"`) is stored verbatim.
 
-`default_group` sets the output root group (default `/`). For CSV sides,
-`delimiter` and `comment` configure parsing/writing.
+For CSV sides, `delimiter` and `comment` configure parsing/writing. An HDF5
+target also accepts `default_group` (default `/`), but it currently has no
+effect: every target heading is an absolute path in the output file.
 
 ## HDF5 → HDF5
 
@@ -81,8 +82,7 @@ computed attributes. Here `/co/TCO` is republished as `/temperature`:
 path = "default"             # the network's own HDF5 rate table
 
 [jaffgen.table.target]
-path          = "GOW.hdf5"
-default_group = "/"
+path = "GOW.hdf5"
 
 [jaffgen.table.target."/temperature"]
 h5path = "/co/TCO"           # move source /co/TCO here (other datasets copy through)
@@ -116,19 +116,20 @@ x = ["/co/TCO", "/co/NeffCO"]             # shape becomes (2, len TCO, len NeffC
 
 ## CSV → HDF5
 
-Write named CSV columns as HDF5 datasets — the usual way to turn a
-`co_1d.csv`-style table into the HDF5 file an interpolation routine reads:
+Write named CSV columns as HDF5 datasets — the usual way to turn a CSV table
+into the HDF5 file an interpolation routine reads. Here `co_1d.csv` is a
+space-separated table with a header row naming its columns (`T0 NeffCO`),
+placed next to the `jaffgen.toml`:
 
 ```toml
 [[jaffgen.table]]
 [jaffgen.table.source]
 delimiter = " "
 comment   = "#"
-path      = "networks/GOW/co_1d.csv"
+path      = "co_1d.csv"
 
 [jaffgen.table.target]
-path          = "GOW.hdf5"
-default_group = "/"
+path = "co.hdf5"
 
 [jaffgen.table.target."/co/1d/Temp"]
 col = "T0"                   # CSV column "T0" → dataset /co/1d/Temp
@@ -138,6 +139,10 @@ max       = "/co/1d/Temp.max"
 min       = "/co/1d/Temp.min"
 t0_length = "/co/1d/Temp.length"
 ```
+
+Each dataset written from a column also gets a `_name` attribute holding the
+CSV column name; the attributes of `/co/1d/Temp` above come out as
+`{'_name': 'T0', 'max': 2000, 'min': 10, 't0_length': 11}`.
 
 ## CSV → CSV
 
@@ -149,7 +154,7 @@ delimiter:
 [jaffgen.table.source]
 delimiter = " "
 comment   = "#"
-path      = "networks/GOW/co_1d.csv"
+path      = "co_1d.csv"
 cols      = ["T0", "NeffCO"]     # only these columns are kept
 
 [jaffgen.table.target]
@@ -157,9 +162,23 @@ delimiter = ","
 path      = "GOW.csv"
 ```
 
+The output currently starts with an unnamed row-index column:
+
+```text
+,T0,NeffCO
+0,10,14.0
+1,20,14.5
+```
+
 <!-- prettier-ignore -->
 !!! note "Relative paths"
-    A table's `source.path` and `target.path` are resolved against the
-    directory of the `jaffgen.toml` that declares it; the target lands in the
+    A table's `source.path` is resolved against the directory of the
+    `jaffgen.toml` that declares it; its `target.path` is resolved against the
     run's output directory.  Table entries are passed to the converter as
     written: the [configuration schema](reference.md) does not check their keys.
+
+<!-- prettier-ignore -->
+!!! warning "Tables need a config file"
+    `[[jaffgen.table]]` entries must come from a `jaffgen.toml` (`--config`, or
+    the one a template bundles). Tables given only through `--set` currently
+    fail with an `AssertionError`.

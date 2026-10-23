@@ -1,3 +1,5 @@
+# ABOUTME: Shared low-level helpers re-exported for JAFF: fast log2, file-extension groups,
+# ABOUTME: symbolic dependency resolution, SymPy JSON codec and integration routines.
 from ._fastlog import fast_log2, inverse_fast_log2
 from ._helper import (
     C_EXTENSIONS,

@@ -1,3 +1,5 @@
+# ABOUTME: .jaff network (de)serialization (gzip JSON) and quokka-compatible
+# ABOUTME: rate-coefficient table building/writing (txt and HDF5).
 """
 Serialization, deserialization, and tabulation utilities for JAFF network files.
 
@@ -16,8 +18,9 @@ The file format
 ---------------
 A ``.jaff`` file is a gzip-compressed UTF-8 JSON document with the top-level
 keys ``format``, ``schema_version``, ``jaff_version``, ``sympy_schema_version``,
-``sympy_version``, ``label``, ``file_name``, ``species``, ``rate_symbols``, and
-``reactions``.  SymPy expressions are stored via the versioned compact encoding
+``sympy_version``, ``label``, ``file_name``, ``species``, ``rate_symbols``,
+``reactions``, ``dEdt_extra``, ``emissivity``, and ``absorption_coefficient``
+(the last two ``null`` without radiation).  SymPy expressions are stored via the versioned compact encoding
 in :mod:`jaff.common._sympy_json` (``SCHEMA_VERSION = 2``).
 """
 
@@ -84,8 +87,8 @@ def to_jaff_file(filename: str | Path, net: "Network"):
     Parameters
     ----------
     filename : str or pathlib.Path
-        Destination path.  If the path does not already end with ``.jaff`` (or
-        ``.jaff.gz``) the ``.jaff`` suffix is appended automatically.
+        Destination path.  If it is not already a ``.jaff`` (or ``.jaff.gz``)
+        path, its suffix is replaced by ``.jaff`` (added if it has none).
     net : Network
         The reaction network to serialize.
 
@@ -264,9 +267,12 @@ def _decode_xsec_props(
 ) -> XsecProps:
     """Rebuild an :class:`XsecProps` from its JSON-serialized dict form.
 
-    Cross-section arrays are JSON-serialized as plain lists; restore them to
-    numpy arrays so the loaded XsecProps matches the in-memory type;
-    *decode_expr* restores the Verner ``photodecay_expr``.
+    :func:`to_jaff_file` stores only custom cross sections (``units``,
+    ``process``, ``database`` and ``photodecay_expr``; see
+    :func:`_encode_custom_xsec_props`), so the array fields are normally
+    absent and come back as ``None``; any ``photon_energy``,
+    ``photo_absorption`` or ``photodecay`` list present is restored to a numpy
+    array.  *decode_expr* restores the ``photodecay_expr``.
     """
     from ..physics.photo_reactions._photochemistry import (
         XsecProcess,
@@ -290,7 +296,7 @@ def _decode_xsec_props(
     )
 
 
-def from_jaff_file(filename: str | Path, errors=False):
+def from_jaff_file(filename: str | Path):
     """
     Deserialize a ``.jaff`` file into a :class:`~jaff.io._typing.JaffProps` dict.
 
@@ -302,15 +308,15 @@ def from_jaff_file(filename: str | Path, errors=False):
     ----------
     filename : str or pathlib.Path
         Path to a ``.jaff`` or ``.jaff.gz`` file.
-    errors : bool, optional
-        Reserved for future use; currently ignored.
 
     Returns
     -------
     JaffProps
         A typed dict containing ``file_name``, ``label``, ``species``
         (:class:`~jaff.core.Species`), and ``reactions`` (list of
-        :class:`~jaff.core._typing.ReactionProps` dicts).  This can be passed
+        :class:`~jaff.core._typing.ReactionProps` dicts), plus ``dEdt_extra``
+        when the payload has that key, and ``emissivity`` /
+        ``absorption_coefficient`` when they are non-null.  This can be passed
         directly to the :class:`~jaff.Network` constructor.
 
     Raises
@@ -582,12 +588,12 @@ def get_table(
     """
     Build a temperature-indexed rate-coefficient lookup table for a reaction list.
 
-    Only reactions whose rate expression depends **solely** on ``tgas`` (gas
-    temperature) are tabulated.  Rates that also depend on ``av`` (visual
-    extinction), ``crate`` (cosmic-ray rate), or any undefined SymPy function
-    are filled with ``NaN``.  Before classification, ``av`` is substituted with
-    ``0.0`` and ``crate`` with ``1.0`` to eliminate those symbols where the
-    dependence is trivial.
+    Before classification, ``av`` (visual extinction) is substituted with
+    ``0.0`` and ``crate`` (cosmic-ray rate) with ``1.0``, so rates depending
+    on them are tabulated at those values.  After that substitution, constant
+    rates and rates depending **solely** on ``tgas`` (gas temperature) are
+    tabulated; rates depending on any other symbol, or containing an undefined
+    SymPy function, are filled with ``NaN``.
 
     The temperature grid is built adaptively: starting from ``nT`` points the
     algorithm doubles the grid by inserting midpoints until the maximum relative
@@ -647,16 +653,19 @@ def get_table(
     Raises
     ------
     ValueError
-        If ``T_min`` or ``T_max`` cannot be determined from the reaction list
-        and were not provided explicitly.
+        If *reactions* is empty and ``T_min`` or ``T_max`` is not supplied
+        (raised by :func:`numpy.nanmin` / :func:`numpy.nanmax`).  When no
+        reaction has a ``tmin`` (``tmax``), the inferred bound is ``NaN``
+        rather than an error.
 
     Notes
     -----
     The log-expand trick (``expand_log(log(r))``) is applied before
     :func:`sympy.lambdify` to keep intermediate values in a numerically safe
-    range.  The lambdified function is evaluated element-by-element in a Python
-    loop rather than with a vectorised NumPy call because SymPy (as of v1.13)
-    does not reliably generate broadcasting-safe expressions for all rate forms.
+    range.  Each lambdified rate is evaluated with a single vectorised NumPy
+    call over the grid; rates containing ``Piecewise``, ``Heaviside``, ``Min``
+    or ``Max`` (and any rate whose vectorised result has the wrong shape) are
+    evaluated point by point in a Python loop instead.
     """
 
     if logger is None:
@@ -738,7 +747,7 @@ def get_table(
             f_eval = eval_rate(i, f, temp)
             log_rates[i, :] = np.clip(f_eval, a_min=None, a_max=np.log(rate_max))
 
-    # Fifth step: do adaptive growth of table
+    # Adaptive growth of the table
     if err_tol is not None:
         with jaff_progress.indeterminate("Refining rate table"):
             while True:
@@ -821,19 +830,21 @@ def write_data_table(
     ------------------------
     ``txt``
         A plain-text file with a header block describing the reactions followed
-        by the data in the quokka 1-D table layout::
+        by the data in the quokka 1-D table layout:
 
-            1              # table dimensionality
-            <nReact>       # number of outputs per entry
-            2 or 3         # axis spacing (2 = log10, 3 = fast_log)
-            <nTemp>        # number of temperature points
-            <T_min> <T_max>
-            <coeff row 0>
-            ...
+        ```text
+        1              # table dimensionality
+        <nReact>       # number of outputs per entry
+        2 or 3         # axis spacing (2 = log10, 3 = fast_log)
+        <nTemp>        # number of temperature points
+        <T_min> <T_max>
+        <coeff row 0>
+        ...
+        ```
 
     ``hdf5``
-        An HDF5 file structured as a quokka ``reaction_coeff`` group with
-        dataset attributes ``input_names``, ``input_units``, ``xlo``, ``xhi``,
+        An HDF5 file structured as a quokka ``reaction_coeff`` group with the
+        group attributes ``input_names``, ``input_units``, ``xlo``, ``xhi``,
         and ``spacing``.
 
     Parameters

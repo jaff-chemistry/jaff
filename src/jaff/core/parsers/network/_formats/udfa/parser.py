@@ -1,3 +1,6 @@
+# ABOUTME: UDFA parser: processes the bucket of colon-delimited reaction lines
+# ABOUTME: Registered with the format-parser registry
+
 """UDFA parser: a single colon-delimited reaction line-type."""
 
 from .._parser import Parser, register

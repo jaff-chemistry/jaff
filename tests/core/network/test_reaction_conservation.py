@@ -1,5 +1,5 @@
 # ABOUTME: Conservation (mass/charge) enforcement through Network loading
-# ABOUTME: Strict errors=True must abort; non-strict must warn naming the reaction
+# ABOUTME: strict=True must abort; non-strict must warn naming the reaction
 
 import logging
 
@@ -20,9 +20,22 @@ class TestStrictTextLoading:
             make_network(_MASS_VIOLATION, strict=True)
 
     def test_non_strict_loads(self, make_network):
-        # errors=False must not abort on a conservation failure.
+        # strict=False must not abort on a conservation failure.
         net = make_network(_MASS_VIOLATION, strict=False)
         assert net.reactions.count == 2
+
+
+class TestReactionCheck:
+    def test_strict_check_exits(self, make_network):
+        net = make_network(_MASS_VIOLATION, strict=False)
+
+        with pytest.raises(SystemExit):
+            net.reactions[0].check(strict=True)
+
+    def test_non_strict_check_returns(self, make_network):
+        net = make_network(_MASS_VIOLATION, strict=False)
+
+        assert net.reactions[0].check(strict=False) is None
 
 
 class TestStrictJaffLoading:

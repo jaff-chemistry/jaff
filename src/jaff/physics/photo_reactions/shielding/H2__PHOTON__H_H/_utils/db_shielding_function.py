@@ -1,3 +1,5 @@
+# ABOUTME: Symbolic three-term H2 self-shielding fit shared by the db1996 and
+# ABOUTME: hg2015 shielding functions (they differ only in the exponent alpha)
 import numpy as np
 from sympy import Expr, Max, exp
 
@@ -28,8 +30,8 @@ def shielding(
     alpha : int or float
         Exponent of the first term (2.0 for DB96, 1.1 for HG2015).
     min_ncol : float, optional
-        Lower floor on the normalised column density ``x`` (avoids a zero
-        denominator); defaults to ``1e-50``.
+        Lower floor on the normalised column density ``x``; defaults to
+        ``1e-50``.
     min_vdisp : float, optional
         Lower floor on the normalised Doppler parameter ``b5`` (avoids a zero
         denominator); defaults to ``1e-50``.

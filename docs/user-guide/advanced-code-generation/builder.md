@@ -42,14 +42,18 @@ reads better alongside the rest of your imports.
 
 ```text
 Building network with template: python_solve_ivp
-INFO     Preprocessing commons.py   -> ./commons.py
-INFO     Preprocessing rates.py     -> ./rates.py
-INFO     Preprocessing fluxes.py    -> ./fluxes.py
-INFO     Preprocessing ode.py       -> ./ode.py
-INFO     Copying main.py            -> ./main.py
+INFO     Preprocessing <templates>/python_solve_ivp/commons.py -> <cwd>/commons.py
+INFO     Preprocessing <templates>/python_solve_ivp/rates.py -> <cwd>/rates.py
+INFO     Preprocessing <templates>/python_solve_ivp/fluxes.py -> <cwd>/fluxes.py
+INFO     Preprocessing <templates>/python_solve_ivp/ode.py -> <cwd>/ode.py
+INFO     Copying <templates>/python_solve_ivp/main.py to <cwd>
 Network built successfully using template 'python_solve_ivp'.
-Output files are located in: /path/to/cwd
+Output files are located in: <cwd>
 ```
+
+The `INFO` lines print full absolute paths; here `<templates>` stands for the
+installed `jaff/templates/preprocessor` directory and `<cwd>` for the current
+working directory.
 
 The four templated files (`commons.py`, `rates.py`, `fluxes.py`, `ode.py`) have
 your network's species, rates, fluxes, and ODEs filled in; `main.py` is copied
@@ -133,46 +137,85 @@ currently uses a C++ construct that recent GCC versions reject.
 
 ## The Python template, end to end
 
-Pick a real network, point `build()` at a fresh directory, and run the driver:
+Pick a network, point `build()` at a fresh directory, and run the driver:
 
 ```python
 from jaff import Network, Builder
 
-net = Network("networks/GOW/GOW.jet")
+net = Network("networks/demos/demo2.jet")
 b = Builder(net)
 b.build(template="python_solve_ivp", output_dir="generated/")
 ```
 
 The generated `ode.py` holds the right-hand side, with your species and reactions
-already wired in (excerpt):
+already wired in. For `demo2.jet` (`E + CO+ -> CO` and `CO -> CO+ + E`) it is:
 
 ```python
-def ode(t, y, tgas, av):
-    k = rates(tgas, av)
-    f = fluxes(k, y)
+import numpy as np
+from commons import *
+from fluxes import get_fluxes
 
-    dydt = [0.0] * nspecs
-    dydt[idx_H]  = -flux[0] + flux[2]
-    dydt[idx_H2] =  flux[0] - flux[1]
-    # ...
-    return dydt
+
+def get_ode(y, tgas, crate, av):
+    dy = np.zeros_like(y)
+
+    flux = get_fluxes(y, tgas, crate, av)
+
+    # PREPROCESS_ODE
+
+    dy[idx_e] =  - flux[0] + flux[1]
+    dy[idx_coj] =  - flux[0] + flux[1]
+    dy[idx_co] =  + flux[0] - flux[1]
+
+    # PREPROCESS_END
+
+    return dy
 ```
 
-and `main.py` is the driver you actually run and tweak (excerpt):
+`commons.py` defines the species indices (`idx_e`, `idx_coj`, `idx_co`, ...),
+`nspecs`, `nreactions`, and `nvars = nspecs + 1`, with the gas temperature stored
+in the extra slot `y[idx_tgas]`.
+
+`main.py` is the driver you actually run and tweak (excerpt):
 
 ```python
+import matplotlib.pyplot as plt
+import numpy as np
+from commons import idx_co, idx_coj, idx_tgas, nvars
+from ode import get_ode
 from scipy.integrate import solve_ivp
-from ode import ode, nspecs
 
-y0 = [1e-4] * nspecs
-sol = solve_ivp(lambda t, y: ode(t, y, tgas=10.0, av=1.0),
-                t_span=(0, 1e13), y0=y0, method="LSODA")
+
+def f(_, y, crate, av):
+    tgas = y[idx_tgas]
+    return get_ode(y, tgas, crate, av)
+
+
+y0 = np.zeros(nvars)
+y0[idx_co] = 1e2
+
+y0[idx_tgas] = 1e2  # Initial temperature in Kelvin
+
+seconds_per_year = 365.0 * 24 * 3600  # seconds in a year
+teval = np.logspace(2, 6, 100) * seconds_per_year
+
+sol = solve_ivp(f, (0, teval[-1]), y0, t_eval=teval, args=(1e-17, 1e0))
 ```
+
+It integrates for $10^6$ years with `crate = 1e-17` and `av = 1`, then plots CO and
+CO⁺ against time with matplotlib.
 
 ```bash
 cd generated/
 python main.py
 ```
+
+<!-- prettier-ignore -->
+!!! warning "`main.py` assumes CO and CO⁺"
+    The bundled `main.py` is copied through unchanged and imports `idx_co` and
+    `idx_coj` from `commons.py`. For a network without both CO and CO⁺,
+    `python main.py` fails with an `ImportError` until you edit the driver to use
+    your own species.
 
 ---
 
@@ -253,6 +296,6 @@ b.build(template="my_python", output_dir="generated/")
 
 <!-- prettier-ignore -->
 !!! tip "Going deeper"
-    For the marker grammar, the per-language comment styles, and the full set of
-    `Codegen` strings you can inject, see
-    [Adding template properties](../../development/adding-template-properties.md).
+    For the marker grammar and how non-template files are copied, see the
+    [`Preprocessor` reference](../../reference/codegen/preprocessor/index.md);
+    for the full set of strings you can inject, see [Codegen](codegen.md).

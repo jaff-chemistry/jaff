@@ -1,10 +1,14 @@
+# ABOUTME: Generates the committed JSON Schemas of jaff.toml and jaffgen.toml from
+# ABOUTME: the config models (python -m jaff.config.json_schema)
 """JSON Schemas of ``jaff.toml`` and ``jaffgen.toml``, generated from the config models.
 
 Editors with a TOML language server (Taplo, Tombi) use them to check a config
 file while it is written.  The schemas are committed under :data:`SCHEMA_DIR`;
-regenerate them after changing a config model with::
+regenerate them after changing a config model with:
 
-    python -m jaff.config.json_schema
+```bash
+python -m jaff.config.json_schema
+```
 
 ``python -m jaff.config.json_schema --path jaff`` (or ``jaffgen``) prints the
 installed schema's path, for a ``#:schema`` line at the top of a config file.

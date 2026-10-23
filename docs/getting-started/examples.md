@@ -42,7 +42,9 @@ leaves the repository untouched.
 
 ## Requirements
 
-Notebooks `01`–`03` and `06` need only JAFF itself. The code-generation
+Notebooks `01`–`03` and `06` need only JAFF itself, although `02` plots
+photo cross sections, so the first time it runs it downloads that data (see
+[Data files](installation.md#data-files)). The code-generation
 notebooks shell out to external tools:
 
 - `04_codegen_jaffgen.py` builds the Fortran solver with `gfortran` and `make`;

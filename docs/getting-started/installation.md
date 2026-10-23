@@ -9,7 +9,7 @@ icon: phosphor/download-simple
 
 ## Requirements
 
-JAFF requires `python>=3.`. Check your Python version:
+JAFF requires `python>=3.11`. Check your Python version:
 
 ```bash
 python --version
@@ -103,17 +103,28 @@ You should see the JAFF code generator help message.
 
 After installation, JAFF provides the following command-line tools:
 
-- **`jaffx`** - Quick command executor
+- **`jaffx`** - Quick network inspection (`jaffx get`) and export (`jaffx export`),
+  for example a rate-coefficient table in HDF5:
 
 ```bash
-jaffx export hdf5 --network networks/demos/demo1.jet --file demo.hdf5
+jaffx export hdf5 --network networks/GOW/GOW.jet --file gow.hdf5
 ```
 
 - **`jaffgen`** - Code generator for chemical reaction networks
 
 ```bash
-jaffgen --network networks/demos/demo1.jet --template microphysics
+jaffgen --network networks/GOW/GOW.jet --template microphysics --outdir generated/
 ```
+
+## Data files
+
+Some data tables (photo cross sections, shielding factors, radiation fields and
+dust data) are not shipped with the package. They are downloaded on first use
+with [pooch](https://www.fatiando.org/pooch/) into the `data/` directory of the
+installed `jaff` package and reused from there afterwards, so the first load of
+a network that needs them requires network access. Set `JAFF_OFFLINE=1` (any
+non-empty value) to disable downloads; a table that is not already present then
+cannot be loaded.
 
 ## Troubleshooting
 

@@ -1,22 +1,29 @@
+# ABOUTME: Record types passed between the network-parser engine and format parsers
+# ABOUTME: Record (detected line), ParsedRecord (parsed reaction), ParseResult
+
+
 class Record:
-    """A detected-but-not-yet-processed reaction line.
+    """A detected-but-not-yet-processed line: a reaction or a directive.
 
     Captured in the engine's detection phase and handed to the owning format's
-    ``process`` method. ``metadata`` snapshots the live parser state the format
-    needs, so deferred processing never reads stale mutable state.
+    ``process`` method.  The engine leaves ``metadata`` empty and no bundled
+    parser reads it.
 
     Attributes
     ----------
     source_index : int
-        File-side reaction number (0-based, stable under dedup).
+        File-side reaction number (0-based, stable under dedup); ``-1`` for a
+        directive line.
     line : str
         Raw file line.
     nline : int
         1-based file line number (for error messages).
     format : str
-        Owning format name.
+        Name of the handler that detected the line; the owning parser uses it
+        to dispatch the record.
     metadata : dict
-        Snapshot of the format state this line depends on.
+        Optional per-line data; ``{}`` unless passed in (the engine never
+        does).
     sub_order : int
         Tie-breaker for a single line expanding into several reactions.
     """
@@ -44,7 +51,7 @@ class ParsedRecord:
     The engine sorts these by ``(source_index, sub_order)`` and converts each to
     the ``parsedListProps`` dict consumed by ``Network``.  ``metadata`` is
     parser-private data that ends up on the reaction as ``Reaction._metadata``
-    for the parser's post-processing hook.
+    for the parser's post-processing hook (``{}`` for every bundled parser).
     """
 
     def __init__(

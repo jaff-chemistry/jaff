@@ -1,3 +1,5 @@
+# ABOUTME: ShieldingFunction: abstract base of the line-shielding plugins,
+# ABOUTME: registered by (name, reaction) and selected by shielding.type
 """Base interface for a line-shielding function plugin."""
 
 from __future__ import annotations
@@ -20,7 +22,8 @@ class ShieldingFunction(ABC):
     """A single photo-reaction line-shielding model.
 
     Subclasses live in their own module under ``shielding`` and register
-    themselves via the :func:`~.register` decorator, keyed by their ``name``
+    themselves via the :func:`~jaff.physics.photo_reactions.shielding._register`
+    decorator, keyed by their ``name``
     (the ``shielding.type`` value used in the network config).  The lookup is a
     dict, so resolving a type to its function is O(1) and independent of import
     order or any directory layout.
@@ -33,8 +36,8 @@ class ShieldingFunction(ABC):
     reaction : str | None
         Serialized reaction this function is bound to (a *local* model), or
         ``None`` for a *global* model that applies to any reaction.  A function
-        is resolved by the pair ``(reaction, name)`` with a fallback to
-        ``(None, name)``, so a local model only matches its own reaction.
+        is resolved by the pair ``(name, reaction)`` with a fallback to
+        ``(name, None)``, so a local model only matches its own reaction.
 
     A model with settings overrides :meth:`config_model` to declare them.
     """

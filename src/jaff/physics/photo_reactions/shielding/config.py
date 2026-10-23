@@ -1,3 +1,5 @@
+# ABOUTME: Config models of the photo-reaction line shielding: the flat
+# ABOUTME: shielding table (type + plugin settings) and the plugins' settings base
 """Config of the photo-reaction line shielding (``shielding`` tables).
 
 A ``shielding`` table names a shielding plugin by ``type``; its other keys are
@@ -56,7 +58,9 @@ class ShieldingConfig(ConfigModel):
     Attributes
     ----------
     type : str
-        Shielding model (case-insensitive).
+        Shielding model (case-insensitive): ``"leiden"`` (the default; any
+        photo reaction with a Leiden table), or ``"db1996"`` / ``"hg2015"``
+        (only for ``"H2._PHOTON__H.H"``).
     params : dict
         The plugin's settings, as written.
     """

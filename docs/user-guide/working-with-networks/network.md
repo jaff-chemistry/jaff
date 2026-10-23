@@ -26,11 +26,12 @@ net = Network("networks/h_photoionization/h_photo.jet")
 A single `Network(...)` call runs a fixed pipeline. Knowing the phases explains
 where every attribute comes from:
 
-1. **Read** — the file is resolved and, if it is a binary `.jaff`, deserialized
-   directly; otherwise the text parser auto-detects the format (KROME, PRIZMO,
+1. **Read** — the file is resolved and, if it is a `.jaff` file (gzip-compressed
+   JSON), deserialized directly; otherwise the text parser auto-detects the format (KROME, PRIZMO,
    UDFA, KIDA, UCLChem, …).
 2. **Parse & assemble** — reactions are read one by one. Each new species name
-   becomes a [`Specie`](species.md) appended to `net.species`; each line becomes
+   becomes a [`Specie`](species.md) appended to `net.species` (pseudo-species
+   such as `_PHOTON` are kept out of it); each line becomes
    a [`Reaction`](reactions.md) appended to `net.reactions`. Any accompanying
    `.jfunc` auxiliary file is loaded here and its custom rates, heating/cooling,
    and radiation terms are wired in.
@@ -73,7 +74,7 @@ it only overrides the config when you pass it. The validated result is
 
 | Parameter                 | Type                                 | Description                                                                                                                         |
 | ------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `fname`                   | `str or Path`                        | Path to the network file (required), or a predefined network name; `.jaff` files are loaded as binary                              |
+| `fname`                   | `str or Path`                        | Path to the network file (required), or a predefined network name; `.jaff` files are loaded as serialized networks                 |
 | `config`                  | path, `dict`, `JaffTomlConfig`, or a list of them | Config layers over the network's `jaff.toml`; a `dict` is shaped like a `jaff.toml` (`{"network": {...}}`)            |
 | `strict`                  | `bool`                               | Treat validation problems (conservation, sinks/sources, ...) as fatal (`network.strict`; default `False`)                          |
 | `label`                   | `str`                                | Human-readable network name (`network.label`; default the file stem)                                                               |
@@ -135,8 +136,10 @@ net = Network(
 | `product_matrix`  | `np.ndarray`      | Integer stoichiometry, same shape — product counts                                                                  |
 | `thermodynamics`  | `Thermodynamics`  | Thermal equations: `eos`, `dEdt_chemical`, `dEdt_extra`, `dEdt_tot`, `dTdt_chemical`, `dTdt_extra`, `dTdt_tot`; see [thermodynamics](../../reference/physics/thermodynamics/index.md) |
 | `radiation`       | `Radiation\|None` | Radiation field object; `None` when the config has no `[network.radiation]` table                                   |
+| `dust`            | `Dust\|None`      | Dust module; `None` when the config has no `[network.dust]` table                                                   |
 | `mass_dict`       | `dict`            | Element mass dictionary used to build the species                                                                   |
 | `symbols`         | `NetworkSymbols`  | Canonical symbols, densities (`ndens`, `ntot`, `rho`, `n_hnuc`), introspection sets and `standardize`; see [symbols](../../reference/core/networksymbols/index.md) |
+| `logger`          | `logging.Logger`  | The JAFF logger the network writes its load and validation messages to                                              |
 
 ```python
 net = Network("networks/h_photoionization/h_photo.jet")
@@ -154,8 +157,8 @@ documented on [Species](species.md), [Reactions](reactions.md) and
 ```python
 net.species.names()                 # ['H', 'H+', 'e-']
 net.species.charged("name")         # ['H+', 'e-']
-net.reactions.verbatim()            # ['H -> H+ + e-', 'H+ + e- -> H']
-net.reactions.photo_reactions()     # [ReactionObject(H -> H+ + e-)]
+net.reactions.verbatim()            # ['H + _PHOTON -> H+ + e-', 'H+ + e- -> H']
+net.reactions.photo_reactions()     # [ReactionObject(H + _PHOTON -> H+ + e-)]
 net.elements.symbols()              # ['H']
 ```
 
@@ -167,7 +170,7 @@ reaction index; column order is species index.
 
 ```python
 net.reactant_matrix
-# [[1 0 0]      reaction 0: H -> H+ + e-   consumes 1× H (species 0)
+# [[1 0 0]      reaction 0: H + _PHOTON -> H+ + e-   consumes 1× H (species 0)
 #  [0 1 1]]     reaction 1: H+ + e- -> H   consumes 1× H+ and 1× e-
 
 net.product_matrix
@@ -183,9 +186,9 @@ species per reaction — the backbone of the ODE system below.
 ## Number densities: the `nden` representation
 
 Inside JAFF every species number density is a reference into one SymPy
-`MatrixSymbol("nden", n_species, 1)`. Species _X_ is `nden[idx_X, 0]`, where the
-index is the species' position in `net.species`. This is why rate and ODE
-expressions print terms like `nden[1, 0]` rather than a named density — it keeps
+`IndexedBase("nden", shape=(n_species,))` (`net.symbols.ndens`). Species _X_ is
+`nden[idx_X]`, where the index is the species' position in `net.species`. This is
+why rate and ODE expressions print terms like `nden[1]` rather than a named density — it keeps
 the whole network on one indexable vector the code generator can emit as an
 array.
 
@@ -194,19 +197,23 @@ expanded into this form:
 
 | Shorthand                                      | Expands to                                                   |
 | ---------------------------------------------- | ------------------------------------------------------------ |
-| `ntot`                                         | sum of `nden[i, 0]` over **all core** species                |
+| `ntot`                                         | sum of `nden[i]` over all species in `net.species`           |
 | `n_<element>_nuc` (e.g. `n_H_nuc`, `n_He_nuc`) | sum over element-bearing species, **weighted** by atom count |
 | `n_e`                                          | electron density                                             |
-| `n_<species>` (e.g. `n_CO`, `n_Hj`, `n_Hk`)    | `nden[idx_X, 0]` for that one species (`j`→`+`, `k`→`-`)     |
+| `n_<species>` (e.g. `n_CO`, `n_Hj`, `n_Hk`)    | `nden[idx_X]` for that one species (`j`→`+`, `k`→`-`)        |
+| `rc_<N>` (e.g. `rc_12`)                        | rate of the reaction numbered `<N>` in the source file       |
+| `chi_pe`                                       | the dust photoelectric `chi` (needs radiation and dust)      |
+
+Name matching is case-insensitive.
 
 For example, a cosmic-ray ionization rate written with the `n_H_nuc` shorthand
-comes out as a weighted `nden` sum (note `2*nden[3, 0]` — H₂ contributes two H
+comes out as a weighted `nden` sum (note `2*nden[3]` — H₂ contributes two H
 atoms):
 
 ```python
 g = Network("networks/GOW/GOW.jet")
 g.reactions.with_type("cosmic_ray")[0].rate_coefficient
-# crate*(1.5*nden[0, 0]/(nden[0, 0] + nden[1, 0] + 2*nden[3, 0] + ...) + ...)
+# crate*(1.5*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + ...)
 ```
 
 Pass `expand_nuclei=False` to keep `n_<element>_nuc` tokens as opaque free
@@ -233,10 +240,14 @@ where $f_i$ is the flux of the $i^{\text{th}}$ reaction.
 for specie, expr in zip(net.species, net.sodes()):
     print(f"d[{specie}]/dt = {expr}")
 
-# d[H]/dt  = 1.659e-10*nden[1, 0]*nden[2, 0]/tgas**0.7 - photorates(1, 13.6, 1.0e+99)*nden[0, 0]
-# d[H+]/dt = -1.659e-10*nden[1, 0]*nden[2, 0]/tgas**0.7 + photorates(1, 13.6, 1.0e+99)*nden[0, 0]
-# d[e-]/dt = -1.659e-10*nden[1, 0]*nden[2, 0]/tgas**0.7 + photorates(1, 13.6, 1.0e+99)*nden[0, 0]
+# d[H]/dt = 1.65941781598291e-10*nden[1]*nden[2]/tgas**0.7 - photorates(1, 13.6, 1000…000.0)*nden[0]
+# d[H+]/dt = -1.65941781598291e-10*nden[1]*nden[2]/tgas**0.7 + photorates(1, 13.6, 1000…000.0)*nden[0]
+# d[e-]/dt = -1.65941781598291e-10*nden[1]*nden[2]/tgas**0.7 + photorates(1, 13.6, 1000…000.0)*nden[0]
 ```
+
+The open upper band edge is stored as the float `1e99`, which SymPy's `str`
+prints in full as a 100-digit number (abbreviated `1000…000.0` above); generated
+code writes it as `1.0e+99`.
 
 ### Fluxes and radiation moments
 
@@ -264,15 +275,16 @@ extrapolate beyond it is the `t_cutoff` setting, for every reaction in
 ## Validation
 
 JAFF validates the network during loading. With `strict=False` (default) each
-problem is logged as a warning; with `strict=True` the process exits on the
-first one. The individual checks can also be re-run by hand — each takes an
-`errors` flag (exit when it finds a problem), logs its findings and returns a
-report whose `.ok` is `True` when nothing was found:
+problem is logged as a warning; with `strict=True` the process exits at the
+first check that finds a problem. The individual checks can also be re-run by
+hand — each takes a `strict` flag (exit when it finds a problem), logs its
+findings and returns a report (`SinkSourceReport`, `RecombinationReport`,
+`IsomerReport`) whose `.ok` is `True` when nothing was found:
 
 ```python
-net.check_sink_sources(errors=False).sinks     # species never produced
-net.check_recombinations(errors=False).missing  # cations lacking an electron recombination
-net.check_isomers(errors=False).groups          # species sharing one atomic composition
+net.check_sink_sources(strict=False).sinks     # species never produced
+net.check_recombinations(strict=False).missing  # cations lacking an electron recombination
+net.check_isomers(strict=False).groups          # species sharing one atomic composition
 ```
 
 Duplicate reactions (same species, mechanism/`type`, and temperature range) are
@@ -280,12 +292,13 @@ resolved at load time by the network's
 [`duplicate_policy`](../configuration/reference.md#networkreactions) rather than by a separate
 check.
 
-<!-- prettier-ignore -->
-!!! note "The checks report, they don't return"
-    These methods write warnings through the logger and return `None`. To act on
-    the results programmatically, inspect the catalogues directly (e.g. compare
-    `reactant_matrix` / `product_matrix` columns for sinks and sources) rather
-    than expecting a returned list.
+On `h_photo` all three come back clean:
+
+```python
+net.check_sink_sources(strict=False)    # SinkSourceReport(sinks=frozenset(), sources=frozenset())
+net.check_recombinations(strict=False)  # RecombinationReport(missing=frozenset())
+net.check_isomers(strict=False)         # IsomerReport(groups=())
+```
 
 Mass and charge conservation are validated per reaction at construction time —
 see [Reactions](reactions.md#conservation-is-checked-at-construction).
@@ -327,17 +340,18 @@ net.write_table("rates.hdf5", format="auto")  # general form; format from extens
 grid). See [`to_hdf5`](../../reference/core/network/to_hdf5.md) and
 [`to_txt`](../../reference/core/network/to_txt.md).
 
-### JAFF binary format
+### JAFF serialized format
 
 `to_jaff` serializes an already-loaded network to a gzip-compressed JSON file
 (conventional extension `.jaff`). Re-loading skips parsing and the expensive
 SymPy assembly, so it is the recommended cache for large networks:
 
 ```python
-net = Network("networks/GOW/GOW.jet")
-net.to_jaff("gow.jaff")        # save
+net = Network("uclchem_small_gas")
+net.to_jaff("uclchem.jaff")        # save
 
-net2 = Network("gow.jaff")     # reload — same species, reactions, and ODEs
+net2 = Network("uclchem.jaff")     # reload — same species, reactions, and ODEs
+net2.species.count, net2.reactions.count   # (73, 562)
 ```
 
 <!-- prettier-ignore -->
@@ -345,5 +359,8 @@ net2 = Network("gow.jaff")     # reload — same species, reactions, and ODEs
     If any rate contains an undefined SymPy function — most commonly an
     unresolved `photorates(...)` (a photo-reaction loaded without radiation)
     or a custom `interp(...)` — `to_jaff` raises `ValueError`, because such
-    expressions cannot be round-tripped through the JSON schema. Resolve the
-    radiation/interpolation first, or keep those networks in their text form.
+    expressions cannot be round-tripped through the JSON schema (GOW, for
+    example, fails this way). Resolve the radiation/interpolation first, or keep
+    those networks in their text form. Some other SymPy nodes are not supported
+    by the encoder either: `COthin`, for instance, currently fails with
+    `SympyJsonError: Unsupported SymPy node: Or`.

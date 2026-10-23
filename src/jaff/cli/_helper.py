@@ -1,3 +1,5 @@
+# ABOUTME: Shared helpers for the jaffgen/jaffx CLIs: option→config-key mapping,
+# ABOUTME: --set parsing, --funcfile parsing and error reporting for commands.
 """Shared argument helpers for the JAFF command-line entry points."""
 
 from __future__ import annotations
@@ -29,7 +31,8 @@ CLI_KEYS: Dict[str, Tuple[str, ...]] = {
     "duplicate_policy": ("network", "reactions", "duplicate_policy"),
 }
 
-#: The :data:`CLI_KEYS` setting ``[network]`` keys (all a network tool takes).
+#: The :data:`CLI_KEYS` setting ``[network]`` keys (the options a network tool may
+#: take; :func:`cli_layer` skips any option a tool does not define).
 NETWORK_KEYS: Dict[str, Tuple[str, ...]] = {
     option: path for option, path in CLI_KEYS.items() if path[0] == "network"
 }
@@ -88,8 +91,9 @@ def funcfile_arg(value: str) -> bool | str:
     can, so ``--funcfile false`` (case-insensitive) is the CLI spelling for
     ``funcfile=False`` — skip auxiliary-function loading entirely — and
     ``--funcfile true`` for ``funcfile=True``, which scans the network
-    directory.  Passing ``true`` is the only way to override a ``funcfile``
-    path set in a config file back to a directory scan.
+    directory.  ``--funcfile true`` (or ``--set network.funcfile=true``)
+    overrides a ``funcfile`` path set in a config file back to a directory
+    scan.
 
     Parameters
     ----------
@@ -149,8 +153,8 @@ def parse_set(items: List[str]) -> Dict[str, Any]:
 
     The key path and the value are written as in TOML (a reaction key is
     quoted: ``network.reactions.reaction."H2._PHOTON__H.H".t_cutoff=clip``); a
-    value that is not a TOML value is taken as a string, so ``label=gow``
-    needs no quotes.
+    value that is not a TOML value is taken as a string, so
+    ``network.label=gow`` needs no quotes.
 
     Parameters
     ----------

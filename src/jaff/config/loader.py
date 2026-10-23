@@ -1,3 +1,5 @@
+# ABOUTME: Loads jaff.toml / jaffgen.toml: merges config layers (files, command line,
+# ABOUTME: dicts) and validates them against the config models
 """Loading of the ``jaff.toml`` / ``jaffgen.toml`` config.
 
 Every config source (a file, the command line, a Python ``dict``) is a *layer*:

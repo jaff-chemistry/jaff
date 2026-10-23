@@ -1,3 +1,5 @@
+# ABOUTME: Builder orchestrator for plugin-based code generation.
+# ABOUTME: Locates jaff.plugins.<name>.plugin and runs its main() on a network.
 """High-level build orchestrator for JAFF plugin-based code generation.
 
 This module provides :class:`Builder`, a convenience wrapper that locates a
@@ -7,7 +9,8 @@ code-generation pipeline to the plugin's ``main()`` entry point.
 Plugin discovery
 ----------------
 Plugins live in ``jaff.plugins.<template_name>.plugin`` and must expose a
-``main(network, *, path_template, path_build)`` function.  The *template_name*
+``main(network, path_template, path_build)`` function; :class:`Builder` calls it
+with ``path_template`` and ``path_build`` as keyword arguments.  The *template_name*
 corresponds to a sub-directory of ``TEMPLATES_DIR / "preprocessor"``
 (``jaff/templates/preprocessor/``).
 """

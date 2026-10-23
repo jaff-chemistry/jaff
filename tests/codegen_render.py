@@ -16,12 +16,12 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 import numpy as np
 
 from jaff.cli import JaffGen
-from tests._paths import GOLDEN_DIR, REPO_ROOT
+from tests._paths import FIXTURES_DIR, GOLDEN_DIR, REPO_ROOT
 
 REPO = REPO_ROOT
-TEMPLATES = Path(__file__).parent / "fixtures" / "templates"
+TEMPLATES = FIXTURES_DIR / "templates"
 GOLDEN = GOLDEN_DIR
-CONFIG = Path(__file__).parent / "fixtures" / "jaffgen.toml"
+CONFIG = FIXTURES_DIR / "jaffgen.toml"
 UPDATE = os.environ.get("JAFF_UPDATE_GOLDEN") == "1"
 
 NETWORKS: Dict[str, Path] = {

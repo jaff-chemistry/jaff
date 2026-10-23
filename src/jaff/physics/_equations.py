@@ -1,3 +1,5 @@
+# ABOUTME: Symbolic chemical fluxes, species ODEs and radiation-moment ODEs
+# ABOUTME: (get_sfluxes, get_sodes, get_sradodes) built from a network
 """
 Symbolic ODE and flux generators for astrochemical reaction networks.
 
@@ -129,16 +131,11 @@ def get_sodes(
 
     Notes
     -----
-    The index used for each participant is determined by ``fidx``:
-
-    - If ``fidx`` is a string starting with ``"idx_"`` the *runtime* index
-      attribute of the participant object is used (dynamic lookup, e.g. for
-      named network slots).
-    - Otherwise ``fidx`` is cast to ``int`` and used directly (static index,
-      e.g. a literal position in a fixed-order array).
-
-    This dual-path allows the same code to handle both named-species networks
-    and fixed-layout networks produced by certain code-generation backends.
+    Each participant's slot is its species ``index``: a species' ``fidx`` is
+    always an ``"idx_<name>"`` string (see
+    :meth:`~jaff.core.species.Specie.get_fidx`).  The code also has a branch
+    that casts a ``fidx`` not starting with ``"idx_"`` to ``int`` and uses it
+    as the slot; no species currently takes it.
 
     Examples
     --------
@@ -156,8 +153,8 @@ def get_sodes(
 
     for i, reaction in enumerate(reactions):
         for rr in reaction.reactants.core:
-            # Choose the output-array slot: either the species' runtime index
-            # (when fidx is a "idx_*" tag) or a literal integer position.
+            # Output-array slot: the species' index (fidx is always an "idx_*"
+            # tag; the int(fidx) branch is not reached by any species).
             idx = (
                 rr.index
                 if isinstance(rr.fidx, str) and rr.fidx.startswith("idx_")
@@ -365,7 +362,7 @@ def handle_dust_reduction(
     where ``<moment>`` is the band symbol ``group.sym`` for the energy density
     and ``rflux[group.index]`` for the flux.  The energy-density and flux
     reductions use the dust's ``u_reduction`` and ``f_reduction`` kinds
-    respectively; a kind that is ``None`` or ``"none"`` is skipped.
+    respectively; a kind that is ``"none"`` is skipped.
 
     Parameters
     ----------

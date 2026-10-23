@@ -123,8 +123,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Removed legacy raw-sum conservation check (not a true invariant)
-
     // Element and charge conservation report
     // The codegen may inject species-element stoichiometry and charges here.
     // Expected injected definitions (all constexpr/static):

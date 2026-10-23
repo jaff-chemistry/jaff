@@ -1,3 +1,5 @@
+# ABOUTME: Config model of the radiation field ([network.radiation]): bands,
+# ABOUTME: spectral index, mode, speed of light, background field
 """Config of the radiation field (``[network.radiation]``)."""
 
 from __future__ import annotations

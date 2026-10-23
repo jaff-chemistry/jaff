@@ -1,7 +1,7 @@
 #executable name
 exe = test
 
-# test if ifort is present
+# test if ifx is present
 wres = $(shell which ifx > /dev/null; echo $$?)
 ifeq "$(wres)" "0"
 	fc = ifx

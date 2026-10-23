@@ -42,13 +42,12 @@ constexpr double atol_spec = 1.e-20;
 // absolute tolerance for energy
 constexpr double atol_echem= 1.e-20;
 
-// The absolute cutoff for species -- note that this might be larger
-// than ``small_x``, but the issue is that we need to prevent underflow
-// issues and keep mass fractions positive in the integrator.  You may
-// have to increase the floor to, e.g. 1.e-20 if your rates are large.
+// Unused: carried over from AMReX-Microphysics; nothing in this template
+// reads it.
 constexpr double SMALL_X_SAFE = 1.0e-30;
 
-// The maximum temperature for reactions in the integration.
+// Unused: carried over from AMReX-Microphysics; nothing in this template
+// reads it.
 constexpr double MAX_TEMP = 1.0e11;
 
 // maximum number of timesteps for the integrator
@@ -57,14 +56,15 @@ constexpr int ode_max_steps = 150000;
 // maximum timestep for the integrator
 constexpr double ode_max_dt = 1.e30;
 
-// flag for turning on the use of number densities for all species
+// Unused: carried over from AMReX-Microphysics; nothing in this template
+// reads it.
 constexpr int use_number_densities = 0;
 
 // for the linear algebra, do we allow pivoting?
 constexpr int linalg_do_pivoting = 1;
 
-// for the step rejection logic on mass fractions, we only consider
-// species that are > X_reject_buffer * atol_spec
+// Unused: carried over from AMReX-Microphysics; nothing in this template
+// reads it.
 constexpr double X_reject_buffer = 1.0;
 
 // Rosenbrock tableau selector:

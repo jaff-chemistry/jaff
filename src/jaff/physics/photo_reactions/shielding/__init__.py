@@ -1,3 +1,5 @@
+# ABOUTME: Registry of the line-shielding plugins, keyed by (name, reaction);
+# ABOUTME: discovers the plugin subpackages on first lookup
 from jaff.common._helper import import_subpackages
 from jaff.errors import ParserError, RegistrationError
 

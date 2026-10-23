@@ -1,3 +1,6 @@
+# ABOUTME: AuxiliaryFunctionParser: parses .jfunc auxiliary function files
+# ABOUTME: Handles @var globals and @function ... @return blocks
+
 """Parser for JAFF auxiliary function files (.jfunc).
 
 A ``.jfunc`` file may define global symbolic constants and named functions
@@ -190,7 +193,8 @@ class AuxiliaryFunctionParser:
 
         When inside a function block, delegates to :meth:`__parse_function`.
         Lines starting with ``@`` are dispatched to :meth:`__parse_token`.
-        Comment-only lines (starting with ``#``) are skipped.
+        Any other line outside a function block (comments included) is
+        ignored.
         """
         if self.scope == "function":
             self.__parse_function()
@@ -280,7 +284,8 @@ class AuxiliaryFunctionParser:
         Raises
         ------
         ParserError
-            If the declaration is malformed (missing parentheses or arguments).
+            If the declaration is malformed (missing parentheses).  An empty
+            argument list (``"f()"``) is accepted.
         """
         self.__set_scope("function")
         if not self.globals_parsed:

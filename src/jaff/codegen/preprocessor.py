@@ -1,3 +1,5 @@
+# ABOUTME: Preprocessor that splices generated code into template source files.
+# ABOUTME: Replaces PREPROCESS_<KEY> / PREPROCESS_END marker regions line by line.
 """Template pre-processor for JAFF code-generation output files.
 
 This module provides :class:`Preprocessor`, which walks a directory of

@@ -64,11 +64,13 @@ def _(mo):
 
     1. **Read** the file and detect each line's format;
     2. **Parse & assemble**: every new species name becomes a `Specie`, every line
-       becomes a `Reaction`;
-    3. **Standardise symbols**: densities in rate expressions are rewritten onto
-       one vector, `nden[i, 0]`, where `i` is the species index;
-    4. **Validate**: mass and charge conservation, sinks/sources, duplicates;
-    5. **Finalise**: build stoichiometry matrices and the set of elements.
+       becomes a `Reaction` (checked for mass and charge conservation as it is
+       built); duplicate reactions are resolved by the duplicate policy;
+    3. **Elements**: collect the set of elements the species are built from;
+    4. **Standardise symbols**: densities in rate expressions are rewritten onto
+       one vector, `nden[i]`, where `i` is the species index;
+    5. **Validate**: sinks/sources, missing recombinations, isomers;
+    6. **Finalise**: build the stoichiometry matrices.
 
     JAFF prints a banner when it loads; the helper cell at the bottom of this
     notebook hides it so the output stays readable.

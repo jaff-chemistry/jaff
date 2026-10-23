@@ -1,3 +1,6 @@
+# ABOUTME: PRIZMO arrow-notation reaction handler
+# ABOUTME: Parses reactants -> products [tmin, tmax] rate lines
+
 """PRIZMO arrow-notation reaction handler."""
 
 import re

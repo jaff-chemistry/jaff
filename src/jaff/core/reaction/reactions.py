@@ -1,3 +1,6 @@
+# ABOUTME: Reactions: ordered catalogue of a network's reactions
+# ABOUTME: Lookup by verbatim string, serialized form, (serialized, type) or index
+
 """Ordered, doubly-indexed :class:`Reactions` catalogue for JAFF networks.
 
 Reactions can be looked up by verbatim string
@@ -240,7 +243,8 @@ class Reactions(Catalogue[Reaction]):
             * ``str`` — checks verbatim names and serialized forms.
             * ``tuple`` — ``(serialized, type)``: true if a reaction with that
               serialized form *and* type exists.
-            * otherwise — positional membership in the list.
+            * ``Reaction`` — true if an equal reaction (same serialized form
+              and type; see :meth:`Reaction.__eq__`) is in the catalogue.
 
         Returns
         -------
@@ -353,8 +357,10 @@ class Reactions(Catalogue[Reaction]):
 
         Returns
         -------
-        Reaction or None
-            The matching reaction, or ``None`` if not found.
+        Reaction, list of Reaction, or None
+            The matching reaction, the list of matching reactions (without
+            *type*, for a key shared by several mechanisms), or ``None`` if not
+            found.
 
         Notes
         -----

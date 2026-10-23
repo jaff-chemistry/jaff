@@ -1,3 +1,5 @@
+# ABOUTME: TypedDict JaffProps: the dict from_jaff_file produces and the Network
+# ABOUTME: constructor consumes (species, reactions, optional thermal/radiation exprs).
 """
 TypedDict definitions for the JAFF I/O module.
 
@@ -47,4 +49,12 @@ dEdt_extra : sympy.Basic, optional
     The already-standardized volumetric extra heating/cooling term
     (:attr:`~jaff.physics.thermodynamics.Thermodynamics.dEdt_extra`).  When
     absent, the network rebuilds it from the ``heatingcoolingrate`` aux function.
+emissivity : sympy.Expr, optional
+    The radiation ``globalEmissivity`` spectrum
+    (``network.radiation.emissivity``); a ``.jfunc`` ``globalEmissivity``
+    function wins over it.
+absorption_coefficient : sympy.Expr, optional
+    The radiation ``globalAbsorptionCoefficient`` spectrum
+    (``network.radiation.absorption_coefficient``); a ``.jfunc``
+    ``globalAbsorptionCoefficient`` function wins over it.
 """

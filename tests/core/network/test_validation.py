@@ -14,7 +14,7 @@ class TestSinkSources:
                 "H2 -> H + H [10,1000] 1e-15",
             ]
         )
-        report = net.check_sink_sources(errors=False)
+        report = net.check_sink_sources(strict=False)
         assert report.ok
         assert report.sinks == frozenset()
         assert report.sources == frozenset()
@@ -27,7 +27,7 @@ class TestSinkSources:
                 "H2 -> H + H [10,1000] 1e-15",
             ]
         )
-        report = net.check_sink_sources(errors=False)
+        report = net.check_sink_sources(strict=False)
         assert "He" in report.sinks
         assert "He" not in report.sources
         assert not report.ok
@@ -40,7 +40,7 @@ class TestSinkSources:
                 "H2 -> H + H [10,1000] 1e-15",
             ]
         )
-        report = net.check_sink_sources(errors=False)
+        report = net.check_sink_sources(strict=False)
         assert "He" in report.sources
         assert "He" not in report.sinks
 
@@ -51,7 +51,7 @@ class TestSinkSources:
                 "dummy + O -> O [10,1000] 1e-15",
             ]
         )
-        report = net.check_sink_sources(errors=False)
+        report = net.check_sink_sources(strict=False)
         flagged = report.sinks | report.sources
         assert not any("dummy" in name.lower() for name in flagged)
 
@@ -71,7 +71,7 @@ class TestRecombinations:
                 "H+ + e- -> H [10,1000] 1e-12",
             ]
         )
-        assert net.check_recombinations(errors=False).ok
+        assert net.check_recombinations(strict=False).ok
 
     def test_missing_recombination_flagged(self, make_network):
         net = make_network(
@@ -80,7 +80,7 @@ class TestRecombinations:
                 "C+ + H2 -> CH+ + H [10,1000] 1e-11",  # no recombination for C+
             ]
         )
-        report = net.check_recombinations(errors=False)
+        report = net.check_recombinations(strict=False)
         assert "C+" in report.missing
 
     def test_errors_true_exits(self, make_network):
@@ -91,7 +91,7 @@ class TestRecombinations:
             ]
         )
         with pytest.raises(SystemExit):
-            net.check_recombinations(errors=True)
+            net.check_recombinations(strict=True)
 
 
 class TestIsomers:
@@ -104,7 +104,7 @@ class TestIsomers:
                 "C + O -> CO [10,1000] 1e-11",
             ]
         )
-        assert net.check_isomers(errors=False).ok
+        assert net.check_isomers(strict=False).ok
 
     def test_isomers_detected(self, make_network):
         net = make_network(
@@ -114,7 +114,7 @@ class TestIsomers:
                 "H + CO -> HOC [10,1000] 1e-11",  # same composition as HCO
             ]
         )
-        report = net.check_isomers(errors=False)
+        report = net.check_isomers(strict=False)
         assert report.groups == (("HCO", "HOC"),)
         assert not report.ok
 
@@ -127,7 +127,7 @@ class TestIsomers:
             ]
         )
         with pytest.raises(SystemExit):
-            net.check_isomers(errors=True)
+            net.check_isomers(strict=True)
 
 
 class TestValidationRunsDuringLoad:

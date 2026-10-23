@@ -1,3 +1,5 @@
+# ABOUTME: Package paths (data, db, templates, networks, shielding) and listings of
+# ABOUTME: the bundled networks and templates
 from pathlib import Path
 
 CONFIG_DIR = Path(__file__).resolve().parent

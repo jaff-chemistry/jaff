@@ -11,6 +11,7 @@ from typing import Callable, Dict
 import pytest
 
 from jaff import Network
+from tests._paths import FIXTURES_DIR, SNAPSHOTS_DIR
 from tests.codegen_render import (
     NETWORKS,
     UPDATE,
@@ -18,8 +19,6 @@ from tests.codegen_render import (
     render,
     template_files,
 )
-
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture(autouse=True)
@@ -67,7 +66,7 @@ def make_network(tmp_path):
         unique ``network_<n>.dat``.
     **kwargs
         Forwarded to :class:`~jaff.Network` (e.g. ``duplicate_policy``,
-        ``errors``).
+        ``strict``).
     """
     counter = {"n": 0}
 
@@ -88,7 +87,7 @@ def sample_network(fixtures_dir):
     return Network(str(fixtures_dir / "sample_kida.dat"))
 
 
-_SNAP_DIR = Path(__file__).parent / "snapshots" / "parser_output"
+_SNAP_DIR = SNAPSHOTS_DIR / "parser_output"
 
 
 class _SnapshotStore:

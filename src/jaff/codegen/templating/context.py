@@ -21,7 +21,8 @@ class RenderContext:
     Attributes:
         net: Network the template is rendered for.
         cg: Code generator for the template's language.
-        file: Template path, for messages and the ``filename`` token.
+        file: Template path, for messages and the ``filename``/``filepath``
+            tokens.
         echo_directives: Whether directives are echoed as comments in the output.
         comment: Comment token for the echo, from ``$$JAFF COMMENT``; ``None``
             means the language's own comment.

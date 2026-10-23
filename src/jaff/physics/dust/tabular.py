@@ -1,3 +1,5 @@
+# ABOUTME: Tabular: the tabulated Milky Way dust cross sections for the configured
+# ABOUTME: R_V, read from dust.hdf5, and their band averages
 from __future__ import annotations
 
 from functools import cached_property
@@ -154,7 +156,7 @@ class Tabular:
         )
 
     def _load_cross_sections(self) -> HDF5Dict:
-        # rv is validated in Dust.__init__; :.1f matches the dust.hdf5 group
+        # rv is validated by DustConfig._check_rv; :.1f matches the dust.hdf5 group
         # names (mw_rv3.1 / mw_rv4.0 / mw_rv5.5).
         data: HDF5Dict = HDF5().to_dict(
             f"{DATA_DIR / 'dust' / 'dust.hdf5'}::mw_rv{self.dust.rv:.1f}"

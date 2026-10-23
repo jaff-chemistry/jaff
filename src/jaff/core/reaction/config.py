@@ -1,3 +1,5 @@
+# ABOUTME: Config models of the reactions: [network.reactions] global settings,
+# ABOUTME: per-reaction overrides and the photo-reaction (photo) table
 """Config of the reactions (``[network.reactions]``).
 
 ``[network.reactions]`` holds the settings applied to every reaction, and
@@ -35,7 +37,12 @@ PiDatabase = Annotated[Literal["norad", "verner", "leiden"], BeforeValidator(low
 class PhotoConfig(ConfigModel):
     """Photo-reaction settings (``[network.reactions.photo]``).
 
-    ``None`` means unset: the value comes from the global settings.
+    The same keys appear in the global ``[network.reactions.photo]`` table and
+    in a reaction's own ``[network.reactions.reaction."<serialized>".photo]``
+    table.  A key left out of a reaction's table takes the global value; a key
+    left out of the global table takes its default: ``pi_database = "norad"``,
+    ``override_custom_rate = false``, ``override_custom_cross_section = false``,
+    ``use_proxy_photoreaction = true`` and no ``shielding``.
 
     Attributes
     ----------
@@ -43,9 +50,14 @@ class PhotoConfig(ConfigModel):
         Photoionisation cross-section database: ``"norad"``, ``"verner"`` or
         ``"leiden"``.
     override_custom_rate : bool or None
-        Recompute a ``.jfunc`` ``chemRate<N>`` rate from the cross sections.
+        Replace a reaction's ``.jfunc`` ``chemRate<N>`` rate with one computed
+        from its cross section over the radiation bands.  Has no effect without
+        a ``[network.radiation]`` table: the ``chemRate`` is then always kept.
     override_custom_cross_section : bool or None
-        Ignore ``.jfunc`` ``photoCrossSection<N>`` and use the database.
+        Ignore a reaction's ``.jfunc`` ``photoCrossSection<N>`` and take its
+        cross section from the database.  The global value only applies with a
+        ``[network.radiation]`` table; a value in a reaction's own table
+        applies with or without one.
     use_proxy_photoreaction : bool or None
         Look cross sections up under the proxy reaction (``CHx`` → ``CH``).
     shielding : ShieldingConfig or None

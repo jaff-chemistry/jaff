@@ -1,3 +1,6 @@
+# ABOUTME: NetworkParser: detects each network-file line's format and dispatches it
+# ABOUTME: Buckets lines per format parser and collects parsed reactions + globals
+
 """Low-level reaction network file parser for multiple astrochemical formats.
 
 ``NetworkParser`` reads a single network file and converts each reaction line
@@ -10,6 +13,7 @@ into a format-independent ``parsedListProps`` dict with keys:
 - ``"rate"``   — rate expression as a Python/SymPy-compatible string
 - ``"type"``   — reaction type concluded by the parser (e.g. ``"photo"``)
 - ``"string"`` — the original network-file line (for error reporting)
+- ``"source_index"`` — file-side reaction number (0-based, in file order)
 - ``"format"`` — name of the parser that produced the reaction
 - ``"metadata"`` — parser-private data for that parser's post-processing
 
@@ -17,12 +21,12 @@ Supported file formats
 ----------------------
 The parser auto-detects the format from line patterns.  Each format is a
 self-contained parser under ``parsers.network._formats``; the engine discovers
-them through :func:`~.parsers.network._formats.all_parsers`.  Detection is
+them through :func:`~jaff.core.parsers.network._formats.all_parsers`.  Detection is
 driven by each parser's handler descriptors, ordered by their declared
 ``priority`` (lower is matched first):
 
-1. **PRIZMO** — arrow-notation (``->``) with optional temperature range in
-   ``[tmin, tmax]`` brackets.  Variables in a ``VARIABLES { }`` block.
+1. **PRIZMO** — arrow-notation (``->``) followed by a ``[tmin, tmax]``
+   bracket (the brackets are required; either bound may be left empty).  Variables in a ``VARIABLES { }`` block.
 2. **UDFA** — colon-delimited, fixed-column database from the UMIST project.
 3. **KROME** — comma-separated, declared via ``@format:`` header.
    Variable aliases via ``@var:``.
@@ -32,10 +36,12 @@ driven by each parser's handler descriptors, ordered by their declared
 
 Rate normalization
 ------------------
-After parsing, all rate strings are lower-cased.  Known format-specific
-symbols (``user_crflux``, ``user_av``, Fortran exponent notation ``d``,
-temperature shortcuts ``t32``, ``invtgas``, etc.) are replaced with canonical
-JAFF symbols before the strings are passed to SymPy for sympification.
+Each format parser normalizes its own rate strings: format-specific symbols
+(e.g. ``user_crflux``, ``user_av``) are rewritten by the parser, and shorthand
+variables such as ``t32`` or ``invtgas`` are supplied as globals by the KROME
+and PRIZMO parsers (their ``BASE_GLOBALS``).  The engine itself only
+lower-cases every rate string after parsing, before ``Network`` passes it to
+SymPy.
 """
 
 import logging

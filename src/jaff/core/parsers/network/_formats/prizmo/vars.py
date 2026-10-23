@@ -1,3 +1,6 @@
+# ABOUTME: PRIZMO VARIABLES { } block handler: toggles block state and stores variables
+# ABOUTME: Variable assignments become symbolic globals
+
 """PRIZMO ``VARIABLES { }`` block lines and variable assignments (directive)."""
 
 import re

@@ -298,7 +298,7 @@ class NetworkSymbols:
         ``dE`` because only the aggregate has its convenience symbols (``n_X``,
         ...) resolved to ``nden`` entries.  With radiation, the reactions'
         ``group_yields`` and the groups' ``emissivity`` (from ``globalEmissivity``)
-        are included.
+        and ``absorption_coefficient`` are included.
         """
         net = self._net
         expressions = [
@@ -368,7 +368,8 @@ class NetworkSymbols:
         file-side number is ``<int>`` (looked up via ``reactions.by_source_index``,
         not the catalogue position, so it stays dedup-safe and consistent with
         ``chemRateN``); ``chi_pe`` → ``net.dust.pe.chi`` (needs radiation and
-        dust).  Name matching is case-insensitive.
+        dust).  Name matching is case-insensitive, except ``n_e``, which is
+        recognised only in lower case.
 
         Parameters
         ----------

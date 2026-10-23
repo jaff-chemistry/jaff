@@ -1,7 +1,7 @@
 # ABOUTME: Legend policy: one shared figure legend, or per-panel groups (opt-in)
 # ABOUTME: Creates the legends; the layout module positions the margin ones
 
-"""Legend placement (spec §14.4).
+"""Legend placement.
 
 Figure policy ``"auto"`` (and ``"figure"``): ONE shared, de-duplicated
 legend for the whole figure, in the bottom-right hidden grid cell when the

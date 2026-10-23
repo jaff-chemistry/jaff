@@ -1,3 +1,5 @@
+# ABOUTME: Physical and astronomical constants as astropy Quantities, the single
+# ABOUTME: source of truth for constants in JAFF
 # pyright: reportAttributeAccessIssue=false
 """Physical and astronomical constants as :class:`astropy.units.Quantity`.
 

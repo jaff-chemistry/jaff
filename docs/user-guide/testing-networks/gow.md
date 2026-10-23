@@ -29,7 +29,7 @@ A network this size has no analytic solution, but it is still testable because i
 !!! warning "Backend requirements"
     This test asks more of a host code than the other two. The backend needs to support HDF5 table interpolation, integrate a gas-energy equation alongside the species, carry number densities, and make the environment parameters below available at runtime.
 
-    The `python_solve_ivp` template does **not** meet these requirements — it generates the species equations only, and the GOW rate expressions refer to runtime state it does not provide. For this test you will need a backend that also solves a thermal equation, or you can wire the generated right-hand side into a driver of your own (see the [worked example](../code-generation/worked-example.md)).
+    The `python_solve_ivp` template does **not** meet these requirements on its own. It can integrate the gas temperature (opt-in at runtime with `evolve_tgas=True`), but its rate function takes only `tgas`, `crate` and `av`, while the GOW rates also refer to `chi`, `d2g`, `gradv`, `vdisp` and the column densities `ncol_*`. For this test you will need a backend that provides those parameters and solves the thermal equation, or you can wire the generated right-hand side into a driver of your own (see the [worked example](../code-generation/worked-example.md)).
 
 ## Setup
 
@@ -56,7 +56,7 @@ Start at a temperature of `100 K`, with the abundances below given relative to h
 | `H+`    | 1e-4         | `He+`   | 1.45e-8 | `C+`    | 1.6e-4 |
 | `e-`    | 3e-4         | `O`     | 3.2e-4  | `CO`    | 1.0e-7 |
 | `H2`    | 1e-10        | `O+`    | 1e-40   | `HCO+`  | 1e-40  |
-| `H2+`   | 1e-40        | `OH`    | 1e-40   | `CH`    | 1e-40  |
+| `H2+`   | 1e-40        | `OHx`   | 1e-40   | `CHx`   | 1e-40  |
 | `H3+`   | 2.681411e-07 | `Si`    | 1.7e-6  | `Si+`   | 1e-40  |
 
 <!-- prettier-ignore -->

@@ -67,7 +67,7 @@ appended — so the generator always wins on a path collision.
 | `--label`      | Override the network label (defaults to the file stem)                             |
 | `--funcfile`   | Path to a `.jfunc` auxiliary file; `true` scans the network dir; `false` skips     |
 | `--expand-nuclei` | `--expand-nuclei` / `--no-expand-nuclei` — expand `n_<element>_nuc` element-nucleus sums (default: on) |
-| `--strict`     | `--strict` / `--no-strict` — exit on conservation violations instead of warning    |
+| `--strict`     | `--strict` / `--no-strict` — exit instead of warning when network validation finds a problem: unconserved mass or charge, sink/source species, missing recombinations, or isomers |
 | `--duplicate-policy` | Resolve duplicate rate coefficients over the same temperature range: `preserve-first` (default), `preserve-last`, or `error` |
 
 When `--network` is a built-in network name (a sub-directory of `networks/`),

@@ -1,16 +1,21 @@
+# ABOUTME: Leiden tabulated line shielding (shielding.type = "leiden"), a global
+# ABOUTME: shielding function interpolating the shipped leiden.hdf5 tables
 """Leiden tabulated line-shielding (global shielding function).
 
 Builds the shielding factor for a photo-reaction from the collapsed Leiden
 shielding tables (``data/shielding/leiden.hdf5``, one group per reaction).  For
-each requested shielding species the relevant column-density grid (``N``) and
-shielding-factor column are extracted into a per-reaction
-``shielding_<reaction>.hdf5`` next to the generated code, and the total factor
-is the product of one interpolation call per shielding species.
+each requested shielding species the column-density grid (``N``) and the
+shielding-factor column are extracted into a per-reaction table, kept on the
+reaction (``photo.shielding.tables``) and written out as
+``shielding_<reaction>.hdf5`` by
+:meth:`~jaff.core.network.Network.write_shielding_tables` (``jaffgen`` writes it
+to the output directory).  The total factor is the product of one
+interpolation call per shielding species.
 
 A reaction selects this function via ``shielding.type = "leiden"`` and must
 declare ``shielding.shielded_by`` (a subset of :data:`LeidenSpecies`); the
 optional ``shielding.radiation`` field picks the radiation-field subgroup
-(default ``"ISRF"``).
+(default ``"isrf"``).
 """
 
 from __future__ import annotations
@@ -44,7 +49,17 @@ class LeidenParams(ShieldingParams):
         Shielding species, ``"self"`` being the reaction's own reactant; their
         factors multiply.
     radiation : str
-        Radiation-field subgroup of the Leiden table (case-insensitive).
+        Radiation field the shielding factors were computed for: the name of a
+        subgroup of the reaction's group in the shipped ``leiden.hdf5``
+        (case-insensitive).  Every reaction has ``"isrf"`` (the default),
+        ``"bb-4000"``, ``"bb-10000"``, ``"bb-20000"``, ``"ly-alpha"``,
+        ``"solar"`` and ``"tw-hya"``; all but ``"Zn._PHOTON__Zn+.e-"`` have
+        ``"mathis-1983"``; only ``"HF._PHOTON__F.H"`` and
+        ``"HF._PHOTON__HF+.e-"`` have ``"gondhalekar-1980"`` and
+        ``"habing-1968"``.  Some subgroups lack some species (``"ly-alpha"``
+        is empty for 84 of the 149 reactions).  The value is not checked when
+        the config is read: a missing subgroup fails when the shielding table
+        is read from ``leiden.hdf5``.
     """
 
     shielded_by: List[LeidenSpecies]
@@ -77,7 +92,7 @@ class Leiden(ShieldingFunction):
         Recognised ``shielded_by`` entries are :data:`LeidenSpecies`; ``"self"``
         resolves to the reaction's reactant (its own column density).  The
         optional ``radiation`` setting selects the radiation-field subgroup and
-        defaults to ``"ISRF"``.
+        defaults to ``"isrf"``.
 
         Raises
         ------

@@ -1,3 +1,6 @@
+# ABOUTME: PRIZMO parser: arrow-notation reactions and VARIABLES { } directives
+# ABOUTME: Seeds temperature shorthand globals (t32, invtgas, ...)
+
 """PRIZMO parser: arrow-notation reactions + ``VARIABLES { }`` directives."""
 
 from sympy import Basic, parse_expr

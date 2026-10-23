@@ -104,13 +104,16 @@ def rate_series(
     Returns
     -------
     dict or None
-        ``None`` (with a warning) if the rate cannot be evaluated
-        numerically, e.g. photo or cosmic-ray rates with free symbols.
+        ``None`` if the rate cannot be evaluated numerically, e.g. photo or
+        cosmic-ray rates with free symbols; this is logged as a warning, or
+        at debug level when *quiet*.
 
     Raises
     ------
     ValueError
-        A bare SymPy expression without ``tmin`` and ``tmax``.
+        A bare SymPy expression without ``tmin`` and ``tmax``, or (for a
+        reaction or SymPy expression) temperature bounds that do not satisfy
+        ``0 < tmin < tmax``.
     TypeError
         An unsupported *item* type.
     """

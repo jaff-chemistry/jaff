@@ -1,3 +1,5 @@
+# ABOUTME: SQLite driver: Db (connection wrapper), Table (single-table queries) and
+# ABOUTME: JaffDb (handle on the bundled jaff.db photo/Verner/atomic-mass database).
 """
 SQLite database driver.
 
@@ -59,7 +61,8 @@ class Db:
     cursor : sqlite3.Cursor or None
         Active cursor; ``None`` before :meth:`connect` is called.
     db_path : Path
-        Resolved path to the database file.
+        Path to the database file, as given (a ``str`` is converted to
+        :class:`~pathlib.Path`; it is not resolved).
 
     Examples
     --------
@@ -482,10 +485,11 @@ class Table:
     """
     Query interface for a single table inside a :class:`Db` connection.
 
-    Provides methods to select, insert, and drop rows without writing raw
-    SQL for each operation.  Instances are usually obtained from
-    :meth:`Db.table`, :meth:`Db.table_from_dataframe` or
-    :meth:`Db.table_from_csv`.
+    Provides methods to select and insert rows, add columns, read and update
+    single cells, and drop the whole table (:meth:`delete`) without writing
+    raw SQL for each operation.  There is no method to delete rows.
+    Instances are usually obtained from :meth:`Db.table`,
+    :meth:`Db.table_from_dataframe` or :meth:`Db.table_from_csv`.
 
     Parameters
     ----------
@@ -849,8 +853,8 @@ class JaffDb(Db):
     - ``photo_reaction_cross_sections``: per photo-reaction, its decay type,
       photo-absorption flag and Leiden/NORAD cross-section sources;
     - ``verner_cross_sections``: the Verner (1996) photoionization fits;
-    - ``atomic_masses``: per element, its name, mass and proton, neutron and
-      electron counts.
+    - ``atomic_masses``: per element, its name, ``mass``, ``atomic_mass`` and
+      proton, neutron and electron counts.
 
     The database path is resolved automatically from the package directory,
     so the constructor takes no arguments.  Access the data via

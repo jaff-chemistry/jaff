@@ -52,6 +52,17 @@ first:
 | 3. command-line options | 3. keyword arguments (`label=`, `strict=`, `radiation_props=`, …) |
 | 4. `--set key.path=value` items | |
 
+<!-- prettier-ignore -->
+!!! warning "The bundled `jaffgen.toml` is validated late"
+    Without `--config`, `jaffgen` currently validates the `jaff.toml` and
+    command-line layers on their own first, and only then adds the
+    `jaffgen.toml` its template bundles. A command-line setting that is valid
+    only together with the bundle's keys fails that first check: with the
+    `microphysics` template, whose bundle sets `bands`,
+    `--set network.radiation.c=1e10` alone stops with
+    `network.radiation.bands: required key missing`. Give the keys it needs on
+    the command line too, or copy the bundled file and pass it with `--config`.
+
 When two layers set the same table, its keys merge one by one; a list or a
 plain value is replaced whole. Tables whose keys depend on their `type` are
 replaced whole too: a `shielding` table and the
@@ -128,21 +139,22 @@ model or a `dict`.
 
 ## From the command line
 
-`jaffgen` and `jaffx` turn their options into a layer:
+`jaffgen` and `jaffx` turn their options into a layer. `jaffx` has only the
+options marked in its column:
 
-| Option | Key |
-| --- | --- |
-| `--network` | `jaffgen.network_file` |
-| `--template` | `jaffgen.template` |
-| `--indir` / `--files` | `jaffgen.input_dir` / `jaffgen.input_files` |
-| `--outdir` | `jaffgen.output_dir` |
-| `--network-config` | `jaffgen.network_config` |
-| `--echo` / `--no-echo` | `jaffgen.echo` |
-| `--label` | `network.label` |
-| `--funcfile` | `network.funcfile` |
-| `--expand-nuclei` / `--no-expand-nuclei` | `network.expand_nuclei` |
-| `--strict` / `--no-strict` | `network.strict` |
-| `--duplicate-policy` | `network.reactions.duplicate_policy` |
+| Option | Key | `jaffx` |
+| --- | --- | --- |
+| `--network` | `jaffgen.network_file` | the network to load |
+| `--template` | `jaffgen.template` | |
+| `--indir` / `--files` | `jaffgen.input_dir` / `jaffgen.input_files` | |
+| `--outdir` | `jaffgen.output_dir` | |
+| `--network-config` | `jaffgen.network_config` | |
+| `--echo` / `--no-echo` | `jaffgen.echo` | |
+| `--label` | `network.label` | yes |
+| `--funcfile` | `network.funcfile` | yes |
+| `--expand-nuclei` / `--no-expand-nuclei` | `network.expand_nuclei` | yes |
+| `--strict` / `--no-strict` | `network.strict` | |
+| `--duplicate-policy` | `network.reactions.duplicate_policy` | yes |
 
 `--set key.path=value` (repeatable) sets any key and wins over the other
 options. The key path and value are written as in TOML; a value that is not a
@@ -155,35 +167,50 @@ jaffgen --network GOW --template microphysics \
     --set 'network.reactions.reaction."CO._PHOTON__C.O".t_cutoff=extrapolate'
 ```
 
-`jaffx` accepts the `network.*` keys only.
+`jaffx` accepts the `network.*` keys only; it has no `--strict`, so use
+`--set network.strict=true`.
 
 ---
 
 ## What a run used: `config.toml`
 
 `jaffgen` writes the run's whole config, every key and default after merging
-all layers, to `config.toml` in the output directory. It records exactly what
-the run used and loads again with `--config`.
+all layers, to `config.toml` in the output directory. It records what the run
+used and loads again with `--config`. As TOML has no null, keys left unset
+(`None`) and empty tables are omitted; the file starts with a `#:schema` line
+for [editors](editor-setup.md) and puts `[jaffgen]` first.
+
+<!-- prettier-ignore -->
+!!! note "Data-table paths in `config.toml`"
+    `[[jaffgen.table]]` entries are written as they were given, so a relative
+    `source.path` is resolved against the directory of the loaded file: when
+    `config.toml` is reloaded from the output directory, that is the output
+    directory rather than the original `jaffgen.toml`'s. Use absolute source
+    paths (or `"default"`) if you plan to rerun from `config.toml`.
 
 ---
 
 ## Errors
 
 The config is validated after merging. Every problem is reported at once, by
-key path:
+key path. From the command line (`jaffgen`, `jaffx`) it is printed after
+`Error:` and the command exits with status 1; from Python, `Network(...)`
+raises a `ParserError` with the same message:
 
 ```text
-ParserError: Invalid config:
+Error: Invalid config:
   network.strict: Input should be a valid boolean
-  network.radiation.rsl: unknown key
   network.reactions.t_cutoff: Input should be 'clip' or 'extrapolate'
+  network.radiation.rsl: unknown key
   network.thermodynamics.eos: unknown EOS type 'polytrope'; choose one of ideal, multi_gamma, fermi_degenerate, relativistic_fermi_degenerate
 ```
 
 Types, allowed values and unknown keys are also checked in your editor as you
-type ([editor setup](editor-setup.md)). Checks across keys (a `profile_index`
-list needs one entry per band; a shielding model bound to one reaction) run
-when the config loads, and checks against the network (a reaction key that
+type ([editor setup](editor-setup.md)). Checks across keys (band edges must
+increase, at least two of them, with `"inf"` only last; a `profile_index` list
+needs one entry per band; `[network.dust.pe]` `threshold_low` below
+`threshold_high`; a shielding model bound to one reaction) run when the config
+loads, and checks against the network (a reaction key that
 names no reaction; `photo` settings on a non-photo reaction) when the network
 is built.
 
@@ -208,3 +235,4 @@ Old keys are errors (`unknown key`). They map to:
 | `[[table]]` | `[[jaffgen.table]]` |
 | `RadiationProps` / `DustProps` / `EosProps` | `RadiationConfig` / `DustConfig` / the EOS config models (or a `dict`) |
 | a copy of `jaffgen.toml` in the output | `config.toml` |
+| `Network(config="x.toml")` replaced the network's `jaff.toml` | `x.toml` is layered over the `jaff.toml`; pass `use_jaff_toml=False` for the old behaviour |

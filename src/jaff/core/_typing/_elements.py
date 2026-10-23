@@ -1,3 +1,6 @@
+# ABOUTME: ElementProps: typed dict for one entry of the JAFF mass dictionary
+# ABOUTME: Keys become the attributes of the same name on Element
+
 from typing import TypedDict
 
 

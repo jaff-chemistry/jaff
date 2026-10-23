@@ -1,3 +1,5 @@
+# ABOUTME: Builds the Verner (1996) photoionisation cross-section table in jaff.db from
+# ABOUTME: verner_1996.csv as piecewise SymPy expressions.
 import pandas as pd
 from sympy import Expr, Piecewise, srepr
 

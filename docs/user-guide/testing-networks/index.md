@@ -107,7 +107,7 @@ Two more worth checking:
 
 The tables live in [`benchmarks/`](https://github.com/jaff-chemistry/jaff/tree/main/benchmarks), one directory per network. Each file carries its provenance, conditions, and column names in a comment header.
 
-The `cie_h` and `h2form` references were produced with JAFF itself (`python_solve_ivp` template + SciPy LSODA at `rtol = 1e-12`) and verified against their analytic solutions before being committed; the deviation is quoted in each header and sets the accuracy floor of the reference. The GOW tables come from Munan Gong's PDR code with the parameters of Gong+2017, so that test compares against an independent implementation rather than against JAFF itself.
+The `cie_h` and `h2form` references were produced with JAFF itself (`python_solve_ivp` template + SciPy LSODA at `rtol = 1e-12`) and verified against their analytic solutions before being committed; the deviation is quoted in each header and sets the accuracy floor of the reference. The `cie_h` reference was made with an earlier version of that network's rates and is being regenerated; until then, use the values on the [cie_h page](cie-h.md). The GOW tables come from Munan Gong's PDR code with the parameters of Gong+2017, so that test compares against an independent implementation rather than against JAFF itself.
 
 ## What a passing result looks like
 

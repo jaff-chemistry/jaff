@@ -155,9 +155,9 @@ class DEDt(InternalEnergy):
     The normalised forms are time derivatives of the normalised energies, so they use
     the quotient rule with the network's per-cell density rates
     (:attr:`NetworkSymbols.drho_dt`, :attr:`NetworkSymbols.dntot_dt`): neither ρ nor
-    n_tot is constant in a cell.  ``E`` is read lazily from
-    ``net.thermodynamics.eos`` because ``DEDt`` objects are created while
-    ``Thermodynamics`` itself is being constructed.
+    n_tot is constant in a cell.  ``E`` is read from ``net.thermodynamics.eos``
+    only when a normalised form is first requested, so the volumetric form never
+    builds the EOS.
     """
 
     @cached_property

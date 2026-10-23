@@ -1,3 +1,6 @@
+# ABOUTME: Typed dicts for the KROME and PRIZMO parsers' format state
+# ABOUTME: kromeFormatProps (column layout) and prizmoFormatProps
+
 from typing import TypedDict
 
 kromeFormatProps = TypedDict(

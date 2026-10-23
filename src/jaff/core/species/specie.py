@@ -1,3 +1,6 @@
+# ABOUTME: Specie class: one chemical species' name, mass, composition and charge
+# ABOUTME: Parses formulas into exploded atom lists and serialized identity forms
+
 """Single chemical species (:class:`Specie`) for JAFF networks.
 
 A *specie* is a single molecular or atomic entity present in a reaction
@@ -137,16 +140,17 @@ class Specie:
         ----------
         name : str
             Chemical formula as used in the network file.  The electron must
-            be given as ``"e-"``; common misspellings (``"E"``, ``"E-"``,
-            ``"electron"``, etc.) raise a fatal error.
+            be given as ``"e-"``; the names ``"E"``, ``"E-"`` and (in any case)
+            ``"e"``, ``"eletron"``, ``"electrons"``, ``"el"`` and ``"els"``
+            raise a fatal error.  ``"electron"`` itself is not in that list.
         index : int, optional
             Position in the parent ``Species`` catalogue, by default ``0``.
 
         Raises
         ------
         SystemExit
-            If *name* is a known misspelling of the electron species (the
-            correct form is ``"e-"``).
+            If *name* is one of the electron misspellings listed under *name*
+            (the correct form is ``"e-"``).
         """
         self.logger: logging.Logger = JaffLogger().get_logger()
         if name.lower() in ["e", "eletron", "electrons", "el", "els"] or name in [
@@ -425,6 +429,8 @@ class Specie:
                 if p != "x":
                     # Repeat the previous atom (n-1) extra times to account
                     # for the first copy already appended in the previous step.
+                    # The max(..., 1) floor means an explicit count of 1 (e.g.
+                    # "C1") also appends one extra copy, giving two atoms.
                     expl += [pold] * max(int(p) - 1, 1)
             pold = p
         self.exploded = sorted([proxy_rev[x] for x in expl])

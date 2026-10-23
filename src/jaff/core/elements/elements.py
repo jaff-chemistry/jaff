@@ -1,3 +1,6 @@
+# ABOUTME: Elements: ordered, unique collection of the elements in a network's species
+# ABOUTME: Derived from a Specie list, with lookup and per-element helpers
+
 """Ordered, unique :class:`Elements` collection for JAFF networks.
 
 ``Elements`` is derived from a list of ``Specie`` objects, with helpers for

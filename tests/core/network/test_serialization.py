@@ -411,3 +411,11 @@ def test_compact_float_is_number():
     assert isinstance(node, list) and node[0] == "Add"
     assert all(isinstance(arg, (int, float)) for arg in node[1])
     assert abs(float(sympy.simplify(from_jsonable(node) - expr).evalf())) < 1e-15
+
+
+def test_from_jaff_file_takes_only_the_path():
+    import inspect
+
+    from jaff.io._io import from_jaff_file
+
+    assert list(inspect.signature(from_jaff_file).parameters) == ["filename"]

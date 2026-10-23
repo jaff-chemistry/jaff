@@ -1,3 +1,6 @@
+# ABOUTME: KROME network parser: @format/@var directives and comma-delimited reactions
+# ABOUTME: Seeds KROME shorthand globals (t32, invtgas, ...) for rate expressions
+
 """KROME parser: ``@format``/``@var`` directives + comma-delimited reactions."""
 
 from sympy import Basic, parse_expr
@@ -19,11 +22,10 @@ class KromeParser(Parser):
     priority = 10
 
     # Canonical JAFF symbol aliases for common Fortran/KROME shorthand
-    # variables such as ``t32``, ``te``, ``invtgas``, and ``sqrtgas``, so that
-    # they are resolved automatically during rate normalization.  Order
-    # matters: compound aliases (invt32, invte) must be listed before the
-    # simpler ones they depend on so that resolve_symbolic_dependencies can
-    # substitute correctly.
+    # variables such as ``t32``, ``te``, ``invtgas``, and ``sqrtgas``.  They
+    # seed the parser's globals, which Network substitutes into the rates.
+    # Order does not matter: resolve_symbolic_dependencies resolves aliases
+    # that reference each other (invt32 -> t32) depth-first.
     BASE_GLOBALS = {
         "invt32": "1e0 / t32",
         "invte": "1e0 / te",

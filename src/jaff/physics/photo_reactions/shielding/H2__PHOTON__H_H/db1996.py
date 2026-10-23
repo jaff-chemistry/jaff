@@ -1,3 +1,5 @@
+# ABOUTME: Draine & Bertoldi (1996) H2 self-shielding (shielding.type = "db1996"),
+# ABOUTME: bound to the H2 photodissociation reaction H2._PHOTON__H.H
 """
 H2 shielding by Draine & Bertoldi 1996
 DOI:https://ui.adsabs.harvard.edu/link_gateway/1996ApJ...468..269D/doi:10.1086/177689
@@ -25,9 +27,13 @@ class DB1996Params(ShieldingParams):
     Attributes
     ----------
     min_ncol : float
-        Lower floor on the H2 column density (cm^-2).
+        Floor on the dimensionless column ``x = N(H2) / 5e14 cm^-2`` of the fit
+        (a floor on ``x``, not on the column density in cm^-2).
     min_vdisp : float
-        Lower floor on the velocity dispersion (cm/s).
+        Floor on the dimensionless Doppler parameter
+        ``b5 = sqrt(2) * vdisp / 1e5 cm/s`` of the fit (a floor on ``b5``, not
+        on the velocity dispersion in cm/s); keeps ``x / b5`` finite when
+        ``vdisp`` is 0.
     """
 
     min_ncol: float = 1.0e-50
@@ -50,8 +56,9 @@ class DB1996(ShieldingFunction):
         """Return the Draine & Bertoldi (1996) H2 self-shielding factor.
 
         Thin wrapper over :func:`shielding` with ``alpha = 2.0``, using the
-        optional floors ``shielding.min_ncol`` (cm^-2) and
-        ``shielding.min_vdisp`` (cm/s).
+        optional floors ``shielding.min_ncol`` (on the dimensionless column
+        ``x``) and ``shielding.min_vdisp`` (on the dimensionless Doppler
+        parameter ``b5``).
 
         Raises
         ------

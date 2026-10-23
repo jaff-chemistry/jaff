@@ -1,3 +1,6 @@
+# ABOUTME: NetworkSpec: a Network's resolved file path, settings and .jfunc functions
+# ABOUTME: Resolves predefined network names and auxiliary .jfunc files
+
 """The :class:`NetworkSpec` normalized parameters of a :class:`~jaff.Network`."""
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ class NetworkSpec:
     and the network file into one of these (exposed as :attr:`Network.spec`):
 
     * ``fname`` is resolved to an absolute path (a filesystem path or a
-      predefined network name; see :meth:`resolve_network_path`);
+      predefined network name; see :meth:`_resolve_network_path`);
     * ``funcfile`` is resolved to the actual ``.jfunc`` file (scanning next to
       the network file when ``True``) and its contents are parsed into
       :attr:`aux_funcs`.
@@ -45,8 +48,10 @@ class NetworkSpec:
         Exposed for inspection/debugging.
     duplicate_policy : str
         Global policy for two rate coefficients sharing a reaction, mechanism,
-        and temperature range (``config.reactions.duplicate_policy``); a
-        reaction's own policy may override it.
+        and temperature range (``config.reactions.duplicate_policy``), kept for
+        reference only: the loader reads each reaction's resolved policy from
+        ``config.reactions`` instead, where a reaction's own policy may
+        override the global one.
     expand_nuclei : bool
         Whether ``n_<element>_nuc`` symbols expand into element-nucleus sums.
     _from_cli : bool
@@ -73,9 +78,11 @@ class NetworkSpec:
     def _load_aux_funcs(self) -> dict[str, AuxiliaryFunctionProps]:
         """Detect and parse the auxiliary ``.jfunc`` file into a dict.
 
-        When :attr:`funcfile` is ``True``, scans next to the network file for
-        ``<network>.jfunc`` (both ``<name>.jfunc`` and ``<stem>.jfunc``) and
-        rewrites :attr:`funcfile` to the resolved path.  ``False`` skips loading.
+        When :attr:`funcfile` is ``True``, looks next to the network file for
+        ``<file name>.jfunc`` (e.g. ``net.dat.jfunc``) and then for the network
+        file with its suffix replaced by ``.jfunc`` (e.g. ``net.jfunc``), and
+        rewrites :attr:`funcfile` to the first one found.  ``False`` skips
+        loading.
 
         Returns
         -------
@@ -113,11 +120,13 @@ class NetworkSpec:
     def _resolve_network_path(fname: str | Path) -> Path:
         """Resolve *fname* to a network file path or a predefined network name.
 
-        A predefined network name wins over a same-named path on disk.  A
-        predefined name is a sub-directory of :data:`~jaff.config.NETWORKS_DIR`
-        that contains exactly one ``.jet`` file.  Non-predefined names are
-        treated as filesystem paths, with relative paths resolved against the
-        current working directory.
+        A predefined name is a sub-directory of :data:`~jaff.config.NETWORKS_DIR`
+        that contains exactly one ``.jet`` file.  Only the final component of
+        *fname* is compared with the predefined names, so any *fname* ending in
+        one (``COthin``, but also ``/some/dir/COthin``) resolves to that
+        predefined network, even when a file exists at that path.  Other names
+        are treated as filesystem paths, with relative paths resolved against
+        the current working directory.
 
         Parameters
         ----------

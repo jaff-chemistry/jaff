@@ -1,3 +1,5 @@
+# ABOUTME: Codegen class turning a Network into rate/flux/ODE/Jacobian code strings.
+# ABOUTME: Supports C++, C, Fortran, Python, Rust, Julia and R with optional CSE.
 """Multi-language code generator for astrochemical network ODEs.
 
 This module exposes the :class:`Codegen` class which transforms a parsed
@@ -781,8 +783,8 @@ class Codegen:
         A thin printer over ``net.thermodynamics.dTdt_tot``
         (:attr:`~jaff.physics.thermodynamics.Thermodynamics.dTdt_tot`).  It is
         selected in the RHS and Jacobian generators with ``thermal="dtdt"``
-        (template modifier ``THERMAL dtdt``).  For the energy rate see
-        :meth:`get_dedt`.
+        (template option group ``THERMAL { MODE -> dtdt }``).  For the energy
+        rate see :meth:`get_dedt`.
 
         Returns
         -------
@@ -1636,9 +1638,10 @@ class Codegen:
             thermal_rows = self._thermal_rows(thermal, energy)
             n_ode_eqns = n_species + len(thermal_rows) + n_rad_eqns
 
-            # Scalar differentiation symbols for each state variable.
-            # SymPy's jacobian() requires ordinary scalar symbols, not
-            # MatrixSymbol entries, so we map nden[i] -> y_i temporarily.
+            # Scalar differentiation symbols for each state variable: the
+            # indexed nden[i] (IndexedBase) entries are mapped to plain y_i
+            # symbols so each row can be differentiated per free symbol, then
+            # mapped back to array notation in the emitted code.
             y_syms = [sp.symbols(f"y_{i}") for i in range(n_species)]
 
             if radiation and self.net.radiation:
@@ -1706,7 +1709,8 @@ class Codegen:
                 for sode in ode_symbols
             ]
 
-        # Compute the full dense Jacobian matrix symbolically
+        # Fill the Jacobian sparsely: differentiate each row only by the state
+        # symbols that actually appear in it (other entries stay zero)
         y_index = {sym: col for col, sym in enumerate(y_syms)}
         jacobian_matrix = sp.zeros(len(ode_symbols), len(y_syms))
         for row, sode in enumerate(
@@ -1943,7 +1947,7 @@ class Codegen:
                 var_name = f"{cse_var}{_idx}"
                 jac_code += self.lang.format_cse_declaration(var_name, expr) + "\n"
 
-        # Generate Jacobian code without CSE
+        # Emit one assignment per Jacobian element (may reference the CSE temps)
         for [i, j], expr in jac_expressions["expressions"]:
             jac_code += f"{jac_var}{self.lang.mlb}{ioff + i}{self.lang.sep}{ioff + j}{self.lang.mrb} {self.lang.assignment_op} {expr}{self.lang.line_end}\n"
 
@@ -1959,10 +1963,12 @@ class Codegen:
         calls ``photorates(...)`` or a custom analytic function), it produces
         :class:`~sympy.Derivative` or :class:`~sympy.Subs` nodes that no
         language printer can serialise.  This method replaces each such node
-        with a synthetic function whose name encodes the derivative signature::
+        with a synthetic function whose name encodes the derivative signature:
 
-            Derivative(foo(a, b), a)  →  foo_partial_0(a, b)
-            Subs(Derivative(bar(x), x), x, 0)  →  bar_partial_0(a, evaluated_0)
+        ```text
+        Derivative(foo(a, b), a)           →  foo_partial_0(a, b)
+        Subs(Derivative(bar(x), x), x, 0)  →  bar_partial_0(0)
+        ```
 
         The suffix ``_N`` indicates that differentiation was performed with
         respect to the argument at position *N*.

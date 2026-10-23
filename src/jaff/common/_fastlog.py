@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# ABOUTME: Fast log2 approximation (from quokka) and its numerical inverse, used to build
+# ABOUTME: uniform-in-fast_log2 temperature grids for rate tables.
 
 """
 Fast log2 approximation and its numerical inverse.

@@ -1,3 +1,6 @@
+# ABOUTME: KROME comma-delimited reaction handler
+# ABOUTME: Parses a reaction line against the active @format column layout
+
 """KROME comma-delimited reaction handler."""
 
 import re

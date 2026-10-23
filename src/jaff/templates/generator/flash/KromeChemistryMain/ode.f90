@@ -23,8 +23,8 @@ module ode
 
         ! Local aliases for the cosmic-ray rate and visual extinction.
         ! The generated energy equation references these by their bare
-        ! network names, so alias them rather than rewriting the wrapped
-        ! expression (a length-changing rewrite would overflow the line).
+        ! network names, so alias them rather than rewriting the generated
+        ! expression with a REPLACE rule.
         crate = common_crate
         av = common_av
 

@@ -1,3 +1,5 @@
+# ABOUTME: Photochemistry: per-reaction photo cross-section look-ups (NORAD, Verner,
+# ABOUTME: Leiden, custom) stored as XsecProps
 """
 Look-ups for photochemical cross sections.
 
@@ -129,8 +131,8 @@ class Photochemistry:
     """Cross-section provider for photo-reactions.
 
     Resolves per-reaction photoionisation / photodissociation / photoabsorption
-    cross sections from the JAFF database and the tabulated Leiden, NORAD, and
-    Verner data files.
+    cross sections from the tabulated Leiden and NORAD data files and the
+    Verner (1996) fits in the JAFF database (``verner_cross_sections`` table).
 
     The network creates one lazily, when its first photo reaction is built, and
     every :class:`~jaff.core.reaction.Reaction` stores what it resolves as

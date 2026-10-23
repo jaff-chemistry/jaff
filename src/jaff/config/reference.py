@@ -1,3 +1,5 @@
+# ABOUTME: Generates the configuration reference page (markdown) from the config
+# ABOUTME: models (python -m jaff.config.reference)
 """The configuration reference page, generated from the config models.
 
 One section per TOML table of a ``jaffgen.toml`` (a ``jaff.toml`` holds its
@@ -6,9 +8,11 @@ description being the key's numpydoc ``Attributes`` entry in the model's
 docstring (or a base model's).  Tables whose keys depend on their ``type``
 (the EOS, the shielding models) get one subsection per type.  The page is
 written to :data:`REFERENCE_PAGE` (not committed; CI builds it before the
-site); write it before serving the docs locally with::
+site); write it before serving the docs locally with:
 
-    python -m jaff.config.reference
+```bash
+python -m jaff.config.reference
+```
 """
 
 from __future__ import annotations
@@ -25,7 +29,7 @@ from ._config import SRC_DIR
 from .base import attribute_descriptions, field_descriptions
 from .loader import _members
 
-#: The committed reference page.
+#: The generated reference page (gitignored, not committed).
 REFERENCE_PAGE: Path = (
     SRC_DIR.parent / "docs" / "user-guide" / "configuration" / "reference.md"
 )

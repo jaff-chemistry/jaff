@@ -1,3 +1,6 @@
+# ABOUTME: UCLCHEM parser: processes the bucket of NAN-sentinel reaction lines
+# ABOUTME: Registered with the format-parser registry
+
 """UCLCHEM parser: a single ``NAN``-sentinel reaction line-type."""
 
 from .._parser import Parser, register

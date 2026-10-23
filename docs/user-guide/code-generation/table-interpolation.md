@@ -32,10 +32,12 @@ function. You simply call it inside a `.jfunc` heating/cooling or rate
 expression; you never define it. From the GOW network's `.jfunc`:
 
 ```text
-L0    = L0_CO_interp1d(tgas)
-LLTE  = LLTE_CO_interp2d(tgas, LVG_param)
+L0 = L0_CO_interp1d(tgas)
+LLTE = LLTE_CO_interp2d(tgas, LVG_param)
+nHalf = nHalf_CO_interp2d(tgas, LVG_param)
 alpha = alpha_CO_interp2d(tgas, LVG_param)
-psi   = PsiGD_coll_interp2d(n_H, tgas)
+...
+psi_coll = PsiGD_coll_interp2d(n_H_nuc, tgas)
 ```
 
 When the network loads, JAFF separates these from genuine mistakes: instead of
@@ -75,12 +77,12 @@ function**:
 
 ```text
 Derivative( alpha_CO_interp2d(tgas, p), tgas )  →  alpha_co_interp2d_partial_0(tgas, p)
-Derivative( PsiGD_coll_interp2d(n_H, tgas), tgas ) → psigd_coll_interp2d_partial_1(n_H, tgas)
+Derivative( PsiGD_coll_interp2d(n_H_nuc, tgas), tgas ) → psigd_coll_interp2d_partial_1(n_H_nuc, tgas)
 ```
 
 The `_partial_N` suffix names the **zero-based argument** the derivative is taken
 with respect to — `_partial_0` is $\partial/\partial\text{arg1}$, `_partial_1` is
-$\partial/\partial\text{arg1}$. The call keeps the original arguments. So alongside each interpolation function you implement, you must also provide its partials that appear in the
+$\partial/\partial\text{arg2}$. The call keeps the original arguments. So alongside each interpolation function you implement, you must also provide its partials that appear in the
 Jacobian — typically the table's gradient in each direction.
 
 For the GOW network, generating the Jacobian with `THERMAL dedt` (so the
@@ -107,7 +109,8 @@ The generated code needs the table itself. The
 source table (the network's own `.hdf5` rate table, or a CSV) into the HDF5/CSV
 file your interpolation routines read at runtime — produced in the same
 `jaffgen` run that writes the source. For example, turning a CO cooling CSV into
-an HDF5 dataset:
+an HDF5 dataset (`co_1d.csv` is a hypothetical input; it is not shipped with
+the GOW network):
 
 ```toml
 [[jaffgen.table]]

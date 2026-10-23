@@ -56,11 +56,12 @@
     },
     "FermiDegenerateEosConfig": {
       "additionalProperties": false,
-      "description": "Non-relativistic degenerate Fermi gas (`type = \"fermi_degenerate\"`).",
+      "description": "Non-relativistic degenerate Fermi gas (`type = \"fermi_degenerate\"`).\n\nNot implemented yet: the config is accepted, but building the EOS raises\n`NotImplementedError`.",
       "properties": {
         "type": {
           "const": "fermi_degenerate",
           "default": "fermi_degenerate",
+          "description": "`\"fermi_degenerate\"` (case-insensitive); required.",
           "title": "Type",
           "type": "string"
         }
@@ -78,6 +79,7 @@
         "type": {
           "const": "ideal",
           "default": "ideal",
+          "description": "`\"ideal\"` (case-insensitive); the EOS used when `type` is omitted.",
           "title": "Type",
           "type": "string"
         },
@@ -99,6 +101,7 @@
         "type": {
           "const": "multi_gamma",
           "default": "multi_gamma",
+          "description": "`\"multi_gamma\"` (case-insensitive); required.",
           "title": "Type",
           "type": "string"
         },
@@ -201,7 +204,7 @@
     },
     "PhotoConfig": {
       "additionalProperties": false,
-      "description": "Photo-reaction settings (`[network.reactions.photo]`).\n\n`None` means unset: the value comes from the global settings.",
+      "description": "Photo-reaction settings (`[network.reactions.photo]`).\n\nThe same keys appear in the global `[network.reactions.photo]` table and\nin a reaction's own `[network.reactions.reaction.\"<serialized>\".photo]`\ntable.  A key left out of a reaction's table takes the global value; a key\nleft out of the global table takes its default: `pi_database = \"norad\"`,\n`override_custom_rate = false`, `override_custom_cross_section = false`,\n`use_proxy_photoreaction = true` and no `shielding`.",
       "properties": {
         "pi_database": {
           "enum": [
@@ -215,12 +218,12 @@
         },
         "override_custom_rate": {
           "type": "boolean",
-          "description": "Recompute a `.jfunc` `chemRate<N>` rate from the cross sections.",
+          "description": "Replace a reaction's `.jfunc` `chemRate<N>` rate with one computed from its cross section over the radiation bands.  Has no effect without a `[network.radiation]` table: the `chemRate` is then always kept.",
           "title": "Override Custom Rate"
         },
         "override_custom_cross_section": {
           "type": "boolean",
-          "description": "Ignore `.jfunc` `photoCrossSection<N>` and use the database.",
+          "description": "Ignore a reaction's `.jfunc` `photoCrossSection<N>` and take its cross section from the database.  The global value only applies with a `[network.radiation]` table; a value in a reaction's own table applies with or without one.",
           "title": "Override Custom Cross Section"
         },
         "use_proxy_photoreaction": {
@@ -426,11 +429,12 @@
     },
     "RelativisticFermiDegenerateEosConfig": {
       "additionalProperties": false,
-      "description": "Relativistic degenerate Fermi gas (`type = \"relativistic_fermi_degenerate\"`).",
+      "description": "Relativistic degenerate Fermi gas (`type = \"relativistic_fermi_degenerate\"`).\n\nNot implemented yet: the config is accepted, but building the EOS raises\n`NotImplementedError`.",
       "properties": {
         "type": {
           "const": "relativistic_fermi_degenerate",
           "default": "relativistic_fermi_degenerate",
+          "description": "`\"relativistic_fermi_degenerate\"` (case-insensitive); required.",
           "title": "Type",
           "type": "string"
         }
@@ -451,13 +455,13 @@
             },
             "min_ncol": {
               "default": 1e-50,
-              "description": "Lower floor on the H2 column density (cm^-2).",
+              "description": "Floor on the dimensionless column `x = N(H2) / 5e14 cm^-2` of the fit (a floor on `x`, not on the column density in cm^-2).",
               "title": "Min Ncol",
               "type": "number"
             },
             "min_vdisp": {
               "default": 1e-50,
-              "description": "Lower floor on the velocity dispersion (cm/s).",
+              "description": "Floor on the dimensionless Doppler parameter `b5 = sqrt(2) * vdisp / 1e5 cm/s` of the fit (a floor on `b5`, not on the velocity dispersion in cm/s); keeps `x / b5` finite when `vdisp` is 0.",
               "title": "Min Vdisp",
               "type": "number"
             }
@@ -476,13 +480,13 @@
             },
             "min_ncol": {
               "default": 1e-50,
-              "description": "Lower floor on the H2 column density (cm^-2).",
+              "description": "Floor on the dimensionless column `x = N(H2) / 5e14 cm^-2` of the fit (a floor on `x`, not on the column density in cm^-2).",
               "title": "Min Ncol",
               "type": "number"
             },
             "min_vdisp": {
               "default": 1e-50,
-              "description": "Lower floor on the velocity dispersion (cm/s).",
+              "description": "Floor on the dimensionless Doppler parameter `b5 = sqrt(2) * vdisp / 1e5 cm/s` of the fit (a floor on `b5`, not on the velocity dispersion in cm/s); keeps `x / b5` finite when `vdisp` is 0.",
               "title": "Min Vdisp",
               "type": "number"
             }
@@ -517,7 +521,7 @@
             },
             "radiation": {
               "default": "isrf",
-              "description": "Radiation-field subgroup of the Leiden table (case-insensitive).",
+              "description": "Radiation field the shielding factors were computed for: the name of a subgroup of the reaction's group in the shipped `leiden.hdf5` (case-insensitive).  Every reaction has `\"isrf\"` (the default), `\"bb-4000\"`, `\"bb-10000\"`, `\"bb-20000\"`, `\"ly-alpha\"`, `\"solar\"` and `\"tw-hya\"`; all but `\"Zn._PHOTON__Zn+.e-\"` have `\"mathis-1983\"`; only `\"HF._PHOTON__F.H\"` and `\"HF._PHOTON__HF+.e-\"` have `\"gondhalekar-1980\"` and `\"habing-1968\"`.  Some subgroups lack some species (`\"ly-alpha\"` is empty for 84 of the 149 reactions).  The value is not checked when the config is read: a missing subgroup fails when the shielding table is read from `leiden.hdf5`.",
               "title": "Radiation",
               "type": "string"
             }

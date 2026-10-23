@@ -65,7 +65,7 @@ print(f"Network contains {net.species.count} species")
 print(f"First species: {net.species[0].name}, mass: {net.species[0].mass} gm")
 
 # Access reactions
-rea = net.reactions["H -> H+ + e-"]
+rea = net.reactions["H + _PHOTON -> H+ + e-"]
 print(f"Reactants: {', '.join(rea.reactants.names())}")
 print(f"Products: {', '.join(rea.products.names())}")
 ```
@@ -74,8 +74,8 @@ print(f"Products: {', '.join(rea.products.names())}")
 
 ```text
 Network contains 3 species
-First species: H, mass: 1.008 gm
-Reactants: H
+First species: H, mass: 1.673773e-24 gm
+Reactants: H, _PHOTON
 Products: H+, e-
 ```
 
@@ -136,7 +136,6 @@ Products: H+, e-
 ## Community & Support
 
 - **GitHub Issues**: Report bugs and request features at [github.com/jaff-chemistry/jaff/issues](https://github.com/jaff-chemistry/jaff/issues)
-- **Discussions**: Ask questions and share ideas
 - **Contributing**: See our [Contributing Guide](development/contributing.md)
 
 ---
@@ -151,7 +150,7 @@ If you use JAFF in your research, please cite:
   author = {JAFF Team},
   year = {2024},
   url = {https://github.com/jaff-chemistry/jaff},
-  version = {0.1.0}
+  version = {0.1.5}
 }
 ```
 

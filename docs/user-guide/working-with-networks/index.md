@@ -30,13 +30,13 @@ print(f"Elements:  {net.elements.count}")
 
     [:octicons-arrow-right-24: Network](network.md)
 
-- :phosphor-sliders:{ .sm .middle } **Network Configuration**
+- :phosphor-sliders:{ .sm .middle } **Configuration**
 
     ***
 
-    The network's `jaff.toml`: per-reaction and global temperature-cutoff (`clip` / `extrapolate`) behaviour, and how it composes with `jaffgen.toml`.
+    The `[network]` settings shared by `jaff.toml` and `jaffgen.toml` (one schema): reactions, temperature cutoffs, radiation, dust, thermodynamics, and how the layers stack.
 
-    [:octicons-arrow-right-24: jaff.toml](../configuration/index.md)
+    [:octicons-arrow-right-24: Configuration](../configuration/index.md)
 
 - :phosphor-dna:{ .sm .middle } **Species**
 

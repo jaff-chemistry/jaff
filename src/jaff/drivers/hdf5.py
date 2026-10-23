@@ -1,3 +1,5 @@
+# ABOUTME: HDF5 driver: converts between HDF5Dict nested dictionaries and HDF5
+# ABOUTME: files via h5py, and exports HDF5 data to CSV.
 """
 HDF5 file driver.
 
