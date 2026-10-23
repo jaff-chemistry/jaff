@@ -90,7 +90,7 @@ _RADODES = {"RADIATION": {"ORDER": Setting("order", parse_int)}}
 
 **Tests**
 
-- `tests/test_templating_repeat_props.py` asserts the exact set of properties
+- `tests/codegen/templating/test_templating_repeat_props.py` asserts the exact set of properties
   (`OLD_PROPS`); add the new name there, and a check of its item variable if it
   has one.
 - Add a block using the property to a fixture in
@@ -98,7 +98,7 @@ _RADODES = {"RADIATION": {"ORDER": Setting("order", parse_int)}}
   regenerate and review the snapshots:
 
 ```bash
-JAFF_UPDATE_SNAPSHOTS=1 uv run pytest tests/test_template_engine_snapshots.py
+JAFF_UPDATE_SNAPSHOTS=1 uv run pytest tests/codegen/templating/test_template_engine_snapshots.py
 git diff tests/snapshots/template_engine
 ```
 
@@ -137,7 +137,7 @@ int total = ((1) + (2) + (2) + (4) + (3));
 
 **Tests**
 
-- `tests/test_templating_reduce.py`: build the command with
+- `tests/codegen/templating/test_templating_reduce.py`: build the command with
   `Reduce(("name_length",), ("specie_name_lengths",))` and assert the rendered
   sum, in the style of the existing `charges()` tests.
 - Add a block to `tests/fixtures/templates/engine/reduce.py` and regenerate the
@@ -156,7 +156,7 @@ int total = ((1) + (2) + (2) + (4) + (3));
   `commands/has/props.py`; the collection must support `entity in collection`.
   `GET` checks its entities against the same table.
 
-Cover each with a case in `tests/test_templating_simple_commands.py` and, where
+Cover each with a case in `tests/codegen/templating/test_templating_simple_commands.py` and, where
 useful, a fixture block plus regenerated snapshots.
 
 ## See Also

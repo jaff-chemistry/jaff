@@ -91,7 +91,7 @@ the module is always there (like `thermodynamics`). Document the field in the
 parent's `Attributes` too. There is no registry: the parent's import of the
 child is what puts it in the tree.
 
-Then add the new module to `CONFIG_MODULES` in `tests/test_config_modules.py`,
+Then add the new module to `CONFIG_MODULES` in `tests/config/test_config_modules.py`,
 which imports every `config.py` in a fresh interpreter to catch import cycles.
 A `config.py` should import only pydantic, `jaff.config` and other `config.py`
 modules.
@@ -158,10 +158,10 @@ or with `--set`. To add a shortcut:
 ```bash
 python -m jaff.config.json_schema   # editor schemas, src/jaff/config/schemas/
 python -m jaff.config.reference     # docs/user-guide/configuration/reference.md (for local docs)
-uv run pytest tests/test_config_*.py
+uv run pytest tests/config
 ```
 
-`tests/test_config_json_schema.py` fails when a committed schema is out of date
+`tests/config/test_config_json_schema.py` fails when a committed schema is out of date
 with the models. The reference page is not committed: CI generates it before
 building the docs.
 
@@ -170,7 +170,7 @@ building the docs.
 - [x] `config.py` next to the module, with a `ConfigModel` subclass
 - [x] Every key documented in numpydoc `Attributes`, worded for TOML users
 - [x] Field added to the parent model (and documented there)
-- [x] Module listed in `CONFIG_MODULES` (`tests/test_config_modules.py`)
+- [x] Module listed in `CONFIG_MODULES` (`tests/config/test_config_modules.py`)
 - [x] The consuming class takes `(network, config)`; `Network` builds it
 - [x] Checks placed by kind (type / validator / network build)
 - [x] Type-selected tables: `_atomic`, one model per type, discriminated union

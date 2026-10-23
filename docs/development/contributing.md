@@ -143,7 +143,7 @@ Two workflows run automatically:
 | **Deploy Documentation** | Builds the docs with `zensical build` to catch broken builds and links.                        |
 
 The **Tests** run includes the [example notebooks](../getting-started/examples.md):
-`tests/test_example_notebooks.py` executes each one headless and fails if it does
+`tests/meta/test_example_notebooks.py` executes each one headless and fails if it does
 not exit 0. Tests that build generated code (the Fortran and C++ solvers, and the
 notebooks that compile them) run only on Linux.
 

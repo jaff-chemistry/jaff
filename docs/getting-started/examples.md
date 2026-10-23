@@ -53,6 +53,6 @@ notebooks shell out to external tools:
 
 ## Tested in CI
 
-`tests/test_example_notebooks.py` runs every notebook headless as part of the
+`tests/meta/test_example_notebooks.py` runs every notebook headless as part of the
 regular test suite and requires it to exit 0. Notebooks `04` and `05` run only
 on Linux, and are skipped when a tool they need is missing.

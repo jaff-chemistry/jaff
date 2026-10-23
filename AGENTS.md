@@ -15,8 +15,8 @@ uv pip install --system -e ".[dev]"    # Install with dev dependencies
 ```bash
 uv run pytest                           # Run all tests
 uv run pytest -v                        # Verbose output
-uv run pytest tests/test_network.py     # Run specific test file
-uv run pytest tests/test_network.py::test_load_network  # Run single test
+uv run pytest tests/core/network/test_network.py     # Run specific test file
+uv run pytest tests/core/network/test_network.py::test_load_network  # Run single test
 uv run pytest -k "network"              # Run tests matching pattern
 uv run pytest --cov=jaff                # Run with coverage
 ```
@@ -161,9 +161,10 @@ from jaff import Network
 
 ```
 src/jaff/       # Main source code
-tests/          # Test files
+tests/          # Test files, mirroring src/jaff/ (core/, physics/, codegen/, ...)
+                # plus e2e/ and meta/; paths via tests/_paths.py
   fixtures/     # Test data
-examples/       # Example marimo notebooks (run by tests/test_example_notebooks.py)
+examples/       # Example marimo notebooks (run by tests/meta/test_example_notebooks.py)
 docs/           # Documentation
 ```
 

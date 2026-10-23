@@ -16,10 +16,11 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 import numpy as np
 
 from jaff.cli import JaffGen
+from tests._paths import GOLDEN_DIR, REPO_ROOT
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = REPO_ROOT
 TEMPLATES = Path(__file__).parent / "fixtures" / "templates"
-GOLDEN = Path(__file__).parent / "golden"
+GOLDEN = GOLDEN_DIR
 CONFIG = Path(__file__).parent / "fixtures" / "jaffgen.toml"
 UPDATE = os.environ.get("JAFF_UPDATE_GOLDEN") == "1"
 
