@@ -238,11 +238,11 @@ def to_jaff_file(filename: str | Path, net: "Network"):
 
 
 def _photo_setting(reaction: Reaction, name: str) -> Any:
-    """A photo reaction's resolved ``config.photo`` setting; ``None`` otherwise."""
-    if reaction.photo is None or reaction.config.photo is None:
+    """A photo reaction's resolved photo setting; ``None`` otherwise."""
+    if reaction.photo is None:
         return None
 
-    return getattr(reaction.config.photo, name)
+    return getattr(reaction.photo.config, name)
 
 
 def _encode_shielding(reaction: Reaction) -> dict[str, Any] | None:

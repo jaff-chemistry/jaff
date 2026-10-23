@@ -1,10 +1,10 @@
-# ABOUTME: Per-reaction property groups split out of Reaction: photo-reaction state
-# ABOUTME: (cross sections, bands) and radiation coupling (energy added to the field)
+# ABOUTME: Per-reaction data split out of Reaction: per-band photo data, radiation
+# ABOUTME: coupling (energy added to the field) and the reaction's aux functions
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, List
 
 from sympy import Expr
 
@@ -12,64 +12,7 @@ from ...core.parsers import AuxiliaryFunctionProps
 from ...errors import ParserError
 
 if TYPE_CHECKING:
-    from ...physics import XsecProps
-
-
-class PhotoReactionProps:
-    """Computed photo-reaction state, held as ``Reaction.photo`` (``None`` otherwise).
-
-    :class:`~jaff.core.Network` builds one for every reaction of type
-    ``"photo"``, and the :class:`Reaction` constructor fills ``xsec``,
-    ``custom_rad_rate`` and, with a radiation field, ``rgrouped``.  It holds
-    only what is computed from the settings: the settings themselves
-    (``pi_database``, ``override_*``, ``shielding``, ...) are the reaction's
-    ``config.photo`` (see :attr:`Reaction.config`).
-
-    Attributes
-    ----------
-    xsec : XsecProps or None
-        Cross sections of the reaction's single decay channel, or ``None``
-        when no database has an entry.  ``xsec.total`` holds the cross
-        section averaged over the whole radiation spectrum (cm²).
-    custom_rad_rate : bool
-        ``True`` when the rate comes from a ``.jfunc`` ``chemRate<N>``
-        function rather than from the cross sections; such a reaction is not
-        coupled to the radiation bands.
-    rgrouped : list[GroupedPhotoReactionProps] or None
-        One entry per radiation band, in ``net.radiation.groups`` order, with
-        that band's loss coefficient ``k``, band-average ``xsec`` and
-        ``xsec_frac``.  Set when a radiation field is configured; ``None``
-        otherwise, and for a ``custom_rad_rate`` reaction.  See
-        :attr:`Reaction.band_xsecs`.
-    shielding_tables : dict[str, Any]
-        Data tables the reaction's shielding model built for the generated
-        code to interpolate over, keyed by file name (e.g.
-        ``shielding_<reaction>.hdf5``); written out by
-        :meth:`~jaff.core.network.Network.write_shielding_tables`.  Empty when
-        the reaction is not shielded or its model needs no table.
-
-    Examples
-    --------
-    >>> from jaff import Network
-    >>> net = Network("h_photoionization")
-    >>> photo = net.reactions.photo_reactions()[0].photo
-    >>> photo.custom_rad_rate, photo.shielding_tables
-    (False, {})
-    >>> photo.xsec.database
-    'norad'
-    """
-
-    def __init__(
-        self,
-        xsec: XsecProps | None = None,
-        custom_rad_rate: bool = False,
-        rgrouped: List[GroupedPhotoReactionProps] | None = None,
-    ):
-        """Store the photo-reaction state; see the class attributes."""
-        self.xsec: XsecProps | None = xsec
-        self.custom_rad_rate: bool = custom_rad_rate
-        self.rgrouped: List[GroupedPhotoReactionProps] | None = rgrouped
-        self.shielding_tables: Dict[str, Any] = {}
+    pass
 
 
 class GroupedPhotoReactionProps:

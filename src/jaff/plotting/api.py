@@ -663,7 +663,7 @@ def plot_xsecs(
     ----------
     reactions : Reaction or list
         A reaction (anything exposing ``photo.xsec``, optionally
-        ``band_xsecs`` / ``get_latex``) or a list (nesting / *grid* as in
+        ``photo.band_xsecs`` / ``get_latex``) or a list (nesting / *grid* as in
         :func:`plot_rates`, including the automatic split past
         ``legend_max`` curves).  Automatic splitting keeps all curves of one
         reaction on one panel.
@@ -682,7 +682,7 @@ def plot_xsecs(
     yscale : str or list[str]
         As in :func:`plot_rates`.
     bands : bool
-        Overlay band-average cross sections (from ``Reaction.band_xsecs``)
+        Overlay band-average cross sections (from ``reaction.photo.band_xsecs``)
         as horizontal bars; reactions without bands add nothing.  An open
         band stays open in any unit: in wavelength units the open ionising
         band extends to the short-wavelength edge of the axes.

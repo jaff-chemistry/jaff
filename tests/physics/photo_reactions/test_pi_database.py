@@ -14,14 +14,13 @@ from jaff.core.network.config import NetworkConfig
 from jaff.cli import JaffGen
 from jaff.common._integrators import get_bounds
 from jaff.core.network import NetworkSymbols
-from jaff.core.reaction import PhotoReactionProps
 from jaff.errors import ParserError
 from jaff.physics.photo_reactions.config import RadiationConfig
 from jaff.physics.photo_reactions._photochemistry import Photochemistry, XsecProcess
 from jaff.physics.photo_reactions._radiation import Radiation
 from jaff.plotting.adapters.xsecs import _sampled_xsecs
 from tests._paths import REPO_ROOT
-from tests.xsec_props import default_reaction_config
+from tests.xsec_props import stub_photo
 
 BANDS = [6.0, 13.6, 100.0, 1000.0]
 
@@ -58,8 +57,7 @@ def _rxn(key, net):
     return SimpleNamespace(
         serialized=key,
         normalized_proxy_reaction_str=lambda: key,
-        config=net.config.reactions.resolve(key),
-        photo=PhotoReactionProps(),
+        photo=stub_photo(config=net.config.reactions.resolve(key).photo),
     )
 
 
@@ -160,8 +158,7 @@ class _FakeReaction:
     """Stand-in for the Reaction attributes Radiation touches."""
 
     def __init__(self, xsecs):
-        self.photo = PhotoReactionProps(xsec=xsecs)
-        self.config = default_reaction_config()
+        self.photo = stub_photo(xsec=xsecs)
 
 
 class TestVernerIntegration:
@@ -422,7 +419,7 @@ class TestPlotSampling:
         make, _ = pc_and_warn
         x = (pc := make(_net("verner"))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.net))
         (s,) = xsec_series(
-            SimpleNamespace(photo=PhotoReactionProps(xsec=x)), processes="photodecay"
+            SimpleNamespace(photo=stub_photo(xsec=x)), processes="photodecay"
         )
         assert s["x"][0] == pytest.approx(11.26, rel=1e-3)
         assert np.all(s["y"] > 0)

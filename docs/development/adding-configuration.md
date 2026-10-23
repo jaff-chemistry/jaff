@@ -139,8 +139,11 @@ self.cosmic_rays = (
 Per-reaction settings work the same way: every `Reaction` holds
 `reaction.config`, its resolved `ReactionConfig` (the global
 `[network.reactions]` table with its own `reaction."<serialized>"` entry applied
-over it; see `ReactionsConfig.resolve`), and `reaction.photo` holds only computed
-photo state (cross sections, band data, shielding tables). To tell a key set on
+over it; see `ReactionsConfig.resolve`). A photo reaction's `reaction.photo` is
+itself a component, `PhotoReaction(reaction, reaction.config.photo)`: it keeps
+the photo section as `photo.config`, computes the cross sections, band data and
+shielding tables (`photo.compute()`), and offers `band_xsecs` and
+`plot_xsecs()`. To tell a key set on
 the reaction itself from the global value, use `ReactionsConfig.own(serialized)`.
 
 ## Where each check belongs

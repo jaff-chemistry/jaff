@@ -18,8 +18,9 @@ src/jaff/
 │   │   ├── _symbols.py         # NetworkSymbols — fixed physics symbols, densities (net.symbols)
 │   │   └── config.py           # NetworkConfig ([network]), JaffTomlConfig, load_network_config
 │   ├── reaction/               # reaction.py (Reaction) · reactions.py (Reactions)
-│   │   ├── reaction_props.py   # PhotoReactionProps, GroupedPhotoReactionProps,
-│   │   │                       #   ReactionRadiationProps, AuxFunctions
+│   │   ├── photo_reaction.py   # PhotoReaction — a photo reaction's component (rxn.photo)
+│   │   ├── reaction_props.py   # GroupedPhotoReactionProps, ReactionRadiationProps,
+│   │   │                       #   AuxFunctions
 │   │   ├── config.py           # [network.reactions] models (ReactionConfig, PhotoConfig, ...)
 │   │   ├── _helper.py          # to_float_or_none
 │   │   └── types/              # RateSegment / RateSegments (rate per temperature range)

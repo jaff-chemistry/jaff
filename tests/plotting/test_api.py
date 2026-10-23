@@ -11,10 +11,9 @@ import numpy as np
 import pytest
 import sympy
 
-from jaff.core.reaction import PhotoReactionProps
 from jaff.plotting import plot, plot_rates, plot_xsecs
 from tests._paths import REPO_ROOT
-from tests.xsec_props import make_xsec_props
+from tests.xsec_props import make_xsec_props, stub_photo
 
 TGAS = sympy.Symbol("tgas")
 
@@ -31,7 +30,7 @@ def _r(k):
 def _photo(name):
     energy = np.linspace(10.0, 20.0, 11)
     return SimpleNamespace(
-        photo=PhotoReactionProps(
+        photo=stub_photo(
             xsec=make_xsec_props(
                 photon_energy=energy,
                 photodecay=np.full(11, 1e-18),

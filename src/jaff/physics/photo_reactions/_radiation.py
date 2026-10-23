@@ -110,7 +110,7 @@ class RadiationGroup:
     Per-reaction band data is not stored here: each photo reaction holds one
     :class:`~jaff.core.reaction.reaction_props.GroupedPhotoReactionProps` per
     band in ``reaction.photo.rgrouped``, in the same order as
-    ``Radiation.groups``; ``Reaction.band_xsecs`` shows them as a table.
+    ``Radiation.groups``; ``reaction.photo.band_xsecs`` shows them as a table.
 
     Parameters
     ----------
@@ -694,8 +694,7 @@ class Radiation:
         # Shielding factor, the same for every band: the shielding model
         # evaluated once (it may write per-reaction tables).
         shielding: sp.Expr | None = None
-        photo_config = reaction.config.photo
-        if photo_config is not None and photo_config.shielding is not None:
+        if photo.config.shielding is not None:
             shielding = Photochemistry.shielding(reaction, self.network)
 
         # Per-band rate data, one entry per group in self.groups order.

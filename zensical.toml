@@ -134,9 +134,7 @@ nav = [
         "reference/core/reaction/has_product.md",
         "reference/core/reaction/get_code.md",
         "reference/core/reaction/get_sympy.md",
-        "reference/core/reaction/band_xsecs.md",
         "reference/core/reaction/plot_rate_coefficient.md",
-        "reference/core/reaction/plot_xsecs.md",
       ] },
       { "core.Reactions" = [
         "reference/core/reactions/index.md",
@@ -224,8 +222,11 @@ nav = [
         "reference/core/networksymbols/standardize.md",
         "reference/core/networksymbols/log_summary.md",
       ] },
-      { "core.PhotoReactionProps" = [
-        "reference/core/photoreactionprops/index.md",
+      { "core.PhotoReaction" = [
+        "reference/core/photoreaction/index.md",
+        "reference/core/photoreaction/compute.md",
+        "reference/core/photoreaction/band_xsecs.md",
+        "reference/core/photoreaction/plot_xsecs.md",
       ] },
     ] },
     { "Physics" = [

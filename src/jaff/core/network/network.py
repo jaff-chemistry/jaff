@@ -57,7 +57,7 @@ from ...physics.thermodynamics.config import ThermodynamicsConfig
 from ..elements import Elements
 from ..parsers import NetworkParser
 from ..reaction import (
-    PhotoReactionProps,
+    PhotoReaction,
     RateSegment,
     RateSegments,
     Reaction,
@@ -574,7 +574,6 @@ class Network:
                 index=si,
                 type=rtype,
                 config=settings,
-                photo=PhotoReactionProps() if rtype == "photo" else None,
                 format=reaction.get("format"),
                 metadata=reaction.get("metadata"),
             )
@@ -617,12 +616,8 @@ class Network:
                 index=reaction.get("index", i),
                 type=rtype,
                 format=reaction.get("format"),
-                photo=PhotoReactionProps(
-                    xsec=reaction.get("xsec_props"),
-                    custom_rad_rate=bool(reaction.get("custom_rad_rate")),
-                )
-                if rtype == "photo"
-                else None,
+                xsec=reaction.get("xsec_props"),
+                custom_rad_rate=bool(reaction.get("custom_rad_rate")),
                 rad=ReactionRadiationProps(spectral_yield=reaction.get("spectral_yield")),
             )
 
@@ -735,7 +730,7 @@ class Network:
             if r.photo is not None:
                 self.__standardize_photo_band_data(r.photo)
 
-    def __standardize_photo_band_data(self, photo: PhotoReactionProps) -> None:
+    def __standardize_photo_band_data(self, photo: PhotoReaction) -> None:
         """Standardize a photo reaction's band data, as its rate already is.
 
         A symbolic ``photoCrossSection`` (e.g. one using ``n_X``) leaves those

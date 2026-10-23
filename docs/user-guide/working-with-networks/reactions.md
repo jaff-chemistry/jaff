@@ -125,13 +125,12 @@ as a 100-digit number (abbreviated above), while
 | `serialized`          | `str`                        | Canonical **name-level** identity (isomer-sensitive)                                                                                                                                                                                                                                                                                                                                                                                       |
 | `serialized_exploded` | `str`                        | Canonical **atom-level** identity (isomer-insensitive)                                                                                                                                                                                                                                                                                                                                                                                     |
 | `type`                | `str`                        | Reaction type concluded by the parser (verbatim): gas-phase `"photo"`/`"cosmic_ray"`/`"3_body"`/`"unknown"`, a KIDA `itype` type (`"two_body"`, `"recombination"`, …), or a grain surface-mechanism type — see [Reaction types](#reaction-types)                                                                                                                                                                                          |
-| `photo`               | `PhotoReactionProps or None` | Photo-reaction state, `None` for non-photo reactions: `xsec` (cross sections; `xsec.total` is the spectrum-averaged σ), `pi_database`, `override_custom_rate` (per-reaction override, or `None`), `override_custom_cross_section` (per-reaction override, or `None`), `custom_rad_rate` (rate from a `.jfunc`, not cross-sections), `rgrouped` (per-band data) and `shielding` (model, settings and any data `tables`) — see [Photo-reactions](#photo-reactions-a-special-citizen) |
+| `photo`               | `PhotoReaction or None` | The photo-reaction component, `None` for non-photo reactions: `config` (the resolved photo settings, same as `rxn.config.photo`), `xsec` (cross sections; `xsec.total` is the spectrum-averaged σ), `custom_rad_rate` (rate from a `.jfunc`, not cross-sections), `rgrouped` (per-band data), `band_xsecs` (per-band table), `shielding_tables`, and `plot_xsecs()` — see [Photo-reactions](#photo-reactions-a-special-citizen) |
 | `t_cutoff`            | `str`                        | Behaviour past the outermost temperature bounds: `"clip"` or `"extrapolate"` (from [`t_cutoff`](../configuration/reference.md#networkreactions))                                                                                                                                                                                                                                                                                             |
 | `rate_segments`       | `RateSegments`               | The per-temperature-range pieces merged into `rate_coefficient` — see [Temperature ranges](#temperature-ranges-and-piecewise-rates)                                                                                                                                                                                                                                                                                                         |
 | `rad`                 | `ReactionRadiationProps`     | Radiation the reaction emits: `spectral_yield` (from a `.jfunc` `spectralYield`, or `None`) and `group_yields` (per radiation group, or `None`)                                                                                                                                                                                                                                                                                             |
 | `species`             | `Species`                    | Unique species on either side (reactants ∪ products), cached                                                                                                                                                                                                                                                                                                                                                                               |
 | `elements`            | `Elements`                   | Unique elements across reactants and products, cached                                                                                                                                                                                                                                                                                                                                                                                      |
-| `band_xsecs`          | `pandas.DataFrame`           | Band-averaged cross sections, one row per radiation band (`lower`, `upper`, `eavg`, `xsec`, `xsec_frac`); empty without band data                                                                                                                                                                                                                                                                                                          |
 
 <!-- prettier-ignore -->
 !!! tip "`reactants` and `products` are `Species` Catalogues"
@@ -543,7 +542,7 @@ rec.get_flux_expression(idx=1, rate_variable="k",
 
 ### Plotting
 
-The `Reaction` plot methods forward to the
+`Reaction.plot_rate_coefficient` and `rxn.photo.plot_xsecs` forward to the
 [`jaff.plotting`](../../reference/plotting/index.md) functions `plot_rates` and
 `plot_xsecs`. They return `(fig, axes)` (a 2-D array of axes), so plots can be
 edited further or saved. The figure is closed in pyplot once it has been
@@ -553,7 +552,7 @@ open.
 ```python
 rec.plot_rate_coefficient()         # κ vs temperature (log–log), one curve
 
-photo = net.reactions.photo_reactions()[0]
+photo = net.reactions.photo_reactions()[0].photo
 photo.plot_xsecs()                                     # all processes, eV vs Mb
 photo.plot_xsecs(processes="photodecay")               # one process only
 photo.plot_xsecs(energy_unit="nm", xsec_unit="cm^2")   # wavelength + cm² axes

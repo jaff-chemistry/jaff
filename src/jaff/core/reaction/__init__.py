@@ -1,7 +1,8 @@
 # ABOUTME: Reaction package: Reaction, the Reactions catalogue and reaction props
 # ABOUTME: Re-exports the public reaction classes
 
-from .reaction_props import PhotoReactionProps, ReactionRadiationProps
+from .photo_reaction import PhotoReaction
+from .reaction_props import ReactionRadiationProps
 from .reaction import Reaction
 from .reactions import Reactions
 from .types import RateSegment, RateSegments
@@ -11,6 +12,6 @@ __all__ = [
     "Reactions",
     "RateSegment",
     "RateSegments",
-    "PhotoReactionProps",
+    "PhotoReaction",
     "ReactionRadiationProps",
 ]

@@ -187,8 +187,8 @@ class Photochemistry:
 
     def _lookup_key(self, reaction: Reaction) -> str:
         """Database key: the proxy string when the reaction uses proxy lookups."""
-        photo = reaction.config.photo
-        if photo is not None and photo.use_proxy_photoreaction:
+        photo = reaction.photo
+        if photo is not None and photo.config.use_proxy_photoreaction:
             return reaction.normalized_proxy_reaction_str()
 
         return reaction.serialized
@@ -258,8 +258,8 @@ class Photochemistry:
 
     def _pi_order(self, reaction: Reaction) -> list[str]:
         """Databases to try: the chosen one, then :data:`PI_DATABASES` order."""
-        photo = reaction.config.photo
-        chosen = (photo.pi_database if photo is not None else None) or "norad"
+        photo = reaction.photo
+        chosen = (photo.config.pi_database if photo is not None else None) or "norad"
 
         return list(dict.fromkeys([chosen, *PI_DATABASES]))
 
@@ -446,7 +446,7 @@ class Photochemistry:
     def shielding(reaction: Reaction, network: Network) -> Expr:
         """Build the symbolic shielding factor for a photo-reaction.
 
-        The shielding function named by ``reaction.config.photo.shielding.type`` is
+        The shielding function named by ``reaction.photo.config.shielding.type`` is
         resolved from the
         shielding registry via
         :func:`~jaff.physics.photo_reactions.shielding._get_shielding_function`.
@@ -479,8 +479,8 @@ class Photochemistry:
             If no shielding function is registered for ``type`` either locally
             (for this reaction) or as a global fallback.
         """
-        photo = reaction.config.photo
-        shielding = photo.shielding if photo is not None else None
+        photo = reaction.photo
+        shielding = photo.config.shielding if photo is not None else None
         assert shielding is not None, f"{reaction} is not shielded"
 
         shielding_fn = _get_shielding_function(shielding.type, reaction.serialized)

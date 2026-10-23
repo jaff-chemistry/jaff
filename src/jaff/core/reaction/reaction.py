@@ -55,7 +55,6 @@ from functools import cache, cached_property
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
-from astropy import units as u
 from sympy import (
     Basic,
     Expr,
@@ -63,24 +62,22 @@ from sympy import (
     sympify,
 )
 
-from ...errors import ParserError
 from ...io import JaffLogger
 from ..elements import Elements
 from ..species import Specie, Species
-from ._helper import to_float_or_none
 from .config import PhotoConfig, ReactionConfig
+from .photo_reaction import PhotoReaction
 from .reaction_props import (
     AuxFunctions,
-    PhotoReactionProps,
     ReactionRadiationProps,
 )
 from .types import RateSegment, RateSegments
 
 if TYPE_CHECKING:
     import matplotlib.pyplot as plt
-    import pandas as pd
 
     from ...core import Network
+    from ...physics import XsecProps
 
 
 class Reaction:
@@ -167,14 +164,12 @@ class Reaction:
         Like ``serialized`` but built from the atom-level serialized forms of
         each species (isomer-insensitive comparison); see
         :meth:`serialize_exploded`.
-    photo : PhotoReactionProps or None
-        Computed photo-reaction state, ``None`` for non-photo reactions:
-        ``xsec`` (cross sections of the single decay channel, an
-        :class:`~jaff.physics.XsecProps`), ``custom_rad_rate`` (rate supplied
-        by a ``.jfunc`` aux function), ``rgrouped`` (per-band data; see
-        :attr:`band_xsecs`) and ``shielding_tables``; the spectrum-averaged
-        cross section is ``xsec.total`` (cm²).  The photo settings are
-        ``config.photo``.  See :class:`PhotoReactionProps`.
+    photo : PhotoReaction or None
+        The photo-reaction component, ``None`` for non-photo reactions: its
+        resolved photo settings (``photo.config``, the same object as
+        ``config.photo``), cross sections (``photo.xsec``), per-band data
+        (``photo.rgrouped``, ``photo.band_xsecs``), ``custom_rad_rate`` and
+        ``shielding_tables``.  See :class:`PhotoReaction`.
     rad : ReactionRadiationProps
         Radiation the reaction emits: ``spectral_yield`` (from a ``.jfunc``
         ``spectralYield<N>`` function, erg eV⁻¹ per event as a function of
@@ -223,7 +218,8 @@ class Reaction:
         dE: Expr | None = None,
         config: ReactionConfig | None = None,
         type: str = "unknown",
-        photo: PhotoReactionProps | None = None,
+        xsec: XsecProps | None = None,
+        custom_rad_rate: bool = False,
         rad: ReactionRadiationProps | None = None,
         format: str | None = None,
         metadata: dict | None = None,
@@ -265,10 +261,12 @@ class Reaction:
             ``"photo"``, ``"cosmic_ray"``, ``"3_body"``, ``"unknown"``, or a
             grain surface-mechanism type).  Stored verbatim on the ``type``
             attribute; defaults to ``"unknown"``.
-        photo : PhotoReactionProps or None, optional
-            Photo-reaction state; pass one for photo reactions, ``None``
-            (default) otherwise.  :class:`~jaff.core.Network` passes one for
-            every photo reaction, filled from the reaction's photo config.
+        xsec : XsecProps or None, optional
+            Cross sections of a photo reaction restored from a ``.jaff`` file;
+            ``None`` (default) looks them up.
+        custom_rad_rate : bool, optional
+            Whether a photo reaction restored from a ``.jaff`` file takes its
+            rate from a ``chemRate<N>`` (default ``False``).
         rad : ReactionRadiationProps or None, optional
             Emitted radiation.  ``None`` (default) builds one from the
             ``.jfunc`` ``spectralYield<N>`` function, if any.
@@ -313,7 +311,6 @@ class Reaction:
             if self.aux_funcs.deltae is not None
             else (dE if dE is not None else Float(0.0))
         )
-        self.photo: PhotoReactionProps | None = photo
         self.rad: ReactionRadiationProps = (
             rad
             if rad is not None
@@ -335,14 +332,17 @@ class Reaction:
         # inferred from the rate expression.
         self.type: str = type
 
+        self.photo: PhotoReaction | None = (
+            PhotoReaction(
+                self, self.__photo_config(), xsec=xsec, custom_rad_rate=custom_rad_rate
+            )
+            if type == "photo"
+            else None
+        )
         if self.photo is not None:
-            if self.aux_funcs.chemrate is not None:
-                self.photo.custom_rad_rate = not self.__overrides_custom_rate()
-
-            self.__set_xsec_props()
-
-            if self.net.radiation is not None:
-                self.__set_photo_reaction_props()
+            band_rate = self.photo.compute()
+            if band_rate is not None:
+                self.rate_coefficient = band_rate
 
         if self.net.radiation is not None and self.rad.spectral_yield is not None:
             self.rad.group_yields = self.net.radiation.integrate_over_groups(
@@ -455,88 +455,6 @@ class Reaction:
         assert photo is not None, f"{self}: unresolved config"
 
         return photo
-
-    def __overrides_custom_rate(self) -> bool:
-        """Whether radiation recomputes this photo reaction's ``chemRate`` rate.
-
-        From the resolved ``photo.override_custom_rate``; without radiation
-        there is no cross-section rate to use, so the ``chemRate`` is always
-        kept.
-        """
-        if self.net.radiation is None:
-            return False
-
-        return bool(self.__photo_config().override_custom_rate)
-
-    def __overrides_custom_cross_section(self) -> bool:
-        """Whether this photo reaction ignores its ``photoCrossSection``.
-
-        From the resolved ``photo.override_custom_cross_section``; like
-        ``override_custom_rate``, it has no effect without radiation.
-        """
-        if self.net.radiation is None:
-            return False
-
-        return bool(self.__photo_config().override_custom_cross_section)
-
-    def __set_xsec_props(self):
-        from ...physics import Photochemistry
-
-        assert self.photo is not None
-
-        if self.net._photochemistry is None:
-            self.net._photochemistry = Photochemistry(self.net)
-
-        custom = self.aux_funcs.photocrosssection
-        if custom is not None and not self.__overrides_custom_cross_section():
-            own = self.net.config.reactions.own(self.serialized)
-            if own is not None and own.photo is not None and own.photo.pi_database:
-                raise ParserError(
-                    f"pi_database cannot be set for {self}: its cross section comes "
-                    "from a photoCrossSection function"
-                )
-
-            self.photo.xsec = self.net._photochemistry.get_custom_xsec(
-                self, cast(Expr, custom.expr)
-            )
-            return
-
-        # A .jaff reload has no aux functions but carries the custom cross section.
-        if self.photo.xsec is not None and self.photo.xsec.database == "custom":
-            return
-
-        # A cross section is mandatory only when radiation sets the rate.
-        self.photo.xsec = (
-            self.net._photochemistry.get_xsec(
-                self,
-                required=self.net.radiation is not None
-                and not self.photo.custom_rad_rate,
-            )
-            or self.photo.xsec
-        )
-
-    def __set_photo_reaction_props(self):
-        assert self.net.radiation is not None
-        assert self.photo is not None
-
-        # A custom rate is not driven by the transported field, so the reaction
-        # is not coupled to the bands and gets no band data.
-        if self.photo.custom_rad_rate:
-            self.logger.warning(
-                f"Photo reaction [cyan]{self}[/] (index {self.index}) uses the custom "
-                f"rate chemRate{self.index}: it is not coupled to the radiation bands "
-                "and removes no photons. Supply a photoCrossSection"
-                f"{self.index} instead, or set override_custom_rate = true to "
-                "compute its rate from the database cross sections."
-            )
-            return
-
-        k_tot, xsec_tot, grouped = self.net.radiation.get_reaction_rate_props(self)
-        self.rate_coefficient = k_tot
-
-        assert self.photo.xsec is not None
-        self.photo.xsec.total = xsec_tot
-        self.photo.rgrouped = grouped
 
     @property
     def rate_coefficient(self) -> Expr:
@@ -995,79 +913,6 @@ class Reaction:
         """
         return sympify(self.rate_coefficient)
 
-    @property
-    def band_xsecs(self) -> pd.DataFrame:
-        """Band-averaged cross sections for this reaction, one row per band.
-
-        Pairs each per-band entry of ``photo.rgrouped`` (populated when a
-        radiation field is configured, e.g. through the ``radiation``
-        argument of :class:`~jaff.core.Network` or ``[network.radiation]``)
-        with the :class:`~jaff.physics.photo_reactions._radiation.RadiationGroup`
-        it was computed for.  A photo reaction whose rate comes from a
-        ``.jfunc`` ``chemRate<N>`` is not coupled to the bands and has no band
-        data, so its frame is empty.  Intended as the data source for band bar
-        plots (the ``bands`` option of :meth:`plot_xsecs`).
-
-        Returns
-        -------
-        pandas.DataFrame
-            One row per radiation band this reaction contributes to, with
-            columns:
-
-            - ``lower`` : lower band edge in eV.
-            - ``upper`` : upper band edge in eV (``inf`` for an open top band).
-            - ``eavg``  : photon-number-weighted band-average energy in eV.
-            - ``xsec``  : photon-number-weighted band-average cross section in
-              cm² (``NaN`` when it is not a number, e.g. a
-              ``photoCrossSection<N>`` that depends on ``tgas``).
-            - ``xsec_frac`` : the band-average cross section divided by the
-              spectrum-averaged one (``photo.xsec.total``); ``0`` when that is
-              zero.  Not normalised to sum to 1 over the bands.
-
-            Empty (with the columns above) when the reaction contributes to no
-            band, e.g. no radiation field is configured.
-
-        Notes
-        -----
-        The rows are ordered by ascending band index: ``photo.rgrouped`` is
-        built by iterating ``net.radiation.groups`` in order, so the two are
-        paired by position.
-
-        Examples
-        --------
-        >>> net = Network(
-        ...     "h_photoionization",
-        ...     radiation={"bands": [1, 13.6, 100, "inf"]},
-        ... )
-        >>> rxn = net.reactions.photo_reactions()[0]
-        >>> rxn.band_xsecs.columns.tolist()
-        ['lower', 'upper', 'eavg', 'xsec', 'xsec_frac']
-        >>> len(rxn.band_xsecs)
-        3
-        >>> rxn.plot_xsecs(bands=True)  # overlay the band bars on σ(E)
-        """
-        import pandas as pd
-
-        columns = ["lower", "upper", "eavg", "xsec", "xsec_frac"]
-        grouped = self.photo.rgrouped if self.photo is not None else None
-        groups = self.net.radiation.groups if grouped and self.net.radiation else []
-        rows = [
-            {
-                "lower": to_float_or_none(group.lower),
-                "upper": to_float_or_none(group.upper),
-                "eavg": (
-                    None
-                    if group.eavg is None
-                    else to_float_or_none(group.eavg * u.erg.to(u.eV))
-                ),
-                "xsec": to_float_or_none(props.xsec),
-                "xsec_frac": to_float_or_none(props.xsec_frac),
-            }
-            for group, props in zip(groups, grouped or [], strict=True)
-        ]
-
-        return pd.DataFrame(rows, columns=columns)
-
     def plot_rate_coefficient(self, **kwargs: Any) -> tuple[plt.Figure, Any] | None:
         """Plot the rate coefficient as a function of gas temperature.
 
@@ -1101,30 +946,3 @@ class Reaction:
         from ...plotting import plot_rates
 
         return plot_rates(self, **kwargs)
-
-    def plot_xsecs(self, **kwargs: Any) -> tuple[plt.Figure, Any] | None:
-        """Plot photo cross sections against photon energy or wavelength.
-
-        Forwards to :func:`jaff.plotting.plot_xsecs` with this reaction as the
-        only item; every ``plot_xsecs`` keyword is accepted (``grid``,
-        ``processes``, ``energy_unit``, ``xsec_unit``, ``xscale``, ``yscale``,
-        ``bands``, ``style``, ``palette``, ``save``, ``show``, ``close`` ...).
-        The panel is titled with the reaction equation and the curves are
-        labelled by process.
-
-        Returns
-        -------
-        tuple[matplotlib.figure.Figure, numpy.ndarray] or None
-            ``(fig, axes)``, or ``None`` (with a log message) if
-            ``self.photo`` or its ``xsec`` is ``None`` or no requested process has data.
-
-        Examples
-        --------
-        >>> photo = net.reactions.photo_reactions()[0]
-        >>> photo.plot_xsecs()  # all processes, eV vs Mb
-        >>> photo.plot_xsecs(processes="photodecay", yscale="linear")
-        >>> photo.plot_xsecs(energy_unit="nm", xsec_unit="cm^2", bands=True)
-        """
-        from ...plotting import plot_xsecs
-
-        return plot_xsecs(self, **kwargs)

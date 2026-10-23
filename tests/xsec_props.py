@@ -6,7 +6,8 @@ from typing import Literal, Optional
 import numpy as np
 from sympy import Expr
 
-from jaff.core.reaction.config import ReactionConfig, ReactionsConfig
+from jaff.core.reaction import PhotoReaction
+from jaff.core.reaction.config import PhotoConfig, ReactionConfig, ReactionsConfig
 from jaff.physics.photo_reactions._photochemistry import (
     XsecProcess,
     XsecProps,
@@ -52,3 +53,13 @@ def make_xsec_props(
 def default_reaction_config() -> ReactionConfig:
     """Resolved default reaction settings (unshielded), for reaction stand-ins."""
     return ReactionsConfig().resolve("stand-in")
+
+
+def stub_photo(
+    xsec: XsecProps | None = None, config: PhotoConfig | None = None
+) -> PhotoReaction:
+    """A PhotoReaction with *xsec* and default (or given) photo settings, no reaction."""
+    photo = config if config is not None else default_reaction_config().photo
+    assert photo is not None
+
+    return PhotoReaction(None, photo, xsec=xsec)  # type: ignore[arg-type]

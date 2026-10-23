@@ -56,7 +56,7 @@ def test_under_radiation_has_no_band_data(custom_network):
     rxn = _photo(custom_network(radiation=RadiationConfig(bands=BANDS)))
 
     assert rxn.photo.rgrouped is None
-    assert rxn.band_xsecs.empty
+    assert rxn.photo.band_xsecs.empty
 
 
 def test_under_radiation_removes_no_photons(custom_network):

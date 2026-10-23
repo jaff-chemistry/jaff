@@ -43,7 +43,7 @@ from ._typing import ElementProps
 from .elements import Element, Elements
 from .network import Network, NetworkSpec, NetworkSymbols
 from .reaction import (
-    PhotoReactionProps,
+    PhotoReaction,
     Reaction,
     Reactions,
 )
@@ -65,5 +65,5 @@ __all__ = [
     "ElementProps",
     "ReactionProps",
     "NetworkSymbols",
-    "PhotoReactionProps",
+    "PhotoReaction",
 ]

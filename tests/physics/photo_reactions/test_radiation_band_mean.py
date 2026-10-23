@@ -9,10 +9,9 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from jaff.core.reaction import PhotoReactionProps
 from jaff.physics.photo_reactions.config import RadiationConfig
 from jaff.physics.photo_reactions._radiation import Radiation
-from tests.xsec_props import default_reaction_config, make_xsec_props
+from tests.xsec_props import make_xsec_props, stub_photo
 
 EV2ERG = u.eV.to(u.erg)
 
@@ -76,10 +75,7 @@ class _FakeReaction:
     def __init__(self):
         E = np.linspace(1.0, 3.0, 201)
         sigma = np.full_like(E, 1.0e-18)  # flat 1e-18 cm^2
-        self.config = default_reaction_config()
-        self.photo = PhotoReactionProps(
-            xsec=make_xsec_props(photon_energy=E, photodecay=sigma)
-        )
+        self.photo = stub_photo(xsec=make_xsec_props(photon_energy=E, photodecay=sigma))
 
 
 def test_photon_and_energy_modes_equivalent():

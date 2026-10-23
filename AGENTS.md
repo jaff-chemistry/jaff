@@ -220,8 +220,10 @@ To add a setting, follow `docs/development/adding-configuration.md`. In short:
    the components it builds, and holds only computed state otherwise: no copies of
    settings, no reads of another component's settings from `net.config`. Reactions
    do the same: `reaction.config` is the resolved `ReactionConfig`
-   (`ReactionsConfig.resolve`; `.own()` for keys set on the reaction itself) and
-   `reaction.photo` holds only computed photo state. Checks against the network
+   (`ReactionsConfig.resolve`; `.own()` for keys set on the reaction itself), and a
+   photo reaction's `reaction.photo` is a `PhotoReaction(reaction, config.photo)`
+   component holding its photo settings, computed photo state and the photo logic
+   (`compute()`, `band_xsecs`, `plot_xsecs()`). Checks against the network
    raise `ParserError` with the key path.
 4. `Network`'s keyword arguments are exactly the `[network]` keys: a new top-level
    field of `NetworkConfig` needs a keyword of the same name (a test enforces it);

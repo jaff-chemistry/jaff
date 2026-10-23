@@ -62,11 +62,11 @@ class ShieldingFunction(ABC):
         ParserError
             If a setting is unknown or has an invalid value.
         """
-        photo = reaction.config.photo
-        assert photo is not None and photo.shielding is not None
+        photo = reaction.photo
+        assert photo is not None and photo.config.shielding is not None
 
         try:
-            return self.config_model().model_validate(photo.shielding.params)
+            return self.config_model().model_validate(photo.config.shielding.params)
         except ValidationError as e:
             raise ParserError(
                 f"Invalid {self.name} shielding settings for {reaction}:\n{e}"
