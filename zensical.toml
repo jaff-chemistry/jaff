@@ -279,6 +279,7 @@ nav = [
     "development/code-style.md",
     "development/testing.md",
     "development/adding-parsers.md",
+    "development/adding-configuration.md",
     "development/adding-shielding-functions.md",
     "development/adding-template-properties.md"
   ] },

@@ -1,0 +1,183 @@
+---
+tags:
+    - Development
+    - Configuration
+---
+
+# Adding Configuration
+
+Every configurable part of JAFF owns its settings: a **config model** in a
+`config.py` next to the code it configures. The models form a tree that mirrors
+the TOML files: a parent model lists its children's models as fields. From that
+tree JAFF validates `jaff.toml` / `jaffgen.toml`, generates the JSON Schemas
+editors read and the [configuration reference](../user-guide/configuration/reference.md),
+so a new setting is written **once**, in its model.
+
+```text
+src/jaff/
+├── config/base.py                       # ConfigModel, LowerStr, PathLike, ...
+├── core/network/config.py               # NetworkConfig ([network]), JaffTomlConfig
+├── core/reaction/config.py              # ReactionsConfig, ReactionConfig, PhotoConfig
+├── physics/photo_reactions/config.py    # RadiationConfig ([network.radiation])
+├── physics/photo_reactions/shielding/config.py
+├── physics/dust/config.py               # DustConfig, PhotoelectricEmissionConfig
+├── physics/thermodynamics/config.py     # ThermodynamicsConfig
+├── physics/thermodynamics/eos/config.py # the EOS models
+└── cli/jaffgen/config.py                # JaffgenConfig ([jaffgen]), JaffgenTomlConfig
+```
+
+## Write the model
+
+Subclass `ConfigModel` (`jaff.config.base`). It rejects unknown keys, is strict
+about types (a TOML string is never turned into a number or a boolean) and is
+frozen once validated. Document every key in a numpydoc `Attributes` section:
+the entries become the key descriptions in the schema and the reference, so
+write them for someone editing a TOML file.
+
+```python
+# src/jaff/physics/cosmic_rays/config.py
+"""Config of the cosmic-ray module (``[network.cosmic_rays]``)."""
+
+from __future__ import annotations
+
+from typing import Annotated, Literal
+
+from pydantic import BeforeValidator, Field
+
+from ...config.base import ConfigModel, PathLike, lower
+
+Spectrum = Annotated[Literal["power_law", "tabulated"], BeforeValidator(lower)]
+
+
+class CosmicRaysConfig(ConfigModel):
+    """Cosmic rays (``[network.cosmic_rays]``); the table enables the module.
+
+    Attributes
+    ----------
+    ionisation_rate : float
+        Primary ionisation rate per H2 in s^-1, > 0.
+    spectrum : str
+        Spectrum shape: ``"power_law"`` or ``"tabulated"`` (case-insensitive).
+    table : Path or None
+        Tabulated spectrum, used with ``spectrum = "tabulated"``.
+    """
+
+    ionisation_rate: float = Field(1.0e-17, gt=0.0)
+    spectrum: Spectrum = "power_law"
+    table: PathLike | None = None
+```
+
+| Building block | Use it for |
+| --- | --- |
+| `Annotated[Literal[...], BeforeValidator(lower)]` | A choice, case-insensitive and stored lower-case. |
+| `LowerStr` | Free text compared case-insensitively. |
+| `PathLike` | A path; a relative one is resolved against the file it is written in. |
+| `Field(default, gt=..., ...)` | Bounds; they appear in the schema too. |
+| `X \| None = None` | An optional key; TOML has no null, so *unset* means absent. |
+| `Dict[str, Model]` | A table of named entries, like `reaction."<serialized>"`. |
+
+## Attach it to its parent
+
+Add the model as a field of the model of the enclosing table, e.g. in
+`NetworkConfig`:
+
+```python
+cosmic_rays: CosmicRaysConfig | None = None   # the table enables the module
+```
+
+Use `| None = None` when the table's presence switches the module on (like
+`radiation` and `dust`); use a default instance (`= CosmicRaysConfig()`) when
+the module is always there (like `thermodynamics`). Document the field in the
+parent's `Attributes` too. There is no registry: the parent's import of the
+child is what puts it in the tree.
+
+Then add the new module to `CONFIG_MODULES` in `tests/test_config_modules.py`,
+which imports every `config.py` in a fresh interpreter to catch import cycles.
+A `config.py` should import only pydantic, `jaff.config` and other `config.py`
+modules.
+
+## Use it
+
+The class that does the work takes its own section, never the whole config:
+
+```python
+class CosmicRays:
+    def __init__(self, network: Network, config: CosmicRaysConfig): ...
+```
+
+and `Network` builds it from `self.config` (as it does `Radiation` and `Dust`):
+
+```python
+self.cosmic_rays = (
+    CosmicRays(self, self.config.cosmic_rays)
+    if self.config.cosmic_rays is not None
+    else None
+)
+```
+
+## Where each check belongs
+
+| Check | Where | Example |
+| --- | --- | --- |
+| A value on its own: type, choice, bound | the field's type | `t_cutoff`, `gamma > 1` |
+| Several keys of one table | a `field_validator` / `model_validator` raising `ValueError` | one `profile_index` per band |
+| Against the network | where `Network` is built, raising `ParserError` with the key path (`jaff.config.base.dotted`) | a reaction key naming no reaction |
+
+The loader turns validation errors into one `ParserError` listing every problem
+by key path. Keep messages short and in TOML terms.
+
+## Tables chosen by a `type`
+
+When a table's keys depend on its `type` (the EOS, shielding), write one model
+per type and select it by `type`:
+
+- set `_atomic: ClassVar[bool] = True` on each model: a layer then replaces the
+  table whole instead of merging it key by key with another type's keys;
+- give each a `type: Annotated[Literal["..."], BeforeValidator(lower)]` field and
+  combine them in an `Annotated[Union[...], Discriminator(...)]` (see
+  `physics/thermodynamics/eos/config.py`);
+- adjust a model's schema in `_extend_json_schema(cls, schema)` (the EOS models
+  mark `type` required there).
+
+For an open set of plugins, let each plugin declare its settings instead — the
+shielding models return a `ShieldingParams` subclass from `config_model()` (see
+[Adding a Custom Shielding Function](adding-shielding-functions.md)).
+
+## Optional: a keyword argument or a command-line option
+
+Most settings need neither: users set them in a file, with `Network(config=...)`
+or with `--set`. To add a shortcut:
+
+- **`Network` keyword argument**: add the parameter (default `None`, meaning
+  not given) and map it in `_keyword_layer` (`core/network/network.py`);
+- **`jaffgen`/`jaffx` option**: add the typer option and an entry in
+  `CLI_KEYS` (`cli/_helper.py`) mapping it to its key path.
+
+## Regenerate and test
+
+```bash
+python -m jaff.config.json_schema   # editor schemas, src/jaff/config/schemas/
+python -m jaff.config.reference     # docs/user-guide/configuration/reference.md
+uv run pytest tests/test_config_*.py
+```
+
+`tests/test_config_json_schema.py` and `tests/test_config_reference.py` fail
+when a committed file is out of date with the models.
+
+## Checklist
+
+- [x] `config.py` next to the module, with a `ConfigModel` subclass
+- [x] Every key documented in numpydoc `Attributes`, worded for TOML users
+- [x] Field added to the parent model (and documented there)
+- [x] Module listed in `CONFIG_MODULES` (`tests/test_config_modules.py`)
+- [x] The consuming class takes `(network, config)`; `Network` builds it
+- [x] Checks placed by kind (type / validator / network build)
+- [x] Type-selected tables: `_atomic`, one model per type, discriminated union
+- [x] Schemas and reference regenerated; tests for defaults, bad values and
+      unknown keys
+
+## See Also
+
+- [Configuration overview](../user-guide/configuration/index.md)
+- [Adding a Custom Shielding Function](adding-shielding-functions.md)
+- [Code Style Guide](code-style.md)
