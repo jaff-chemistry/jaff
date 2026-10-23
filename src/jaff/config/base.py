@@ -9,10 +9,11 @@ number or a bool) and is frozen once validated.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
-from typing import Annotated, Any, ClassVar, TypeVar
+from typing import Annotated, Any, ClassVar, List, Tuple, TypeVar
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict
+from pydantic import BaseModel, BeforeValidator, ConfigDict, ValidationError
 
 
 def lower(value: Any) -> Any:
@@ -72,3 +73,57 @@ def overlay(base: _ModelT, over: BaseModel | None) -> _ModelT:
         update[name] = value
 
     return base.model_copy(update=update)
+
+
+#: A key path into a config table, e.g. ``("network", "reactions", "photo")``.
+KeyPath = Tuple[str, ...]
+
+_BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
+
+#: Plain wording for the pydantic error types a config user meets most.
+_MESSAGES = {"extra_forbidden": "unknown key", "missing": "required key missing"}
+
+
+def dotted(path: Tuple[str | int, ...]) -> str:
+    """Write a key path as in TOML: ``network.reactions.reaction."H+.e-__H"``.
+
+    Keys that are not bare TOML keys are quoted; list positions are ``[i]``.
+    """
+    text = ""
+    for part in path:
+        if isinstance(part, int):
+            text += f"[{part}]"
+            continue
+
+        key = part if _BARE_KEY.fullmatch(part) else f'"{part}"'
+        text += f".{key}" if text else key
+
+    return text
+
+
+def format_validation_errors(
+    error: ValidationError, prefix: Tuple[str | int, ...] = ()
+) -> List[str]:
+    """Return one ``"<key path>: <message>"`` line per problem in *error*.
+
+    Parameters
+    ----------
+    error : ValidationError
+        Error raised validating a config model.
+    prefix : tuple, optional
+        Key path of that model within the config, prepended to every path.
+
+    Returns
+    -------
+    list of str
+        The problems; a validator's message spanning several lines gives one
+        line each, under the same path.
+    """
+    lines: List[str] = []
+    for problem in error.errors(include_url=False):
+        path = dotted((*prefix, *problem["loc"]))
+        message = _MESSAGES.get(problem["type"], problem["msg"])
+        message = message.removeprefix("Value error, ")
+        lines.extend(f"{path}: {line}" if path else line for line in message.splitlines())
+
+    return lines

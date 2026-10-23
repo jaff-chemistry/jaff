@@ -18,18 +18,48 @@ from typing import (
     Dict,
     List,
     Mapping,
-    Tuple,
+    Sequence,
+    TypeVar,
     Union,
     get_args,
     get_origin,
 )
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from ..errors import ParserError
+from .base import KeyPath, format_validation_errors
 
-#: A key path into a layer, e.g. ``("network", "reactions", "photo")``.
-KeyPath = Tuple[str, ...]
+_ModelT = TypeVar("_ModelT", bound=BaseModel)
+
+
+def load_config(layers: Sequence[Mapping[str, Any]], model: type[_ModelT]) -> _ModelT:
+    """Merge config *layers* and validate the result against *model*.
+
+    Parameters
+    ----------
+    layers : Sequence[Mapping[str, Any]]
+        Layers, lowest precedence first (paths already resolved).
+    model : type[BaseModel]
+        Model of the whole config (e.g. ``JaffgenTomlConfig``); it also says
+        which tables are replaced whole between layers (:func:`atomic_tables`).
+
+    Returns
+    -------
+    BaseModel
+        The validated config.
+
+    Raises
+    ------
+    ParserError
+        Listing every problem as ``<key path>: <message>``.
+    """
+    merged = deep_merge(*layers, atomic=atomic_tables(model))
+    try:
+        return model.model_validate(merged)
+    except ValidationError as e:
+        problems = "\n  ".join(format_validation_errors(e))
+        raise ParserError(f"Invalid config:\n  {problems}") from e
 
 
 def load_layer(path: Path, model: type[BaseModel]) -> Dict[str, Any]:

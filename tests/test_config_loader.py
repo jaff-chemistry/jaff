@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 
 from jaff.cli.jaffgen.config import JaffgenTomlConfig
-from jaff.config.loader import atomic_tables, deep_merge, load_layer, resolve_paths
+from jaff.config.loader import (
+    atomic_tables,
+    deep_merge,
+    load_config,
+    load_layer,
+    resolve_paths,
+)
 from jaff.core.network.config import JaffTomlConfig
 from jaff.errors import ParserError
 
@@ -231,3 +237,118 @@ class TestLoadLayer:
 
         with pytest.raises(ParserError, match="jaff.toml"):
             load_layer(cfg, JaffTomlConfig)
+
+
+class TestLoadConfig:
+    def test_no_layers_gives_defaults(self):
+        assert load_config([], JaffTomlConfig) == JaffTomlConfig()
+
+    def test_later_layer_wins(self):
+        cfg = load_config(
+            [
+                {"network": {"label": "low", "strict": True}},
+                {"network": {"label": "high"}},
+            ],
+            JaffTomlConfig,
+        )
+
+        assert cfg.network.label == "high"
+        assert cfg.network.strict is True
+
+    def test_atomic_tables_replace_across_layers(self):
+        cfg = load_config(
+            [
+                {
+                    "network": {
+                        "thermodynamics": {
+                            "eos": {
+                                "type": "multi_gamma",
+                                "default_gamma": 1.4,
+                                "gamma_map": {},
+                            }
+                        }
+                    }
+                },
+                {"network": {"thermodynamics": {"eos": {"gamma": 1.3}}}},
+            ],
+            JaffTomlConfig,
+        )
+
+        assert cfg.network.thermodynamics.eos.type == "ideal"
+
+    def test_unknown_key_reported_by_path(self):
+        with pytest.raises(ParserError, match=r"network\.radiation\.rsl: unknown key"):
+            load_config(
+                [{"network": {"radiation": {"bands": [6.0, 13.6], "rsl": 1}}}],
+                JaffTomlConfig,
+            )
+
+    def test_missing_key_reported_by_path(self):
+        with pytest.raises(
+            ParserError, match=r"network\.radiation\.bands: required key missing"
+        ):
+            load_config([{"network": {"radiation": {}}}], JaffTomlConfig)
+
+    def test_every_problem_is_listed(self):
+        with pytest.raises(ParserError) as info:
+            load_config(
+                [{"network": {"strict": "yes", "reactions": {"t_cutoff": "clamp"}}}],
+                JaffTomlConfig,
+            )
+
+        message = str(info.value)
+        assert "network.strict:" in message
+        assert "network.reactions.t_cutoff:" in message
+
+    def test_reaction_key_is_quoted(self):
+        with pytest.raises(ParserError, match=r'reaction\."H\+\.e-__H"\.t_cutoff: '):
+            load_config(
+                [
+                    {
+                        "network": {
+                            "reactions": {"reaction": {"H+.e-__H": {"t_cutoff": "x"}}}
+                        }
+                    }
+                ],
+                JaffTomlConfig,
+            )
+
+    def test_validator_message_has_no_pydantic_prefix(self):
+        with pytest.raises(ParserError) as info:
+            load_config(
+                [
+                    {
+                        "network": {
+                            "radiation": {"bands": [6.0, 13.6], "profile_index": [0, 1]}
+                        }
+                    }
+                ],
+                JaffTomlConfig,
+            )
+
+        message = str(info.value)
+        assert "network.radiation: profile_index has 2 entries" in message
+        assert "Value error" not in message
+
+    def test_shielding_plugin_errors_use_the_same_format(self):
+        layer = {
+            "network": {
+                "reactions": {
+                    "reaction": {
+                        "H2._PHOTON__H.H": {
+                            "photo": {"shielding": {"type": "hg2015", "min_ncl": 1.0}}
+                        }
+                    }
+                }
+            }
+        }
+
+        with pytest.raises(ParserError) as info:
+            load_config([layer], JaffTomlConfig)
+
+        message = str(info.value)
+        assert (
+            'network.reactions: reaction."H2._PHOTON__H.H".photo.shielding.min_ncl: unknown key'
+            in message
+        )
+        assert "errors.pydantic.dev" not in message

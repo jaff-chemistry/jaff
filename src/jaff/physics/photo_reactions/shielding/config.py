@@ -11,7 +11,13 @@ from typing import Any, ClassVar, Dict
 
 from pydantic import ValidationError, model_validator
 
-from ....config.base import ConfigModel, LowerStr
+from ....config.base import (
+    ConfigModel,
+    dotted,
+    format_validation_errors,
+    KeyPath,
+    LowerStr,
+)
 from ....errors import ParserError
 
 
@@ -66,7 +72,8 @@ def check_shielding(shielding: ShieldingConfig | None, reaction: str | None) -> 
     ------
     ValueError
         If no plugin of that type applies to *reaction*, or the plugin rejects
-        a setting.
+        a setting; one ``"<key path>: <message>"`` line per problem, the path
+        relative to ``[network.reactions]``.
     """
     if shielding is None:
         return
@@ -74,13 +81,16 @@ def check_shielding(shielding: ShieldingConfig | None, reaction: str | None) -> 
     # Imported here: the plugin registry imports this module.
     from . import _get_shielding_function
 
-    where = (
-        "reactions.photo.shielding"
+    # Key path of the table within [network.reactions].
+    where: KeyPath = (
+        ("photo", "shielding")
         if reaction is None
-        else f'reactions.reaction."{reaction}".photo.shielding'
+        else ("reaction", reaction, "photo", "shielding")
     )
     try:
         plugin = _get_shielding_function(shielding.type, reaction)
         plugin.config_model().model_validate(shielding.params)
-    except (ParserError, ValidationError) as e:
-        raise ValueError(f"{where}: {e}") from e
+    except ParserError as e:
+        raise ValueError(f"{dotted(where)}: {e}") from e
+    except ValidationError as e:
+        raise ValueError("\n".join(format_validation_errors(e, where))) from e
