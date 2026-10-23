@@ -22,24 +22,32 @@ class RateSegments(Catalogue[RateSegment]):
     ``(tmin, tmax)`` bounds.  The pieces are collapsed into a single SymPy
     expression by :meth:`evaluate_equivalent_rate`.
 
+    Out-of-range behaviour follows the owning reaction's ``t_cutoff`` setting
+    (``reaction.config.t_cutoff``): ``"clip"`` holds the boundary rate below
+    the first / above the last range; any other value lets the outermost
+    segments extend unbounded.
+
     Parameters
     ----------
+    reaction : Reaction
+        The reaction the segments belong to.
     segments : list[RateSegment]
         Initial rate segments.
-    mode : str
-        Out-of-range behaviour.  ``"clip"`` holds the boundary rate below the
-        first / above the last range; any other value lets the outermost
-        segments extend unbounded.
+
+    Attributes
+    ----------
+    reaction : Reaction
+        The reaction the segments belong to.
     """
 
-    def __init__(self, segments: list[RateSegment], mode: str):
+    def __init__(self, reaction: Reaction, segments: list[RateSegment]):
         _by_temp: dict[tuple[float | None, float | None], RateSegment] = {}
 
         if segments is not None:
             _by_temp = {(rs.tmin, rs.tmax): rs for rs in segments}
 
         super().__init__(segments, _by_temp)
-        self.mode: str = mode
+        self.reaction: Reaction = reaction
 
     def add(self, segment: RateSegment):
         """Append a rate segment, keyed by its ``(tmin, tmax)`` range.
@@ -70,13 +78,13 @@ class RateSegments(Catalogue[RateSegment]):
     def __repr__(self):
         return "<RateSegment Object>"
 
-    def evaluate_equivalent_rate(self, r: Reaction) -> Expr:
+    def evaluate_equivalent_rate(self) -> Expr:
         """Collapse the segments into a single SymPy ``Piecewise`` rate.
 
         Segments must be sorted by ascending temperature (call :meth:`sort`
         first).  Each range contributes its own rate; the gap between two
         adjacent ranges is bridged by linear interpolation of the two bounding
-        rates.  Out-of-range behaviour follows :attr:`mode` (``"clip"`` holds
+        rates.  Out-of-range behaviour follows the reaction's ``t_cutoff`` (``"clip"`` holds
         the boundary value, otherwise the end segments extend unbounded).
 
         A lone segment with a temperature-independent rate, or one that is fully
@@ -87,11 +95,6 @@ class RateSegments(Catalogue[RateSegment]):
         range open on one side (e.g. ``tmin`` set, ``tmax`` ``None``) clamps its
         closed side and extrapolates the open side.  Interior bounds of a
         multi-range rate must always be defined.
-
-        Parameters
-        ----------
-        r : Reaction
-            The reaction these segments belong to; used only in error messages.
 
         Returns
         -------
@@ -107,6 +110,8 @@ class RateSegments(Catalogue[RateSegment]):
         from ...network import NetworkSymbols
 
         tgas = NetworkSymbols.tgas
+        r = self.reaction
+        clip = r.config.t_cutoff == "clip"
         ls = self._list
         first = ls[0]
         last = ls[-1]
@@ -127,7 +132,7 @@ class RateSegments(Catalogue[RateSegment]):
 
         # Lower edge: hold the boundary rate below tmin (clip, when a lower
         # bound exists); an open lower end just extrapolates.
-        if self.mode == "clip" and first.tmin is not None:
+        if clip and first.tmin is not None:
             segs.append((first.rate.xreplace({tgas: first.tmin}), tgas < first.tmin))
 
         segs.append(_body(first))
@@ -155,7 +160,7 @@ class RateSegments(Catalogue[RateSegment]):
 
         # Upper edge: hold the boundary rate above tmax (clip, when an upper
         # bound exists); otherwise the last segment extends unbounded.
-        if self.mode == "clip" and last.tmax is not None:
+        if clip and last.tmax is not None:
             segs.append((last.rate.xreplace({tgas: last.tmax}), True))
         else:
             segs[-1] = (segs[-1][0], True)

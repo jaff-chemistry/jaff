@@ -308,8 +308,9 @@ net.check_recombinations(strict=False)  # RecombinationReport(missing=frozenset(
 net.check_isomers(strict=False)         # IsomerReport(groups=())
 ```
 
-Mass and charge conservation are validated per reaction at construction time —
-see [Reactions](reactions.md#conservation-is-checked-at-construction).
+Mass and charge conservation are checked for every reaction by
+`net.check_conservation(strict=False)`, also run on construction —
+see [Reactions](reactions.md#conservation-is-checked-by-the-network).
 
 ---
 

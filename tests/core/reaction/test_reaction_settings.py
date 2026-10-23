@@ -51,10 +51,18 @@ class TestReactionConfig:
         assert rxn.config.photo.pi_database == "verner"
         assert other.config.t_cutoff == "extrapolate"
 
-    def test_rate_segments_use_the_resolved_cutoff(self, make_network):
+    def test_rate_segments_belong_to_the_reaction(self, make_network):
         rxn = _photo(_net(make_network, reactions={"t_cutoff": "extrapolate"}))
 
-        assert rxn.rate_segments.mode == "extrapolate"
+        assert rxn.rate_segments.reaction is rxn
+        assert not hasattr(rxn.rate_segments, "mode")
+
+    def test_constructor_takes_no_config(self):
+        import inspect
+
+        from jaff.core.reaction import Reaction
+
+        assert "config" not in inspect.signature(Reaction.__init__).parameters
 
 
 class TestPhotoHoldsComputedStateOnly:

@@ -2,6 +2,8 @@
 # ABOUTME: Constant/temperature-dependent ranges, adjacent+separated, both clip modes
 
 
+from types import SimpleNamespace
+
 import pytest
 from sympy import Integer, Rational, symbols
 
@@ -11,9 +13,14 @@ from jaff.core.reaction.types import RateSegment, RateSegments
 TGAS = symbols("tgas")
 
 
+def _owner(mode):
+    """A stand-in reaction whose ``t_cutoff`` setting is *mode*."""
+    return SimpleNamespace(config=SimpleNamespace(t_cutoff=mode))
+
+
 def _eval(segments, mode, t):
     """Assemble the piecewise rate and evaluate it at temperature *t*."""
-    expr = RateSegments(list(segments), mode).sort().evaluate_equivalent_rate("r")
+    expr = RateSegments(_owner(mode), list(segments)).sort().evaluate_equivalent_rate()
     return expr.subs(TGAS, t) if hasattr(expr, "subs") else expr
 
 
@@ -177,7 +184,7 @@ def test_sort_open_lower_bound_first():
     """A ``tmin=None`` segment sorts below any finite bound (was a TypeError)."""
     high = RateSegment(Integer(2), 100, None)
     low = RateSegment(Integer(1), None, 100)
-    segs = RateSegments([high, low], "clip").sort()
+    segs = RateSegments(_owner("clip"), [high, low]).sort()
     assert list(segs) == [low, high]
 
 
@@ -193,12 +200,12 @@ def test_sort_rejects_open_bound_off_the_edge(bounds):
     """Only the lowest range may lack ``tmin``; only the highest may lack ``tmax``."""
     segs = [RateSegment(Integer(i), lo, hi) for i, (lo, hi) in enumerate(bounds)]
     with pytest.raises(ValueError, match="open"):
-        RateSegments(segs, "clip").sort()
+        RateSegments(_owner("clip"), segs).sort()
 
 
 def test_sort_allows_lone_fully_open_segment():
     seg = RateSegment(Integer(1), None, None)
-    assert list(RateSegments([seg], "clip").sort()) == [seg]
+    assert list(RateSegments(_owner("clip"), [seg]).sort()) == [seg]
 
 
 def test_network_open_ended_ranges(tmp_path):

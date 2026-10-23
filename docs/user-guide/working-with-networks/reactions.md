@@ -149,15 +149,17 @@ rxn.tmin, rxn.tmax           # (None, None)
 rxn.index                    # 0
 ```
 
-### Conservation is checked at construction
+### Conservation is checked by the network
 
-Every `Reaction` validates mass and charge conservation when it is built — a
-violation is logged as a warning (or aborts the load when the network is opened
-with `strict=True`). You can re-run the checks yourself:
+`Network` checks every reaction for mass and charge conservation once the network
+is built (`net.check_conservation`): a violation is logged as a warning, or aborts
+the load when the network is opened with `strict=True`. A `Reaction` built by hand
+is not checked; run the checks yourself:
 
 ```python
 rxn.check_mass()    # True  — mass balances within one electron mass
 rxn.check_charge()  # True  — net charge identical on both sides
+net.check_conservation(strict=False)  # every reaction; logs each violation
 ```
 
 `check_mass` deliberately tolerates a one-electron-mass discrepancy

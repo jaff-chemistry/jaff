@@ -93,8 +93,7 @@ class Reaction:
     ----------
     net : Network
         Network the reaction belongs to.  Supplies the ``.jfunc`` auxiliary
-        functions, the radiation field, the cross-section lookup and the
-        conservation-check mode (``net.config.strict``).
+        functions, the radiation field and the cross-section lookup.
     original_string : str
         The raw network-file line that produced this reaction.
     reactants : Species
@@ -214,18 +213,17 @@ class Reaction:
         original_string: str,
         index: int,
         dE: Expr | None = None,
-        config: ReactionConfig | None = None,
         type: str = "unknown",
         format: str | None = None,
         metadata: dict | None = None,
     ):
-        """Construct a ``Reaction`` and validate mass/charge conservation.
+        """Construct a ``Reaction`` from its species and rate.
 
         Parameters
         ----------
         net : Network
             Network the reaction belongs to; supplies the auxiliary functions,
-            radiation field, cross-section lookup and conservation-check mode.
+            radiation field and cross-section lookup.
         reactants : list[Specie]
             Reactant species (may contain duplicates for three-body reactions).
         products : list[Specie]
@@ -246,11 +244,6 @@ class Reaction:
             Energy change per event (erg).  A ``.jfunc`` ``deltaE<N>``
             function takes precedence; ``None`` (default) without one means
             zero.
-        config : ReactionConfig or None, optional
-            The reaction's resolved settings (see the :attr:`config`
-            attribute); :class:`~jaff.core.Network` passes
-            ``net.reactions.config.resolve(serialized)``.  ``None`` (default)
-            resolves it from the network's reactions catalogue.
         type : str, optional
             Reaction type as concluded by the network-format parser (e.g.
             ``"photo"``, ``"cosmic_ray"``, ``"3_body"``, ``"unknown"``, or a
@@ -265,8 +258,6 @@ class Reaction:
 
         Raises
         ------
-        SystemExit
-            When ``net.config.strict`` is set and mass or charge is not conserved.
         ParserError
             For invalid photo-reaction or shielding configuration (e.g. a
             ``pi_database`` set on a reaction whose cross section comes from
@@ -284,13 +275,9 @@ class Reaction:
         self.tmin: float | None = tmin
         self.tmax: float | None = tmax
         self.serialized: str = self.serialize(self.reactants, self.products)
-        self.config: ReactionConfig = (
-            config
-            if config is not None
-            else self.net.reactions.config.resolve(self.serialized)
-        )
+        self.config: ReactionConfig = self.net.reactions.config.resolve(self.serialized)
         self.rate_segments: RateSegments = RateSegments(
-            [RateSegment(rate_coefficient, tmin, tmax)], self.__t_cutoff()
+            self, [RateSegment(rate_coefficient, tmin, tmax)]
         )
         self.dE: Expr = (
             cast(Expr, self.aux_funcs.deltae.expr)
@@ -304,7 +291,6 @@ class Reaction:
         self.verbatim: str = self.get_verbatim()
         self.catalogue_index: int = -1
 
-        self.check(self.net.config.strict)
         self.serialized_exploded: str = self.serialize_exploded()
         # The reaction type is concluded by the parser and supplied here, not
         # inferred from the rate expression.
@@ -412,13 +398,6 @@ class Reaction:
             photocrosssection=af.get(f"photocrosssection{self.index}", None),
             spectralyield=af.get(f"spectralyield{self.index}", None),
         )
-
-    def __t_cutoff(self) -> str:
-        """The resolved ``t_cutoff`` (always set once resolved)."""
-        t_cutoff = self.config.t_cutoff
-        assert t_cutoff is not None, f"{self}: unresolved config"
-
-        return t_cutoff
 
     def __photo_config(self) -> PhotoConfig:
         """The resolved photo settings (always set once resolved)."""
@@ -613,8 +592,8 @@ class Reaction:
         Compares the summed mass and net charge of the reactants against
         those of the products (see :meth:`check_mass` and
         :meth:`check_charge`).  Violations are logged; with *strict* the
-        first one is fatal.  The constructor runs it with
-        ``net.config.strict``.
+        first one is fatal.  :meth:`~jaff.core.Network.check_conservation` runs
+        it for every reaction of a network.
 
         Parameters
         ----------

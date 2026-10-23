@@ -399,6 +399,7 @@ class Network:
         )
         self.symbols.log_summary()
 
+        self.check_conservation(self.config.strict)
         self.check_sink_sources(self.config.strict)
         self.check_recombinations(self.config.strict)
         self.check_isomers(self.config.strict)
@@ -476,9 +477,6 @@ class Network:
 
             local_subs_dict = {**subs_dict}
             srxn = Reaction.serialize(rr, pp)
-            # The global reaction settings with this reaction's own applied.
-            settings = self.reactions.config.resolve(srxn)
-            assert settings.t_cutoff is not None and settings.photo is not None
 
             rate_expr = self.__parse_rate(aux_chem_rate, rate, aux_funcs, global_vars)
             rate_expr = resolve_dependencies(rate_expr, local_subs_dict, aux_funcs)
@@ -500,7 +498,6 @@ class Network:
                 original_string=reaction["string"],
                 index=si,
                 type=rtype,
-                config=settings,
                 format=reaction.get("format"),
                 metadata=reaction.get("metadata"),
             )
@@ -550,7 +547,7 @@ class Network:
             else:
                 for seg in r.rate_segments:
                     seg.rate = self.symbols.standardize(seg.rate)
-                r.rate_coefficient = r.rate_segments.sort().evaluate_equivalent_rate(r)
+                r.rate_coefficient = r.rate_segments.sort().evaluate_equivalent_rate()
 
             r.tmin, r.tmax = r.rate_segments[0].tmin, r.rate_segments[-1].tmax
             if r.rad.group_yields is not None:
@@ -808,6 +805,28 @@ class Network:
         self.logger.info(f"{len(common)} species are common in both networks")
         self.logger.info(f'{len(not_in_self)} species are missing in "{self.label}"')
         self.logger.info(f'{len(not_in_other)} species are missing in "{other.label}"')
+
+    def check_conservation(self, strict: bool) -> None:
+        """Check every reaction for mass and charge conservation.
+
+        Runs :meth:`~jaff.core.reaction.Reaction.check` on each reaction: a
+        violation is logged as a warning, or is fatal with *strict*.  Run
+        automatically on construction with ``strict`` set to the network's
+        ``strict`` setting.
+
+        Parameters
+        ----------
+        strict : bool
+            If ``True``, call ``sys.exit(1)`` on the first violation.
+
+        Raises
+        ------
+        SystemExit
+            If *strict* is ``True`` and a reaction does not conserve mass or
+            charge.
+        """
+        for reaction in self.reactions:
+            reaction.check(strict)
 
     def check_sink_sources(self, strict: bool) -> SinkSourceReport:
         """Report (and warn, or abort) species never produced or never consumed.
