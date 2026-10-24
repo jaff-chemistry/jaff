@@ -13,4 +13,5 @@ def test_parsed_reactions_carry_sequential_source_index(tmp_path):
     )
     with NetworkParser(str(dat)) as p:
         parsed, _ = p.get_parsed()
-    assert [r["source_index"] for r in parsed] == [0, 1, 2]
+    assert [r.source_index for r in parsed] == [0, 1, 2]
+    assert all(r.format == "krome" for r in parsed)

@@ -21,7 +21,7 @@ def _fingerprint(path):
     with NetworkParser(path) as p:
         parsed, _ = p.get_parsed()
     return [
-        (i, tuple(r["r"]), tuple(r["p"]), r["tmin"], r["tmax"], r["rate"], r["type"])
+        (i, tuple(r.reactants), tuple(r.products), r.tmin, r.tmax, r.rate, r.type)
         for i, r in enumerate(parsed)
     ]
 

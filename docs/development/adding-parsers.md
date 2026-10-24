@@ -66,7 +66,7 @@ A **handler** is a plain class — it does not subclass anything — living in i
 | `global_re`                   | Fast, broad filter — a compiled `re.Pattern` attribute (the engine reads it once and calls `.match` on it, so it cannot be a method). Identifies lines that _could_ belong to this handler. Matched first, across all handlers, in priority order. |
 | `local_re`                    | Detailed extractor — uses **named groups** to capture every field. Matched inside `parse`/`apply`.               |
 | `default_state() -> dict`     | Optional. Initial values this handler contributes to the parser's shared `state` dict (only for state-carrying handlers). |
-| `parse(line, nline, state, file) -> dict` | Reaction handlers only. Extracts the reaction fields dict (`r`, `p`, `tmin`, `tmax`, `rate`, `type`, `string`) from *line*. The handler is called by its own parser's `process`, so a parser may agree a different shape with its handler — UDFA's returns a `list[dict]`, one per temperature range of a multi-range line. |
+| `parse(line, nline, state, file) -> dict` | Reaction handlers only. Extracts the reaction fields dict (`reactants`, `products`, `tmin`, `tmax`, `rate`, `type`, `line`) from *line*. The handler is called by its own parser's `process`, so a parser may agree a different shape with its handler — UDFA's returns a `list[dict]`, one per temperature range of a multi-range line. |
 | `apply(line, nline, state, globals, file, logger) -> None` | Directive handlers only. Mutates the parser's local `state` and/or the `globals` dict in place. |
 
 `global_re` is always a static compiled pattern; most `local_re` are too (module-level or class attributes), since they no longer need to depend on a shared context object. A handler whose extraction pattern depends on live state (like KROME's reaction line, whose column layout depends on an earlier `@format:` header) instead defines `local_re` as a **method** that rebuilds the pattern from the current `state`.
@@ -77,15 +77,15 @@ A reaction handler's `parse` returns a dict with exactly these keys (the same sh
 
 | Key        | Type            | Description                                         |
 | ---------- | --------------- | ---------------------------------------------------- |
-| `"r"`      | `list[str]`     | Reactant name strings (include any agent pseudo-species, see below) |
-| `"p"`      | `list[str]`     | Product name strings                                |
+| `"reactants"` | `list[str]`  | Reactant name strings (include any agent pseudo-species, see below) |
+| `"products"`  | `list[str]`  | Product name strings                                |
 | `"tmin"`   | `float or None` | Lower temperature bound in Kelvin, or `None`        |
 | `"tmax"`   | `float or None` | Upper temperature bound in Kelvin, or `None`        |
 | `"rate"`   | `str`           | Rate expression as a Python/SymPy-compatible string |
 | `"type"`   | `str`           | Reaction type concluded by the parser: `"photo"`, `"cosmic_ray"`, `"3_body"`, or `"unknown"` (or a more specific structural type, see `kida/reaction.py`) |
-| `"string"` | `str`           | Original network-file line (for error reporting)    |
+| `"line"`   | `str`           | Original network-file line (for error reporting)    |
 
-The parser's `process` wraps this dict in a `ParsedRecord` (from `_formats/_record.py`), adding `source_index` and `sub_order` from the `Record` the engine handed it. The engine then calls `ParsedRecord.as_parsed_props(name)` with the parser's `name`, which converts it back to this same dict plus `source_index`, `format` (that name) and `metadata` for `Network` to consume.
+The parser's `process` wraps this dict in a `ParsedRecord` (from `_formats/_record.py`), adding `source_index` and `sub_order` from the `Record` the engine handed it. The engine then sets each record's `format` to the parser's `name` and hands the records themselves to `Network`, which reads their attributes (`record.reactants`, `record.rate`, ...).
 
 `ParsedRecord` also takes an optional `metadata` dict for format-private data. `Network` stores the parser name and that dict on each `Reaction` as the private fields `_format` and `_metadata`, so the parser's [post-processing hook](#post-processing-hook) can find its own reactions (`network.reactions.with_format(self.name)`) and read back what it recorded.
 
@@ -106,7 +106,7 @@ serialization but are excluded from the kinetics. See the existing formats'
 `_reaction_type` and agent-injection logic (e.g. `kida/reaction.py`,
 `krome/reaction.py`) for reference implementations.
 
-After all parsers have run, the engine sorts every collected `ParsedRecord` by `(source_index, sub_order)`, `__normalize_rates` lower-cases every `"rate"` string, and `resolve_symbolic_dependencies` substitutes any global variables (e.g. from `@var` or `VARIABLES` blocks, merged from every parser's `ParseResult.globals`) into the expressions.
+After all parsers have run, the engine sorts every collected `ParsedRecord` by `(source_index, sub_order)`, `__normalize_rates` lower-cases every record's `rate`, and `resolve_symbolic_dependencies` substitutes any global variables (e.g. from `@var` or `VARIABLES` blocks, merged from every parser's `ParseResult.globals`) into the expressions.
 
 ### Post-processing hook
 
@@ -187,13 +187,13 @@ class MyFormatReaction:
         rtype = "3_body" if sum(not r.startswith("_") for r in rr) >= 3 else "unknown"
 
         return {
-            "r": rr,
-            "p": pp,
+            "reactants": rr,
+            "products": pp,
             "tmin": t_min,
             "tmax": t_max,
             "rate": rate,
             "type": rtype,
-            "string": line.strip(),
+            "line": line.strip(),
         }
 ```
 

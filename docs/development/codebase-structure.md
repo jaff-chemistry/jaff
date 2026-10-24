@@ -270,7 +270,7 @@ used by the solver plugins.
 | Step | Component                                    | What happens                                                                                       |
 | ---- | -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | 1    | `cli/jaffgen/_engine.py`, `config/`          | Parse CLI args (Typer); merge jaff.toml < jaffgen.toml < CLI < `--set` into one validated config; collect the template files |
-| 2    | `core/parsers/network/_engine.py`            | Auto-detect format via registered plugins; convert each reaction line to a `parsedListProps` dict  |
+| 2    | `core/parsers/network/_engine.py`            | Auto-detect format via registered plugins; turn each reaction line into a `ParsedRecord`            |
 | 3    | `core/parsers/auxiliary_func/_engine.py`     | Parse `.jfunc` file (if present); resolve `@var`/`@function` blocks into SymPy expressions         |
 | 4    | `core/network/network.py`                    | Build `Species`, `Reactions`, `Elements` catalogues; validate duplicates, sinks, isomers           |
 | 5    | `cli/jaffgen/_config_table.py`, `Network`    | Write any `[[jaffgen.table]]` data tables and the network's shielding tables to the output directory |

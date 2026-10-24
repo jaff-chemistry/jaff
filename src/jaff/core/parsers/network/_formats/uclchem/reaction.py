@@ -185,15 +185,15 @@ class UclchemReaction:
         pp = [self.SPECIAL_MAP.get(p, p) for p in pp]
 
         return {
-            "r": rr,
-            "p": pp,
+            "reactants": rr,
+            "products": pp,
             "tmin": t_min,
             "tmax": t_max,
             "rate": rate,
             "type": mechanism_type
             if mechanism_type is not None
             else self._reaction_type(rate, rr),
-            "string": line.strip(),
+            "line": line.strip(),
         }
 
     @staticmethod

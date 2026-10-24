@@ -117,13 +117,13 @@ class KidaReaction:
             rr.append(agent)
 
         return {
-            "r": rr,
-            "p": pp,
+            "reactants": rr,
+            "products": pp,
             "tmin": t_min,
             "tmax": tmax,
             "rate": rate,
             "type": rtype,
-            "string": line.strip(),
+            "line": line.strip(),
         }
 
     @staticmethod

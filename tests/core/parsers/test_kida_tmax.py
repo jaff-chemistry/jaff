@@ -11,7 +11,7 @@ KIDA_NET = REPO / "networks" / "kida_uva_2024" / "gas_reactions_kida.uva.2024.je
 
 
 def _row(tmin, tmax, r=("H", "Cl"), p=("HCl",)):
-    return {"r": list(r), "p": list(p), "tmin": tmin, "tmax": tmax}
+    return {"reactants": list(r), "products": list(p), "tmin": tmin, "tmax": tmax}
 
 
 def test_lone_9999_is_open():

@@ -100,13 +100,13 @@ class PrizmoReaction:
                 rr.append("_PHOTON")
 
         return {
-            "r": rr,
-            "p": pp,
+            "reactants": rr,
+            "products": pp,
             "tmin": t_min,
             "tmax": t_max,
             "rate": rate,
             "type": self._reaction_type(rate, rr),
-            "string": line.strip(),
+            "line": line.strip(),
         }
 
     @staticmethod

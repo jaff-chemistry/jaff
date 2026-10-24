@@ -140,13 +140,13 @@ class UdfaReaction:
 
             segments.append(
                 {
-                    "r": rr,
-                    "p": pp,
+                    "reactants": rr,
+                    "products": pp,
                     "tmin": tmin if tmin > 0 else None,
                     "tmax": tmax if tmax < 41000.0 else None,
                     "rate": self._build_rate(rtype, ka, kb, kc),
                     "type": rtype_str,
-                    "string": string,
+                    "line": string,
                 }
             )
 

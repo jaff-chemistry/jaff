@@ -53,7 +53,7 @@ from ...physics.thermodynamics.config import ThermodynamicsConfig
 from ..chemistry import element_table
 from ..elements import Elements
 from ..parsers import NetworkParser
-from ..parsers.network._typing import parsedListProps
+from ..parsers.network._formats import ParsedRecord
 from ..reaction import (
     RateSegment,
     Reaction,
@@ -465,7 +465,7 @@ class Network:
 
         return parsers
 
-    def __build_species(self, rows: list[parsedListProps]) -> dict[str, Specie]:
+    def __build_species(self, rows: list[ParsedRecord]) -> dict[str, Specie]:
         """Add every species named in *rows* to :attr:`species`, in file order.
 
         Pseudo-species (names starting with ``_``, e.g. ``_PHOTON``) are not
@@ -473,7 +473,7 @@ class Network:
 
         Parameters
         ----------
-        rows : list[parsedListProps]
+        rows : list[ParsedRecord]
             The parsed reaction rows.
 
         Returns
@@ -485,7 +485,7 @@ class Network:
         special_species: dict[str, Specie] = {}
 
         for row in rows:
-            for name in row["r"] + row["p"]:
+            for name in row.reactants + row.products:
                 if name in seen:
                     continue
                 seen.add(name)
@@ -498,7 +498,7 @@ class Network:
 
     def __build_reactions(
         self,
-        rows: list[parsedListProps],
+        rows: list[ParsedRecord],
         global_vars: dict[str, Basic],
         special_species: dict[str, Specie],
     ) -> None:
@@ -510,7 +510,7 @@ class Network:
 
         Parameters
         ----------
-        rows : list[parsedListProps]
+        rows : list[ParsedRecord]
             The parsed reaction rows.
         global_vars : dict[str, Basic]
             The network file's global variables.
@@ -531,12 +531,12 @@ class Network:
             rows,
             description=f"Creating {self.label} network",
         ):
-            reactants: list[str] = reaction["r"]
-            products: list[str] = reaction["p"]
-            tmin: float | None = reaction["tmin"]
-            tmax: float | None = reaction["tmax"]
-            rate: str = reaction["rate"]
-            si = reaction["source_index"]
+            reactants: list[str] = reaction.reactants
+            products: list[str] = reaction.products
+            tmin: float | None = reaction.tmin
+            tmax: float | None = reaction.tmax
+            rate: str = reaction.rate
+            si = reaction.source_index
             aux_chem_rate = f"chemrate{si}"
 
             rr = [
@@ -555,7 +555,7 @@ class Network:
             rate_expr = resolve_dependencies(rate_expr, local_subs_dict, functions)
             rate_expr = self.symbols.standardize(rate_expr)
 
-            rtype = reaction.get("type", "unknown")
+            rtype = reaction.type
             if (srxn, rtype) in self.reactions:
                 self.reactions.add_rate(
                     self.reactions[srxn, rtype], RateSegment(rate_expr, tmin, tmax)
@@ -569,11 +569,11 @@ class Network:
                 rate_coefficient=rate_expr,
                 tmin=tmin,
                 tmax=tmax,
-                original_string=reaction["string"],
+                original_string=reaction.line,
                 index=si,
                 type=rtype,
-                format=reaction.get("format"),
-                metadata=reaction.get("metadata"),
+                format=reaction.format,
+                metadata=reaction.metadata,
             )
             self.reactions.add(rea)
 

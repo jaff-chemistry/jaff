@@ -28,13 +28,13 @@ def test_record_metadata_defaults_to_fresh_dict():
 
 def _parsed(**kwargs):
     fields = dict(
-        r=["H"],
-        p=["H"],
+        reactants=["H"],
+        products=["H"],
         tmin=None,
         tmax=None,
         rate="1",
         type="unknown",
-        string="H -> H",
+        line="H -> H",
         source_index=0,
     )
 
@@ -48,8 +48,22 @@ def test_parsed_record_metadata_defaults_to_fresh_dict():
     assert b.metadata == {}
 
 
-def test_parsed_props_carry_format_and_metadata():
-    props = _parsed(metadata={"k": 1}).as_parsed_props(format="prizmo")
+def test_parsed_record_fields():
+    rec = _parsed(metadata={"k": 1})
 
-    assert props["format"] == "prizmo"
-    assert props["metadata"] == {"k": 1}
+    assert (rec.reactants, rec.products, rec.line) == (["H"], ["H"], "H -> H")
+    assert rec.metadata == {"k": 1}
+    assert rec.format is None  # set by the engine
+
+
+def test_parsed_record_has_no_dict_form():
+    rec = _parsed()
+
+    for name in ("r", "p", "string", "as_parsed_props"):
+        assert not hasattr(rec, name)
+
+
+def test_parsed_dict_type_is_gone():
+    import importlib.util
+
+    assert importlib.util.find_spec("jaff.core.parsers.network._typing._parsed") is None

@@ -48,11 +48,11 @@ def test_rxn74_shared_participants() -> None:
     segs = _segments(_bundled_line("74"))
     first = segs[0]
     for s in segs[1:]:
-        assert s["r"] == first["r"]
-        assert s["p"] == first["p"]
+        assert s["reactants"] == first["reactants"]
+        assert s["products"] == first["products"]
         assert s["type"] == first["type"]
-    assert first["r"] == ["H-", "H"]
-    assert first["p"] == ["H2", "e-"]
+    assert first["reactants"] == ["H-", "H"]
+    assert first["products"] == ["H2", "e-"]
 
 
 @pytest.mark.parametrize("index,count", [("1", 1), ("74", 2), ("3177", 3), ("7298", 4)])

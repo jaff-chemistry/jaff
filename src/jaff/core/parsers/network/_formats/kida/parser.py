@@ -52,13 +52,15 @@ def _resolve_open_tmax(rows: list[dict]) -> None:
     starts: dict[tuple, list[float]] = {}
     for f in rows:
         if f["tmin"] is not None:
-            starts.setdefault((tuple(f["r"]), tuple(f["p"])), []).append(f["tmin"])
+            starts.setdefault((tuple(f["reactants"]), tuple(f["products"])), []).append(
+                f["tmin"]
+            )
 
     for f in rows:
         if f["tmax"] != KIDA_OPEN_TMAX:
             continue
 
         lo = float("-inf") if f["tmin"] is None else f["tmin"]
-        later = starts.get((tuple(f["r"]), tuple(f["p"])), [])
+        later = starts.get((tuple(f["reactants"]), tuple(f["products"])), [])
         if not any(t > lo for t in later):
             f["tmax"] = None
