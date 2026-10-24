@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ...config import JAFF_DIR
-from .config import JaffgenTomlConfig
+from .config import JaffgenConfig, JaffgenRunConfig
 
 #: Fallback output directory (``<repo_root>/generated``) when none is supplied.
 DEFAULT_OUTPUT: Path = JAFF_DIR.parent.parent / "generated"
@@ -34,9 +34,10 @@ class State:
     Attributes
     ----------
     config_file : Path or None
-        The ``jaffgen.toml`` the config was loaded from, if any.
-    config : JaffgenTomlConfig
-        The run's validated config (jaff.toml < jaffgen.toml < command line).
+        The ``jaffgen.toml`` the config was loaded from (given or bundled), if any.
+    config : JaffgenRunConfig
+        The run's config: the validated ``[jaffgen]`` section and the
+        ``[network]`` settings handed to the network.
     output_dir : ResolvedPath
         Directory the generated files are written to (defaults to
         :data:`DEFAULT_OUTPUT`).
@@ -46,7 +47,9 @@ class State:
     """
 
     config_file: Path | None = None
-    config: JaffgenTomlConfig = field(default_factory=JaffgenTomlConfig)
+    config: JaffgenRunConfig = field(
+        default_factory=lambda: JaffgenRunConfig(JaffgenConfig(), {}, None)
+    )
     output_dir: ResolvedPath = field(
         default_factory=lambda: ResolvedPath(DEFAULT_OUTPUT, Path())
     )

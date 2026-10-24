@@ -82,11 +82,14 @@ class TestTomlConfigs:
             JaffgenTomlConfig.model_validate({"table": [{}]})
 
 
+NET = "H + H -> H2  []  1e-10\nH2 -> H + H  []  1e-10\n"
+
+
 @pytest.fixture
 def project(tmp_path):
     """A network dir and a run dir; write(name, text) writes a file under tmp_path."""
     (tmp_path / "net").mkdir()
-    (tmp_path / "net" / "net.jet").write_text("")
+    (tmp_path / "net" / "net.jet").write_text(NET)
     (tmp_path / "run").mkdir()
 
     def write(name, text):
@@ -98,11 +101,35 @@ def project(tmp_path):
     return tmp_path, write
 
 
+def _network(cfg):
+    """The Network a jaffgen run builds from *cfg* (its [network] layer as config=)."""
+    from jaff import Network
+
+    return Network(cfg.jaffgen.network_file, config=cfg.network, funcfile=False)
+
+
 class TestLoadJaffgenConfig:
     def test_nothing_gives_defaults(self, tmp_path):
-        assert load_jaffgen_config(cwd=tmp_path) == JaffgenTomlConfig()
+        cfg = load_jaffgen_config(cwd=tmp_path)
 
-    def test_precedence_jaff_then_jaffgen_then_cli(self, project):
+        assert cfg.jaffgen == JaffgenConfig()
+        assert cfg.network == {}
+        assert cfg.config_file is None
+
+    def test_network_layer_is_jaffgen_toml_then_cli(self, project):
+        root, write = project
+        cfg_file = write(
+            "run/jaffgen.toml",
+            '[jaffgen]\nnetwork_file = "../net/net.jet"\n'
+            '[network]\nlabel = "jaffgen"\nstrict = false\n',
+        )
+
+        cfg = load_jaffgen_config(cfg_file, {"network": {"label": "cli"}}, cwd=root)
+
+        assert cfg.network == {"label": "cli", "strict": False}
+        assert cfg.config_file == cfg_file
+
+    def test_network_applies_the_jaff_toml_beside_it(self, project):
         root, write = project
         write(
             "net/jaff.toml",
@@ -110,14 +137,17 @@ class TestLoadJaffgenConfig:
         )
         cfg_file = write(
             "run/jaffgen.toml",
-            '[jaffgen]\nnetwork_file = "../net/net.jet"\n[network]\nlabel = "jaffgen"\nstrict = false\n',
+            '[jaffgen]\nnetwork_file = "../net/net.jet"\n'
+            '[network]\nlabel = "jaffgen"\nstrict = false\n',
         )
 
         cfg = load_jaffgen_config(cfg_file, {"network": {"label": "cli"}}, cwd=root)
+        net = _network(cfg)
 
-        assert cfg.network.label == "cli"
-        assert cfg.network.strict is False
-        assert cfg.network.expand_nuclei is False
+        assert "expand_nuclei" not in cfg.network  # read by Network, not jaffgen
+        assert net.config.label == "cli"
+        assert net.config.strict is False
+        assert net.config.expand_nuclei is False
 
     def test_paths_resolved_per_source(self, project):
         root, write = project
@@ -132,32 +162,32 @@ class TestLoadJaffgenConfig:
         assert cfg.jaffgen.input_dir == (root / "run" / "tpl").resolve()
         assert cfg.jaffgen.output_dir == (root / "cli_out").resolve()
 
-    def test_cli_network_file_selects_its_jaff_toml(self, project):
+    def test_custom_jaff_toml_is_merged_over_the_one_beside_the_network(self, project):
         root, write = project
-        (root / "other").mkdir()
-        (root / "other" / "o.jet").write_text("")
-        write("net/jaff.toml", '[network]\nlabel = "net"\n')
-        write("other/jaff.toml", '[network]\nlabel = "other"\n')
-        cfg_file = write(
-            "run/jaffgen.toml", '[jaffgen]\nnetwork_file = "../net/net.jet"\n'
-        )
-
-        cfg = load_jaffgen_config(
-            cfg_file, {"jaffgen": {"network_file": "other/o.jet"}}, cwd=root
-        )
-
-        assert cfg.network.label == "other"
-
-    def test_network_config_overrides_detection(self, project):
-        root, write = project
-        write("net/jaff.toml", '[network]\nlabel = "detected"\n')
+        write("net/jaff.toml", '[network]\nlabel = "beside"\nstrict = true\n')
         write("run/custom.toml", '[network]\nlabel = "custom"\n')
         cfg_file = write(
             "run/jaffgen.toml",
             '[jaffgen]\nnetwork_file = "../net/net.jet"\nnetwork_config = "custom.toml"\n',
         )
 
-        assert load_jaffgen_config(cfg_file, cwd=root).network.label == "custom"
+        cfg = load_jaffgen_config(cfg_file, cwd=root)
+        net = _network(cfg)
+
+        assert cfg.network == {"label": "custom"}
+        assert net.config.label == "custom"
+        assert net.config.strict is True
+
+    def test_custom_jaff_toml_beside_the_network_is_not_read_twice(self, project):
+        root, write = project
+        write("net/jaff.toml", '[network]\nlabel = "beside"\n')
+        cfg_file = write(
+            "run/jaffgen.toml",
+            '[jaffgen]\nnetwork_file = "../net/net.jet"\n'
+            'network_config = "../net/jaff.toml"\n',
+        )
+
+        assert load_jaffgen_config(cfg_file, cwd=root).network == {}
 
     def test_missing_network_config(self, project):
         root, write = project
@@ -166,11 +196,71 @@ class TestLoadJaffgenConfig:
         with pytest.raises(FileNotFoundError):
             load_jaffgen_config(cfg_file, cwd=root)
 
-    def test_jaffgen_section_in_jaff_toml_is_rejected(self, project):
+    def test_jaffgen_section_in_custom_jaff_toml_is_rejected(self, project):
         root, write = project
-        write("net/jaff.toml", '[jaffgen]\ntemplate = "microphysics"\n')
+        write("run/custom.toml", '[jaffgen]\ntemplate = "microphysics"\n')
 
         with pytest.raises(ParserError, match="jaffgen"):
             load_jaffgen_config(
-                None, {"jaffgen": {"network_file": "net/net.jet"}}, cwd=root
+                None, {"jaffgen": {"network_config": "run/custom.toml"}}, cwd=root
             )
+
+    def test_jaffgen_section_is_validated(self, project):
+        root, _ = project
+
+        with pytest.raises(ParserError, match=r"jaffgen\.echo"):
+            load_jaffgen_config(None, {"jaffgen": {"echo": "yes"}}, cwd=root)
+
+    def test_unknown_top_level_table_is_rejected(self, project):
+        root, _ = project
+
+        with pytest.raises(ParserError, match="netwrok"):
+            load_jaffgen_config(None, {"netwrok": {"strict": True}}, cwd=root)
+
+    def test_network_keys_are_checked_by_the_network(self, project):
+        root, _ = project
+        cfg = load_jaffgen_config(
+            None,
+            {"jaffgen": {"network_file": "net/net.jet"}, "network": {"rates": {}}},
+            cwd=root,
+        )
+
+        with pytest.raises(ParserError, match=r"network\.rates: unknown key"):
+            _network(cfg)
+
+
+class TestBundledTemplateConfig:
+    def test_template_bundle_is_the_file_layer(self, project):
+        root, _ = project
+        cfg = load_jaffgen_config(
+            None, {"jaffgen": {"template": "microphysics"}}, cwd=root
+        )
+
+        assert cfg.config_file is not None
+        assert cfg.config_file.name == "jaffgen.toml"
+        assert cfg.network["radiation"]["bands"] == [13.6, "inf"]
+
+    def test_cli_key_needing_bundle_keys_is_valid(self, project):
+        # bugs.md #46: --set network.radiation.c=1e10 with a template whose
+        # bundle sets bands used to fail ("bands: required key missing").
+        root, _ = project
+        cli = {
+            "jaffgen": {"template": "microphysics", "network_file": "net/net.jet"},
+            "network": {"radiation": {"c": 1e10}},
+        }
+
+        cfg = load_jaffgen_config(None, cli, cwd=root)
+
+        assert cfg.network["radiation"]["bands"] == [13.6, "inf"]
+        assert cfg.network["radiation"]["c"] == pytest.approx(1e10)
+
+    def test_explicit_config_wins_over_bundle(self, project):
+        root, write = project
+        cfg_file = write("run/jaffgen.toml", "[jaffgen]\n")
+
+        cfg = load_jaffgen_config(
+            cfg_file, {"jaffgen": {"template": "microphysics"}}, cwd=root
+        )
+
+        assert cfg.config_file == cfg_file
+        assert "radiation" not in cfg.network

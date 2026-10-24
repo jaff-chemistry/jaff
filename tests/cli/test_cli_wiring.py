@@ -7,6 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
+from jaff import Network
+
 from jaff.cli._helper import cli_layer, command_line_layer, parse_set
 from jaff.cli.jaffgen.config import load_jaffgen_config
 from jaff.errors import ParserError
@@ -65,7 +67,7 @@ class TestCliOverConfigFile:
 
         config = load_jaffgen_config(cfg, cli, cwd=tmp_path)
 
-        assert config.network.reactions.duplicate_policy == "error"
+        assert config.network["reactions"]["duplicate_policy"] == "error"
 
     def test_no_cli_flag_keeps_config_value(self, tmp_path):
         cfg = tmp_path / "jaffgen.toml"
@@ -73,13 +75,14 @@ class TestCliOverConfigFile:
 
         config = load_jaffgen_config(cfg, cli_layer(SimpleNamespace()), cwd=tmp_path)
 
-        assert config.network.reactions.duplicate_policy == "preserve-last"
+        assert config.network["reactions"]["duplicate_policy"] == "preserve-last"
 
     def test_eos_table(self, tmp_path):
         cfg = tmp_path / "jaffgen.toml"
         cfg.write_text('[network.thermodynamics.eos]\ntype = "ideal"\ngamma = 1.4\n')
 
-        eos = load_jaffgen_config(cfg, cwd=tmp_path).network.thermodynamics.eos
+        layer = load_jaffgen_config(cfg, cwd=tmp_path).network
+        eos = Network(DUP, config=layer, funcfile=False).config.thermodynamics.eos
 
         assert isinstance(eos, IdealEosConfig)
         assert eos.gamma == pytest.approx(1.4)
@@ -91,10 +94,9 @@ class TestCliOverConfigFile:
             f"[network.radiation]\nbands = [6, 11.2, 13.6]\nprofile_index = {index}\n"
         )
 
-        radiation = load_jaffgen_config(cfg, cwd=tmp_path).network.radiation
+        radiation = load_jaffgen_config(cfg, cwd=tmp_path).network["radiation"]
 
-        assert radiation is not None
-        assert radiation.profile_index == expected
+        assert radiation["profile_index"] == expected
 
     def test_non_boolean_echo_is_an_error(self, tmp_path):
         cfg = tmp_path / "jaffgen.toml"
@@ -107,8 +109,9 @@ class TestCliOverConfigFile:
         cfg = tmp_path / "jaffgen.toml"
         cfg.write_text('[network]\nerrors = true\nconfig = "jaff.toml"\n')
 
+        layer = load_jaffgen_config(cfg, cwd=tmp_path).network
         with pytest.raises(ParserError) as info:
-            load_jaffgen_config(cfg, cwd=tmp_path)
+            Network(DUP, config=layer, funcfile=False)
 
         assert "network.errors: unknown key" in str(info.value)
         assert "network.config: unknown key" in str(info.value)
@@ -245,7 +248,7 @@ class TestConfigRelativeNetworkPaths:
         cfg_dir, _ = dirs
         cfg = self._write_cfg(cfg_dir, network_block='funcfile = "net.jfunc"\n')
 
-        assert load_jaffgen_config(cfg).network.funcfile == cfg_dir / "net.jfunc"
+        assert load_jaffgen_config(cfg).network["funcfile"] == cfg_dir / "net.jfunc"
 
     def test_network_config_resolves_against_config_dir(self, dirs):
         cfg_dir, _ = dirs
@@ -257,14 +260,14 @@ class TestConfigRelativeNetworkPaths:
         cfg_dir, _ = dirs
         cfg = self._write_cfg(cfg_dir, network_block="funcfile = false\n")
 
-        assert load_jaffgen_config(cfg).network.funcfile is False
+        assert load_jaffgen_config(cfg).network["funcfile"] is False
 
     def test_absolute_paths_are_kept(self, dirs):
         cfg_dir, cwd = dirs
         block = f'funcfile = "{(cwd / "net.jfunc").as_posix()}"\n'
         cfg = self._write_cfg(cfg_dir, network_block=block)
 
-        assert load_jaffgen_config(cfg).network.funcfile == cwd / "net.jfunc"
+        assert load_jaffgen_config(cfg).network["funcfile"] == cwd / "net.jfunc"
 
     def _generate(self, cfg, *extra):
         from typer.testing import CliRunner
@@ -481,7 +484,7 @@ class TestConfigToml:
 
         reloaded = load_jaffgen_config(written)
 
-        assert reloaded.network.label == "x"
+        assert reloaded.network["label"] == "x"
         assert reloaded.jaffgen.output_dir == (tmp_path / "out").resolve()
 
 

@@ -11,7 +11,8 @@ source files (C, C++, Fortran, Python, Rust, Julia, R) to an output directory.
 Configuration comes from three layers, lowest precedence first (see
 :func:`~jaff.cli.jaffgen.config.load_jaffgen_config`):
 
-1. The network's ``jaff.toml`` (or ``[jaffgen] network_config``).
+1. The network's ``jaff.toml``, then ``[jaffgen] network_config`` (merged by
+   the network itself).
 2. A ``jaffgen.toml`` config file (``--config``, or bundled in the template).
 3. Command-line options (:data:`~jaff.cli._helper.CLI_KEYS`), then ``--set``
    ``key.path=value`` items.
@@ -45,11 +46,10 @@ from ...common import print_motd
 from ...config import TEMPLATES_DIR, predefined_templates
 from ...config.json_schema import SCHEMA_DIR
 from ...config.loader import dump_config
-from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
 from .._helper import DuplicatePolicy, command_line_layer, funcfile_arg, reports_errors
 from ._structs import DEFAULT_OUTPUT, ResolvedPath, State
-from .config import load_jaffgen_config
+from .config import JaffgenTomlConfig, load_jaffgen_config
 
 
 class JaffGen:
@@ -59,15 +59,17 @@ class JaffGen:
     Instantiating this class drives the full code-generation pipeline from a
     namespace of parsed CLI arguments:
 
-    1. Load the config (``parse_args``): the network's ``jaff.toml`` <
-       ``jaffgen.toml`` < command line, then collect the template files.
-    2. Build the chemical reaction network once (``build_network``).
-    3. Write any config-declared data tables (``handle_data_tables``).
-    4. Write the network's shielding tables to the output directory
+    1. Load the config (``parse_args``): ``jaffgen.toml`` (or the template's)
+       < command line.
+    2. Build the chemical reaction network once (``build_network``); it merges
+       the run's ``[network]`` settings over its own ``jaff.toml``.
+    3. Collect the files to render (``collect_files``).
+    4. Write any config-declared data tables (``handle_data_tables``).
+    5. Write the network's shielding tables to the output directory
        (:meth:`~jaff.Network.write_shielding_tables`).
-    5. Render every collected template file to the output directory
+    6. Render every collected template file to the output directory
        (``process_files``).
-    6. Write the run's whole config as ``config.toml`` (``write_config``).
+    7. Write the run's whole config as ``config.toml`` (``write_config``).
 
     Parameters
     ----------
@@ -112,7 +114,9 @@ class JaffGen:
 
         print_motd("jaffgen")
         self.parse_args()
+        # The network validates its settings: build it before touching files.
         self.net: Network = self.build_network()
+        self.collect_files()
         self.handle_data_tables()
         self.net.write_shielding_tables(self.state.output_dir.abspath)
         self.process_files()
@@ -123,28 +127,28 @@ class JaffGen:
     # ------------------------------------------------------------------
 
     def parse_args(self) -> None:
-        """
-        Load the config and collect every file to render.
+        """Load the run's config from ``--config`` (else the template's) and the command line.
 
         A ``jaffgen.toml`` bundled with the template is used when no
-        ``--config`` was given; it is config, not a file to render.  Files come
-        from the template, then the input directory, then the individual input
-        files.
+        ``--config`` was given (see :func:`~jaff.cli.jaffgen.config.load_jaffgen_config`).
+        """
+        cli = command_line_layer(self.args)
+        config_file = self._config_file(getattr(self.args, "config", None))
+        self.load_config(config_file, cli)
+
+    def collect_files(self) -> None:
+        """
+        Collect every file to render and create the output directory.
+
+        Files come from the template (minus its bundled ``jaffgen.toml``, which
+        is config), then the input directory, then the individual input files.
 
         Raises
         ------
         RuntimeError
             If no input file/folder/template resolved.
         """
-        cli = command_line_layer(self.args)
-        config_file = self._config_file(getattr(self.args, "config", None))
-        self.load_config(config_file, cli)
-
         template_files = self._template_files(self.state.config.jaffgen.template)
-        if config_file is None:
-            bundled = self._bundled_config(template_files)
-            if bundled is not None:
-                self.load_config(bundled, cli)
 
         self.state.output_files = [
             f for f in template_files if f.abspath.name != "jaffgen.toml"
@@ -158,9 +162,9 @@ class JaffGen:
         self.state.output_dir.abspath.mkdir(parents=True, exist_ok=True)
 
     def load_config(self, config_file: Path | None, cli: dict[str, Any]) -> None:
-        """Load the run's config from *config_file* and the command-line layer *cli*."""
-        self.state.config_file = config_file
+        """Load the run's config from *config_file* (else the template's) and *cli*."""
         self.state.config = load_jaffgen_config(config_file, cli)
+        self.state.config_file = self.state.config.config_file
 
     @staticmethod
     def _config_file(config_file: Path | str | None) -> Path | None:
@@ -231,24 +235,6 @@ class JaffGen:
 
         return [*gfiles, *(f for f in pfiles if f.relpath in extras)]
 
-    @staticmethod
-    def _bundled_config(files: list[ResolvedPath]) -> Path | None:
-        """
-        Return the ``jaffgen.toml`` bundled among a template's *files*, if any.
-
-        Raises
-        ------
-        ParserError
-            If more than one ``jaffgen.toml`` is present among *files*.
-        """
-        matches = [f for f in files if f.abspath.name == "jaffgen.toml"]
-        if len(matches) > 1:
-            raise ParserError(
-                "More than one jaffgen.toml file found in template directory"
-            )
-
-        return matches[0].abspath if matches else None
-
     def collect_input_files(self) -> None:
         """
         Collect the input directory's files, then the individual input files.
@@ -311,10 +297,9 @@ class JaffGen:
 
     def build_network(self) -> Network:
         """
-        Construct the :class:`~jaff.Network` from the loaded config.
+        Construct the :class:`~jaff.Network` from the run's ``[network]`` settings.
 
-        The config already holds the network's ``jaff.toml``, so the network
-        does not stack it again.
+        The network merges them over its own ``jaff.toml`` and validates them.
 
         Returns
         -------
@@ -336,13 +321,17 @@ class JaffGen:
     def write_config(self) -> None:
         """Write the run's whole config to ``config.toml`` in the output directory.
 
-        Every key, defaults included, after merging the network's ``jaff.toml``,
-        the ``jaffgen.toml`` and the command line: an exact record of the run,
-        loadable again with ``--config``.
+        Every key, defaults included: the run's ``[jaffgen]`` section and the
+        network's validated config (``net.config``, its ``jaff.toml``, the
+        ``jaffgen.toml`` and the command line merged): an exact record of the
+        run, loadable again with ``--config``.
         """
         path = self.state.output_dir.abspath / "config.toml"
         schema = SCHEMA_DIR / "jaffgen.schema.json"
-        path.write_text(dump_config(self.state.config, schema=schema))
+        config = JaffgenTomlConfig(
+            jaffgen=self.state.config.jaffgen, network=self.net.config
+        )
+        path.write_text(dump_config(config, schema=schema))
         self.logger.info(f"[cyan]{path.name}[/] created at {path.parent}")
 
     def handle_data_tables(self) -> None:

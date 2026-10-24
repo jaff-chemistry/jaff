@@ -52,16 +52,11 @@ holds that network's own defaults and always applies. Lowest precedence first:
 | 3. command-line options | 3. keyword arguments: the `[network]` keys (`label=`, `reactions=`, `radiation=`, …) |
 | 4. `--set key.path=value` items | |
 
-<!-- prettier-ignore -->
-!!! warning "The bundled `jaffgen.toml` is validated late"
-    Without `--config`, `jaffgen` currently validates the `jaff.toml` and
-    command-line layers on their own first, and only then adds the
-    `jaffgen.toml` its template bundles. A command-line setting that is valid
-    only together with the bundle's keys fails that first check: with the
-    `microphysics` template, whose bundle sets `bands`,
-    `--set network.radiation.c=1e10` alone stops with
-    `network.radiation.bands: required key missing`. Give the keys it needs on
-    the command line too, or copy the bundled file and pass it with `--config`.
+For `jaffgen`, the `[network]` settings of the `jaffgen.toml` and the command
+line (and of a `--network-config` file) are merged over the network's own
+`jaff.toml` by the network, which validates them once; `jaffgen` itself checks
+the `[jaffgen]` section. Without `--config`, the `jaffgen.toml` a template
+bundles is the file layer, merged before anything is checked.
 
 When two layers set the same table, its keys merge one by one; a list or a
 plain value is replaced whole. Tables whose keys depend on their `type` are

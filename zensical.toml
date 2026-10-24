@@ -518,9 +518,13 @@ nav = [
         { "JaffgenConfig" = [
           "reference/config/jaffgen/jaffgenconfig/index.md",
         ] },
+        { "JaffgenRunConfig" = [
+          "reference/config/jaffgen/jaffgenrunconfig/index.md",
+        ] },
         { "JaffgenTomlConfig" = [
           "reference/config/jaffgen/jaffgentomlconfig/index.md",
         ] },
+        "reference/config/jaffgen/bundled_config.md",
         "reference/config/jaffgen/load_jaffgen_config.md",
       ] },
     ] },

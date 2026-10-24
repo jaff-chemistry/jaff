@@ -134,7 +134,7 @@
         "network_config": {
           "format": "path",
           "type": "string",
-          "description": "`jaff.toml` to load instead of the one next to the network file.",
+          "description": "Another `jaff.toml`, merged over the one next to the network file.",
           "title": "Network Config"
         },
         "echo": {

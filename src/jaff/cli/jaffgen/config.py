@@ -1,24 +1,35 @@
 # ABOUTME: Config model of a code-generation run ([jaffgen]) and of a jaffgen.toml
-# ABOUTME: file, assembled from jaff.toml, jaffgen.toml and the command line
+# ABOUTME: file, assembled from the jaffgen.toml (or a template's) and the command line
 """Config of a code-generation run (``[jaffgen]``) and of a ``jaffgen.toml`` file.
 
-:func:`load_jaffgen_config` assembles a run's config from the network's
-``jaff.toml``, the ``jaffgen.toml`` and the command line, in that order of
-precedence (lowest first).
+:func:`load_jaffgen_config` assembles a run's config from the ``jaffgen.toml``
+(or the one its template bundles) and the command line, lowest precedence first.
+It validates ``[jaffgen]`` and gathers ``[network]`` for the network, which
+merges it over its own ``jaff.toml`` and validates it.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Mapping
+from typing import Any, Dict, List, Mapping, NamedTuple
 
 from ...config.base import ConfigModel, PathLike
-from ...config.loader import deep_merge, load_config, load_layer, resolve_paths
+from ...config import TEMPLATES_DIR, predefined_templates
+from ...config.loader import (
+    atomic_tables,
+    deep_merge,
+    load_config,
+    load_layer,
+    resolve_paths,
+)
 from ...core.network.config import JaffTomlConfig, jaff_toml_for
+from ...errors import ParserError
 
 __all__ = [
     "JaffgenConfig",
+    "JaffgenRunConfig",
     "JaffgenTomlConfig",
+    "bundled_config",
     "load_jaffgen_config",
 ]
 
@@ -39,7 +50,7 @@ class JaffgenConfig(ConfigModel):
     network_file : Path or None
         Network file, or the name of a predefined network.
     network_config : Path or None
-        ``jaff.toml`` to load instead of the one next to the network file.
+        Another ``jaff.toml``, merged over the one next to the network file.
     echo : bool
         Echo the template directives as comments in the output.
     table : list of dict
@@ -62,17 +73,38 @@ class JaffgenTomlConfig(JaffTomlConfig):
     jaffgen: JaffgenConfig = JaffgenConfig()
 
 
+class JaffgenRunConfig(NamedTuple):
+    """A code-generation run's config, as :func:`load_jaffgen_config` assembles it.
+
+    Attributes
+    ----------
+    jaffgen : JaffgenConfig
+        The validated ``[jaffgen]`` section.
+    network : dict
+        The run's ``[network]`` settings, merged but not validated: a custom
+        ``jaff.toml`` (``network_config``) < the ``jaffgen.toml`` < the command
+        line.  :class:`~jaff.core.Network` merges it over the ``jaff.toml``
+        next to the network and validates it (``Network(..., config=network)``).
+    config_file : Path or None
+        The ``jaffgen.toml`` used: the one given, else the one the template
+        bundles, else ``None``.
+    """
+
+    jaffgen: JaffgenConfig
+    network: Dict[str, Any]
+    config_file: Path | None
+
+
 def load_jaffgen_config(
     config_file: Path | None = None,
     cli_layer: Mapping[str, Any] | None = None,
     cwd: Path | None = None,
-) -> JaffgenTomlConfig:
-    """Load a code-generation run's config: jaff.toml < jaffgen.toml < command line.
+) -> JaffgenRunConfig:
+    """Load a code-generation run's config: jaffgen.toml < command line.
 
-    Loads in two phases: the ``[jaffgen]`` sections of the ``jaffgen.toml`` and
-    of the command line name the network (``network_file``) and its config
-    (``network_config``, else the ``jaff.toml`` next to the network, if any);
-    that ``jaff.toml`` is then loaded and all three are merged and validated.
+    The ``jaffgen.toml`` is *config_file*, else (with a ``[jaffgen] template``)
+    the one the template bundles.  ``[jaffgen]`` is validated here; ``[network]``
+    is gathered for the network, which validates it over its own ``jaff.toml``.
 
     Parameters
     ----------
@@ -86,40 +118,80 @@ def load_jaffgen_config(
 
     Returns
     -------
-    JaffgenTomlConfig
-        The validated config.
+    JaffgenRunConfig
+        The validated ``[jaffgen]`` section, the ``[network]`` settings and the
+        ``jaffgen.toml`` used.
 
     Raises
     ------
     FileNotFoundError
-        If a named config file or the network does not exist.
+        If a named config file does not exist.
     ParserError
-        If a file is not valid TOML or the config is invalid.
+        If a file is not valid TOML, a top-level table is unknown, or
+        ``[jaffgen]`` is invalid.
     """
-    file_layer = load_layer(config_file, JaffgenTomlConfig) if config_file else {}
+    atomic = atomic_tables(JaffgenTomlConfig)
     cli = resolve_paths(cli_layer or {}, JaffgenTomlConfig, cwd or Path.cwd())
 
-    run = deep_merge(file_layer, cli).get("jaffgen")
-    jaff_toml = _jaff_toml(run if isinstance(run, Mapping) else {})
-    jaff_layer = load_layer(jaff_toml, JaffTomlConfig) if jaff_toml else {}
+    if config_file is None:
+        run = cli.get("jaffgen", {})
+        config_file = (
+            bundled_config(run.get("template")) if isinstance(run, Mapping) else None
+        )
+    file_layer = load_layer(config_file, JaffgenTomlConfig) if config_file else {}
 
-    return load_config([jaff_layer, file_layer, cli], JaffgenTomlConfig)
+    merged = deep_merge(file_layer, cli, atomic=atomic)
+    network = merged.pop("network", {})
+    jaffgen = load_config([merged], JaffgenTomlConfig).jaffgen
+
+    custom = _custom_jaff_toml(jaffgen)
+    if custom is not None:
+        base = load_layer(custom, JaffTomlConfig)
+        network = deep_merge(base, {"network": network}, atomic=atomic)["network"]
+
+    return JaffgenRunConfig(jaffgen, network, config_file)
 
 
-def _jaff_toml(run: Mapping[str, Any]) -> Path | None:
-    """Return the ``jaff.toml`` a ``[jaffgen]`` section selects, or ``None``.
+def bundled_config(template: str | None) -> Path | None:
+    """The ``jaffgen.toml`` the built-in *template* bundles, if any.
 
-    An explicit ``network_config`` is returned even if missing, so loading it
-    reports the missing file; the one next to the network only if it exists.
+    Looked for among the template's generator and preprocessor files; a
+    generator file wins over a preprocessor one at the same relative path.
+
+    Raises
+    ------
+    ParserError
+        If the template holds more than one ``jaffgen.toml``.
     """
-    explicit = run.get("network_config")
-    if isinstance(explicit, Path):
-        return explicit
-
-    network_file = run.get("network_file")
-    if not isinstance(network_file, Path):
+    if template is None or template not in predefined_templates():
         return None
 
-    candidate = jaff_toml_for(network_file)
+    found: Dict[Path, Path] = {}
+    for kind in ("preprocessor", "generator"):
+        root = TEMPLATES_DIR / kind / template
+        for path in root.rglob("jaffgen.toml"):
+            found[path.relative_to(root)] = path.resolve()
 
-    return candidate if candidate.exists() else None
+    if len(found) > 1:
+        raise ParserError("More than one jaffgen.toml file found in template directory")
+
+    return next(iter(found.values()), None)
+
+
+def _custom_jaff_toml(run: JaffgenConfig) -> Path | None:
+    """The ``network_config`` to merge, unless it is the ``jaff.toml`` beside the network.
+
+    That one is read by the network itself.
+    """
+    custom = run.network_config
+    if custom is None:
+        return None
+
+    if not custom.exists():
+        raise FileNotFoundError(custom)
+
+    beside = jaff_toml_for(run.network_file) if run.network_file is not None else None
+    if beside is not None and beside.resolve() == custom.resolve():
+        return None
+
+    return custom

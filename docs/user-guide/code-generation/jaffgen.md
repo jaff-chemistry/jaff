@@ -22,13 +22,14 @@ jaffgen --network <file> [options]
 
 A `jaffgen` run is five phases:
 
-1. **Resolve configuration** — merge the network's `jaff.toml`, a
-   [`jaffgen.toml`](../configuration/index.md) and the command line (see
-   [below](#configuration-priority)), then validate the result.
-2. **Gather template files** — from `--indir`, `--files`, and `--template`.
+1. **Resolve configuration** — merge a
+   [`jaffgen.toml`](../configuration/index.md) (or the one `--template`
+   bundles) and the command line (see [below](#configuration-priority)), and
+   check the `[jaffgen]` section.
+2. **Load the network** — exactly one `Network`: it merges the run's
+   `[network]` settings over its own `jaff.toml` and validates them.
+3. **Gather template files** — from `--indir`, `--files`, and `--template`.
    These **combine** — a single run can pull from all three.
-3. **Load the network** — exactly one `Network`, built from the resolved
-   network/label/funcfile/radiation settings.
 4. **Generate** — run [`TemplateParser`](template-syntax.md) on every gathered
    file and write the result to `--outdir`, preserving each file's path
    relative to its source directory, together with any data tables
@@ -63,7 +64,7 @@ appended — so the generator always wins on a path collision.
 | Argument       | Description                                                                        |
 | -------------- | ---------------------------------------------------------------------------------- |
 | `--network`    | Network file path **or** a built-in network name; required (CLI or `jaffgen.toml`) |
-| `--network-config` | Path to the network's [`jaff.toml`](../configuration/index.md) to use instead of `<network_dir>/jaff.toml` |
+| `--network-config` | Path to another [`jaff.toml`](../configuration/index.md), merged over `<network_dir>/jaff.toml` |
 | `--label`      | Override the network label (defaults to the file stem)                             |
 | `--funcfile`   | Path to a `.jfunc` auxiliary file; `true` scans the network dir; `false` skips     |
 | `--expand-nuclei` | `--expand-nuclei` / `--no-expand-nuclei` — expand `n_<element>_nuc` element-nucleus sums (default: on) |
@@ -107,8 +108,9 @@ Each setting is resolved highest-wins:
 1. `--set key.path=value` items
 2. Other command-line options (e.g. `--network`, `--strict`)
 3. [`jaffgen.toml`](../configuration/index.md) value (from `--config`, or bundled with the template)
-4. The network's `jaff.toml` (or `--network-config`)
-5. The config defaults
+4. `--network-config`, if given
+5. The network's `jaff.toml`
+6. The config defaults
 
 Paths taken from a config file are resolved **relative to that file's
 directory**; paths given on the CLI are resolved relative to the current
