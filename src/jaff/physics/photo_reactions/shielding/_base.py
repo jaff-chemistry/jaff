@@ -8,11 +8,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from pydantic import ValidationError
 from sympy import Expr
 
 from .config import ShieldingParams
-from ....errors import ParserError
 
 if TYPE_CHECKING:
     from ....core.reaction import Reaction
@@ -75,22 +73,17 @@ class ShieldingFunction(ABC):
         return ShieldingParams
 
     def params(self, reaction: "Reaction") -> ShieldingParams:
-        """Validate *reaction*'s shielding settings against :meth:`config_model`.
+        """Return *reaction*'s shielding settings, typed by :meth:`config_model`.
 
-        Raises
-        ------
-        ParserError
-            If a setting is unknown or has an invalid value.
+        They were validated when the config was read
+        (``reaction.config.photo.shielding.params``).
         """
         photo = reaction.photo
         assert photo is not None and photo.config.shielding is not None
+        params = photo.config.shielding.params
+        assert isinstance(params, self.config_model())
 
-        try:
-            return self.config_model().model_validate(photo.config.shielding.params)
-        except ValidationError as e:
-            raise ParserError(
-                f"Invalid {self.name} shielding settings for {reaction}:\n{e}"
-            ) from e
+        return params
 
     @abstractmethod
     def get_shielding(self, reaction: "Reaction") -> ShieldingResult:

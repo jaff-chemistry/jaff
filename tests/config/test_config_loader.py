@@ -350,7 +350,7 @@ class TestLoadConfig:
 
         message = str(info.value)
         assert (
-            'network.reactions: reaction."H2._PHOTON__H.H".photo.shielding.min_ncl: unknown key'
+            'network.reactions.reaction."H2._PHOTON__H.H".photo.shielding.min_ncl: unknown key'
             in message
         )
         assert "errors.pydantic.dev" not in message

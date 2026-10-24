@@ -35,12 +35,13 @@ photo reaction (see the [configuration reference](../user-guide/configuration/re
 shielding = { type = "hg2015", min_ncol = 1.0e-35 }
 ```
 
-1. **When the config loads**, the table's `type` is looked up in the registry —
-   `(type, reaction)` first, then the global `(type, None)` — and the other
-   keys are validated against the model's [`config_model()`](#the-shieldingfunction-contract).
-   An unknown type, a model bound to another reaction or a bad setting is a
-   config error naming the key path. A global `[network.reactions.photo]`
-   shielding table may only use global models.
+1. **When the config loads**, the table's other keys are validated against its
+   `type`'s [`config_model()`](#the-shieldingfunction-contract) and stored typed
+   in `.params`; then the type is looked up in the registry for the reaction —
+   `(type, reaction)` first, then the global `(type, None)`. An unknown type, a
+   model bound to another reaction or a bad setting is a config error naming the
+   key path. A global `[network.reactions.photo]` shielding table may only use
+   global models.
 2. **When the network is built**, the photo reaction's resolved settings
    (`reaction.config`) hold the table as `reaction.config.photo.shielding`, a
    `ShieldingConfig` with `.type` and the settings in `.params`. A shielded
@@ -122,7 +123,7 @@ class MyModel(ShieldingFunction):
 | `name`           | Shielding type keyword, matched case-insensitively against the table's `type`.                            |
 | `reaction`       | Serialized reaction this model is bound to (local), or `None` for a global model.                         |
 | `config_model()` | Static method returning the model of its settings, a `ShieldingParams` subclass. Default: no settings.    |
-| `params(reaction)` | Validates `reaction.config.photo.shielding.params` against `config_model()` and returns the typed settings. |
+| `params(reaction)` | Returns the reaction's settings, `reaction.config.photo.shielding.params`, already typed by `config_model()`. |
 | `get_shielding`  | Returns a `ShieldingResult`: the dimensionless `factor` (`sympy.Expr`) and any data `tables`.            |
 
 **Settings.** The `ShieldingParams` subclass is a regular
@@ -130,7 +131,10 @@ class MyModel(ShieldingFunction):
 types, and its numpydoc `Attributes` become the key descriptions in the
 [configuration reference](../user-guide/configuration/reference.md) and in
 editors. Give each model its **own** params class, even when two models take the
-same keys, so they can evolve independently. There is no hand-written input
+same keys, so they can evolve independently. Models registered under one `name`
+(e.g. the same type bound to several reactions) must share one `config_model()`:
+a table's settings are validated by its `type` alone, before the reaction is
+known (`register` raises otherwise). There is no hand-written input
 checking left in `get_shielding`: read the settings through `self.params(reaction)`.
 
 **Symbols.** The returned `Expr` may reference free symbols the code generator

@@ -179,7 +179,7 @@ class TestShieldingConfig:
         cfg = ShieldingConfig.model_validate({"type": "Leiden", "shielded_by": ["self"]})
 
         assert cfg.type == "leiden"
-        assert cfg.params == {"shielded_by": ["self"]}
+        assert cfg.params.model_dump(exclude_unset=True) == {"shielded_by": ["self"]}
 
     def test_type_defaults_to_leiden(self):
         assert ShieldingConfig.model_validate({"shielded_by": ["self"]}).type == "leiden"
@@ -235,7 +235,9 @@ class TestShieldingConfig:
         shielding = _resolved_shielding(cfg, CO_KEY)
 
         assert shielding is not None
-        assert shielding.params == {"shielded_by": ["self"]}
+        assert shielding.params.model_dump(exclude_unset=True) == {
+            "shielded_by": ["self"]
+        }
 
     def test_global_shielding_applies_without_entry(self):
         cfg = ReactionsConfig.model_validate(

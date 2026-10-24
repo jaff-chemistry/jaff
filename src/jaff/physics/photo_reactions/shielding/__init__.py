@@ -6,6 +6,7 @@ from jaff.common._helper import import_subpackages
 from jaff.errors import ParserError, RegistrationError
 
 from ._base import ShieldingFunction, ShieldingResult
+from .config import ShieldingParams
 
 _REGISTER: dict[tuple[str, str | None], ShieldingFunction] = {}
 _DISCOVERED: bool = False
@@ -27,13 +28,22 @@ def register(cls: type[ShieldingFunction]) -> type[ShieldingFunction]:
     Raises
     ------
     RegistrationError
-        If a plugin with the same ``(name, reaction)`` is already registered.
+        If a plugin with the same ``(name, reaction)`` is already registered, or
+        one with the same name has another ``config_model()``.
     """
     key = (cls.name, cls.reaction)
     if key in _REGISTER:
         raise RegistrationError(
             f"Key already exists for shielding function: {cls.name}, {cls.reaction}"
         )
+
+    # A shielding type's settings model is chosen by its name alone (the
+    # reaction is not known when a config table is read).
+    for (name, _), plugin in _REGISTER.items():
+        if name == cls.name and plugin.config_model() is not cls.config_model():
+            raise RegistrationError(
+                f"Shielding functions named {cls.name} must share one config_model()"
+            )
 
     _REGISTER[key] = cls()
 
@@ -61,6 +71,33 @@ def shielding_functions() -> dict[tuple[str, str | None], ShieldingFunction]:
     _discover()
 
     return dict(_REGISTER)
+
+
+def settings_model(name: str) -> type[ShieldingParams]:
+    """The settings model (``config_model()``) of the shielding type *name*.
+
+    Every plugin of one name shares it (see :func:`register`).
+
+    Parameters
+    ----------
+    name : str
+        The ``shielding.type`` value (case-insensitive).
+
+    Returns
+    -------
+    type[ShieldingParams]
+
+    Raises
+    ------
+    ParserError
+        If no plugin has that name.
+    """
+    _discover()
+    for (plugin_name, _), plugin in _REGISTER.items():
+        if plugin_name == name.lower():
+            return plugin.config_model()
+
+    raise ParserError(f"Unknown shielding type {name!r}")
 
 
 def shielding_function(name: str, reaction: str | None) -> ShieldingFunction:
@@ -100,6 +137,7 @@ def shielding_function(name: str, reaction: str | None) -> ShieldingFunction:
 
 __all__ = [
     "register",
+    "settings_model",
     "shielding_function",
     "shielding_functions",
     "ShieldingFunction",

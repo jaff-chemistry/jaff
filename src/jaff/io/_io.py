@@ -241,7 +241,10 @@ def _encode_shielding(reaction: Reaction) -> dict[str, Any] | None:
     if shielding is None:
         return None
 
-    return {"type": shielding.type, "props": dict(shielding.params)}
+    return {
+        "type": shielding.type,
+        "props": shielding.params.model_dump(exclude_unset=True),
+    }
 
 
 def _encode_custom_xsec_props(

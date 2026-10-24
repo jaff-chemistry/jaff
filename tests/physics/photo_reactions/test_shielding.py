@@ -249,3 +249,48 @@ class TestRegistry:
 
         for name in ("_register", "_get_shielding_function", "_discover_shielding"):
             assert not hasattr(shielding, name)
+
+
+class TestTypedParams:
+    def test_params_are_typed_on_load(self):
+        from jaff.physics.photo_reactions.shielding.config import ShieldingConfig
+        from jaff.physics.photo_reactions.shielding.global_.leiden import LeidenParams
+
+        config = ShieldingConfig.model_validate(
+            {"type": "leiden", "shielded_by": ["self"]}
+        )
+
+        assert isinstance(config.params, LeidenParams)
+        assert config.params.radiation == "isrf"
+
+    def test_dump_is_the_table_as_written(self):
+        from jaff.physics.photo_reactions.shielding.config import ShieldingConfig
+
+        table = {"type": "leiden", "shielded_by": ["self"]}
+
+        assert ShieldingConfig.model_validate(table).model_dump() == table
+
+    def test_unknown_type_is_rejected_on_load(self):
+        from jaff.physics.photo_reactions.shielding.config import ShieldingConfig
+
+        with pytest.raises(ValidationError, match="nope"):
+            ShieldingConfig.model_validate({"type": "nope"})
+
+    def test_plugin_reads_the_stored_settings(self, leiden_network):
+        rxn = leiden_network.reactions[CO_KEY, "photo"]
+
+        assert Leiden().params(rxn) is rxn.config.photo.shielding.params
+
+    def test_one_name_has_one_settings_model(self):
+        from jaff.errors import RegistrationError
+        from jaff.physics.photo_reactions.shielding import register
+
+        class Other(ShieldingFunction):
+            name = "leiden"
+            reaction = "CO._PHOTON__C.O"
+
+            def get_shielding(self, reaction):
+                return ShieldingResult(Float(1.0))
+
+        with pytest.raises(RegistrationError, match="leiden"):
+            register(Other)

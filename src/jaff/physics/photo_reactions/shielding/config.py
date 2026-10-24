@@ -3,8 +3,10 @@
 """Config of the photo-reaction line shielding (``shielding`` tables).
 
 A ``shielding`` table names a shielding plugin by ``type``; its other keys are
-that plugin's settings, checked by the plugin's ``config_model()`` (a
-:class:`ShieldingParams` subclass) once the reaction it applies to is known.
+that plugin's settings, validated by the type's ``config_model()`` (a
+:class:`ShieldingParams` subclass) when the table is read.  Whether the type
+applies to the reaction is checked once the reaction is known
+(:func:`check_shielding`).
 """
 
 from __future__ import annotations
@@ -13,7 +15,6 @@ from typing import Any, ClassVar, Dict, List
 
 from pydantic import (
     GetJsonSchemaHandler,
-    ValidationError,
     model_serializer,
     model_validator,
 )
@@ -23,7 +24,6 @@ from pydantic_core import CoreSchema
 from ....config.base import (
     ConfigModel,
     dotted,
-    format_validation_errors,
     KeyPath,
     LowerStr,
 )
@@ -50,8 +50,9 @@ class ShieldingConfig(ConfigModel):
 
     Written flat in TOML (``{ type = "leiden", shielded_by = ["self"] }``):
     ``type`` names the shielding plugin and every other key is one of its
-    settings, checked by the plugin's ``config_model()`` once the reaction it
-    applies to is known (see :class:`~jaff.core.reaction.config.ReactionsConfig`).
+    settings, validated by the type's ``config_model()``; whether the type
+    applies to the reaction is checked once it is known (see
+    :class:`~jaff.core.reaction.config.ReactionsConfig`).
 
     The table is atomic: a per-reaction one replaces the global one whole.
 
@@ -61,30 +62,39 @@ class ShieldingConfig(ConfigModel):
         Shielding model (case-insensitive): ``"leiden"`` (the default; any
         photo reaction with a Leiden table), or ``"db1996"`` / ``"hg2015"``
         (only for ``"H2._PHOTON__H.H"``).
-    params : dict
-        The plugin's settings, as written.
+    params : ShieldingParams
+        The plugin's settings, validated by its ``config_model()``.
     """
 
     _atomic: ClassVar[bool] = True
 
     type: LowerStr = "leiden"
-    params: Dict[str, Any] = {}
+    params: ShieldingParams = ShieldingParams()
 
     @model_validator(mode="before")
     @classmethod
     def _split_type(cls, data: Any) -> Any:
-        """Split a flat table into ``type`` and the plugin ``params``."""
+        """Split a flat table into ``type`` and the plugin's validated ``params``."""
         if not isinstance(data, dict):
             return data
 
-        params = {k: v for k, v in data.items() if k != "type"}
+        # Imported here: the plugin registry imports this module.
+        from . import settings_model
 
-        return {"type": data.get("type", "leiden"), "params": params}
+        name = str(data.get("type", "leiden")).lower()
+        settings = {k: v for k, v in data.items() if k != "type"}
+        try:
+            model = settings_model(name)
+        except ParserError as e:
+            raise ValueError(str(e)) from e
+
+        # A ValidationError raised here keeps its key paths (``shielding.<key>``).
+        return {"type": name, "params": model.model_validate(settings)}
 
     @model_serializer
     def _flat(self) -> Dict[str, Any]:
         """Dump as the flat TOML table it is written as."""
-        return {"type": self.type, **self.params}
+        return {"type": self.type, **self.params.model_dump(exclude_unset=True)}
 
     @classmethod
     def __get_pydantic_json_schema__(
@@ -136,14 +146,16 @@ class ShieldingConfig(ConfigModel):
 
 
 def check_shielding(shielding: ShieldingConfig | None, reaction: str | None) -> None:
-    """Check *shielding* against its plugin, for *reaction* (``None``: global).
+    """Check that a plugin of *shielding*'s type applies to *reaction* (``None``: global).
+
+    Its settings were validated when the table was read.
 
     Raises
     ------
     ValueError
-        If no plugin of that type applies to *reaction*, or the plugin rejects
-        a setting; one ``"<key path>: <message>"`` line per problem, the path
-        relative to ``[network.reactions]``.
+        If no plugin of that type applies to *reaction*, as
+        ``"<key path>: <message>"`` with the path relative to
+        ``[network.reactions]``.
     """
     if shielding is None:
         return
@@ -158,9 +170,6 @@ def check_shielding(shielding: ShieldingConfig | None, reaction: str | None) -> 
         else ("reaction", reaction, "photo", "shielding")
     )
     try:
-        plugin = shielding_function(shielding.type, reaction)
-        plugin.config_model().model_validate(shielding.params)
+        shielding_function(shielding.type, reaction)
     except ParserError as e:
         raise ValueError(f"{dotted(where)}: {e}") from e
-    except ValidationError as e:
-        raise ValueError("\n".join(format_validation_errors(e, where))) from e
