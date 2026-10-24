@@ -256,8 +256,8 @@ fixed order:
 
 1. CSE temporaries
 2. `f[0]` … `f[N-1]` — species density ODEs
-3. `f[N]` — the thermal row, chosen by `thermal`: `dE/dt` for `"dedt"` (the
-   default), `dT/dt` for `"dtdt"`, and absent for `"none"`
+3. `f[N]` — the thermal row, chosen by `thermal`: `dE/dt` for `"dedt"`,
+   `dT/dt` for `"dtdt"`, and absent for `"none"` (the default)
 4. the radiation ODEs after that (only when `radiation=True`)
 
 ```python
@@ -269,8 +269,8 @@ cg.get_rhs_str(
 )
 ```
 
-For `cie_h` with the defaults, the species rows share their temporaries with the
-`dE/dt` row `f[3]`:
+For `cie_h` with `thermal="dedt"`, the species rows share their temporaries with
+the `dE/dt` row `f[3]`:
 
 ```cpp
 const double cse0 = nden[1]*nden[2]/(6.3095734448019361e-5*std::pow(tgas, 0.69999999999999996) + 1);
@@ -338,7 +338,10 @@ J[2][2] = cse6;
 A few specifics:
 
 - **`thermal="dedt"`** (or **`"dtdt"`**) adds the thermal equation's row and column, coupling the
-  chemistry to temperature through the network's EOS. The default is `"none"`.
+  chemistry to temperature through the network's EOS. The default is `"none"`,
+  as for `get_rhs_str`; `energy`, `radiation` and `rad_order` work as there too.
+  Both print the same system,
+  [`net.ode_system(...)`](../working-with-networks/network.md#the-ode-system).
 - Rate functions SymPy can't differentiate symbolically (e.g.
   `#!python photorates(...)`) become named partial calls —
   `#!python photorates_partial_0(...)`, where the suffix is the zero-based

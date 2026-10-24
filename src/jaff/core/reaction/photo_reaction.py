@@ -19,9 +19,8 @@ if TYPE_CHECKING:
     import matplotlib.pyplot as plt
     import pandas as pd
 
-    from ...physics import XsecProps
+    from ...physics import PhotoBand, Radiation, XsecProps
     from .reaction import Reaction
-    from ...physics import PhotoBand, Radiation
 
 
 class PhotoReaction:

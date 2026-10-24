@@ -1112,4 +1112,4 @@ class Radiation:
         if self.emissivity is None:
             return None
 
-        return sum((grp.emissivity for grp in self.groups), sp.S.Zero)  # type: ignore[arg-type]
+        return sum((grp.emissivity for grp in self.groups), sp.S.Zero)  # type: ignore

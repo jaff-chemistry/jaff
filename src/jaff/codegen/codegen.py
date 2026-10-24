@@ -27,7 +27,7 @@ per-method bracket/token overrides are applied by the
 from __future__ import annotations
 
 from itertools import count
-from typing import TYPE_CHECKING, Iterator, List, Set, Tuple, cast
+from typing import TYPE_CHECKING, Iterator, List, Sequence, Set, Tuple, cast
 
 import sympy as sp
 
@@ -281,48 +281,30 @@ class Codegen:
             "extras": {"cse": IndexedList()},
             "expressions": IndexedList(),
         }
-        # Maps reaction index -> symbolic rate for reactions eligible for CSE.
-        # String rates are excluded (see docstring).
-        cse_dict: dict[int, sp.Basic | str] = {}
+        # Reaction index -> CSE-reduced printed rate.  String rates are excluded
+        # (see docstring) and, like every rate without CSE, use get_code().
+        printed_rates: dict[int, str] = {}
         if use_cse:
-            for i, rea in enumerate(self.net.reactions):
+            symbolic = {
+                i: rea.rate_coefficient
+                for i, rea in enumerate(self.net.reactions)
                 # Skip raw-string rates — they are already valid target-language code
-                if type(rea.rate_coefficient) is str:
-                    continue
-                cse_dict[i] = rea.rate_coefficient
-
-            if cse_dict:
-                exprs = cse_dict.values()
-
-                # Create a numbered symbol generator for CSE temp names
-                cse_symbols = self._cse_symbols(cse_var, cse_suffix)
-                replacements, reduced_exprs = sp.cse(
-                    exprs, optimizations="basic", symbols=cse_symbols
+                if not isinstance(rea.rate_coefficient, str)
+            }
+            if symbolic:
+                printed = self._print_indexed(
+                    list(symbolic.values()),
+                    use_cse,
+                    cse_var,
+                    cse_suffix,
+                    optimizations="basic",
                 )
+                out["extras"]["cse"] = printed["extras"]["cse"]
+                for key, (_, expr) in zip(symbolic, printed["expressions"]):
+                    printed_rates[key] = expr
 
-                # Drop CSE temporaries not referenced by any reduced expression
-                replacements = self.__prune_cse(replacements, reduced_exprs)
-
-                if replacements:
-                    for var, expr in replacements:
-                        idx: int = self._cse_index(var, cse_var, cse_suffix)
-                        expr = self.lang.code_gen(
-                            expr, strict=False, allow_unknown_functions=True
-                        )
-                        out["extras"]["cse"].append(IndexedValue([idx], expr))
-
-                # Overwrite the original symbolic rates with their CSE-reduced forms
-                for key, expr in zip(cse_dict.keys(), reduced_exprs):
-                    expr = self.lang.code_gen(
-                        expr, strict=False, allow_unknown_functions=True
-                    )
-                    cse_dict[key] = expr
-
-        # Build the final expression list for all reactions.
-        # Reactions absent from cse_dict (string rates) fall back to their
-        # get_code() representation, which passes string rates through.
         for i, rea in enumerate(self.net.reactions):
-            rate = cse_dict[i] if cse_dict.get(i, "") else rea.get_code(self.lang.name)
+            rate = printed_rates.get(i) or rea.get_code(self.lang.name)
             out["expressions"].append(IndexedValue([i], rate))
 
         return out
@@ -407,11 +389,7 @@ class Codegen:
 
         # Emit CSE temporary definitions first so the main rate lines can
         # reference them without forward-declaration issues.
-        if use_cse:
-            for idx, expression in rate_expressions["extras"]["cse"]:
-                _idx = idx[0]
-                var_name = f"{cse_var}{_idx}"
-                rates += self.lang.format_cse_declaration(var_name, expression) + "\n"
+        rates += self._cse_declarations(rate_expressions, cse_var)
 
         for idx, expression in rate_expressions["expressions"]:
             _idx = idx[0]
@@ -881,46 +859,11 @@ class Codegen:
         [2] cse1
         """
         with jaff_progress.indeterminate("Generating odes"):
-            ir: IndexedReturn = {
-                "extras": {"cse": IndexedList()},
-                "expressions": IndexedList(),
-            }
+            odes = self.net.sodes()
 
-            # Map symbolic rate placeholders k[i] to concrete rate expressions
-            subs_k = {
-                sp.symbols(f"k[{i}]"): rea.rate_coefficient
-                for i, rea in enumerate(self.net.reactions)
-            }
-
-            # Retrieve symbolic dn_i/dt expressions and inline the rates
-            ode_symbols = self.net.sodes()
-            ode_symbols = [sode.xreplace(subs_k) for sode in ode_symbols]
-
-        if use_cse:
-            with jaff_progress.indeterminate("Generating cse expressions"):
-                cse_symbols = self._cse_symbols(cse_var, cse_suffix)
-                replacements, reduced_exprs = sp.cse(ode_symbols, symbols=cse_symbols)
-
-                # Remove unused CSE temporaries to keep generated code lean
-                replacements = self.__prune_cse(replacements, reduced_exprs)
-
-                for var, expr in replacements:
-                    idx: int = self._cse_index(var, cse_var, cse_suffix)
-                    expr = self.lang.code_gen(
-                        expr, strict=False, allow_unknown_functions=True
-                    )
-                    ir["extras"]["cse"].append(IndexedValue([idx], expr))
-
-                # Switch to CSE-reduced forms for the main expression list
-                ode_symbols = reduced_exprs
-
-        for i, expr in enumerate(
-            jaff_progress.track(ode_symbols, description="Generating ode code")
-        ):
-            expr = self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
-            ir["expressions"].append(IndexedValue([i], expr))
-
-        return ir
+        return self._print_indexed(
+            odes, use_cse, cse_var, cse_suffix, description="Generating ode code"
+        )
 
     @scoped_tokens("lang")
     def get_ode_str(
@@ -998,11 +941,7 @@ class Codegen:
         ode_expressions = self.get_indexed_odes(use_cse=use_cse, cse_var=cse_var)
 
         # Emit CSE temporaries before the main ODE assignments
-        if use_cse:
-            for idx, expression in ode_expressions["extras"]["cse"]:
-                _idx = idx[0]
-                var_name = f"{cse_var}{_idx}"
-                ode_code += self.lang.format_cse_declaration(var_name, expression) + "\n"
+        ode_code += self._cse_declarations(ode_expressions, cse_var)
 
         for idx, expression in ode_expressions["expressions"]:
             _idx = idx[0]
@@ -1086,37 +1025,12 @@ class Codegen:
         9
         """
         with jaff_progress.indeterminate("Generating rhs equations"):
-            ir: IndexedReturn = {
-                "extras": {"cse": IndexedList()},
-                "expressions": IndexedList(),
-            }
             system = self.net.ode_system(thermal, energy, radiation, rad_order)
-            rhs_symbols = system.rhs.flat()
+            rhs = system.rhs.flat()
 
-        if use_cse:
-            with jaff_progress.indeterminate("Generating cse expressions"):
-                cse_symbols = self._cse_symbols(cse_var, cse_suffix)
-                replacements, reduced_exprs = sp.cse(rhs_symbols, symbols=cse_symbols)
-
-                # Prune CSE temporaries unreachable from any expression
-                replacements = self.__prune_cse(replacements, reduced_exprs)
-
-                for var, expr in replacements:
-                    idx: int = self._cse_index(var, cse_var, cse_suffix)
-                    expr = self.lang.code_gen(
-                        expr, strict=False, allow_unknown_functions=True
-                    )
-                    ir["extras"]["cse"].append(IndexedValue([idx], expr))
-
-                rhs_symbols = reduced_exprs
-
-        for i, expr in enumerate(
-            jaff_progress.track(rhs_symbols, description="Generating RHS code")
-        ):
-            expr = self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
-            ir["expressions"].append(IndexedValue([i], expr))
-
-        return ir
+        return self._print_indexed(
+            rhs, use_cse, cse_var, cse_suffix, description="Generating RHS code"
+        )
 
     @scoped_tokens("lang")
     def get_rhs_str(
@@ -1228,11 +1142,7 @@ class Codegen:
         )
 
         # Emit CSE temporaries before the main assignments
-        if use_cse:
-            for idx, expression in rhs_expressions["extras"]["cse"]:
-                _idx = idx[0]
-                var_name = f"{cse_var}{_idx}"
-                rhs_code += self.lang.format_cse_declaration(var_name, expression) + "\n"
+        rhs_code += self._cse_declarations(rhs_expressions, cse_var)
 
         for idx, expression in rhs_expressions["expressions"]:
             _idx = idx[0]
@@ -1306,39 +1216,13 @@ class Codegen:
         Band 0 (1–13.6 eV) lies below the H ionisation threshold, so its
         equations vanish.
         """
-        ir: IndexedReturn = {
-            "extras": {"cse": IndexedList()},
-            "expressions": IndexedList(),
-        }
-        radode_symbols = self.net.sradodes(order)
-
-        if use_cse:
-            with jaff_progress.indeterminate("Generating cse expressions"):
-                cse_symbols = self._cse_symbols(cse_var, cse_suffix)
-                replacements, reduced_exprs = sp.cse(radode_symbols, symbols=cse_symbols)
-
-                # Prune unreferenced CSE temporaries to avoid dead code
-                replacements = self.__prune_cse(replacements, reduced_exprs)
-
-                # Emit only the CSE temporaries actually used by the radiation ODEs
-                for var, expr in replacements:
-                    idx: int = self._cse_index(var, cse_var, cse_suffix)
-                    expr = self.lang.code_gen(
-                        expr, strict=False, allow_unknown_functions=True
-                    )
-                    ir["extras"]["cse"].append(IndexedValue([idx], expr))
-
-                radode_symbols = reduced_exprs
-
-        for i, expr in enumerate(
-            jaff_progress.track(
-                radode_symbols, description="Generating radiaton ode code"
-            )
-        ):
-            expr = self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
-            ir["expressions"].append(IndexedValue([i], expr))
-
-        return ir
+        return self._print_indexed(
+            self.net.sradodes(order),
+            use_cse,
+            cse_var,
+            cse_suffix,
+            description="Generating radiation ode code",
+        )
 
     @scoped_tokens("lang")
     def get_radode_str(
@@ -1426,16 +1310,8 @@ class Codegen:
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
 
-        radode_code: str = ""
         radode_expressions = self.get_indexed_radodes(order, use_cse, cse_var)
-
-        if use_cse:
-            for idx, expression in radode_expressions["extras"]["cse"]:
-                _idx = idx[0]
-                var_name = f"{cse_var}{_idx}"
-                radode_code += (
-                    self.lang.format_cse_declaration(var_name, expression) + "\n"
-                )
+        radode_code = self._cse_declarations(radode_expressions, cse_var)
 
         for idx, expression in radode_expressions["expressions"]:
             _idx = idx[0]
@@ -1535,43 +1411,15 @@ class Codegen:
 
         system = self.net.ode_system(thermal, energy, radiation, rad_order)
         entries = sorted(system.jacobian.todok().items())
-        exprs = [expr for _, expr in entries]
-        ir: IndexedReturn = {
-            "extras": {"cse": IndexedList()},
-            "expressions": IndexedList(),
-        }
-        replacements_dict = None
 
-        if use_cse:
-            with jaff_progress.indeterminate("Generating cse expressions"):
-                cse_symbols = self._cse_symbols(cse_var, cse_suffix)
-                replacements, exprs = sp.cse(exprs, symbols=cse_symbols)
-
-                replacements = self.__prune_cse(replacements, exprs)
-                # Keep a str-keyed dict so __convert_unknown_derivatives can
-                # resolve CSE symbols back to their defining expressions.
-                replacements_dict = {str(k): v for k, v in replacements}
-
-                for var, expr in replacements:
-                    # Handle Derivative() nodes arising from user-defined rate
-                    # functions before serialisation
-                    expr = self.__convert_unknown_derivatives(expr, replacements_dict)
-                    idx: int = self._cse_index(var, cse_var, cse_suffix)
-                    expr_str = self.lang.code_gen(
-                        expr, strict=False, allow_unknown_functions=True
-                    )
-                    ir["extras"]["cse"].append(IndexedValue([idx], expr_str))
-
-        for ((i, j), _), expr in jaff_progress.track(
-            list(zip(entries, exprs)), description="Generating jacobian code"
-        ):
-            expr = self.__convert_unknown_derivatives(expr, replacements_dict)
-            expr_str = self.lang.code_gen(
-                expr, strict=False, allow_unknown_functions=True
-            )
-            ir["expressions"].append(IndexedValue([i, j], expr_str))
-
-        return ir
+        return self._print_indexed(
+            [expr for _, expr in entries],
+            use_cse,
+            cse_var,
+            cse_suffix,
+            description="Generating jacobian code",
+            indices=[[i, j] for (i, j), _ in entries],
+        )
 
     @scoped_tokens("lang")
     def get_jacobian_str(
@@ -1585,6 +1433,9 @@ class Codegen:
         var_prefix: str = "",
         assignment_op: str = "",
         line_end: str = "",
+        energy: str = "volumetric",
+        radiation: bool = False,
+        rad_order: int = 0,
     ) -> str:
         """Generate Jacobian assignment code as a multi-line string.
 
@@ -1598,9 +1449,6 @@ class Codegen:
         ```
 
         Only non-zero elements are emitted; ``J[i][j]`` is ``∂f_i/∂y_j``.
-        The energy form, radiation equations and CSE suffix of
-        :meth:`get_indexed_jacobian` are not forwarded: this method always
-        uses the volumetric energy form and no radiation equations.
 
         Parameters
         ----------
@@ -1639,6 +1487,13 @@ class Codegen:
             Assignment operator override.  Empty string uses the language default.
         line_end : str, optional
             Line terminator override.  Empty string uses the language default.
+        energy : str, optional
+            Evolved internal-energy form when *thermal* is ``"dedt"`` (see
+            :meth:`get_indexed_jacobian`).  Default ``"volumetric"``.
+        radiation : bool, optional
+            Include the radiation-moment equations.  Default ``False``.
+        rad_order : int, optional
+            Radiation layout order (``0``–``3``).  Default ``0``.
 
         Returns
         -------
@@ -1651,7 +1506,8 @@ class Codegen:
         InvalidLanguageError
             If *matrix_format* is not a supported format string.
         ValueError
-            If *thermal* is not a valid mode.
+            If *thermal* or *energy* is not valid, or *radiation* is requested
+            without a radiation field.
 
         Examples
         --------
@@ -1680,16 +1536,15 @@ class Codegen:
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
 
         jac_expressions = self.get_indexed_jacobian(
-            cse_var=cse_var, use_cse=use_cse, thermal=thermal
+            thermal=thermal,
+            use_cse=use_cse,
+            cse_var=cse_var,
+            energy=energy,
+            radiation=radiation,
+            rad_order=rad_order,
         )
 
-        jac_code: str = ""
-
-        if use_cse:
-            for idx, expr in jac_expressions["extras"]["cse"]:
-                _idx = idx[0]
-                var_name = f"{cse_var}{_idx}"
-                jac_code += self.lang.format_cse_declaration(var_name, expr) + "\n"
+        jac_code = self._cse_declarations(jac_expressions, cse_var)
 
         # Emit one assignment per Jacobian element (may reference the CSE temps)
         for [i, j], expr in jac_expressions["expressions"]:
@@ -1697,10 +1552,68 @@ class Codegen:
 
         return jac_code
 
+    def _print_indexed(
+        self,
+        exprs: Sequence[sp.Basic],
+        use_cse: bool,
+        cse_var: str,
+        cse_suffix: str = "",
+        description: str = "Generating code",
+        indices: Sequence[list[int]] | None = None,
+        optimizations: str | None = None,
+    ) -> IndexedReturn:
+        """CSE *exprs* (optionally), prune unused temporaries and print everything.
+
+        Entry *k* gets ``indices[k]`` (default ``[k]``).  Derivatives of
+        undefined functions become ``<name>_partial_<n>(...)`` calls (see
+        :meth:`__convert_unknown_derivatives`).
+        """
+        out: IndexedReturn = {
+            "extras": {"cse": IndexedList()},
+            "expressions": IndexedList(),
+        }
+        cse_defs: dict[str, sp.Basic] | None = None
+        if use_cse:
+            with jaff_progress.indeterminate("Generating cse expressions"):
+                cse_symbols = self._cse_symbols(cse_var, cse_suffix)
+                replacements, exprs = sp.cse(
+                    list(exprs), symbols=cse_symbols, optimizations=optimizations
+                )
+                # Drop CSE temporaries not referenced by any reduced expression
+                replacements = self.__prune_cse(replacements, exprs)
+                # str-keyed so __convert_unknown_derivatives can resolve CSE
+                # symbols back to their defining expressions
+                cse_defs = {str(var): expr for var, expr in replacements}
+                for var, expr in replacements:
+                    idx = self._cse_index(var, cse_var, cse_suffix)
+                    out["extras"]["cse"].append(
+                        IndexedValue([idx], self._code(expr, cse_defs))
+                    )
+
+        keys = indices if indices is not None else [[k] for k in range(len(exprs))]
+        for key, expr in jaff_progress.track(
+            list(zip(keys, exprs)), description=description
+        ):
+            out["expressions"].append(IndexedValue(key, self._code(expr, cse_defs)))
+
+        return out
+
+    def _code(self, expr: sp.Basic, cse_defs: dict[str, sp.Basic] | None = None) -> str:
+        """*expr* printed in the target language, unknown derivatives resolved."""
+        expr = self.__convert_unknown_derivatives(expr, cse_defs)
+        return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
+
+    def _cse_declarations(self, printed: IndexedReturn, cse_var: str) -> str:
+        """One declaration line per CSE temporary of *printed*."""
+        return "".join(
+            self.lang.format_cse_declaration(f"{cse_var}{idx[0]}", expr) + "\n"
+            for idx, expr in printed["extras"]["cse"]
+        )
+
     @staticmethod
     def __convert_unknown_derivatives(
-        expr: sp.Expr, cse_defs: dict | None = None
-    ) -> sp.Expr:
+        expr: sp.Basic, cse_defs: dict | None = None
+    ) -> sp.Basic:
         """Replace unevaluated SymPy derivatives with named partial-function calls.
 
         When SymPy differentiates a user-defined function (e.g. a rate that
@@ -1723,7 +1636,7 @@ class Codegen:
 
         Parameters
         ----------
-        expr : sympy.Expr
+        expr : sympy.Basic
             Expression potentially containing :class:`~sympy.Derivative` or
             :class:`~sympy.Subs` nodes.
         cse_defs : dict or None, optional
@@ -1733,7 +1646,7 @@ class Codegen:
 
         Returns
         -------
-        sympy.Expr
+        sympy.Basic
             Expression with all derivative nodes replaced by named function
             calls that are safe to serialise.
         """

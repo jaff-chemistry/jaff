@@ -524,3 +524,32 @@ class TestThermalModes:
     def test_invalid_thermal_raises(self, dedt_codegen) -> None:
         with pytest.raises(ValueError, match="thermal"):
             dedt_codegen.get_indexed_rhs(use_cse=False, thermal="bogus")
+
+
+class TestJacobianStrOptions:
+    """``get_jacobian_str`` forwards every system option to ``get_indexed_jacobian``."""
+
+    @pytest.fixture(scope="class")
+    def rad_codegen(self):
+        bands = {"bands": [1, 13.6, 100, "inf"]}
+        return Codegen(Network("h_photoionization", radiation=bands), lang="c++")
+
+    @staticmethod
+    def _indexed_terms(cg: Codegen, **options) -> List[str]:
+        jac = cg.get_indexed_jacobian(use_cse=False, **options)
+        return [expr for _, expr in jac["expressions"]]
+
+    def test_energy_form(self, rad_codegen) -> None:
+        options = {"thermal": "dedt", "energy": "specific"}
+        text = rad_codegen.get_jacobian_str(use_cse=False, **options)
+        assert _rhs_terms(text) == self._indexed_terms(rad_codegen, **options)
+        volumetric = rad_codegen.get_jacobian_str(use_cse=False, thermal="dedt")
+        assert text != volumetric
+
+    def test_radiation_and_order(self, rad_codegen) -> None:
+        options = {"thermal": "dtdt", "radiation": True, "rad_order": 2}
+        text = rad_codegen.get_jacobian_str(use_cse=False, **options)
+        assert _rhs_terms(text) == self._indexed_terms(rad_codegen, **options)
+        assert len(_rhs_terms(text)) > len(
+            self._indexed_terms(rad_codegen, thermal="dtdt")
+        )
