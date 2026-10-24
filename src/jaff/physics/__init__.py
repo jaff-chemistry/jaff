@@ -1,4 +1,4 @@
-# ABOUTME: Physics package: symbolic ODE/flux generators, radiation, dust and EOS
+# ABOUTME: Physics package: radiation, photochemistry, dust and EOS
 # ABOUTME: models re-exported for Network and codegen
 """Physics models behind a network's ODEs: constants, radiation, dust and EOS.
 
@@ -9,13 +9,12 @@ exposes them as attributes; they are rarely constructed directly:
   (built by :class:`EosFactory` from ``[network.thermodynamics.eos]``), the
   heating/cooling rates ``dE/dt`` and the temperature rates ``dT/dt``.
 * ``net.radiation`` -- a :class:`Radiation` of :class:`RadiationGroup` bands,
-  present when a radiation field is configured (``[network.radiation]``).
+  present when a radiation field is configured (``[network.radiation]``); its
+  :meth:`Radiation.odes` are the radiation-moment equations.
 * ``net.dust`` -- a :class:`Dust`, present when dust is configured
   (``[network.dust]``).
 * :class:`Photochemistry` resolves photo-reaction cross sections
-  (:class:`XsecProps`) and shielding factors from the bundled databases.
-* :func:`get_sfluxes`, :func:`get_sodes` and :func:`get_sradodes` assemble the
-  symbolic reaction fluxes, species ODEs and radiation-moment ODEs.
+  (:class:`XsecProps`) from the bundled databases.
 
 Notes
 -----
@@ -40,7 +39,6 @@ Examples
 """
 
 from . import constants
-from ._equations import get_sfluxes, get_sodes, get_sradodes
 from .dust import Dust
 from .photo_reactions._photo_band import PhotoBand
 from .photo_reactions._photochemistry import Photochemistry, XsecProps
@@ -52,9 +50,6 @@ __all__ = [
     "XsecProps",
     "constants",
     "Photochemistry",
-    "get_sfluxes",
-    "get_sodes",
-    "get_sradodes",
     "Radiation",
     "RadiationGroup",
     "PhotoBand",

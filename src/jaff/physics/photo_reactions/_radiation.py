@@ -88,6 +88,7 @@ from astropy import units as u
 
 from ...common._integrators import smart_integrate
 from ...io import JaffLogger
+from ...io._logger import jaff_progress
 from .background_field import BackgroundField
 
 if TYPE_CHECKING:
@@ -319,7 +320,7 @@ class Radiation:
         (``"photden"`` vs. ``"radeden"``) and sets the normalisation of the
         rate coefficients.  ``config.absorption_attenuates_flux`` says whether
         the ``globalAbsorptionCoefficient`` also attenuates the flux equations
-        (``-c * <α>_i * rflux[i]``); see :func:`~jaff.physics.get_sradodes`.
+        (``-c * <α>_i * rflux[i]``); see :meth:`odes`.
     bands : list of (int, float, or sympy.Basic)
         Band-edge list from ``config.bands``, ``"inf"`` replaced by
         ``sympy.oo``.
@@ -397,7 +398,7 @@ class Radiation:
     ``c * photon_density(group) * <σ>_i`` (:meth:`photon_density`).  Each photo
     reaction assembles it (:meth:`~jaff.core.reaction.PhotoReaction.band_rates`)
     and stores it as ``reaction.photo.band_rate``, ``reaction.photo.xsec_total``
-    and ``reaction.photo.bands``.  :func:`~jaff.physics.get_sradodes` builds the
+    and ``reaction.photo.bands``.  :meth:`odes` builds the
     radiation-moment equations from them, laid out by :meth:`ordered_index`.
 
     Examples
@@ -655,6 +656,143 @@ class Radiation:
             xsec, ph_E, group, ph_profile, energy_weighted=True
         )
 
+    def odes(self, order: int = 0) -> List[sp.Expr]:
+        """Symbolic right-hand sides of the radiation-moment equations of every band.
+
+        Each band *i* has two moments, the density ``den[i]`` (``radeden`` in
+        erg cm⁻³, or ``photden`` in cm⁻³) and the flux ``rflux[i]``
+        (:attr:`flux`).  Its density equation holds:
+
+        - the losses to photo reactions (each band's loss coefficient
+          ``bands[i].k`` times the reaction's reactant densities); photo
+          reactions whose rate comes from a ``.jfunc`` ``chemRate<N>`` are not
+          coupled to the bands and are skipped;
+        - the absorption by the medium ``-c · <α>_i · den[i]`` (a
+          ``globalAbsorptionCoefficient``);
+        - the radiation emitted by reactions with a spectral yield
+          (``reaction.rad.group_yields`` times the reaction rate) and the band's
+          ``globalEmissivity``.
+
+        Its flux equation is the density losses with ``den[i] → rflux[i]``;
+        emission is isotropic and feeds the density only, and the absorption
+        enters it only with ``absorption_attenuates_flux``.  With dust, the dust
+        attenuation (:meth:`~jaff.physics.Dust.attenuation`) is subtracted from
+        both.  Transport terms (the flux divergence, the radiation pressure) are
+        not included.
+
+        Parameters
+        ----------
+        order : {0, 1, 2, 3}, optional
+            Layout of the result (see :meth:`ordered_index`):
+
+            - ``0`` (default): ``[den_0, flux_0, den_1, flux_1, ...]``;
+            - ``1``: ``[flux_0, den_0, flux_1, den_1, ...]``;
+            - ``2``: ``[den_0, den_1, ..., flux_0, flux_1, ...]``;
+            - ``3``: ``[flux_0, flux_1, ..., den_0, den_1, ...]``.
+
+        Returns
+        -------
+        list of sympy.Expr
+            ``2 * nbands`` expressions, laid out as *order* says.
+
+        Raises
+        ------
+        ValueError
+            If *order* is not one of ``0``, ``1``, ``2``, ``3``.
+        RuntimeError
+            If a photo reaction without a custom rate has no per-band data.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> net = Network(
+        ...     "h_photoionization",
+        ...     radiation={"bands": [1, 13.6, 100, "inf"]},
+        ... )
+        >>> net.radiation.odes()  # [den_0, flux_0, den_1, flux_1, den_2, flux_2]
+        [0, 0, -5.85154082319921e-8*nden[0]*photden[1], -5.85154082319921e-8*nden[0]*rflux[1], -1.1420465158197e-10*nden[0]*photden[2], -1.1420465158197e-10*nden[0]*rflux[2]]
+        """
+        if order not in [0, 1, 2, 3]:
+            raise ValueError("Invalid order: Supported orders are 0, 1, 2, 3")
+
+        # Obtain the flux-moment equation from the density-moment equation:
+        # replace each density symbol den[i] with the flux rflux[i].
+        flux_map = {g.sym: self.flux[g.index] for g in self.groups}
+        losses = self._photo_losses()
+        emissions = self._emissions()
+        dust = self.network.dust
+
+        odes: List[sp.Expr] = [sp.Float(0.0) for _ in range(2 * self.nbands)]
+        for group in self.groups:
+            rate = losses[group.index]
+
+            # Absorption by the medium: -c <α>_i den_i.  Added before the den → rflux
+            # substitution it also attenuates the flux; afterwards only the density.
+            absorption: sp.Expr = sp.Float(0.0)
+            if group.absorption_coefficient is not None:
+                absorption = -self.c * group.absorption_coefficient * group.sym
+            if self.config.absorption_attenuates_flux:
+                rate += absorption
+                absorption = sp.Float(0.0)
+
+            flux = rate.xreplace(flux_map)
+            rate += absorption
+
+            # Emission is isotropic, so it feeds the density equation only.
+            rate += emissions[group.index]
+            if group.emissivity is not None:
+                rate += group.emissivity
+
+            if dust is not None:
+                density_loss, flux_loss = dust.attenuation(group)
+                rate -= density_loss
+                flux -= flux_loss
+
+            ei, fi = self.ordered_index(group.index, order)
+            odes[ei] = rate
+            odes[fi] = flux
+
+        return odes
+
+    def _photo_losses(self) -> List[sp.Expr]:
+        """Per band, the radiation photo reactions remove (a negative rate)."""
+        net = self.network
+        nden = net.symbols.ndens
+        losses: List[sp.Expr] = [sp.Float(0.0) for _ in self.groups]
+        for reaction in jaff_progress.track(
+            net.reactions.with_type("photo"), description="Generating radiation equations"
+        ):
+            photo = reaction.photo
+            # A custom-rate reaction is not coupled to the bands.
+            if photo is not None and photo.custom_rad_rate:
+                continue
+
+            # With radiation, every other photo reaction has its bands (or the
+            # build raised), so missing data is a broken invariant.
+            if photo is None or not photo.bands:
+                raise RuntimeError(
+                    f"Photo reaction {reaction} has no per-band radiation data"
+                )
+
+            for band in photo.bands:
+                # k times every reactant density (mass-action kinetics).
+                loss = band.k
+                for reactant in reaction.reactants.core:
+                    loss *= nden[net.species[str(reactant)].index]
+                losses[band.group.index] -= loss
+
+        return losses
+
+    def _emissions(self) -> List[sp.Expr]:
+        """Per band, the radiation emitted by reactions with a spectral yield."""
+        emissions: List[sp.Expr] = [sp.Float(0.0) for _ in self.groups]
+        for reaction in self.network.reactions.radiation_emitters():
+            yields = reaction.rad.group_yields
+            for group, group_yield in zip(self.groups, yields, strict=True):
+                emissions[group.index] += group_yield * reaction.rate
+
+        return emissions
+
     def ordered_index(self, idx: int, order: int) -> tuple[int, int]:
         """
         Map a band index to positions in the flat radiation ODE output array.
@@ -689,7 +827,7 @@ class Radiation:
 
         Notes
         -----
-        This method is used by :func:`~jaff.physics._equations.get_sradodes`
+        This method is used by :meth:`odes`
         to place each band's pair of moment equations at the correct position
         in the generated ODE array, matching the memory layout expected by
         the downstream numerical integrator.

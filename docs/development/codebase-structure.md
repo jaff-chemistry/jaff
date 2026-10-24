@@ -45,7 +45,6 @@ src/jaff/
 │   └── _typing/                # Shared core TypedDicts (ElementProps)
 │
 ├── physics/                    # Symbolic ODE/flux generation + physics helpers
-│   ├── _equations.py           # get_sfluxes, get_sodes, get_sradodes
 │   ├── photo_reactions/        # Photochemistry: cross sections, radiation, shielding
 │   │   ├── _photo_band.py      # PhotoBand — a photo reaction's data for one band
 │   │   ├── _photochemistry.py  # XsecProps, Photochemistry — cross-section lookups
@@ -275,7 +274,7 @@ used by the solver plugins.
 | 4    | `core/network/network.py`                    | Build `Species`, `Reactions`, `Elements` catalogues; validate duplicates, sinks, isomers           |
 | 5    | `cli/jaffgen/_config_table.py`, `Network`    | Write any `[[jaffgen.table]]` data tables and the network's shielding tables to the output directory |
 | 6    | `codegen/templating/`                        | `TemplateParser` renders each template file, expanding its `$$JAFF` directives                     |
-| 7    | `codegen/codegen.py`, `physics/_equations.py` | Directives call `Codegen`, which takes the symbolic fluxes/ODEs (`sfluxes`, `sodes`) from the network and prints them for the file's language |
+| 7    | `codegen/codegen.py`                         | Directives call `Codegen`, which takes the symbolic fluxes/ODEs (`sfluxes`, `sodes`, `sradodes`; built by `Reactions.rates` / `Reactions.odes` / `Radiation.odes`) from the network and prints them for the file's language |
 | 8    | `cli/jaffgen/_engine.py`                     | Write each rendered file, then the merged config as `config.toml`, to the output directory          |
 
 ## Key Design Decisions

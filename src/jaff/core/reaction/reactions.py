@@ -13,7 +13,7 @@ from __future__ import annotations
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Sequence, SupportsIndex, cast, overload
 
-from sympy import Basic, Expr
+from sympy import Basic, Expr, Float
 
 from ...config.base import dotted
 from ...errors import ParserError
@@ -717,6 +717,51 @@ class Reactions(Catalogue[Reaction]):
         Vector[Basic]
         """
         return Vector([r.rate for r in self])
+
+    def odes(self, species: Species) -> list[Basic]:
+        """Right-hand sides of the species ODEs, one per core species.
+
+        ``d nden[s]/dt`` is the sum of the :meth:`rates` of the reactions
+        producing *s* minus those destroying it; a species appearing several
+        times on one side counts once per occurrence:
+
+        ```
+        d nden[s] / dt = sum_{i: s in products(i)} rate_i
+                       - sum_{i: s in reactants(i)} rate_i
+        ```
+
+        Parameters
+        ----------
+        species : Species
+            The network's species catalogue: the result has one entry per core
+            species (pseudo-species such as ``_PHOTON`` are not integrated), in
+            ``species.index`` order.
+
+        Returns
+        -------
+        list of sympy.Basic
+            The time derivative of each core species' number density
+            (cm⁻³ s⁻¹).
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> net = Network("h_photoionization")  # H + γ -> H+ + e-, H+ + e- -> H
+        >>> [s.name for s in net.species.core]
+        ['H', 'H+', 'e-']
+        >>> odes = net.reactions.odes(net.species)
+        >>> odes[1] == -odes[0]
+        True
+        """
+        rates = self.rates()
+        odes: list[Basic] = [Float(0.0) for _ in range(species.core.count)]
+        for rate, reaction in zip(rates, self, strict=True):
+            for reactant in reaction.reactants.core:
+                odes[reactant.index] -= rate
+            for product in reaction.products.core:
+                odes[product.index] += rate
+
+        return odes
 
     def tmins(self) -> Vector[float | None]:
         """Return a ``Vector`` of lower temperature bounds (K or ``None``).

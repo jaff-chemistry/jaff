@@ -117,7 +117,13 @@ class TestAttenuation:
 
         assert [float(loss) for loss in losses] == pytest.approx([0.0, 0.0])
 
-    def test_free_function_is_gone(self):
-        import jaff.physics._equations as equations
+    def test_radiation_subtracts_it(self, make_network):
+        net = self._net(make_network)
+        group = net.radiation.groups[1]
+        density_loss, flux_loss = net.dust.attenuation(group)
+        ei, fi = net.radiation.ordered_index(group.index, 0)
+        odes = net.radiation.odes()
 
-        assert not hasattr(equations, "handle_dust_reduction")
+        # No photo reactions or emission: dust is the only term.
+        assert odes[ei] == -density_loss
+        assert odes[fi] == -flux_loss

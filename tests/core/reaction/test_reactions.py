@@ -300,3 +300,33 @@ class TestCheckConfig:
 
         with pytest.raises(ParserError, match=r"reaction\.\"C\.O__CO\""):
             cat.check_config()
+
+
+class TestEquations:
+    NET = "H -> H+ + E  []  1e-9\nH+ + E -> H  []  1e-12\n"
+
+    def test_odes_balance(self, make_network):
+        net = make_network(self.NET, name="e.jet", funcfile=False)
+        odes = net.reactions.odes(net.species)
+        h, hp, e = (net.species[name].index for name in ("H", "H+", "e-"))
+        rates = net.reactions.rates()
+
+        assert len(odes) == net.species.core.count
+        assert odes[h] == rates[1] - rates[0]
+        assert odes[hp] == rates[0] - rates[1]
+        assert odes[e] == odes[hp]
+
+    def test_network_delegates(self, make_network):
+        net = make_network(self.NET, name="e.jet", funcfile=False)
+
+        assert net.sfluxes() == list(net.reactions.rates())
+        assert net.sodes() == net.reactions.odes(net.species)
+
+    def test_free_functions_are_gone(self):
+        import importlib.util
+
+        import jaff.physics
+
+        for name in ("get_sfluxes", "get_sodes", "get_sradodes"):
+            assert not hasattr(jaff.physics, name)
+        assert importlib.util.find_spec("jaff.physics._equations") is None

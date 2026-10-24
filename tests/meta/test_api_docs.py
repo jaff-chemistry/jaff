@@ -38,11 +38,11 @@ class TestPackagePage:
         assert "| [`Network`](network/index.md) |" in index
 
     def test_functions_table_links_function_pages(self, pages):
-        index = pages["reference/physics/index.md"]
+        index = pages["reference/plotting/index.md"]
 
         assert "## Functions" in index
-        assert "| [`get_sfluxes`](get_sfluxes.md) |" in index
-        assert "reference/physics/get_sfluxes.md" in pages
+        assert "| [`plot`](plot.md) |" in index
+        assert "reference/plotting/plot.md" in pages
 
     def test_exceptions_are_listed(self, pages):
         assert "| `ParserError` |" in pages["reference/errors/index.md"]

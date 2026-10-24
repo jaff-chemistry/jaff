@@ -1,4 +1,4 @@
-# ABOUTME: Regression tests for get_sradodes: how per-band photo-reaction data is
+# ABOUTME: Regression tests for Radiation.odes (net.sradodes): how per-band photo-reaction data is
 # ABOUTME: assembled into the radiation density/flux moment equations and laid out
 
 import pytest
@@ -144,3 +144,15 @@ def test_flux_equations_use_the_radiation_flux_symbol(radiation_network):
     fluxes = {s for e in odes for s in e.atoms(sp.Indexed) if s.base == net.radiation.flux}
 
     assert fluxes
+
+
+@pytest.mark.parametrize("order", [0, 1, 2, 3])
+def test_radiation_odes_are_the_network_ones(radiation_network, order):
+    net = radiation_network()
+
+    assert net.radiation.odes(order) == net.sradodes(order)
+
+
+def test_radiation_odes_reject_an_unknown_order(radiation_network):
+    with pytest.raises(ValueError, match="order"):
+        radiation_network().radiation.odes(4)

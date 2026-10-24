@@ -46,9 +46,6 @@ from ...physics import (
     Dust,
     Radiation,
     Thermodynamics,
-    get_sfluxes,
-    get_sodes,
-    get_sradodes,
 )
 from ...physics.dust.config import DustConfig
 from ...physics.photo_reactions.config import RadiationConfig
@@ -1017,7 +1014,7 @@ class Network:
         >>> net.sfluxes()[0].has(net.symbols.ndens[0] * net.symbols.ndens[1])
         True
         """
-        return get_sfluxes(self.reactions, self.species, self.symbols.ndens)
+        return list(self.reactions.rates())
 
     def sodes(self) -> list[Basic]:
         """Return symbolic ODE right-hand sides for all species.
@@ -1030,7 +1027,8 @@ class Network:
         dn_s/dt = sum_{i: s in products(i)} F_i - sum_{i: s in reactants(i)} F_i
         ```
 
-        where ``F_i`` are the fluxes from :meth:`sfluxes`.  A species appearing
+        where ``F_i`` are the fluxes from :meth:`sfluxes`; see
+        :meth:`Reactions.odes`.  A species appearing
         several times on one side contributes the flux once per occurrence.
 
         Returns
@@ -1038,7 +1036,7 @@ class Network:
         list[Basic]
             One SymPy expression per species, in species-index order.
         """
-        return get_sodes(self.reactions, self.species, self.symbols.ndens)
+        return self.reactions.odes(self.species)
 
     def sradodes(self, order: int = 0) -> list[Expr]:
         """Return symbolic radiation moment ODE right-hand sides.
@@ -1084,7 +1082,12 @@ class Network:
         >>> len(net.sradodes(order=2))
         2
         """
-        return get_sradodes(self, order)
+        if self.radiation is None:
+            raise RuntimeError(
+                "No radiation bands found. Radiation odes cannot be generated"
+            )
+
+        return self.radiation.odes(order)
 
     def to_hdf5(
         self,

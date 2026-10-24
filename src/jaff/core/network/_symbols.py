@@ -184,7 +184,7 @@ class NetworkSymbols:
         ``H+`` once, ...) times its number density, so the sum is the total H
         nuclei density rather than a molecular count.  Equivalent to the
         ``n_H_nuc`` grammar token; used directly by the dust radiation-moment
-        source terms (see :mod:`jaff.physics._equations`), cached so every
+        source terms (see :meth:`~jaff.physics.Dust.attenuation`), cached so every
         consumer shares one expression.
 
         Returns
