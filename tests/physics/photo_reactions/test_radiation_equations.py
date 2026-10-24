@@ -136,3 +136,11 @@ def test_requires_radiation(make_network):
 def test_rejects_unknown_order(radiation_network):
     with pytest.raises(ValueError, match="Invalid order"):
         radiation_network().sradodes(order=4)
+
+
+def test_flux_equations_use_the_radiation_flux_symbol(radiation_network):
+    net = radiation_network()
+    odes = net.sradodes()
+    fluxes = {s for e in odes for s in e.atoms(sp.Indexed) if s.base == net.radiation.flux}
+
+    assert fluxes

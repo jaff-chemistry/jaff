@@ -334,6 +334,9 @@ class Radiation:
     den : sympy.IndexedBase
         Symbolic radiation-density variable, shape ``(nbands,)``, named
         ``"radeden"`` in energy-density mode or ``"photden"`` otherwise.
+    flux : sympy.IndexedBase
+        Symbolic radiation-flux variable ``rflux``, shape ``(nbands,)``: the
+        flux moment of each band, in the units of :attr:`den` times a speed.
     groups : list of RadiationGroup
         One :class:`RadiationGroup` per band, in ascending energy order.  Each
         carries its own spectral index *α_i* (``grp.profile_idx``, from
@@ -467,6 +470,8 @@ class Radiation:
         self.den = sp.IndexedBase(
             "radeden" if self.config.mode == "u" else "photden", shape=(self.nbands,)
         )
+        # Symbolic radiation flux variable (the first moment), one per band.
+        self.flux = sp.IndexedBase("rflux", shape=(self.nbands,))
         self.groups: list[RadiationGroup] = [
             RadiationGroup(
                 lower=lower,  # type: ignore
@@ -584,6 +589,28 @@ class Radiation:
         density = self.den[group.index]
         if self.config.mode == "u":
             return density / group.eavg
+
+        return density
+
+    def energy_density(self, group: RadiationGroup) -> sp.Expr:
+        """Radiation energy density of *group* (erg cm⁻³), from its :attr:`den` symbol.
+
+        ``den[i]`` itself in ``"u"`` mode; in ``"nph"`` mode the photon density
+        times the band-average photon energy, ``den[i] · <E>_i``.
+
+        Parameters
+        ----------
+        group : RadiationGroup
+            The band.
+
+        Returns
+        -------
+        sympy.Expr
+            The energy density.
+        """
+        density = self.den[group.index]
+        if self.config.mode == "nph":
+            return density * group.eavg
 
         return density
 

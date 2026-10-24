@@ -164,3 +164,22 @@ class TestBandHelpers:
         expected = rad.get_group_average_cross_section(E, E, group, energy_weighted=True)
 
         assert rad.loss_cross_section(E, E, group, None, 7.0) == pytest.approx(expected)
+
+
+class TestSymbols:
+    def test_flux_symbol(self):
+        rad = _radiation([1.0, 2.0, 3.0], profile_index=2, mode="nph")
+
+        assert rad.flux.label.name == "rflux"
+        assert rad.flux.shape == (2,)
+
+    def test_energy_density_in_energy_mode(self):
+        rad = _radiation([1.0, 2.0, 3.0], profile_index=2, mode="u")
+
+        assert rad.energy_density(rad.groups[1]) == rad.den[1]
+
+    def test_energy_density_in_photon_mode(self):
+        rad = _radiation([1.0, 2.0, 3.0], profile_index=2, mode="nph")
+        group = rad.groups[1]
+
+        assert rad.energy_density(group) == rad.den[1] * group.eavg

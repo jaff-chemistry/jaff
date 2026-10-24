@@ -121,7 +121,8 @@ class PhotoelectricEmission:
         Numerator and denominator are both energy densities in erg/cm³, so the
         result is dimensionless.  In photon-density mode each band's symbol is a
         photon number density, converted to an energy density by multiplying by
-        the band-average photon energy ``eavg`` (erg).
+        the band-average photon energy ``eavg`` (erg); see
+        :meth:`~jaff.physics.Radiation.energy_density`.
         """
         rad = self.net.radiation
         if rad is None:
@@ -160,12 +161,6 @@ class PhotoelectricEmission:
                 (grp.lower, grp.upper),
             )
 
-            num = grp.sym * energy_frac  # type: ignore
-
-            # multiply with average energy in group if number densities are enabled
-            if rad.config.mode == "nph":
-                num *= grp.eavg or 0.0
-
-            num_tot += num
+            num_tot += rad.energy_density(grp) * energy_frac
 
         return (num_tot / den) * (rad.c / c.cgs.value)  # chi

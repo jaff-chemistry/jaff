@@ -1667,13 +1667,8 @@ class Codegen:
                 nden_to_y[nden_matrix[i]] = y_syms[i]
 
             if radiation and self.net.radiation:
-                radden_matrix = sp.IndexedBase(
-                    "radeden" if self.net.radiation.config.mode == "u" else "photden",
-                    shape=(self.net.radiation.nbands,),
-                )
-                radflux_matrix = sp.IndexedBase(
-                    "rflux", shape=(self.net.radiation.nbands,)
-                )
+                radden_matrix = self.net.radiation.den
+                radflux_matrix = self.net.radiation.flux
 
                 for i in range(self.net.radiation.nbands):
                     ei, fi = self.net.radiation.ordered_index(i, rad_order)
@@ -1781,14 +1776,10 @@ class Codegen:
                     if radiation and self.net.radiation is not None:
                         rad = self.net.radiation
                         expr_str = rrdpattern.sub(
-                            lambda m: _replace_y(
-                                m,
-                                "radeden" if rad.config.mode == "u" else "photden",
-                            ),
-                            expr_str,
+                            lambda m: _replace_y(m, str(rad.den.label)), expr_str
                         )
                         expr_str = rfdpattern.sub(
-                            lambda m: _replace_y(m, "rflux"), expr_str
+                            lambda m: _replace_y(m, str(rad.flux.label)), expr_str
                         )
 
                     ir["extras"]["cse"].append(IndexedValue([idx], expr_str))
@@ -1817,13 +1808,11 @@ class Codegen:
             if radiation and self.net.radiation is not None:
                 rad = self.net.radiation
                 expr_str = rrdpattern.sub(
-                    lambda m: _replace_y(
-                        m,
-                        "radeden" if rad.config.mode == "u" else "photden",
-                    ),
-                    expr_str,
+                    lambda m: _replace_y(m, str(rad.den.label)), expr_str
                 )
-                expr_str = rfdpattern.sub(lambda m: _replace_y(m, "rflux"), expr_str)
+                expr_str = rfdpattern.sub(
+                    lambda m: _replace_y(m, str(rad.flux.label)), expr_str
+                )
 
             ir["expressions"].append(IndexedValue([i, j], expr_str))
 

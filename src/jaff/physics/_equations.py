@@ -267,7 +267,7 @@ def get_sradodes(net: "Network", order: int = 0) -> list[Expr]:
     rad_groups = net.radiation.groups
     nden = net.symbols.ndens
 
-    rflux = IndexedBase("rflux", shape=(net.radiation.nbands,))
+    rflux = net.radiation.flux
     # Mapping used to obtain the flux-moment equation from the density-moment
     # equation: replace each density symbol den[i] with the flux rflux[i].
     flux_map = {g.sym: rflux[i] for i, g in enumerate(net.radiation.groups)}

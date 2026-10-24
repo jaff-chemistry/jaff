@@ -262,6 +262,7 @@ nav = [
       { "physics.Radiation" = [
         "reference/physics/radiation/index.md",
         "reference/physics/radiation/photon_density.md",
+        "reference/physics/radiation/energy_density.md",
         "reference/physics/radiation/loss_cross_section.md",
         "reference/physics/radiation/ordered_index.md",
         "reference/physics/radiation/get_photden_profile.md",
