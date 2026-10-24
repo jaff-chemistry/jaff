@@ -36,7 +36,7 @@ Elements can also be built directly from a list of species names:
 [[1, 0], [0, 2], [1, 1]]
 """
 
-from . import elements, network, reaction, species
+from . import chemistry, elements, network, reaction, species
 from ._typing import ElementProps
 from .elements import Element, Elements
 from .network import Network, NetworkSpec, NetworkSymbols
@@ -49,6 +49,7 @@ from .reaction import (
 from .species import Specie, Species
 
 __all__ = [
+    "chemistry",
     "elements",
     "network",
     "reaction",

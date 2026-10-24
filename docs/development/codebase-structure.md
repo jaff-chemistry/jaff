@@ -13,6 +13,7 @@ This page maps the `src/jaff` source tree, explains what each package owns, and 
 ```
 src/jaff/
 ├── core/                       # Domain model
+│   ├── chemistry.py            # Chemistry reference data as functions (element_table, cached)
 │   ├── network/                # network.py (Network — main entry point; validation reports)
 │   │   ├── _functions.py       # NetworkFunctions — the .jfunc functions (net.functions)
 │   │   ├── _spec.py            # NetworkSpec — source-file paths (net.spec)

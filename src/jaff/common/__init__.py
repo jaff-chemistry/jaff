@@ -10,7 +10,6 @@ from ._helper import (
     f90_convert,
     float_piecewise_branches,
     is_jaff_file,
-    load_mass_dict,
     resolve_dependencies,
     resolve_symbolic_dependencies,
 )
@@ -25,7 +24,6 @@ __all__ = [
     "sym_integrate",
     "integrate",
     "arr_integrate",
-    "load_mass_dict",
     "f90_convert",
     "float_piecewise_branches",
     "resolve_symbolic_dependencies",

@@ -6,7 +6,6 @@ Miscellaneous helper utilities shared across JAFF subsystems.
 This module provides:
 
 * Extension-list constants for recognizing source/data file types.
-* :func:`load_mass_dict` -- load atomic masses from the embedded SQLite DB.
 * :func:`f90_convert` -- coerce Fortran-style numeric literals to Python/C.
 * :func:`resolve_symbolic_dependencies` -- topological substitution of a
   symbol dependency graph.
@@ -32,7 +31,6 @@ from sympy.core.function import AppliedUndef
 from ..errors import ParserError
 
 if TYPE_CHECKING:
-    from ..core._typing import ElementProps
     from ..core.network import NetworkFunctions
 
 # ---------------------------------------------------------------------------
@@ -48,40 +46,6 @@ RUST_EXTENSIONS = [".rs"]
 
 # Matches Fortran double-precision exponent notation, e.g. ``1.0d-3`` → ``1.0e-3``
 F90_PATTERN = re.compile(r"([0-9_.])d([0-9_+-])")
-
-
-def load_mass_dict() -> dict:
-    """
-    Load atomic mass data from the JAFF embedded SQLite database.
-
-    Opens the bundled ``atomic_masses`` table via :class:`~jaff.drivers.sqlite.JaffDb`
-    and returns a dict keyed by element symbol.
-
-    Returns
-    -------
-    dict[str, ElementProps]
-        Mapping from element symbol (e.g. ``"H"``) to an
-        :class:`~jaff.core._typing.ElementProps` dict with keys
-        ``name``, ``mass``, ``atomic_mass``, ``protons``, ``neutrons``,
-        and ``electrons``.
-    """
-    from ..drivers.sqlite import JaffDb
-
-    with JaffDb() as jdb:
-        rows = jdb.table("atomic_masses").all_rows()
-
-    mass_dict: dict[str, ElementProps] = {}
-    for row in rows:
-        mass_dict[row["element"]] = {
-            "name": row["name"],
-            "mass": row["mass"],
-            "atomic_mass": row["atomic_mass"],
-            "protons": row["protons"],
-            "neutrons": row["neutrons"],
-            "electrons": row["electrons"],
-        }
-
-    return mass_dict
 
 
 def f90_convert(expr: str) -> str:

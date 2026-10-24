@@ -10,10 +10,7 @@ dictionary (CGS units throughout).  Instances are flyweights: constructing
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .._typing import ElementProps
+from ..chemistry import element_table
 
 
 class Element:
@@ -67,40 +64,6 @@ class Element:
     """
 
     _register: dict = {}
-    _mass_dict: dict | None = None
-
-    @classmethod
-    def configure(cls, mass_dict: dict[str, ElementProps]) -> None:
-        """Override the mass dictionary used to instantiate elements.
-
-        Call this before creating any ``Element`` instances if you need a
-        custom mass table.  Calling it after elements have already been
-        registered has no effect on those existing flyweight instances.
-
-        Parameters
-        ----------
-        mass_dict : dict[str, ElementProps]
-            Mapping from element symbol to a dict with keys ``"name"``,
-            ``"mass"``, ``"atomic_mass"``, ``"protons"``, ``"neutrons"``,
-            ``"electrons"``.
-        """
-        cls._mass_dict = mass_dict
-
-    @classmethod
-    def __get_mass_dict(cls) -> dict[str, ElementProps]:
-        """Return the mass dictionary, loading it on first access.
-
-        Returns
-        -------
-        dict[str, ElementProps]
-            Mapping from element symbol to its properties.
-        """
-        if cls._mass_dict is None:
-            from ...common import load_mass_dict
-
-            cls._mass_dict = load_mass_dict()
-
-        return cls._mass_dict
 
     def __new__(cls, symbol: str):
         """Return the flyweight instance for *symbol*, creating it if absent.
@@ -142,7 +105,7 @@ class Element:
         if getattr(self, "_initialized", False):
             return
 
-        mass_dict = self.__get_mass_dict()
+        mass_dict = element_table()
 
         if symbol not in mass_dict:
             raise KeyError(f"No specie found in mass dictionary: {symbol}")

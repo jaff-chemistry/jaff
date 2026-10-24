@@ -12,7 +12,6 @@ from __future__ import annotations
 from functools import cached_property
 
 from ...types import Catalogue, Vector
-from .._typing import ElementProps
 from ..elements import Elements
 from .specie import Specie
 
@@ -48,25 +47,6 @@ class Species(Catalogue[Specie]):
     >>> species.count
     3
     """
-
-    _mass_dict: dict | None = None
-
-    @classmethod
-    def configure(cls, mass_dict: dict[str, ElementProps]) -> None:
-        """Override the mass dictionary and propagate it to ``Specie``.
-
-        Class-level: delegates to :meth:`Specie.configure`, so the dictionary
-        applies to every ``Specie`` created afterwards.  ``Network`` calls this
-        during construction, so it is only needed when working with a custom
-        mass table outside of a ``Network``.
-
-        Parameters
-        ----------
-        mass_dict : dict[str, ElementProps]
-            Custom mass dictionary.
-        """
-        cls._mass_dict = mass_dict
-        Specie.configure(mass_dict)
 
     def __init__(
         self,

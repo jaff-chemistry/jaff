@@ -74,11 +74,9 @@ nav = [
       "reference/core/index.md",
       { "core.Element" = [
         "reference/core/element/index.md",
-        "reference/core/element/configure.md",
       ] },
       { "core.Elements" = [
         "reference/core/elements/index.md",
-        "reference/core/elements/configure.md",
         "reference/core/elements/truth_matrix.md",
         "reference/core/elements/density_matrix.md",
         "reference/core/elements/from_name.md",
@@ -95,6 +93,7 @@ nav = [
       { "core.Network" = [
         "reference/core/network/index.md",
         "reference/core/network/filename.md",
+        "reference/core/network/mass_dict.md",
         "reference/core/network/label.md",
         "reference/core/network/write_shielding_tables.md",
         "reference/core/network/to_jaff.md",
@@ -179,7 +178,6 @@ nav = [
       ] },
       { "core.Specie" = [
         "reference/core/specie/index.md",
-        "reference/core/specie/configure.md",
         "reference/core/specie/elements.md",
         "reference/core/specie/get_fidx.md",
         "reference/core/specie/is_special.md",
@@ -189,7 +187,6 @@ nav = [
       ] },
       { "core.Species" = [
         "reference/core/species/index.md",
-        "reference/core/species/configure.md",
         "reference/core/species/add.md",
         "reference/core/species/special.md",
         "reference/core/species/core.md",
@@ -247,6 +244,7 @@ nav = [
         "reference/core/reactionradiation/expressions.md",
         "reference/core/reactionradiation/substitute.md",
       ] },
+      "reference/core/chemistry/index.md",
     ] },
     { "Physics" = [
       "reference/physics/index.md",

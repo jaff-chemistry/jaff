@@ -25,7 +25,7 @@ from itertools import product
 from typing import TYPE_CHECKING
 
 from ...io import JaffLogger
-from .._typing import ElementProps
+from ..chemistry import element_table
 from ..elements import Elements
 
 if TYPE_CHECKING:
@@ -97,41 +97,6 @@ class Specie:
     _ATTRS: frozenset[str] = frozenset(
         {"name", "mass", "exploded", "charge", "index", "fidx", "serialized", "elements"}
     )
-    _mass_dict: dict | None = None
-
-    @classmethod
-    def configure(cls, mass_dict: dict[str, ElementProps]) -> None:
-        """Override the mass dictionary and propagate it to ``Elements``.
-
-        Class-level: the dictionary is shared by every ``Specie`` instance
-        created afterwards.  ``Network`` calls this (via
-        :meth:`Species.configure`) during construction, so it is only needed
-        when working with a custom mass table outside of a ``Network``.
-
-        Parameters
-        ----------
-        mass_dict : dict[str, ElementProps]
-            Custom mass dictionary, mapping element symbol to its
-            ``ElementProps`` (must contain at least the key ``"mass"``).
-        """
-        cls._mass_dict = mass_dict
-        Elements.configure(mass_dict)
-
-    @classmethod
-    def __get_mass_dict(cls) -> dict[str, ElementProps]:
-        """Return the mass dictionary, loading it on first access.
-
-        Returns
-        -------
-        dict[str, ElementProps]
-            Mapping from element symbol to its properties.
-        """
-        if cls._mass_dict is None:
-            from ...common import load_mass_dict
-
-            cls._mass_dict = load_mass_dict()
-
-        return cls._mass_dict
 
     def __init__(self, name: str, index: int = 0):
         """Construct a ``Specie`` and immediately parse its composition.
@@ -169,7 +134,7 @@ class Specie:
         self.fidx: str = self.get_fidx()
         self.serialized: str = ""
 
-        self._parse(self.__get_mass_dict())
+        self._parse(element_table())
         self.serialize()
 
     def __repr__(self):

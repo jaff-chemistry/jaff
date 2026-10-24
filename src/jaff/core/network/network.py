@@ -36,7 +36,7 @@ from sympy import (
     symbols,
 )
 
-from ...common import is_jaff_file, load_mass_dict, print_motd, resolve_dependencies
+from ...common import is_jaff_file, print_motd, resolve_dependencies
 from ...config.base import as_layer
 from ...drivers import HDF5
 from ...errors import ParserError
@@ -50,6 +50,7 @@ from ...physics import (
 from ...physics.dust.config import DustConfig
 from ...physics.photo_reactions.config import RadiationConfig
 from ...physics.thermodynamics.config import ThermodynamicsConfig
+from ..chemistry import element_table
 from ..elements import Elements
 from ..parsers import NetworkParser
 from ..parsers.network._typing import parsedListProps
@@ -225,8 +226,8 @@ class Network:
         Dust module; ``None`` when no ``[network.dust]`` table (in the config or
         the ``dust`` argument) is given.
     mass_dict : dict[str, ElementProps]
-        Element mass dictionary used during species construction and the
-        conservation checks.
+        The element table (:func:`~jaff.core.chemistry.element_table`) the
+        species and elements are built from; shared by every network.
     spec : NetworkSpec
         Facts about the source files (not settings): the resolved ``fname``,
         the ``.jfunc`` file used (``jfunc_path``).
@@ -383,7 +384,6 @@ class Network:
         if not _from_cli:
             print_motd()
 
-        self.mass_dict: dict[str, ElementProps] = {}
         self.species: Species = Species()
         self.reactions: Reactions = Reactions(self.config.reactions)
         self.symbols: NetworkSymbols = NetworkSymbols(self)
@@ -402,9 +402,6 @@ class Network:
 
         self.logger.info(f"Loading network from {self.spec.fname}")
         self.logger.info(f"Network label: [yellow]{self.label}[/]")
-
-        self.mass_dict: dict[str, ElementProps] = load_mass_dict()
-        Species.configure(self.mass_dict)
 
         parsers = self.__load_network()
 
@@ -431,6 +428,11 @@ class Network:
     def filename(self) -> Path:
         """Absolute path to the source network file (from :attr:`spec`)."""
         return self.spec.fname
+
+    @property
+    def mass_dict(self) -> dict[str, ElementProps]:
+        """The element table (:func:`~jaff.core.chemistry.element_table`)."""
+        return element_table()
 
     @property
     def label(self) -> str:

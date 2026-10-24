@@ -17,7 +17,6 @@ from ...types import Catalogue, Vector
 from .element import Element
 
 if TYPE_CHECKING:
-    from .._typing import ElementProps
     from ..species import Specie
 
 
@@ -60,39 +59,6 @@ class Elements(Catalogue):
     """
 
     _register: dict = {}
-    _mass_dict: dict | None = None
-
-    @classmethod
-    def configure(cls, mass_dict: dict[str, ElementProps]) -> None:
-        """Override the mass dictionary for both ``Elements`` and ``Element``.
-
-        The dictionary is forwarded to ``Element.configure``.  Call this
-        before constructing any ``Specie`` or ``Elements`` objects; elements
-        that have already been created keep their existing properties.
-
-        Parameters
-        ----------
-        mass_dict : dict[str, ElementProps]
-            Custom mass dictionary mapping element symbol (e.g. ``"H"``) to
-            its :class:`~jaff.core.ElementProps`.
-        """
-        cls._mass_dict = mass_dict
-        Element.configure(mass_dict)
-
-    @classmethod
-    def __get_mass_dict(cls) -> dict[str, ElementProps]:
-        """Return the mass dictionary for the ``Elements`` collection.
-
-        Returns
-        -------
-        dict[str, ElementProps]
-            Mapping from element symbol to its properties.
-        """
-        if cls._mass_dict is None:
-            from ...common import load_mass_dict
-
-            cls._mass_dict = load_mass_dict()
-        return cls._mass_dict
 
     @staticmethod
     def __get_species_list(
