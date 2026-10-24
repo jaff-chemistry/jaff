@@ -40,6 +40,7 @@ ZENSICAL_TOML: Path = SRC_DIR.parent / "zensical.toml"
 #: Documented packages and their nav titles: the only hand-kept list.
 PACKAGES: Dict[str, str] = {
     "jaff.core": "Core",
+    "jaff.chemistry": "Chemistry",
     "jaff.physics": "Physics",
     "jaff.codegen": "Code generation",
     "jaff.drivers": "Drivers",

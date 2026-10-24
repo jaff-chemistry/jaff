@@ -62,6 +62,23 @@ This keeps element objects unique across the whole program, so identity
 
 ## The individual `Element`
 
+Every `Element` is a record of the **periodic table**,
+`jaff.chemistry.periodic_table()`: JAFF's bundled element table, read once and
+shared by every network. It is reference data, not part of a network:
+
+```python
+from jaff.chemistry import periodic_table
+from jaff.core import Element
+
+periodic_table()          # the whole table: a read-only {symbol: Element} mapping
+periodic_table("C")       # one element → Element('C')
+Element("C")              # the same object
+periodic_table("C").mass  # 1.994473e-23 (grams)
+```
+
+Besides the chemical elements, the table holds pseudo-elements such as `e-` and
+`GRAIN` (only `name` and `mass` set).
+
 ### Attributes
 
 | Attribute     | Type    | Description                                     |

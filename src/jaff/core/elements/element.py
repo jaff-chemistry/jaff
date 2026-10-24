@@ -1,24 +1,21 @@
-# ABOUTME: Element: flyweight for one chemical element loaded from the JAFF mass table
-# ABOUTME: Exposes mass, atomic mass and proton/neutron/electron counts
+# ABOUTME: Element: one record of the periodic table (mass, atomic mass and
+# ABOUTME: proton/neutron/electron counts); Element("H") looks it up in the table
 
-"""Single chemical :class:`Element` flyweight for JAFF networks.
-
-An ``Element`` represents a single chemical element, loaded from the JAFF mass
-dictionary (CGS units throughout).  Instances are flyweights: constructing
-``Element("H")`` twice returns the same object.
-"""
+"""Single chemical :class:`Element`: one record of :func:`~jaff.chemistry.periodic_table`."""
 
 from __future__ import annotations
 
-from ..chemistry import element_table
+from typing import Any, Mapping
+
+from ...chemistry import periodic_table
 
 
 class Element:
-    """A chemical element loaded from the JAFF mass dictionary.
+    """A chemical element: one record of :func:`~jaff.chemistry.periodic_table`.
 
-    Instances are flyweights: constructing ``Element("H")`` twice returns the
-    same object.  The first construction populates all attributes from the
-    mass dictionary; subsequent constructions are no-ops.
+    Every element is built once, when the table is read, and shared:
+    ``Element("H")`` returns the table's record for ``"H"`` (the same object as
+    ``periodic_table("H")``), so constructing it twice gives the same object.
 
     Elements compare, sort and hash by :attr:`symbol`; comparing an
     ``Element`` with any other type raises :exc:`TypeError`.  ``str(element)``
@@ -29,33 +26,33 @@ class Element:
     symbol : str
         Periodic-table symbol (e.g. ``"H"``, ``"He"``).
     name : str
-        Full element name as stored in the mass dictionary (e.g.
-        ``"Hydrogen"``).
+        Full element name (e.g. ``"Hydrogen"``).
     mass : float
         Mass of the element in grams (CGS), i.e. the standard atomic weight
         expressed in grams.
-    atomic_mass : float
+    atomic_mass : float or None
         Standard atomic weight in atomic mass units.
-    protons : int
+    protons : int or None
         Number of protons (atomic number).
-    neutrons : int
+    neutrons : int or None
         Number of neutrons in the most common isotope.
-    electrons : int
+    electrons : int or None
         Number of electrons in the neutral atom.
 
     Notes
     -----
-    The mass dictionary also holds pseudo-elements such as ``"e-"`` and
-    ``"GRAIN"``; for these only ``name`` and ``mass`` are set and the other
-    numeric attributes are ``None``.
+    The table also holds pseudo-elements such as ``"e-"`` and ``"GRAIN"``; for
+    these only ``name`` and ``mass`` are set and the other numeric attributes
+    are ``None``.
 
     Examples
     --------
+    >>> from jaff.chemistry import periodic_table
     >>> from jaff.core import Element
     >>> h = Element("H")
     >>> h.name, h.protons, h.atomic_mass
     ('Hydrogen', 1, 1.008)
-    >>> Element("H") is h
+    >>> h is periodic_table("H")
     True
     >>> str(Element("He"))
     'He'
@@ -63,61 +60,47 @@ class Element:
     [ElementObject(symbol='C'), ElementObject(symbol='O')]
     """
 
-    _register: dict = {}
+    symbol: str
+    name: str
+    mass: float
+    atomic_mass: float | None
+    protons: int | None
+    neutrons: int | None
+    electrons: int | None
 
-    def __new__(cls, symbol: str):
-        """Return the flyweight instance for *symbol*, creating it if absent.
+    def __new__(cls, symbol: str) -> Element:
+        """Return the periodic table's record for *symbol*.
 
         Parameters
         ----------
         symbol : str
-            Periodic-table symbol (case-sensitive).
+            Periodic-table symbol (case-sensitive, e.g. ``"He"``).
 
         Returns
         -------
         Element
-            Existing cached instance, or a newly allocated one registered for
-            future calls.
-        """
-        # Return the cached instance if this element has already been built;
-        # otherwise create a fresh one and register it for future look-ups.
-        if symbol in cls._register:
-            return cls._register[symbol]
-
-        instance = super().__new__(cls)
-        cls._register[symbol] = instance
-
-        return instance
-
-    def __init__(self, symbol: str):
-        """Initialise an Element from the mass dictionary.
-
-        Parameters
-        ----------
-        symbol : str
-            Periodic-table symbol of the element (case-sensitive, e.g. ``"He"``).
+            The shared record.
 
         Raises
         ------
         KeyError
-            If *symbol* is not present in the mass dictionary.
+            If *symbol* is not in the periodic table.
         """
-        if getattr(self, "_initialized", False):
-            return
+        return periodic_table(symbol)
 
-        mass_dict = element_table()
+    @classmethod
+    def _from_row(cls, row: Mapping[str, Any]) -> Element:
+        """Build the record of one row of the bundled ``atomic_masses`` table."""
+        element = object.__new__(cls)
+        element.symbol = row["element"]
+        element.name = row["name"]
+        element.mass = row["mass"]
+        element.atomic_mass = row["atomic_mass"]
+        element.protons = row["protons"]
+        element.neutrons = row["neutrons"]
+        element.electrons = row["electrons"]
 
-        if symbol not in mass_dict:
-            raise KeyError(f"No specie found in mass dictionary: {symbol}")
-
-        self.symbol: str = symbol
-        self.name: str = mass_dict[symbol]["name"]
-        self.mass: float = mass_dict[symbol]["mass"]
-        self.atomic_mass: float = mass_dict[symbol]["atomic_mass"]
-        self.protons: int = mass_dict[symbol]["protons"]
-        self.neutrons: int = mass_dict[symbol]["neutrons"]
-        self.electrons: int = mass_dict[symbol]["electrons"]
-        self._initialized = True
+        return element
 
     def __repr__(self) -> str:
         """Return detailed string representation of this element.

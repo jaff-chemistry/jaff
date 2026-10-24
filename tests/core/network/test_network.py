@@ -17,7 +17,6 @@ class TestConstruction:
         assert net.label == "sample_kida"
         assert isinstance(net.species, Species)
         assert isinstance(net.reactions, Reactions)
-        assert isinstance(net.mass_dict, dict)
         assert net.reactions.count > 0 and net.species.count > 0
 
     def test_custom_label(self, fixtures_dir):
@@ -31,13 +30,6 @@ class TestConstruction:
     def test_nonexistent_file_raises(self):
         with pytest.raises(FileNotFoundError):
             Network(str(Path("no") / "such" / "file.dat"))
-
-    def test_mass_dict_values(self, fixtures_dir):
-        net = Network(str(fixtures_dir / "empty_network.dat"))
-        assert net.mass_dict["H"]["mass"] == pytest.approx(1.673773e-24)
-        assert net.mass_dict["He"]["mass"] == pytest.approx(6.646473e-24)
-        assert net.mass_dict["C"]["mass"] == pytest.approx(1.994473e-23)
-        assert net.mass_dict["O"]["mass"] == pytest.approx(2.656763e-23)
 
 
 class TestEmptyNetwork:

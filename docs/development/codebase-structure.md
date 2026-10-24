@@ -13,7 +13,6 @@ This page maps the `src/jaff` source tree, explains what each package owns, and 
 ```
 src/jaff/
 ├── core/                       # Domain model
-│   ├── chemistry.py            # Chemistry reference data as functions (element_table, cached)
 │   ├── network/                # network.py (Network — main entry point; validation reports)
 │   │   ├── _functions.py       # NetworkFunctions — the .jfunc functions (net.functions)
 │   │   ├── _spec.py            # NetworkSpec — source-file paths (net.spec)
@@ -26,7 +25,7 @@ src/jaff/
 │   │   ├── _helper.py          # to_float_or_none
 │   │   └── types/              # RateSegment / RateSegments (rate per temperature range)
 │   ├── species/                # specie.py (Specie) · species.py (Species)
-│   ├── elements/               # element.py (Element) · elements.py (Elements)
+│   ├── elements/               # element.py (Element, a periodic-table record) · elements.py (Elements)
 │   ├── parsers/                # File parsers (network + auxiliary)
 │   │   ├── network/            # Multi-format network file parser
 │   │   │   ├── _engine.py      # NetworkParser — drives format plugins
@@ -43,7 +42,9 @@ src/jaff/
 │   │   └── auxiliary_func/     # .jfunc auxiliary function parser
 │   │       ├── _engine.py      # AuxiliaryFunctionParser
 │   │       └── function_props.py # AuxiliaryFunctionProps (one parsed function)
-│   └── _typing/                # Shared core TypedDicts (ElementProps)
+│
+├── chemistry/                  # Chemistry reference data (not network state)
+│   └── _periodic_table.py      # periodic_table(): the element table (cached), or one Element
 │
 ├── physics/                    # Symbolic ODE/flux generation + physics helpers
 │   ├── photo_reactions/        # Photochemistry: cross sections, radiation, shielding

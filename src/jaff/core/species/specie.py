@@ -22,13 +22,14 @@ import re
 import sys
 from functools import cached_property
 from itertools import product
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Mapping
 
+from ...chemistry import periodic_table
 from ...io import JaffLogger
-from ..chemistry import element_table
 from ..elements import Elements
 
 if TYPE_CHECKING:
+    from ..elements import Element
     import logging
 
 
@@ -134,7 +135,7 @@ class Specie:
         self.fidx: str = self.get_fidx()
         self.serialized: str = ""
 
-        self._parse(element_table())
+        self._parse(periodic_table())
         self.serialize()
 
     def __repr__(self):
@@ -334,7 +335,7 @@ class Specie:
         """
         return f"${self.__latex}$" if dollars else self.__latex
 
-    def _parse(self, mass_dict: dict) -> None:
+    def _parse(self, table: Mapping[str, Element]) -> None:
         """Parse *name* into elemental composition, mass, and charge.
 
         This is called automatically during ``__init__``.  It uses a proxy
@@ -348,9 +349,8 @@ class Specie:
 
         Parameters
         ----------
-        mass_dict : dict
-            Mapping from element symbol to property dict (must contain at
-            least the key ``"mass"``).
+        table : Mapping[str, Element]
+            The periodic table (:func:`~jaff.chemistry.periodic_table`).
 
         Notes
         -----
@@ -366,7 +366,7 @@ class Specie:
         """
         # Sort atoms longest-first so that multi-character symbols (e.g. "He")
         # are matched before single-character ones (e.g. "H").
-        atoms = sorted(mass_dict.keys(), key=lambda x: len(x), reverse=True)
+        atoms = sorted(table.keys(), key=lambda x: len(x), reverse=True)
         ps = ["".join(x) for x in product("qzxj", repeat=4)][: len(atoms)]
         proxy = {a: p for a, p in zip(atoms, ps)}
         proxy_rev = {p: a for a, p in proxy.items()}
@@ -399,7 +399,7 @@ class Specie:
                     expl += [pold] * max(int(p) - 1, 1)
             pold = p
         self.exploded = sorted([proxy_rev[x] for x in expl])
-        self.mass = sum([mass_dict[x]["mass"] for x in self.exploded])
+        self.mass = sum([table[x].mass for x in self.exploded])
 
         # --- Build LaTeX representation ---
         latex = self.name.strip()

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, ClassVar, Collection, Sequence
 from sympy import Basic, Expr, Float, Function, IndexedBase, S, Symbol
 from sympy.core.function import AppliedUndef, UndefinedFunction
 
+from ...chemistry import periodic_table
 from ...errors import ParserError
 
 if TYPE_CHECKING:
@@ -342,8 +343,8 @@ class NetworkSymbols:
 
     @cached_property
     def _element_lookup(self) -> dict[str, str]:
-        """Lower-cased element token -> canonical element symbol (``net.mass_dict``)."""
-        return {s.lower(): s for s in self._net.mass_dict}
+        """Lower-cased element token -> canonical element symbol (the periodic table)."""
+        return {s.lower(): s for s in periodic_table()}
 
     @cached_property
     def _charge_reverse(self) -> dict[str, Specie]:

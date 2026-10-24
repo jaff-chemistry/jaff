@@ -93,7 +93,6 @@ nav = [
       { "core.Network" = [
         "reference/core/network/index.md",
         "reference/core/network/filename.md",
-        "reference/core/network/mass_dict.md",
         "reference/core/network/label.md",
         "reference/core/network/write_shielding_tables.md",
         "reference/core/network/to_jaff.md",
@@ -207,9 +206,6 @@ nav = [
         "reference/core/species/charged.md",
         "reference/core/species/charge_truths.md",
       ] },
-      { "core.ElementProps" = [
-        "reference/core/elementprops/index.md",
-      ] },
       { "core.NetworkSymbols" = [
         "reference/core/networksymbols/index.md",
         "reference/core/networksymbols/ncol.md",
@@ -244,7 +240,10 @@ nav = [
         "reference/core/reactionradiation/expressions.md",
         "reference/core/reactionradiation/substitute.md",
       ] },
-      "reference/core/chemistry/index.md",
+    ] },
+    { "Chemistry" = [
+      "reference/chemistry/index.md",
+      "reference/chemistry/periodic_table.md",
     ] },
     { "Physics" = [
       "reference/physics/index.md",

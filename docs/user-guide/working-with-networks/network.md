@@ -145,7 +145,6 @@ net = Network(
 | `thermodynamics`  | `Thermodynamics`  | Thermal equations: `eos`, `dEdt_chemical`, `dEdt_extra`, `dEdt_tot`, `dTdt_chemical`, `dTdt_extra`, `dTdt_tot`; see [thermodynamics](../../reference/physics/thermodynamics/index.md) |
 | `radiation`       | `Radiation\|None` | Radiation field object; `None` when the config has no `[network.radiation]` table                                   |
 | `dust`            | `Dust\|None`      | Dust module; `None` when the config has no `[network.dust]` table                                                   |
-| `mass_dict`       | `dict`            | Element mass dictionary used to build the species                                                                   |
 | `symbols`         | `NetworkSymbols`  | Canonical symbols, densities (`ndens`, `ntot`, `rho`, `n_hnuc`), introspection sets and `standardize`; see [symbols](../../reference/core/networksymbols/index.md) |
 | `logger`          | `logging.Logger`  | The JAFF logger the network writes its load and validation messages to                                              |
 

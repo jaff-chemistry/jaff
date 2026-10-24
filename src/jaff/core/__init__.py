@@ -1,5 +1,5 @@
 # ABOUTME: Core data model of JAFF: networks, species, reactions and elements.
-# ABOUTME: Re-exports the public classes and typed dicts of the jaff.core subpackages.
+# ABOUTME: Re-exports the public classes of the jaff.core subpackages.
 """Primary data-model classes for chemical reaction networks.
 
 ``jaff.core`` contains the classes for loading, parsing and representing
@@ -11,7 +11,8 @@ astrochemical reaction networks:
 - :class:`Reactions` / :class:`Reaction` hold the network's reactions, each
   with a symbolic rate expression and other attributes and helper methods.
 - :class:`Elements` / :class:`Element` extract the chemical elements of a set
-  of species and their collective atomic properties.
+  of species and their collective atomic properties; each :class:`Element` is
+  a record of :func:`~jaff.chemistry.periodic_table`.
 
 Examples
 --------
@@ -36,8 +37,7 @@ Elements can also be built directly from a list of species names:
 [[1, 0], [0, 2], [1, 1]]
 """
 
-from . import chemistry, elements, network, reaction, species
-from ._typing import ElementProps
+from . import elements, network, reaction, species
 from .elements import Element, Elements
 from .network import Network, NetworkSpec, NetworkSymbols
 from .reaction import (
@@ -49,7 +49,6 @@ from .reaction import (
 from .species import Specie, Species
 
 __all__ = [
-    "chemistry",
     "elements",
     "network",
     "reaction",
@@ -62,7 +61,6 @@ __all__ = [
     "Reactions",
     "Specie",
     "Species",
-    "ElementProps",
     "NetworkSymbols",
     "PhotoReaction",
     "ReactionRadiation",

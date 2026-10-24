@@ -50,7 +50,6 @@ from ...physics import (
 from ...physics.dust.config import DustConfig
 from ...physics.photo_reactions.config import RadiationConfig
 from ...physics.thermodynamics.config import ThermodynamicsConfig
-from ..chemistry import element_table
 from ..elements import Elements
 from ..parsers import NetworkParser
 from ..parsers.network._formats import ParsedRecord
@@ -67,7 +66,6 @@ from ._symbols import NetworkSymbols
 from .config import NetworkConfig, NetworkConfigSource, load_network_config
 
 if TYPE_CHECKING:
-    from .._typing import ElementProps
     from ..parsers.network._formats import Parser
 
 
@@ -223,9 +221,6 @@ class Network:
     dust : Dust or None
         Dust module; ``None`` when no ``[network.dust]`` table (in the config or
         the ``dust`` argument) is given.
-    mass_dict : dict[str, ElementProps]
-        The element table (:func:`~jaff.core.chemistry.element_table`) the
-        species and elements are built from; shared by every network.
     spec : NetworkSpec
         Facts about the source files (not settings): the resolved ``fname``,
         the ``.jfunc`` file used (``jfunc_path``).
@@ -421,11 +416,6 @@ class Network:
     def filename(self) -> Path:
         """Absolute path to the source network file (from :attr:`spec`)."""
         return self.spec.fname
-
-    @property
-    def mass_dict(self) -> dict[str, ElementProps]:
-        """The element table (:func:`~jaff.core.chemistry.element_table`)."""
-        return element_table()
 
     @property
     def label(self) -> str:

@@ -40,8 +40,6 @@ class TestNetworkInitialization:
         assert network.label == "sample_kida"
         assert isinstance(network.species, Species)
         assert isinstance(network.reactions, Reactions)
-        assert isinstance(network.mass_dict, dict)
-
         # Check that some reactions were loaded
         assert len(network.reactions) > 0
         assert len(network.species) > 0
@@ -98,16 +96,6 @@ class TestNetworkInitialization:
                                 network = Network(test_path)
 
         assert network.label == "network_file"
-
-    def test_mass_dict_loading(self, fixtures_dir):
-        """Test mass dictionary loading"""
-        fpath = os.path.join(fixtures_dir, "empty_network.dat")
-        net = Network(fpath)
-
-        assert net.mass_dict["H"]["mass"] == pytest.approx(1.673773e-24)
-        assert net.mass_dict["He"]["mass"] == pytest.approx(6.646473e-24)
-        assert net.mass_dict["C"]["mass"] == pytest.approx(1.994473e-23)
-        assert net.mass_dict["O"]["mass"] == pytest.approx(2.656763e-23)
 
     def test_errors_parameter_true(self):
         """Test initialization with errors=True parameter."""
@@ -170,8 +158,6 @@ class TestNetworkInitialization:
         # Check data structure types and initial states
         assert isinstance(network.species, Species)
         assert isinstance(network.reactions, Reactions)
-        assert isinstance(network.mass_dict, dict)
-
         # Check that reactant_matrix and product_matrix are generated
         assert network.reactant_matrix is not None
         assert network.product_matrix is not None
