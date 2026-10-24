@@ -437,7 +437,7 @@ class TestOdeJacobianWithInternalEnergy:
         )
 
     def test_rhs_and_jacobian(self, dedt_codegen):
-        rhs = _rhs_terms(dedt_codegen.get_rhs_str(use_cse=False))
+        rhs = _rhs_terms(dedt_codegen.get_rhs_str(use_cse=False, thermal="dedt"))
         jac = _rhs_terms(dedt_codegen.get_jacobian_str(use_cse=False, thermal="dedt"))
         assert rhs == [
             "-std::pow(nden[0], 2)*nden[1]",
@@ -513,6 +513,13 @@ class TestThermalModes:
         dedt_row = [e for (i, _), e in jacs["dedt"]["expressions"] if i == n]
         dtdt_row = [e for (i, _), e in jacs["dtdt"]["expressions"] if i == n]
         assert dedt_row != dtdt_row
+
+    def test_rhs_and_jacobian_share_default(self, dedt_codegen) -> None:
+        n = dedt_codegen.net.species.count
+        rhs = dedt_codegen.get_indexed_rhs(use_cse=False)
+        jac = dedt_codegen.get_indexed_jacobian(use_cse=False)
+        assert len(rhs["expressions"]) == n
+        assert max(max(idx) for idx, _ in jac["expressions"]) < n
 
     def test_invalid_thermal_raises(self, dedt_codegen) -> None:
         with pytest.raises(ValueError, match="thermal"):

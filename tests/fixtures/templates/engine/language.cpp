@@ -44,6 +44,7 @@ void rhs(double *f, const double *nden, double tgas) {
             "nden\[(\d+)\]" -> "state.xn[\1]"
             "tgas" -> "state.T"
         }
+        THERMAL { MODE -> dedt }
     }
     const amrex::Real cse$idx$ = $cse$;
     ydot($idx+1$) = $rhs$;

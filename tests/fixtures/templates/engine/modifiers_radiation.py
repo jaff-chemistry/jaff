@@ -10,15 +10,15 @@ r$idx$ = $cse$
 drad[$idx$] = $radode$
 $$JAFF END
 
-$$JAFF REPEAT idx, rhs IN rhses { RADIATION { ENABLED -> True } }
+$$JAFF REPEAT idx, rhs IN rhses { RADIATION { ENABLED -> True }  THERMAL { MODE -> dedt } }
 f_rad[$idx$] = $rhs$
 $$JAFF END
 
-$$JAFF REPEAT idx, rhs IN rhses { RADIATION { ENABLED -> FALSE } }
+$$JAFF REPEAT idx, rhs IN rhses { RADIATION { ENABLED -> FALSE }  THERMAL { MODE -> dedt } }
 f_norad[$idx$] = $rhs$
 $$JAFF END
 
-$$JAFF REPEAT idx, rhs IN rhses { RADIATION { ENABLED -> true  ORDER -> 1 } }
+$$JAFF REPEAT idx, rhs IN rhses { RADIATION { ENABLED -> true  ORDER -> 1 }  THERMAL { MODE -> dedt } }
 f_rad1[$idx$] = $rhs$
 $$JAFF END
 

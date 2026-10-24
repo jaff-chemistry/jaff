@@ -43,6 +43,7 @@ void rhs(double *f, const double *nden, double tgas) {
             // "nden\[(\d+)\]" -> "state.xn[\1]"
             // "tgas" -> "state.T"
         // }
+        // THERMAL { MODE -> dedt }
     // }
     const amrex::Real cse0 = std::pow(state.xn[0], 2)*state.xn[1];
     const amrex::Real cse1 = -cse0;

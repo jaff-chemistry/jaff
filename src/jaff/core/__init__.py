@@ -5,7 +5,9 @@
 ``jaff.core`` contains the classes for loading, parsing and representing
 astrochemical reaction networks:
 
-- :class:`Network` loads and manages a reaction network from file.
+- :class:`Network` loads and manages a reaction network from file;
+  :class:`OdeSystem` (``net.ode_system(...)``) is the state vector and rhs a
+  solver integrates.
 - :class:`Species` / :class:`Specie` hold the network's species, each with
   mass, charge and other attributes and helper methods.
 - :class:`Reactions` / :class:`Reaction` hold the network's reactions, each
@@ -39,7 +41,7 @@ Elements can also be built directly from a list of species names:
 
 from . import elements, network, reaction, species
 from .elements import Element, Elements
-from .network import Network, NetworkSpec, NetworkSymbols
+from .network import Network, NetworkSpec, NetworkSymbols, OdeSystem, StateVariable
 from .reaction import (
     PhotoReaction,
     ReactionRadiation,
@@ -62,6 +64,8 @@ __all__ = [
     "Specie",
     "Species",
     "NetworkSymbols",
+    "OdeSystem",
+    "StateVariable",
     "PhotoReaction",
     "ReactionRadiation",
 ]

@@ -44,6 +44,7 @@ void rhs(double *f, const double *nden, double tgas) {
             // "nden\[(\d+)\]" -> "state.xn[\1]"
             // "tgas" -> "state.T"
         // }
+        // THERMAL { MODE -> dedt }
     // }
     const amrex::Real cse0 = state.xn[1]*state.xn[2];
     const amrex::Real cse1 = 1.6594178159829075e-10*cse0*std::pow(state.T, -0.69999999999999996) - 5.0572844545056314e-8*state.xn[0]*photden[0];
@@ -51,7 +52,7 @@ void rhs(double *f, const double *nden, double tgas) {
     ydot(1) = cse1;
     ydot(2) = cse2;
     ydot(3) = cse2;
-    ydot(4) = -2.2910735482189851e-26*cse0*std::pow(state.T, 0.30000000000000004)*(0.68400000000000005 - 0.041599999999999998*std::log(0.0001*state.T)) + 3.2366620508836041e-19*state.xn[0]*photden[0];
+    ydot(4) = -2.2910735482189854e-26*cse0*std::pow(state.T, 0.30000000000000004)*(0.68400000000000005 - 0.041599999999999998*std::log(0.0001*state.T)) + 3.2366620508836041e-19*state.xn[0]*photden[0];
     // $$JAFF END
 }
 

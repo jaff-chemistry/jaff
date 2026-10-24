@@ -224,11 +224,11 @@ def test_render_error_becomes_a_parser_error(net, tmp_path, monkeypatch):
 def test_failure_inside_codegen_is_a_parser_error_at_the_directive(net, tmp_path):
     text = "x\n$$JAFF REPEAT idx, rhs IN rhses { RADIATION { ENABLED -> True } }\n"
     text += "f[$idx$] = $rhs$\n$$JAFF END\n"
-    with pytest.raises(ParserError, match="REPEAT failed: RuntimeError") as err:
+    with pytest.raises(ParserError, match="REPEAT failed: ValueError") as err:
         render(net, tmp_path, text)
 
     assert err.value.nline == 2
-    assert isinstance(err.value.__cause__, RuntimeError)
+    assert isinstance(err.value.__cause__, ValueError)
 
 
 def test_arithmetic_error_is_a_parser_error(net, tmp_path):

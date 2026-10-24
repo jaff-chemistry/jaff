@@ -26,14 +26,14 @@ f_dtdt[2] = nden[0]**2*nden[1]
 f_dtdt[3] = (2.0709734999999e-16*tgas*nden[0]**2*nden[1] + nden[0]**3*nden[1])/(2.0709734999999e-16*nden[0] + 2.0709734999999e-16*nden[1] + 2.0709734999999e-16*nden[2])
 # $$JAFF END
 
-# $$JAFF REPEAT idx, rhs IN rhses { THERMAL { ENERGY -> specific } }
+# $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt  ENERGY -> specific } }
 f_specific[0] = -nden[0]**2*nden[1]
 f_specific[1] = -nden[0]**2*nden[1]
 f_specific[2] = nden[0]**2*nden[1]
 f_specific[3] = -2.44367099999988e-24*tgas*(1.380649e-16*nden[0] + 1.380649e-16*nden[1] + 1.380649e-16*nden[2])*nden[0]**2*nden[1]/(1.673773e-24*nden[0] + 3.343586e-24*nden[1] + 6.646473e-24*nden[2])**2 + nden[0]**3*nden[1]/(1.673773e-24*nden[0] + 3.343586e-24*nden[1] + 6.646473e-24*nden[2])
 # $$JAFF END
 
-# $$JAFF REPEAT idx, rhs IN rhses { THERMAL { ENERGY -> per_particle } }
+# $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt  ENERGY -> per_particle } }
 f_per_particle[0] = -nden[0]**2*nden[1]
 f_per_particle[1] = -nden[0]**2*nden[1]
 f_per_particle[2] = nden[0]**2*nden[1]

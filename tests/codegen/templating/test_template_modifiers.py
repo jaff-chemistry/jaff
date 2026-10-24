@@ -62,9 +62,9 @@ def test_radiation_true_still_requires_radiation(
     dedt_net: Network, tmp_path: Path, spelling: str
 ) -> None:
     repeat, body = BOOL_CASES["RADIATION ENABLED"]
-    with pytest.raises(ParserError, match="No radiation bands") as err:
+    with pytest.raises(ParserError, match="no radiation field") as err:
         _render(dedt_net, tmp_path, repeat, body, _option("RADIATION ENABLED", spelling))
-    assert isinstance(err.value.__cause__, RuntimeError)
+    assert isinstance(err.value.__cause__, ValueError)
 
 
 @pytest.mark.parametrize("value", ["1", "0", "yes", "None", "'True'"])
@@ -79,12 +79,18 @@ def test_non_boolean_values_rejected(
 
 def test_dedt_type_selects_energy_form(dedt_net: Network, tmp_path: Path) -> None:
     repeat, body = "idx, rhs IN rhses", "f[$idx$] = $rhs$"
-    default = _render(dedt_net, tmp_path, repeat, body, "")
-    specific = _render(dedt_net, tmp_path, repeat, body, "THERMAL { ENERGY -> specific }")
-    per_particle = _render(
-        dedt_net, tmp_path, repeat, body, "THERMAL { ENERGY -> per_particle }"
+    default = _render(dedt_net, tmp_path, repeat, body, "THERMAL { MODE -> dedt }")
+    specific = _render(
+        dedt_net, tmp_path, repeat, body, "THERMAL { MODE -> dedt  ENERGY -> specific }"
     )
-    volumetric = "THERMAL { ENERGY -> volumetric }"
+    per_particle = _render(
+        dedt_net,
+        tmp_path,
+        repeat,
+        body,
+        "THERMAL { MODE -> dedt  ENERGY -> per_particle }",
+    )
+    volumetric = "THERMAL { MODE -> dedt  ENERGY -> volumetric }"
     assert _render(dedt_net, tmp_path, repeat, body, volumetric) == default
     assert specific != default
     assert per_particle != specific

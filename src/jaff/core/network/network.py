@@ -64,6 +64,7 @@ from ._functions import NetworkFunctions
 from ._spec import NetworkSpec
 from ._symbols import NetworkSymbols
 from .config import NetworkConfig, NetworkConfigSource, load_network_config
+from .ode_system import OdeSystem
 
 if TYPE_CHECKING:
     from ..parsers.network._formats import Parser
@@ -471,6 +472,7 @@ class Network:
             for name in row.reactants + row.products:
                 if name in seen:
                     continue
+
                 seen.add(name)
                 if name.startswith("_"):
                     special_species[name] = Specie(name, -1)
@@ -1000,6 +1002,46 @@ class Network:
         True
         """
         return list(self.reactions.rates())
+
+    def ode_system(
+        self,
+        thermal: str = "none",
+        energy: str = "volumetric",
+        radiation: bool = False,
+        rad_order: int = 0,
+    ) -> OdeSystem:
+        """The ODE system a generated solver integrates, for the chosen equations.
+
+        A new :class:`OdeSystem` per call; it caches its own rhs.
+
+        Parameters
+        ----------
+        thermal : str, optional
+            Thermal equation: ``"none"`` (default), ``"dedt"`` or ``"dtdt"``.
+        energy : str, optional
+            Form of the evolved internal energy with ``"dedt"``.  Default
+            ``"volumetric"``.
+        radiation : bool, optional
+            Include the radiation-moment equations.  Default ``False``.
+        rad_order : int, optional
+            Layout of the radiation equations, ``0`` (default) to ``3``.
+
+        Returns
+        -------
+        OdeSystem
+
+        Raises
+        ------
+        ValueError
+            If a choice is invalid (see :class:`OdeSystem`).
+
+        Examples
+        --------
+        >>> net = Network("h_photoionization")
+        >>> net.ode_system(thermal="dedt").rhs.shape
+        (4, 1)
+        """
+        return OdeSystem(self, thermal, energy, radiation, rad_order)
 
     def sodes(self) -> list[Basic]:
         """Return symbolic ODE right-hand sides for all species.

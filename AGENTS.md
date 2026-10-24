@@ -304,6 +304,8 @@ docs/           # Documentation
 ## Key Modules
 
 - `core/network/network.py`: `Network`, loading/managing a chemical network
+- `core/network/ode_system.py`: `OdeSystem` (`net.ode_system(...)`), the state vector and
+  rhs a solver integrates; `Codegen` prints it rather than assembling equations
 - `core/reaction/`, `core/species/`, `core/elements/`: reactions, species, elements
 - `core/parsers/`: network file formats and `.jfunc` auxiliary functions
 - `physics/`: radiation and photo-reactions, dust, thermodynamics/EOS, constants

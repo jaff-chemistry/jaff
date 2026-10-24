@@ -68,7 +68,7 @@ def odes_cse():
 
 
 def rhs():
-    # $$JAFF REPEAT idx, rhs IN rhses
+    # $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt } }
     f[0] = 4.1207223003989e-10*tgas**(-0.8)*nden[1]*nden[2] - 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]*nden[1]
     f[1] = -4.1207223003989e-10*tgas**(-0.8)*nden[1]*nden[2] + 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]*nden[1] - nden[1]*nden[3]**2
     f[2] = -4.1207223003989e-10*tgas**(-0.8)*nden[1]*nden[2] + 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]*nden[1]
@@ -84,6 +84,7 @@ def rhs_cse_replace():
             # "nden\[(\d+)\]" -> "y[\1]"
             # "tgas" -> "T"
         # }
+        # THERMAL { MODE -> dedt }
     # }
     x0 = 4.1207223003989e-10*T**(-0.8)*y[1]*y[2] - 5.85e-11*math.sqrt(T)*math.exp(-157809.1/T)*y[0]*y[1]
     x1 = y[1]*y[3]**2

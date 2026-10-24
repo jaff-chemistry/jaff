@@ -122,8 +122,6 @@ class Codegen:
     flux(2) = k(2) * y(idx_hj) * y(idx_e)
     """
 
-    _THERMAL_MODES = ("none", "dedt", "dtdt")
-
     def __init__(
         self,
         network: Network,
@@ -814,32 +812,6 @@ class Codegen:
         expr = self.net.thermodynamics.dTdt_tot
         return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
 
-    def _thermal_rows(self, thermal: str, energy: str) -> list[sp.Expr]:
-        """Thermal ODE row for *thermal* (``none`` → no row).
-
-        ``dedt`` → total dE/dt in the *energy* form (see
-        :attr:`Thermodynamics.dEdt_tot` and :meth:`InternalEnergy.normaliser`);
-        ``dtdt`` → total dT/dt (:attr:`Thermodynamics.dTdt_tot`).
-
-        Raises
-        ------
-        ValueError
-            If *thermal* is not ``none``, ``dedt`` or ``dtdt``.
-        """
-        if thermal not in self._THERMAL_MODES:
-            raise ValueError(
-                f"Invalid thermal mode {thermal!r}; "
-                f"valid modes are: {', '.join(self._THERMAL_MODES)}"
-            )
-
-        thermo = self.net.thermodynamics
-        if thermal == "dedt":
-            return [thermo.dEdt_tot.normaliser(energy)]
-        if thermal == "dtdt":
-            return [thermo.dTdt_tot]
-
-        return []
-
     def _energy_column(
         self,
         jacobian_matrix: sp.Matrix,
@@ -1076,7 +1048,7 @@ class Codegen:
         self,
         use_cse: bool = True,
         cse_var: str = "cse",
-        thermal: str = "dedt",
+        thermal: str = "none",
         energy: str = "volumetric",
         radiation: bool = False,
         rad_order: int = 0,
@@ -1107,7 +1079,7 @@ class Codegen:
         thermal : str, optional
             Thermal equation mode: ``"none"``, ``"dedt"`` (total dE/dt, see
             :meth:`get_dedt`) or ``"dtdt"`` (total dT/dt, see
-            :meth:`get_dtdt`).  Default ``"dedt"``.
+            :meth:`get_dtdt`).  Default ``"none"``.
         energy : str, optional
             Evolved internal-energy form when *thermal* is ``"dedt"``:
             ``"volumetric"``, ``"specific"``, ``"per_particle"`` or
@@ -1141,7 +1113,7 @@ class Codegen:
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
         >>> net = Network("h_photoionization", radiation=bands)
         >>> cg = Codegen(net, lang="cxx")
-        >>> len(cg.get_indexed_rhs()["expressions"])  # 3 species + dE/dt
+        >>> len(cg.get_indexed_rhs(thermal="dedt")["expressions"])  # 3 species + dE/dt
         4
         >>> rhs = cg.get_indexed_rhs(thermal="none", radiation=True)
         >>> len(rhs["expressions"])  # 3 species + 3 bands x (density, flux)
@@ -1152,23 +1124,8 @@ class Codegen:
                 "extras": {"cse": IndexedList()},
                 "expressions": IndexedList(),
             }
-
-            # Substitute symbolic rate placeholders with concrete expressions
-            subs_k = {
-                sp.symbols(f"k[{i}]"): rea.rate_coefficient
-                for i, rea in enumerate(self.net.reactions)
-            }
-
-            # Start with species density ODEs; inline rate expressions
-            rhs_symbols = self.net.sodes()
-            rhs_symbols = [sode.xreplace(subs_k) for sode in rhs_symbols]
-            # Append thermal row (per *thermal*) and (optionally) radiation ODEs
-            rhs_symbols.extend(
-                [
-                    *self._thermal_rows(thermal, energy),
-                    *(self.net.sradodes(rad_order) if radiation else []),
-                ]
-            )
+            system = self.net.ode_system(thermal, energy, radiation, rad_order)
+            rhs_symbols = system.rhs.flat()
 
         if use_cse:
             with jaff_progress.indeterminate("Generating cse expressions"):
@@ -1206,7 +1163,7 @@ class Codegen:
         def_prefix: str = "",
         assignment_op: str = "",
         line_end: str = "",
-        thermal: str = "dedt",
+        thermal: str = "none",
         energy: str = "volumetric",
         radiation: bool = False,
         rad_order: int = 0,
@@ -1249,7 +1206,7 @@ class Codegen:
         thermal : str, optional
             Thermal equation mode: ``"none"``, ``"dedt"`` (total dE/dt, see
             :meth:`get_dedt`) or ``"dtdt"`` (total dT/dt, see
-            :meth:`get_dtdt`).  Default ``"dedt"``.
+            :meth:`get_dtdt`).  Default ``"none"``.
         energy : str, optional
             Evolved internal-energy form when *thermal* is ``"dedt"``:
             ``"volumetric"``, ``"specific"``, ``"per_particle"`` or
@@ -1280,7 +1237,7 @@ class Codegen:
         >>> from jaff.codegen import Codegen
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
         >>> net = Network("h_photoionization", radiation=bands)
-        >>> print(Codegen(net, lang="cxx").get_rhs_str(), end="")
+        >>> print(Codegen(net, lang="cxx").get_rhs_str(thermal="dedt"), end="")
         const double cse0 = nden[1]*nden[2];
         const double cse1 = 5.8515408231992116e-8*photden[1] + ...*photden[2];
         const double cse2 = 1.6594178159829075e-10*cse0*... - cse1*nden[0];
@@ -1624,9 +1581,7 @@ class Codegen:
         """
 
         with jaff_progress.indeterminate("Preprocessing jacobian"):
-            if radiation and rad_order not in [0, 1, 2, 3]:
-                raise ValueError("Invalid order: Supported orders are 0, 1, 2, 3")
-
+            system = self.net.ode_system(thermal, energy, radiation, rad_order)
             ir: IndexedReturn = {
                 "extras": {"cse": IndexedList()},
                 "expressions": IndexedList(),
@@ -1635,7 +1590,11 @@ class Codegen:
             n_rad_eqns = (
                 2 * self.net.radiation.nbands if radiation and self.net.radiation else 0
             )
-            thermal_rows = self._thermal_rows(thermal, energy)
+            thermal_rows = [
+                row
+                for var, row in zip(system.state, system.rhs.flat())
+                if var.kind in ("energy", "temperature")
+            ]
             n_ode_eqns = n_species + len(thermal_rows) + n_rad_eqns
 
             # Scalar differentiation symbols for each state variable: the

@@ -47,7 +47,7 @@ contains
   subroutine rhs(f, nden, tgas)
     real(8), intent(out) :: f(:)
     real(8), intent(in) :: nden(nspec), tgas
-    ! $$JAFF REPEAT idx, rhs, cse IN rhses
+    ! $$JAFF REPEAT idx, rhs, cse IN rhses { THERMAL { MODE -> dedt } }
     cse0 = nden(1)*nden(2)
     cse1 = 1.65941781598291d-10*cse0*tgas**(-0.7d0) - 5.05728445450563d-8*nden(0)* photden(0)
     cse2 = -cse1

@@ -80,7 +80,7 @@ field is therefore an energy density in erg/cm³.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, ClassVar, List
 
 import numpy as np
 import sympy as sp
@@ -413,6 +413,9 @@ class Radiation:
     2.931570981481379
     """
 
+    ORDERS: ClassVar[tuple[int, ...]] = (0, 1, 2, 3)
+    """The layouts of the radiation equations (see :meth:`ordered_index`)."""
+
     def __init__(
         self,
         network: Network,
@@ -700,7 +703,7 @@ class Radiation:
         >>> net.radiation.odes()  # [den_0, flux_0, den_1, flux_1, den_2, flux_2]
         [0, 0, -5.85154082319921e-8*nden[0]*photden[1], -5.85154082319921e-8*nden[0]*rflux[1], -1.1420465158197e-10*nden[0]*photden[2], -1.1420465158197e-10*nden[0]*rflux[2]]
         """
-        if order not in [0, 1, 2, 3]:
+        if order not in self.ORDERS:
             raise ValueError("Invalid order: Supported orders are 0, 1, 2, 3")
 
         # Obtain the flux-moment equation from the density-moment equation:

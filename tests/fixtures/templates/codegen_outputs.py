@@ -69,7 +69,7 @@ def dedt():
 
 def rhs_volumetric():
     out = {}
-    $$JAFF REPEAT idx, rhs, cse IN rhses { RADIATION { ENABLED -> True } }
+    $$JAFF REPEAT idx, rhs, cse IN rhses { RADIATION { ENABLED -> True }  THERMAL { MODE -> dedt } }
     cse$idx$ = $cse$
     out[$idx$] = $rhs$
     $$JAFF END
@@ -80,7 +80,7 @@ def rhs_specific_mass():
     out = {}
     $$JAFF REPEAT idx, rhs, cse IN rhses {
         RADIATION { ENABLED -> True }
-        THERMAL { ENERGY -> specific }
+        THERMAL { MODE -> dedt  ENERGY -> specific }
     }
     cse$idx$ = $cse$
     out[$idx$] = $rhs$
@@ -92,7 +92,7 @@ def rhs_specific_number():
     out = {}
     $$JAFF REPEAT idx, rhs, cse IN rhses {
         RADIATION { ENABLED -> True }
-        THERMAL { ENERGY -> per_particle }
+        THERMAL { MODE -> dedt  ENERGY -> per_particle }
     }
     cse$idx$ = $cse$
     out[$idx$] = $rhs$

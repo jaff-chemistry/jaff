@@ -18,11 +18,11 @@ $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dtdt } }
 f_dtdt[$idx$] = $rhs$
 $$JAFF END
 
-$$JAFF REPEAT idx, rhs IN rhses { THERMAL { ENERGY -> specific } }
+$$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt  ENERGY -> specific } }
 f_specific[$idx$] = $rhs$
 $$JAFF END
 
-$$JAFF REPEAT idx, rhs IN rhses { THERMAL { ENERGY -> per_particle } }
+$$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt  ENERGY -> per_particle } }
 f_per_particle[$idx$] = $rhs$
 $$JAFF END
 

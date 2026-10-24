@@ -1,5 +1,5 @@
-# ABOUTME: Network package: Network, NetworkFunctions, NetworkSpec, NetworkSymbols, reports
-# ABOUTME: Re-exports the public network classes
+# ABOUTME: Network package: Network, NetworkFunctions, NetworkSpec, NetworkSymbols,
+# ABOUTME: OdeSystem, reports
 
 from ._functions import NetworkFunctions
 from ._spec import NetworkSpec
@@ -11,6 +11,7 @@ from .network import (
     RecombinationReport,
     SinkSourceReport,
 )
+from .ode_system import OdeSystem, StateVariable
 
 __all__ = [
     "ConservationReport",
@@ -18,7 +19,9 @@ __all__ = [
     "Network",
     "NetworkFunctions",
     "NetworkSpec",
+    "OdeSystem",
     "RecombinationReport",
     "SinkSourceReport",
     "NetworkSymbols",
+    "StateVariable",
 ]

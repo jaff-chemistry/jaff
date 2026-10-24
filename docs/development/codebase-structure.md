@@ -17,7 +17,8 @@ src/jaff/
 │   │   ├── _functions.py       # NetworkFunctions — the .jfunc functions (net.functions)
 │   │   ├── _spec.py            # NetworkSpec — source-file paths (net.spec)
 │   │   ├── _symbols.py         # NetworkSymbols — fixed physics symbols, densities (net.symbols)
-│   │   └── config.py           # NetworkConfig ([network]), JaffTomlConfig, load_network_config
+│   │   ├── config.py           # NetworkConfig ([network]), JaffTomlConfig, load_network_config
+│   │   └── ode_system.py       # OdeSystem, StateVariable — state vector + rhs (net.ode_system())
 │   ├── reaction/               # reaction.py (Reaction) · reactions.py (Reactions)
 │   │   ├── photo_reaction.py   # PhotoReaction — a photo reaction's component (rxn.photo)
 │   │   ├── reaction_radiation.py # ReactionRadiation — every reaction's radiation component (rxn.rad)
@@ -275,7 +276,7 @@ used by the solver plugins.
 | 4    | `core/network/network.py`                    | Build `Species`, `Reactions`, `Elements` catalogues; validate duplicates, sinks, isomers           |
 | 5    | `cli/jaffgen/_config_table.py`, `Network`    | Write any `[[jaffgen.table]]` data tables and the network's shielding tables to the output directory |
 | 6    | `codegen/templating/`                        | `TemplateParser` renders each template file, expanding its `$$JAFF` directives                     |
-| 7    | `codegen/codegen.py`                         | Directives call `Codegen`, which takes the symbolic fluxes/ODEs (`sfluxes`, `sodes`, `sradodes`; built by `Reactions.rates` / `Reactions.odes` / `Radiation.odes`) from the network and prints them for the file's language |
+| 7    | `codegen/codegen.py`                         | Directives call `Codegen`, which takes the symbolic fluxes/ODEs (`sfluxes`, `sodes`, `sradodes`; built by `Reactions.rates` / `Reactions.odes` / `Radiation.odes`) and the ODE system (`net.ode_system(...)`: state + rhs) from the network and prints them for the file's language |
 | 8    | `cli/jaffgen/_engine.py`                     | Write each rendered file, then the merged config as `config.toml`, to the output directory          |
 
 ## Key Design Decisions

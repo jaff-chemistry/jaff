@@ -267,6 +267,34 @@ A flux is just the reaction rate times its reactant densities; the species ODEs
 are signed sums of these. See [`sfluxes`](../../reference/core/network/sfluxes.md) and
 [`sradodes`](../../reference/core/network/sradodes.md) for details.
 
+### The ODE system
+
+`Network.ode_system(...)` gathers the equations a generated solver integrates
+into one [`OdeSystem`](../../reference/core/odesystem/index.md): the
+state vector and its time derivative. You choose the thermal equation
+(`thermal="none"` (default), `"dedt"` for the internal energy in the `energy` form,
+or `"dtdt"` for the temperature) and whether to add the radiation moments
+(`radiation=True`, laid out by `rad_order`):
+
+```python
+system = net.ode_system(thermal="dtdt", radiation=True)
+for var in system.state:
+    print(var.kind, var.symbol, var.index)
+
+# species nden[0] 0
+# species nden[1] 1
+# species nden[2] 2
+# temperature tgas 0
+# radiation_density photden[0] 0
+# radiation_flux rflux[0] 0
+
+system.rhs.shape    # (6, 1): one row per state entry, in the same order
+```
+
+The species rows come from the reactions, the thermal row from
+`net.thermodynamics` and the radiation rows from `net.radiation`; `Codegen`'s
+`rhses` prints `system.rhs`.
+
 ---
 
 ## Temperature cutoffs

@@ -46,6 +46,7 @@ def main(
 
     ode = cg.get_rhs_str(
         idx_offset=1,
+        thermal="dedt",
         use_cse=True,
         def_prefix="const amrex::Real ",
         brac_format="()",

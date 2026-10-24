@@ -50,7 +50,7 @@ def odes_cse():
 
 
 def rhs():
-    $$JAFF REPEAT idx, rhs IN rhses
+    $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt } }
     f[$idx$] = $rhs$
     $$JAFF END
 
@@ -61,6 +61,7 @@ def rhs_cse_replace():
             "nden\[(\d+)\]" -> "y[\1]"
             "tgas" -> "T"
         }
+        THERMAL { MODE -> dedt }
     }
     x$idx$ = $cse$
     f[$idx+1$] = $rhs$
