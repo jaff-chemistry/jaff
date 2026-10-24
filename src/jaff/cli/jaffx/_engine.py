@@ -44,6 +44,7 @@ import typer
 
 from ... import Network
 from ...common import print_motd
+from ...errors import ParserError
 from ...io import JaffLogger
 from .._helper import (
     NETWORK_KEYS,
@@ -71,12 +72,20 @@ class JaffX:
 
         Any argument left at its CLI default (``None``) is not given, so the
         network's ``jaff.toml`` (or the config default) applies.
+
+        Raises
+        ------
+        ParserError
+            If a ``--set`` key is outside ``[network]``.
         """
-        return Network(
-            args.network,
-            config=command_line_layer(args, NETWORK_KEYS),
-            _from_cli=True,
-        )
+        layer = command_line_layer(args, NETWORK_KEYS)
+        unknown = sorted(set(layer) - {"network"})
+        if unknown:
+            raise ParserError(
+                f"jaffx only takes [network] keys; got {', '.join(unknown)}"
+            )
+
+        return Network(args.network, config=layer.get("network", {}), _from_cli=True)
 
     def export_table(self, args: SimpleNamespace, fmt: str) -> None:
         """Handle ``jaffx export hdf5`` / ``export txt``.

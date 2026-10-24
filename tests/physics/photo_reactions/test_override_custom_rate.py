@@ -31,8 +31,8 @@ def custom_network(make_network, tmp_path):
 
 
 def _global_photo(**photo):
-    """Config layer setting the global photo settings ([network.reactions.photo])."""
-    return {"network": {"reactions": {"photo": photo}}}
+    """``[network]`` keys setting the global photo settings ([network.reactions.photo])."""
+    return {"reactions": {"photo": photo}}
 
 
 class TestGlobalFlag:
@@ -81,8 +81,8 @@ class TestPerReaction:
             f'[network.reactions.reaction."{KEY}".photo]\noverride_custom_rate = false\n'
         )
         own = {"photo": {"override_custom_rate": True}}
-        jaffgen = {"network": {"reactions": {"reaction": {KEY: own}}}}
-        rxn = _photo(custom_network(config=[str(cfg), jaffgen]))
+        jaffgen = {"reactions": {"reaction": {KEY: own}}}
+        rxn = _photo(custom_network(config=str(cfg), **jaffgen))
 
         assert rxn.config.photo.override_custom_rate is True
 

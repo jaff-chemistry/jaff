@@ -128,11 +128,9 @@ class TestPerReactionPolicy:
 
     def test_per_reaction_policy_applies(self):
         config = {
-            "network": {
-                "reactions": {
-                    "duplicate_policy": "error",
-                    "reaction": {DUP_RXN: {"duplicate_policy": "preserve-last"}},
-                }
+            "reactions": {
+                "duplicate_policy": "error",
+                "reaction": {DUP_RXN: {"duplicate_policy": "preserve-last"}},
             }
         }
 

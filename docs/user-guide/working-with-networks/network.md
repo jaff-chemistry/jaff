@@ -60,13 +60,12 @@ Network(
     radiation=None,
     dust=None,
     thermodynamics=None,
-    use_jaff_toml=True,
 )
 ```
 
 Settings come from the network's [configuration](../configuration/index.md):
-the `jaff.toml` next to the network file, then the `config` layers, then the
-keyword arguments. The keyword arguments are the keys of the
+the `jaff.toml` next to the network file (the network's own defaults), then
+`config`, then the keyword arguments. The keyword arguments are the keys of the
 [`[network]`](../configuration/reference.md#network) table, named and nested
 exactly as in the file: a table (`reactions`, `radiation`, `dust`,
 `thermodynamics`) is a `dict` or its config model. Every keyword argument
@@ -77,7 +76,7 @@ replaces it whole). The validated result is `net.config`.
 | Parameter                 | Type                                 | Description                                                                                                                         |
 | ------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `fname`                   | `str or Path`                        | Path to the network file (required), or a predefined network name; `.jaff` files cannot be loaded at the moment                     |
-| `config`                  | path, `dict`, `JaffTomlConfig`, or a list of them | Config layers over the network's `jaff.toml`; a `dict` is shaped like a `jaff.toml` (`{"network": {...}}`)            |
+| `config`                  | path, `dict` or `NetworkConfig`      | Merged over the network's `jaff.toml`: a TOML file (its `[network]` table), a `dict` of the `[network]` keys, or a `NetworkConfig` |
 | `strict`                  | `bool`                               | Treat validation problems (conservation, sinks/sources, ...) as fatal (`network.strict`; default `False`)                          |
 | `label`                   | `str`                                | Human-readable network name (`network.label`; default the file stem)                                                               |
 | `funcfile`                | `bool or str or Path`                | `.jfunc` auxiliary file; `True` scans the network dir, `False` skips loading (`network.funcfile`; default `True`)                  |
@@ -86,7 +85,6 @@ replaces it whole). The validated result is `net.config`.
 | `radiation`               | `RadiationConfig` or `dict`          | [`[network.radiation]`](../configuration/reference.md#networkradiation); enables radiation transport and photochemistry           |
 | `dust`                    | `DustConfig` or `dict`               | [`[network.dust]`](../configuration/reference.md#networkdust); enables the dust module                                               |
 | `thermodynamics`          | `ThermodynamicsConfig` or `dict`     | [`[network.thermodynamics]`](../configuration/reference.md#networkthermodynamics), e.g. `{"eos": {"type": "ideal", "gamma": 1.4}}`; an `eos` replaces a configured EOS whole |
-| `use_jaff_toml`           | `bool`                               | Stack the `jaff.toml` next to the network file under the `config` layers (default `True`)                                          |
 
 ### Examples
 
@@ -114,10 +112,11 @@ net = Network(
     thermodynamics={"eos": {"type": "ideal", "gamma": 1.4}},
 )
 
-# Config layers: a file, then a dict
+# A config file merged over the network's jaff.toml, then a keyword override
 net = Network(
     "networks/GOW/GOW.jet",
-    config=["tuned.toml", {"network": {"reactions": {"t_cutoff": "clip"}}}],
+    config="tuned.toml",
+    reactions={"t_cutoff": "clip"},
 )
 
 # With radiation bands (needed for photochemistry during code generation)

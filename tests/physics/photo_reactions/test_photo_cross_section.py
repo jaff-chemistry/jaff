@@ -115,8 +115,8 @@ class TestCustomCrossSection:
 
 
 def _global_photo(**photo):
-    """Config layer setting the global photo settings ([network.reactions.photo])."""
-    return {"network": {"reactions": {"photo": photo}}}
+    """``[network]`` keys setting the global photo settings ([network.reactions.photo])."""
+    return {"reactions": {"photo": photo}}
 
 
 class TestOverride:
@@ -149,8 +149,9 @@ class TestOverride:
         cfg = _toml(tmp_path, "override_custom_cross_section = false")
         rxn = _photo(
             xsec_network(
-                config=[_global_photo(override_custom_cross_section=True), cfg],
+                config=cfg,
                 radiation=RadiationConfig(bands=BANDS),
+                **_global_photo(override_custom_cross_section=True),
             )
         )
 

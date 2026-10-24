@@ -45,7 +45,6 @@ from ...common import print_motd
 from ...config import TEMPLATES_DIR, predefined_templates
 from ...config.json_schema import SCHEMA_DIR
 from ...config.loader import dump_config
-from ...core.network.config import JaffTomlConfig
 from ...errors import ParserError
 from ...io import JaffLogger, jaff_progress
 from .._helper import DuplicatePolicy, command_line_layer, funcfile_arg, reports_errors
@@ -332,12 +331,7 @@ class JaffGen:
         if network_file is None:
             raise RuntimeError("No network file supplied. Please enter a network file")
 
-        return Network(
-            network_file,
-            config=JaffTomlConfig(network=config.network),
-            use_jaff_toml=False,
-            _from_cli=True,
-        )
+        return Network(network_file, config=config.network, _from_cli=True)
 
     def write_config(self) -> None:
         """Write the run's whole config to ``config.toml`` in the output directory.

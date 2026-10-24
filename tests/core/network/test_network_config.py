@@ -1,5 +1,5 @@
 # ABOUTME: NetworkConfig: [network] keys and sections (reactions, radiation, dust, ...),
-# ABOUTME: and load_network_config (jaff.toml < config layers < overrides)
+# ABOUTME: and load_network_config (defaults < jaff.toml < config < overrides)
 
 from pathlib import Path
 
@@ -110,11 +110,14 @@ class TestLoadNetworkConfig:
 
         assert load_network_config(net).label == "auto"
 
-    def test_use_jaff_toml_false_skips_it(self, network):
+    def test_config_merges_over_jaff_toml(self, network):
         net, write = network
-        write("net/jaff.toml", '[network]\nlabel = "auto"\n')
+        write("net/jaff.toml", '[network]\nlabel = "auto"\nstrict = true\n')
 
-        assert load_network_config(net, use_jaff_toml=False).label is None
+        cfg = load_network_config(net, {"label": "mine"})
+
+        assert cfg.label == "mine"
+        assert cfg.strict is True
 
     def test_config_file_layers_over_jaff_toml(self, network):
         net, write = network
@@ -129,9 +132,7 @@ class TestLoadNetworkConfig:
     def test_dict_layer_paths_resolve_against_cwd(self, network):
         net, _ = network
 
-        cfg = load_network_config(
-            net, {"network": {"funcfile": "aux.jfunc"}}, cwd=net.parent
-        )
+        cfg = load_network_config(net, {"funcfile": "aux.jfunc"}, cwd=net.parent)
 
         assert cfg.funcfile == (net.parent / "aux.jfunc").resolve()
 
@@ -139,50 +140,69 @@ class TestLoadNetworkConfig:
         net, write = network
         write("net/jaff.toml", "[network]\nstrict = true\n")
 
-        cfg = load_network_config(net, JaffTomlConfig(network=NetworkConfig(label="m")))
+        cfg = load_network_config(net, NetworkConfig(label="m"))
 
         assert cfg.label == "m"
         assert cfg.strict is True
 
-    def test_layers_apply_in_order_then_overrides(self, network):
+    def test_overrides_beat_config(self, network):
         net, _ = network
 
         cfg = load_network_config(
-            net,
-            [{"network": {"label": "a", "strict": True}}, {"network": {"label": "b"}}],
-            overrides={"network": {"strict": False}},
+            net, {"label": "a", "strict": True}, overrides={"strict": False}
         )
 
-        assert cfg.label == "b"
+        assert cfg.label == "a"
         assert cfg.strict is False
+
+    def test_overrides_merge_key_by_key(self, network):
+        net, write = network
+        write(
+            "net/jaff.toml",
+            '[network.reactions]\nt_cutoff = "extrapolate"\n'
+            '[network.reactions.photo]\npi_database = "verner"\n',
+        )
+
+        cfg = load_network_config(
+            net, overrides={"reactions": {"duplicate_policy": "error"}}
+        )
+
+        assert cfg.reactions.t_cutoff == "extrapolate"
+        assert cfg.reactions.photo.pi_database == "verner"
+        assert cfg.reactions.duplicate_policy == "error"
+
+    @pytest.mark.parametrize(
+        "config", [[{"label": "a"}], JaffTomlConfig(), ({"label": "a"},)]
+    )
+    def test_only_one_config_source(self, network, config):
+        net, _ = network
+
+        with pytest.raises(TypeError, match="config"):
+            load_network_config(net, config)
 
     def test_model_layer_with_shielding_round_trips(self, network):
         net, _ = network
-        model = JaffTomlConfig.model_validate(
+        model = NetworkConfig.model_validate(
             {
-                "network": {
-                    "reactions": {
-                        "photo": {
-                            "shielding": {"type": "leiden", "shielded_by": ["self"]}
-                        }
-                    }
+                "reactions": {
+                    "photo": {"shielding": {"type": "leiden", "shielded_by": ["self"]}}
                 }
             }
         )
 
         cfg = load_network_config(net, model)
 
-        assert cfg.reactions.photo.shielding == model.network.reactions.photo.shielding
+        assert cfg.reactions.photo.shielding == model.reactions.photo.shielding
 
     def test_invalid_layer_is_parser_error(self, network):
         net, _ = network
 
         with pytest.raises(ParserError, match=r"network\.rates: unknown key"):
-            load_network_config(net, {"network": {"rates": {}}})
+            load_network_config(net, {"rates": {}})
 
 
 class TestNetworkUsesConfig:
-    """Network builds net.config: jaff.toml < config layers < keyword arguments."""
+    """Network builds net.config: defaults < jaff.toml < config < keyword arguments."""
 
     NET = "H + H -> H2 [10,1000] 1e-10\nH2 -> H + H [10,1000] 1e-10\n"
 
@@ -211,13 +231,16 @@ class TestNetworkUsesConfig:
         assert net.config.expand_nuclei is False
         assert net.config.expand_nuclei is False
 
-    def test_use_jaff_toml_false_skips_it(self, make_network, tmp_path):
+    def test_config_dict_merges_over_jaff_toml(self, make_network, tmp_path):
         (tmp_path / "jaff.toml").write_text('[network]\nlabel = "from_toml"\n')
 
-        assert self._net(make_network, use_jaff_toml=False).label == "n"
+        net = self._net(make_network, config={"expand_nuclei": False})
 
-    def test_config_dict_layer(self, make_network):
-        net = self._net(make_network, config={"network": {"label": "from_dict"}})
+        assert net.label == "from_toml"
+        assert net.config.expand_nuclei is False
+
+    def test_config_dict_is_the_network_table(self, make_network):
+        net = self._net(make_network, config={"label": "from_dict"})
 
         assert net.label == "from_dict"
 
@@ -232,11 +255,7 @@ class TestNetworkUsesConfig:
 
     def test_photo_settings_on_non_photo_reaction(self, make_network):
         config = {
-            "network": {
-                "reactions": {
-                    "reaction": {"H.H__H2": {"photo": {"pi_database": "verner"}}}
-                }
-            }
+            "reactions": {"reaction": {"H.H__H2": {"photo": {"pi_database": "verner"}}}}
         }
 
         with pytest.raises(ParserError, match="only valid for photo reactions"):
@@ -244,13 +263,11 @@ class TestNetworkUsesConfig:
 
     def test_settings_for_unknown_reaction_are_reported(self, make_network):
         config = {
-            "network": {
-                "reactions": {
-                    "reaction": {
-                        "H.H__H2": {"t_cutoff": "extrapolate"},
-                        "He.H__HeH": {"t_cutoff": "clip"},
-                        "C.O__CO": {"t_cutoff": "clip"},
-                    }
+            "reactions": {
+                "reaction": {
+                    "H.H__H2": {"t_cutoff": "extrapolate"},
+                    "He.H__HeH": {"t_cutoff": "clip"},
+                    "C.O__CO": {"t_cutoff": "clip"},
                 }
             }
         }
@@ -264,9 +281,7 @@ class TestNetworkUsesConfig:
         assert "H.H__H2" not in message
 
     def test_settings_for_known_reactions_pass(self, make_network):
-        config = {
-            "network": {"reactions": {"reaction": {"H.H__H2": {"t_cutoff": "clip"}}}}
-        }
+        config = {"reactions": {"reaction": {"H.H__H2": {"t_cutoff": "clip"}}}}
 
         assert self._net(make_network, config=config).config.reactions.reaction
 
@@ -297,7 +312,6 @@ class TestNetworkKeywordSections:
             "radiation",
             "dust",
             "thermodynamics",
-            "use_jaff_toml",
             "_from_cli",
         ]
 
@@ -411,9 +425,7 @@ class TestModelLayers:
         from jaff.physics.thermodynamics.eos.config import MultiGammaEosConfig
 
         eos = MultiGammaEosConfig(default_gamma=1.4, gamma_map={"H2": 1.4})
-        layer = JaffTomlConfig(
-            network=NetworkConfig(thermodynamics=ThermodynamicsConfig(eos=eos))
-        )
+        layer = NetworkConfig(thermodynamics=ThermodynamicsConfig(eos=eos))
 
         net = make_network(self.NET, name="n.dat", config=layer)
 
@@ -423,7 +435,7 @@ class TestModelLayers:
         net = make_network(
             self.NET,
             name="n.dat",
-            config={"network": {"reactions": ReactionsConfig(t_cutoff="extrapolate")}},
+            config={"reactions": ReactionsConfig(t_cutoff="extrapolate")},
         )
 
         assert net.config.reactions.t_cutoff == "extrapolate"

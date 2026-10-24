@@ -26,7 +26,7 @@ import sys
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Dict, Mapping
 
 import numpy as np
 from sympy import (
@@ -64,7 +64,7 @@ from ..species import Specie, Species
 from ._functions import NetworkFunctions
 from ._spec import NetworkSpec
 from ._symbols import NetworkSymbols
-from .config import ConfigLayer, NetworkConfig, load_network_config
+from .config import NetworkConfig, NetworkConfigSource, load_network_config
 
 if TYPE_CHECKING:
     from .._typing import ElementProps
@@ -88,13 +88,11 @@ def _keyword_layer(**kwargs: Any) -> Dict[str, Any]:
     """Return the config layer of :class:`Network`'s keyword arguments.
 
     The keywords are the keys of the ``[network]`` table, so the layer is that
-    table with the arguments given (not ``None``); an omitted one never
-    overrides the ``jaff.toml`` or the ``config`` layers.  A section given as a
-    config model becomes the dict of its set keys (:func:`~jaff.config.base.as_layer`).
+    table's keys with the arguments given (not ``None``); an omitted one never
+    overrides the ``jaff.toml`` or ``config``.  A section given as a config
+    model becomes the dict of its set keys (:func:`~jaff.config.base.as_layer`).
     """
-    network = {key: as_layer(value) for key, value in kwargs.items() if value is not None}
-
-    return {"network": network} if network else {}
+    return {key: as_layer(value) for key, value in kwargs.items() if value is not None}
 
 
 @dataclass(frozen=True)
@@ -252,11 +250,11 @@ class Network:
     >>> net.reactant_matrix.shape
     (238, 37)
 
-    Config layers and keyword arguments stack over the ``jaff.toml``:
+    ``config`` and the keyword arguments are merged over the ``jaff.toml``:
 
     >>> net = Network(
     ...     "h_photoionization",
-    ...     config={"network": {"label": "hphoto"}},
+    ...     config={"label": "hphoto"},
     ...     radiation={"bands": [13.6, 20.0, 50.0]},
     ... )
     >>> net.config.label, net.radiation.nbands
@@ -266,7 +264,7 @@ class Network:
     def __init__(
         self,
         fname: str | Path,
-        config: ConfigLayer | Sequence[ConfigLayer] | None = None,
+        config: NetworkConfigSource | None = None,
         strict: bool | None = None,
         label: str | None = None,
         funcfile: bool | str | Path | None = None,
@@ -275,7 +273,6 @@ class Network:
         radiation: RadiationConfig | Mapping[str, Any] | None = None,
         dust: DustConfig | Mapping[str, Any] | None = None,
         thermodynamics: ThermodynamicsConfig | Mapping[str, Any] | None = None,
-        use_jaff_toml: bool = True,
         _from_cli: bool = False,
     ):
         """Load a reaction network from *fname*.
@@ -290,15 +287,18 @@ class Network:
             auto-detected by ``NetworkParser`` (KIDA, UDFA, PRIZMO, KROME,
             UCLCHEM).  ``.jaff`` files written by :meth:`to_jaff` cannot be
             loaded at the moment (``ParserError``).
-        config : ConfigLayer or sequence of them, optional
-            Config layers stacked over the ``jaff.toml`` next to the network
-            file: a TOML file path, a ``dict`` shaped like a ``jaff.toml``
-            (``{"network": {...}}``) or a ``JaffTomlConfig``; see
+        config : str | Path | dict | NetworkConfig | None, optional
+            Settings merged over the network's own defaults, the ``jaff.toml``
+            next to the network file (if any): a TOML file (its ``[network]``
+            table), a dict of the ``[network]`` table's keys
+            (``{"strict": True, "reactions": {...}}``) or a
+            :class:`~jaff.core.network.config.NetworkConfig` (only the keys
+            explicitly set on it count); see
             :func:`~jaff.core.network.config.load_network_config`.  The keyword
-            arguments below are the keys of the ``[network]`` table, named and
-            nested as in the config file; given ones (not ``None``) override the
-            layers: tables merge key by key, except an ``eos`` or a shielding
-            model, which replaces the layers' whole.
+            arguments below are the same ``[network]`` keys, named and nested
+            as in the config file; given ones (not ``None``) are merged over
+            *config*.  Tables merge key by key, except an ``eos`` or a
+            shielding table, which replaces the lower one whole.
         strict : bool | None, optional
             If ``True``, treat conservation violations and validation problems
             as fatal errors (process exits).  Default (``network.strict``):
@@ -333,9 +333,6 @@ class Network:
             "ideal", "gamma": 1.4}}``.  An ``eos`` given here replaces the
             config's whole; without one, an ideal gas with the default adiabatic
             index is used.
-        use_jaff_toml : bool, optional
-            Stack the ``jaff.toml`` next to the network file, if any, under the
-            ``config`` layers (default ``True``).
 
         Raises
         ------
@@ -350,7 +347,7 @@ class Network:
             "error"``, or the network or ``.jfunc`` file is
             malformed.
         TypeError
-            If a *config* item is not a path, dict or ``JaffTomlConfig``.
+            If *config* is not a path, dict or ``NetworkConfig``.
         SystemExit
             If *strict* is enabled and a reaction does not conserve mass or
             charge, or :meth:`check_sink_sources`, :meth:`check_recombinations`
@@ -376,7 +373,6 @@ class Network:
         self.config: NetworkConfig = load_network_config(
             Path(fname),
             config,
-            use_jaff_toml=use_jaff_toml,
             overrides=overrides,
         )
         self.spec: NetworkSpec = NetworkSpec(fname, self.config.funcfile)

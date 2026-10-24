@@ -25,7 +25,7 @@ def shielded_network(make_network):
 
     def _make(shielding):
         own = {"photo": {"shielding": shielding}}
-        config = {"network": {"reactions": {"reaction": {H2_KEY: own}}}}
+        config = {"reactions": {"reaction": {H2_KEY: own}}}
         with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
             net = make_network(
                 H2_PHOTO,
@@ -135,9 +135,7 @@ LEIDEN = {"type": "leiden", "shielded_by": ["self", "H2"]}
 @pytest.fixture
 def leiden_network(make_network):
     """CO photodissociation with Leiden shielding, built without jaffgen."""
-    config = {
-        "network": {"reactions": {"reaction": {CO_KEY: {"photo": {"shielding": LEIDEN}}}}}
-    }
+    config = {"reactions": {"reaction": {CO_KEY: {"photo": {"shielding": LEIDEN}}}}}
     with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
         return make_network(
             CO_PHOTO,
@@ -221,11 +219,7 @@ class TestPhotoReactionShielding:
         assert set(result.tables) == {f"shielding_{CO_KEY}.hdf5"}
 
     def test_shielding_without_radiation_raises(self, make_network):
-        config = {
-            "network": {
-                "reactions": {"reaction": {CO_KEY: {"photo": {"shielding": LEIDEN}}}}
-            }
-        }
+        config = {"reactions": {"reaction": {CO_KEY: {"photo": {"shielding": LEIDEN}}}}}
 
         with pytest.raises(ParserError, match="radiation"):
             make_network(CO_PHOTO, name="co.jet", funcfile=False, config=config)

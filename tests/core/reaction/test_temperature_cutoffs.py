@@ -19,17 +19,16 @@ RXN = "H+.H2__H.H2+"
 
 
 def _load(config=None, upper=None):
-    """Load sample_kida with an optional jaff.toml path and a layer stacked above it.
+    """Load sample_kida with an optional config and keyword settings merged above it.
 
-    *upper* stands in for a jaffgen.toml: a config layer over the jaff.toml.
+    *upper* stands in for a jaffgen.toml: ``[network]`` keys merged over *config*.
     """
-    layers = [layer for layer in (config, upper) if layer is not None]
-    return Network(KIDA, funcfile=False, _from_cli=True, config=layers)
+    return Network(KIDA, funcfile=False, _from_cli=True, config=config, **(upper or {}))
 
 
 def _reactions(**reactions):
-    """Config layer setting [network.reactions] keys."""
-    return {"network": {"reactions": reactions}}
+    """``[network]`` keys setting [network.reactions] keys."""
+    return {"reactions": reactions}
 
 
 def _is_clipped(net, srxn=RXN):

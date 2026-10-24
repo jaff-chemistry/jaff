@@ -210,8 +210,8 @@ def _by_key(net):
 
 
 def _global_photo(**photo):
-    """Config layer setting the global photo settings ([network.reactions.photo])."""
-    return {"network": {"reactions": {"photo": photo}}}
+    """``[network]`` keys setting the global photo settings ([network.reactions.photo])."""
+    return {"reactions": {"photo": photo}}
 
 
 class TestNetworkWiring:

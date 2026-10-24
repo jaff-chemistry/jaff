@@ -19,11 +19,9 @@ class TestUseProxyPhotoreaction:
     def test_per_reaction_setting_beats_global(self, make_network):
         own = {"photo": {"use_proxy_photoreaction": True}}
         config = {
-            "network": {
-                "reactions": {
-                    "photo": {"use_proxy_photoreaction": False},
-                    "reaction": {"OHx._PHOTON__H.O": own},
-                }
+            "reactions": {
+                "photo": {"use_proxy_photoreaction": False},
+                "reaction": {"OHx._PHOTON__H.O": own},
             }
         }
 

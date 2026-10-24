@@ -4,14 +4,14 @@
 
 :class:`NetworkConfig` lists the models of the modules it configures as its
 fields.  A network's ``jaff.toml`` lives next to its network file
-(:func:`jaff_toml_for`); :func:`load_network_config` stacks it under the
-caller's config layers.
+(:func:`jaff_toml_for`) and holds its defaults; :func:`load_network_config`
+merges the caller's config and overrides over it.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Sequence, Union, cast
+from typing import Any, Dict, List, Mapping, Union, cast
 
 from ...config.loader import load_config, load_layer, resolve_paths
 from ...config.base import ConfigModel, PathLike, as_layer
@@ -22,9 +22,9 @@ from ..reaction.config import ReactionsConfig
 from ._spec import NetworkSpec
 
 __all__ = [
-    "ConfigLayer",
     "JaffTomlConfig",
     "NetworkConfig",
+    "NetworkConfigSource",
     "jaff_toml_for",
     "load_network_config",
 ]
@@ -91,38 +91,39 @@ def jaff_toml_for(network_file: Path) -> Path:
     return NetworkSpec._resolve_network_path(network_file).parent / "jaff.toml"
 
 
-#: One config layer: a TOML file, a dict shaped like one, or a parsed file.
-ConfigLayer = Union[str, Path, Mapping[str, Any], JaffTomlConfig]
+#: The ``config`` of a network: a ``jaff.toml``-style file (its ``[network]``
+#: table), a dict of the ``[network]`` table's keys, or a ``NetworkConfig``.
+NetworkConfigSource = Union[str, Path, Mapping[str, Any], NetworkConfig]
 
 
 def load_network_config(
     network_file: Path,
-    config: ConfigLayer | Sequence[ConfigLayer] | None = None,
-    use_jaff_toml: bool = True,
+    config: NetworkConfigSource | None = None,
     overrides: Mapping[str, Any] | None = None,
     cwd: Path | None = None,
-    defaults: Mapping[str, Any] | None = None,
 ) -> NetworkConfig:
-    """Load a network's config: *defaults* < jaff.toml < *config* layers < *overrides*.
+    """Load a network's config: defaults < its ``jaff.toml`` < *config* < *overrides*.
+
+    The layers merge key by key (a table given in a higher layer updates the
+    lower one; an ``eos`` or a shielding table replaces it whole) and the
+    result is validated once.
 
     Parameters
     ----------
     network_file : Path
-        Network file, or the name of a predefined network.
-    config : ConfigLayer or sequence of them, optional
-        Layers stacked over the network's ``jaff.toml``, lowest first: a TOML
-        file path, a ``dict`` shaped like a ``jaff.toml``
-        (``{"network": {...}}``), or a :class:`JaffTomlConfig`, of which only
-        the keys explicitly set count.  Relative paths resolve against *cwd*.
-    use_jaff_toml : bool, optional
-        Stack the ``jaff.toml`` next to the network file (if any) at the
-        bottom (default ``True``).
+        Network file, or the name of a predefined network; the ``jaff.toml``
+        next to it, if any, holds the network's own defaults.
+    config : NetworkConfigSource or None, optional
+        One more source merged over that ``jaff.toml``: a TOML file (its
+        ``[network]`` table), a dict of the ``[network]`` table's keys
+        (``{"strict": True, "reactions": {...}}``), or a
+        :class:`NetworkConfig` (only the keys explicitly set on it count).
+        Relative paths resolve against *cwd*.
     overrides : Mapping or None, optional
-        Top layer, shaped like a ``jaff.toml``.
+        Top layer, a dict of the ``[network]`` table's keys (the keyword
+        arguments of :class:`~jaff.core.Network`).
     cwd : Path or None, optional
         Working directory; defaults to the current one.
-    defaults : Mapping or None, optional
-        Bottom layer, below the ``jaff.toml``, shaped like a ``jaff.toml``.
 
     Returns
     -------
@@ -135,43 +136,42 @@ def load_network_config(
         If a config file or the network does not exist.
     ParserError
         If a file is not valid TOML or the config is invalid.
+    TypeError
+        If *config* is not one of the accepted kinds.
     """
     cwd = cwd or Path.cwd()
-    layers: List[Dict[str, Any]] = [resolve_paths(defaults or {}, JaffTomlConfig, cwd)]
+    layers: List[Dict[str, Any]] = []
 
     jaff_toml = jaff_toml_for(network_file)
-    if use_jaff_toml and jaff_toml.exists():
+    if jaff_toml.exists():
         layers.append(load_layer(jaff_toml, JaffTomlConfig))
 
-    layers += [_as_layer(item, cwd) for item in _config_items(config)]
-    layers.append(resolve_paths(overrides or {}, JaffTomlConfig, cwd))
+    if config is not None:
+        layers.append(_source_layer(config, cwd))
+
+    layers.append(_network_layer(overrides or {}, cwd))
 
     return load_config(layers, JaffTomlConfig).network
 
 
-def _config_items(
-    config: ConfigLayer | Sequence[ConfigLayer] | None,
-) -> List[ConfigLayer]:
-    """Return the *config* argument of :func:`load_network_config` as a list."""
-    if config is None:
-        return []
-
-    if isinstance(config, (str, Path, JaffTomlConfig, Mapping)):
-        return [cast(ConfigLayer, config)]
-
-    return list(config)
-
-
-def _as_layer(item: ConfigLayer, cwd: Path) -> Dict[str, Any]:
-    """Turn one *config* item of :func:`load_network_config` into a layer."""
-    if isinstance(item, (str, Path)):
-        path = Path(item)
+def _source_layer(config: NetworkConfigSource, cwd: Path) -> Dict[str, Any]:
+    """Turn the *config* of :func:`load_network_config` into a ``jaff.toml`` layer."""
+    if isinstance(config, (str, Path)):
+        path = Path(config)
 
         return load_layer(path if path.is_absolute() else cwd / path, JaffTomlConfig)
 
-    if isinstance(item, (JaffTomlConfig, Mapping)):
-        return resolve_paths(cast(Mapping[str, Any], as_layer(item)), JaffTomlConfig, cwd)
+    if isinstance(config, (NetworkConfig, Mapping)):
+        return _network_layer(config, cwd)
 
     raise TypeError(
-        f"Invalid config layer {item!r}: expected a path, dict or JaffTomlConfig"
+        f"Invalid network config {config!r}: expected a TOML file path, a dict of "
+        "the [network] keys or a NetworkConfig"
     )
+
+
+def _network_layer(table: NetworkConfig | Mapping[str, Any], cwd: Path) -> Dict[str, Any]:
+    """Wrap a ``[network]`` table as a ``jaff.toml`` layer, paths resolved against *cwd*."""
+    layer = {"network": as_layer(table)}
+
+    return resolve_paths(cast(Mapping[str, Any], layer), JaffTomlConfig, cwd)

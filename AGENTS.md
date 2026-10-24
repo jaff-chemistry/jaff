@@ -194,9 +194,13 @@ schema and reference machinery. Every folder has an `__init__.py`.
 `jaff.toml` and `jaffgen.toml` share one schema built from pydantic models. Each
 configurable module owns a `config.py` next to its code (e.g.
 `physics/dust/config.py`), and a parent model lists its children's models as fields,
-so the TOML keys mirror the class structure (`[network.dust.pe]`). Layers merge as
-defaults < `jaff.toml` < `jaffgen.toml` / `config=` < keyword args / CLI options <
-`--set key.path=value`.
+so the TOML keys mirror the class structure (`[network.dust.pe]`). One merge rule
+(`config/loader.py`: tables key by key, `eos` / shielding tables whole, one
+validation at the end) builds every config. `Network` owns `[network]`: defaults <
+the `jaff.toml` next to the network (always applied: the network's own defaults) <
+`config=` (one source: a TOML file, a `dict` of the `[network]` keys or a
+`NetworkConfig`) < keyword args. jaffgen layers `jaffgen.toml` < CLI options <
+`--set key.path=value` over that.
 
 `Network(...)`'s keyword arguments are the `[network]` keys, named and nested as in
 the file: `strict`, `label`, `funcfile`, `expand_nuclei`, and the tables `reactions`,

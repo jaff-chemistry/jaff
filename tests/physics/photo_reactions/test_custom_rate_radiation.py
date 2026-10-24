@@ -84,7 +84,7 @@ def test_without_radiation_no_warning(custom_network, warnings):
 def test_overridden_custom_rate_does_not_warn(custom_network, warnings):
     custom_network(
         radiation=RadiationConfig(bands=BANDS),
-        config={"network": {"reactions": {"photo": {"override_custom_rate": True}}}},
+        config={"reactions": {"photo": {"override_custom_rate": True}}},
     )
 
     assert not [m for m in warnings() if "chemRate0" in m]

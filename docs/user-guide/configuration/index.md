@@ -41,14 +41,14 @@ c     = "c_hat"
 
 ## Layers and precedence
 
-Every source of settings is a **layer** shaped like the file; JAFF merges the
-layers, a later one winning, then validates the result. Lowest precedence
-first:
+Every source of settings is a **layer**; JAFF merges the layers, a later one
+winning, then validates the result once. The `jaff.toml` next to a network
+holds that network's own defaults and always applies. Lowest precedence first:
 
 | `jaffgen` | Python `Network(...)` |
 | --- | --- |
-| 1. the network's `jaff.toml` | 1. the network's `jaff.toml` (unless `use_jaff_toml=False`) |
-| 2. the `jaffgen.toml` (`--config`, or the one a template bundles) | 2. the `config=` layers, in order |
+| 1. the network's `jaff.toml` | 1. the network's `jaff.toml` |
+| 2. the `jaffgen.toml` (`--config`, or the one a template bundles) | 2. `config=`: one more source (a TOML file, a `dict` of the `[network]` keys, or a `NetworkConfig`) |
 | 3. command-line options | 3. keyword arguments: the `[network]` keys (`label=`, `reactions=`, `radiation=`, …) |
 | 4. `--set key.path=value` items | |
 
@@ -69,8 +69,8 @@ replaced whole too: a `shielding` table and the
 `[network.thermodynamics.eos]` table, so switching the EOS `type` in one layer
 never mixes in keys of another type.
 
-`[jaffgen] network_config` (or `--network-config`) names the `jaff.toml` to use
-instead of the one next to the network file.
+`[jaffgen] network_config` (or `--network-config`) names another `jaff.toml`,
+merged over the one next to the network file.
 
 ---
 
@@ -121,17 +121,18 @@ Python is resolved against the working directory.
 from jaff import Network
 
 net = Network("GOW")                                    # its jaff.toml, if any
-net = Network("GOW", config="tuned.toml")               # a file layer on top
-net = Network("GOW", config={"network": {"reactions": {"t_cutoff": "clip"}}})
-net = Network("GOW", config=["base.toml", {"network": {"label": "run-2"}}])
-net = Network("GOW", strict=True, use_jaff_toml=False)  # keyword arguments win
+net = Network("GOW", config="tuned.toml")               # tuned.toml merged over it
+net = Network("GOW", config={"reactions": {"t_cutoff": "clip"}})
+net = Network("GOW", config=other_net.config, label="run-2")
+net = Network("GOW", strict=True)                       # keyword arguments win
 
 net.config                                              # the validated config
 ```
 
-A `config=` layer is a file path, a `dict` shaped like a `jaff.toml`, or a
-`JaffTomlConfig`; of a `JaffTomlConfig`, only the keys explicitly set count. A
-keyword argument given (not `None`) wins over every layer. The keyword
+`config=` is one source merged over the network's `jaff.toml`: a TOML file (its
+`[network]` table), a `dict` of the `[network]` table's keys, or a
+`NetworkConfig` (only the keys explicitly set on it count). A keyword argument
+given (not `None`) is merged over `config=`. The keyword
 arguments are the keys of the `[network]` table, named and nested as in the
 file: `strict`, `label`, `funcfile`, `expand_nuclei`, and the tables
 `reactions`, `radiation`, `dust` and `thermodynamics`, each a `dict` or its
@@ -251,4 +252,7 @@ Old keys are errors (`unknown key`). They map to:
 | `Network(duplicate_policy=…)` | `Network(reactions={"duplicate_policy": …})` |
 | `Network(use_proxy_photoreaction=…)` | `Network(reactions={"photo": {"use_proxy_photoreaction": …}})` |
 | a copy of `jaffgen.toml` in the output | `config.toml` |
-| `Network(config="x.toml")` replaced the network's `jaff.toml` | `x.toml` is layered over the `jaff.toml`; pass `use_jaff_toml=False` for the old behaviour |
+| `Network(config="x.toml")` replaced the network's `jaff.toml` | `x.toml` is merged over the `jaff.toml`, which always applies |
+| `Network(config={"network": {...}})` | `Network(config={...})`: a `dict` holds the `[network]` keys |
+| `Network(config=[a, b])`, `Network(config=JaffTomlConfig(...))` | one source: `Network(config=a, **b)`, or a `NetworkConfig` |
+| `Network(use_jaff_toml=False)` | removed: the `jaff.toml` next to a network always applies |
