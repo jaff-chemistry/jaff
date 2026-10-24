@@ -179,6 +179,46 @@ class Thermodynamics:
         """
         return (self.dEdt_tot.volumetric - self._composition_rate) / self._dE_dT
 
+    def temperature_derivatives(self, energy: str) -> tuple[Expr, tuple[Expr, ...]]:
+        """How the temperature responds to the evolved energy and the densities.
+
+        With ``e = eos.normaliser(energy)`` evolved instead of ``T``, the
+        temperature is ``T(e, n)``; from the EOS:
+
+        ```text
+        ∂T/∂e        = 1 / (∂e/∂T)
+        ∂T/∂n_j |_e  = −(∂e/∂n_j) / (∂e/∂T)
+        ```
+
+        These are the chain-rule factors of a Jacobian whose equations are
+        written in ``T`` but whose state holds ``e``.
+
+        Parameters
+        ----------
+        energy : str
+            Form of the evolved internal energy: ``"volumetric"``,
+            ``"specific"``, ``"per_particle"`` or ``"molar"``.
+
+        Returns
+        -------
+        tuple
+            ``(∂T/∂e, (∂T/∂n_0, ∂T/∂n_1, ...))``, one density term per species,
+            as functions of ``T`` and the densities.
+
+        Raises
+        ------
+        ValueError
+            If *energy* is not one of the forms above.
+        """
+        e = self.eos.normaliser(energy)
+        sym = self.net.symbols
+        de_dT = diff(e, sym.tgas)
+        dT_dn = tuple(
+            -diff(e, sym.ndens[j]) / de_dT for j in range(self.net.species.count)
+        )
+
+        return 1 / de_dT, dT_dn
+
     def _get_dEdt_chemical(self) -> DEDt:
         """Build the chemical heating rate from the reactions.
 

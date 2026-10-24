@@ -99,15 +99,15 @@ def rhs_cse_replace():
 
 def jacobian():
     # $$JAFF REPEAT idx, expr IN jacobian
-    J[0][0] = -5.85e-11*math.sqrt(tgas)*nden[1]*math.exp(-157809.1/tgas)
-    J[0][1] = 4.1207223003989e-10*tgas**(-0.8)*nden[2] - 5.85e-11*math.sqrt(tgas)*nden[0]*math.exp(-157809.1/tgas)
+    J[0][0] = -5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[1]
+    J[0][1] = 4.1207223003989e-10*tgas**(-0.8)*nden[2] - 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]
     J[0][2] = 4.1207223003989e-10*tgas**(-0.8)*nden[1]
-    J[1][0] = 5.85e-11*math.sqrt(tgas)*nden[1]*math.exp(-157809.1/tgas)
-    J[1][1] = -4.1207223003989e-10*tgas**(-0.8)*nden[2] + 5.85e-11*math.sqrt(tgas)*nden[0]*math.exp(-157809.1/tgas) - nden[3]**2
+    J[1][0] = 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[1]
+    J[1][1] = -4.1207223003989e-10*tgas**(-0.8)*nden[2] + 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0] - nden[3]**2
     J[1][2] = -4.1207223003989e-10*tgas**(-0.8)*nden[1]
     J[1][3] = -2*nden[1]*nden[3]
-    J[2][0] = 5.85e-11*math.sqrt(tgas)*nden[1]*math.exp(-157809.1/tgas)
-    J[2][1] = -4.1207223003989e-10*tgas**(-0.8)*nden[2] + 5.85e-11*math.sqrt(tgas)*nden[0]*math.exp(-157809.1/tgas)
+    J[2][0] = 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[1]
+    J[2][1] = -4.1207223003989e-10*tgas**(-0.8)*nden[2] + 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]
     J[2][2] = -4.1207223003989e-10*tgas**(-0.8)*nden[1]
     J[3][1] = -nden[3]**2
     J[3][3] = -2*nden[1]*nden[3]

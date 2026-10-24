@@ -26,8 +26,7 @@ per-method bracket/token overrides are applied by the
 
 from __future__ import annotations
 
-import re
-from itertools import count, product
+from itertools import count
 from typing import TYPE_CHECKING, Iterator, List, Set, Tuple, cast
 
 import sympy as sp
@@ -812,39 +811,6 @@ class Codegen:
         expr = self.net.thermodynamics.dTdt_tot
         return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
 
-    def _energy_column(
-        self,
-        jacobian_matrix: sp.Matrix,
-        dxdot_dtgas_list: list[sp.Expr],
-        nden_matrix: sp.IndexedBase,
-        energy: str,
-    ) -> sp.Matrix:
-        """Energy column ∂F/∂e and in-place species-column chain-rule correction.
-
-        Converts the temperature dependence into the state-vector framework via
-        the EOS relation.  With ``e = eos.normaliser(energy)`` the state variable
-        replacing T:
-
-        * ``∂F/∂e = (∂F/∂T)/(∂e/∂T)`` (returned column), and
-        * ``∂F/∂n_j|_e = ∂F/∂n_j|_T − (∂F/∂T)(∂e/∂n_j)/(∂e/∂T)`` (applied to
-          the species columns of *jacobian_matrix* in place).
-        """
-        n_species = self.net.species.count
-        tgas = self.net.symbols.tgas
-        e_form = self.net.thermodynamics.eos.normaliser(energy)
-        de_dtgas = sp.diff(e_form, tgas)
-        # nden_matrix is scalar indexed (IndexedBase), use scalar form for differentiation
-        de_dn = [sp.diff(e_form, nden_matrix[j]) for j in range(n_species)]
-
-        for j in jaff_progress.track(
-            range(n_species), description="Applying EOS chain rule to species columns"
-        ):
-            for i, dxdot_dtgas in enumerate(dxdot_dtgas_list):
-                correction = dxdot_dtgas * de_dn[j] / de_dtgas
-                jacobian_matrix[i, j] = jacobian_matrix[i, j] - correction
-
-        return sp.Matrix([d / de_dtgas for d in dxdot_dtgas_list])
-
     def get_indexed_odes(
         self,
         use_cse: bool = True,
@@ -1494,22 +1460,9 @@ class Codegen:
         symbolic differentiation.  Only non-zero Jacobian elements are
         included in the output, making this suitable for sparse solver formats.
 
-        The computation proceeds in four main stages:
-
-        1. **Symbol mapping** — Each ``nden[i]`` (a SymPy
-           :class:`~sympy.Indexed` entry) is mapped to a scalar symbol
-           ``y_i`` so each element can be differentiated with respect
-           to an ordinary symbol.  Radiation density/flux symbols are similarly mapped.
-        2. **Rate inlining** — Symbolic rate placeholders ``k[i]`` are
-           replaced with the concrete rate expressions after the symbol
-           substitution.
-        3. **Jacobian computation** — each ODE is differentiated with
-           respect to every ``y_j`` among its free symbols; all other
-           elements stay zero.
-        4. **Back-substitution** — Scalar symbols ``y_i`` in the generated
-           code strings are replaced with their original array notation
-           ``nden[i]`` (and ``radeden[i]`` or ``photden[i]`` / ``rflux[i]``
-           for radiation) via regex.
+        The Jacobian is :attr:`OdeSystem.jacobian <jaff.core.OdeSystem.jacobian>`
+        of ``net.ode_system(thermal, energy, radiation, rad_order)``; this
+        method applies CSE to its non-zero entries (row by row) and prints them.
 
         When *thermal* is not ``"none"``, the thermal row is appended and an
         extra column is inserted after the species columns to account for the
@@ -1580,143 +1533,21 @@ class Codegen:
         [1] 1.6594178159829075e-10*std::pow(tgas, -0.69999999999999996)
         """
 
-        with jaff_progress.indeterminate("Preprocessing jacobian"):
-            system = self.net.ode_system(thermal, energy, radiation, rad_order)
-            ir: IndexedReturn = {
-                "extras": {"cse": IndexedList()},
-                "expressions": IndexedList(),
-            }
-            n_species = self.net.species.count
-            n_rad_eqns = (
-                2 * self.net.radiation.nbands if radiation and self.net.radiation else 0
-            )
-            thermal_rows = [
-                row
-                for var, row in zip(system.state, system.rhs.flat())
-                if var.kind in ("energy", "temperature")
-            ]
-            n_ode_eqns = n_species + len(thermal_rows) + n_rad_eqns
-
-            # Scalar differentiation symbols for each state variable: the
-            # indexed nden[i] (IndexedBase) entries are mapped to plain y_i
-            # symbols so each row can be differentiated per free symbol, then
-            # mapped back to array notation in the emitted code.
-            y_syms = [sp.symbols(f"y_{i}") for i in range(n_species)]
-
-            if radiation and self.net.radiation:
-                # Pad with placeholder symbols; will be overwritten below
-                y_syms.extend([sp.symbols("xx") for _ in range(n_rad_eqns)])
-
-                # Map radiation energy/flux quantities to dedicated scalar symbols
-                # ei: energy-density index; fi: flux index (order-dependent)
-                for i in range(self.net.radiation.nbands):
-                    ei, fi = self.net.radiation.ordered_index(i, rad_order)
-                    y_syms[n_species + ei] = sp.symbols(f"ry_{i}")
-                    y_syms[n_species + fi] = sp.symbols(f"fy_{i}")
-
-            nden_matrix = self.net.symbols.ndens
-
-            # Substitution dicts: scalar indexed form -> scalar y_i symbols
-            nden_to_y = {}
-            radden_to_y = {}
-            radflux_to_y = {}
-
-            for i in range(n_species):
-                # Map scalar indexed form directly to y_i
-                nden_to_y[nden_matrix[i]] = y_syms[i]
-
-            if radiation and self.net.radiation:
-                radden_matrix = self.net.radiation.den
-                radflux_matrix = self.net.radiation.flux
-
-                for i in range(self.net.radiation.nbands):
-                    ei, fi = self.net.radiation.ordered_index(i, rad_order)
-                    # Map scalar indexed form directly to y_i
-                    radden_to_y[radden_matrix[i]] = y_syms[n_species + ei]
-                    # Map scalar indexed form directly to y_i
-                    radflux_to_y[radflux_matrix[i]] = y_syms[n_species + fi]
-
-            # Substitute nden/radiation symbols inside rate expressions first,
-            # then build the subs_k dict that replaces k[i] placeholders in
-            # the ODE expressions with those fully-scalar rate expressions.
-            k_exprs = [
-                rea.rate_coefficient.xreplace(
-                    {**nden_to_y, **radden_to_y, **radflux_to_y}
-                )
-                for rea in self.net.reactions
-            ]
-
-            subs_k = {
-                sp.symbols(f"k[{i}]"): k_exprs[i] for i in range(len(self.net.reactions))
-            }
-            ode_symbols = self.net.sodes()
-
-            # Optionally append the thermal equation and radiation ODEs
-            ode_symbols.extend(thermal_rows)
-
-            if radiation:
-                ode_symbols.extend(self.net.sradodes(order=rad_order))
-
-            # Apply all substitutions in a single pass: nden/rad -> y_i, k[i] -> rate
-            ode_symbols = [
-                sode.xreplace({**nden_to_y, **radden_to_y, **radflux_to_y, **subs_k})
-                for sode in ode_symbols
-            ]
-
-        # Fill the Jacobian sparsely: differentiate each row only by the state
-        # symbols that actually appear in it (other entries stay zero)
-        y_index = {sym: col for col, sym in enumerate(y_syms)}
-        jacobian_matrix = sp.zeros(len(ode_symbols), len(y_syms))
-        for row, sode in enumerate(
-            jaff_progress.track(
-                ode_symbols, description="Generating jacobian number desnities terms"
-            )
-        ):
-            for sym in sode.free_symbols:
-                col = y_index.get(sym)
-                if col is not None:
-                    jacobian_matrix[row, col] = sode.diff(sym)
-
-        if thermal_rows:
-            tgas = self.net.symbols.tgas
-            dxdot_dtgas_list = [
-                sp.diff(ode_symbols[i], tgas)
-                for i in jaff_progress.track(
-                    range(n_ode_eqns), description="Generating jacobian thermal terms"
-                )
-            ]
-            if thermal == "dtdt":
-                dde = sp.Matrix(dxdot_dtgas_list)
-            else:
-                dde = self._energy_column(
-                    jacobian_matrix, dxdot_dtgas_list, nden_matrix, energy
-                )
-            left = jacobian_matrix[:, :n_species]
-            right = jacobian_matrix[:, n_species:]
-
-            # Insert the thermal-coupling column between species and radiation cols
-            jacobian_matrix = left.row_join(dde).row_join(right)
-
-        # Regex patterns to back-substitute scalar symbols -> array notation in
-        # the serialised code strings.
-        dpattern = re.compile(r"\by_(\d+)\b")  # y_i -> nden[i]
-        if radiation and self.net.radiation is not None:
-            rrdpattern = re.compile(r"\bry_(\d+)\b")  # ry_i -> radeden/photden[i]
-            rfdpattern = re.compile(r"\bfy_(\d+)\b")  # fy_i -> rflux[i]
-
-        def _replace_y(match: re.Match[str], var) -> str:
-            """Regex replacement helper: ``y_N`` → ``var[N]``."""
-            idx = int(match.group(1))
-            return f"{var}{self.lang.lb}{idx}{self.lang.rb}"
+        system = self.net.ode_system(thermal, energy, radiation, rad_order)
+        entries = sorted(system.jacobian.todok().items())
+        exprs = [expr for _, expr in entries]
+        ir: IndexedReturn = {
+            "extras": {"cse": IndexedList()},
+            "expressions": IndexedList(),
+        }
+        replacements_dict = None
 
         if use_cse:
             with jaff_progress.indeterminate("Generating cse expressions"):
                 cse_symbols = self._cse_symbols(cse_var, cse_suffix)
-                replacements, reduced_exprs = sp.cse(
-                    list(jacobian_matrix), symbols=cse_symbols
-                )
+                replacements, exprs = sp.cse(exprs, symbols=cse_symbols)
 
-                replacements = self.__prune_cse(replacements, reduced_exprs)
+                replacements = self.__prune_cse(replacements, exprs)
                 # Keep a str-keyed dict so __convert_unknown_derivatives can
                 # resolve CSE symbols back to their defining expressions.
                 replacements_dict = {str(k): v for k, v in replacements}
@@ -1729,50 +1560,15 @@ class Codegen:
                     expr_str = self.lang.code_gen(
                         expr, strict=False, allow_unknown_functions=True
                     )
-                    # Back-substitute scalar symbols to array notation
-                    expr_str = dpattern.sub(lambda m: _replace_y(m, "nden"), expr_str)
-
-                    if radiation and self.net.radiation is not None:
-                        rad = self.net.radiation
-                        expr_str = rrdpattern.sub(
-                            lambda m: _replace_y(m, str(rad.den.label)), expr_str
-                        )
-                        expr_str = rfdpattern.sub(
-                            lambda m: _replace_y(m, str(rad.flux.label)), expr_str
-                        )
-
                     ir["extras"]["cse"].append(IndexedValue([idx], expr_str))
 
-        # Iterate over every (row, col) pair and emit non-zero elements only.
-        # Row-major iteration: element [i, j] lives at index i*n + j in the
-        # flattened reduced_exprs list produced by sp.cse().
-        for i, j in jaff_progress.track(
-            product(range(n_ode_eqns), repeat=2), description="Generating jacobian code"
+        for ((i, j), _), expr in jaff_progress.track(
+            list(zip(entries, exprs)), description="Generating jacobian code"
         ):
-            expr = reduced_exprs[i * n_ode_eqns + j] if use_cse else jacobian_matrix[i, j]
-
-            # Skip structural zeros to support sparse output formats
-            if expr == 0:
-                continue
-
-            expr = self.__convert_unknown_derivatives(
-                expr, replacements_dict if use_cse else None
-            )
+            expr = self.__convert_unknown_derivatives(expr, replacements_dict)
             expr_str = self.lang.code_gen(
                 expr, strict=False, allow_unknown_functions=True
             )
-            # Back-substitute scalar y_i -> nden[i] and radiation symbols
-            expr_str = dpattern.sub(lambda m: _replace_y(m, "nden"), expr_str)
-
-            if radiation and self.net.radiation is not None:
-                rad = self.net.radiation
-                expr_str = rrdpattern.sub(
-                    lambda m: _replace_y(m, str(rad.den.label)), expr_str
-                )
-                expr_str = rfdpattern.sub(
-                    lambda m: _replace_y(m, str(rad.flux.label)), expr_str
-                )
-
             ir["expressions"].append(IndexedValue([i, j], expr_str))
 
         return ir

@@ -77,8 +77,8 @@ class Reactions(Catalogue[Reaction]):
     False
     """
 
-    _by_prop: dict[str, list[Reaction]]  # type: ignore[assignment]
-    _by_serialized: dict[str, list[Reaction]]  # type: ignore[assignment]
+    _by_prop: dict[str, list[Reaction]]  # type: ignore
+    _by_serialized: dict[str, list[Reaction]]  # type: ignore
 
     def __init__(self, config: ReactionsConfig):
         """Initialise an empty reactions catalogue.
@@ -197,6 +197,34 @@ class Reactions(Catalogue[Reaction]):
 
     def __repr__(self):
         return f"Catalogue({self.verbatim()!r})"
+
+    def __contains__(self, item) -> bool:
+        """Test membership by ``Reaction``, name/serialized string, or
+        ``(serialized, type)`` tuple.
+
+        Parameters
+        ----------
+        item : Reaction, str, or tuple[str, str]
+            * ``str`` — checks verbatim names and serialized forms.
+            * ``tuple`` — ``(serialized, type)``: true if a reaction with that
+              serialized form *and* type exists.
+            * ``Reaction`` — true if an equal reaction (same serialized form
+              and type; see :meth:`Reaction.__eq__`) is in the catalogue.
+
+        Returns
+        -------
+        bool
+        """
+        if isinstance(item, tuple):
+            ident, rtype = item
+            group = self._by_serialized.get(ident) or self._by_prop.get(ident, [])
+
+            return any(r.type == rtype for r in group)
+
+        if isinstance(item, str):
+            return item in self._by_prop or item in self._by_serialized
+
+        return item in self._list
 
     def add(self, reaction: Reaction) -> None:
         """Append a reaction to the catalogue (duplicates are not checked here).
@@ -440,34 +468,6 @@ class Reactions(Catalogue[Reaction]):
         Reaction | None
         """
         return self._by_source_index.get(n)
-
-    def __contains__(self, item) -> bool:
-        """Test membership by ``Reaction``, name/serialized string, or
-        ``(serialized, type)`` tuple.
-
-        Parameters
-        ----------
-        item : Reaction, str, or tuple[str, str]
-            * ``str`` — checks verbatim names and serialized forms.
-            * ``tuple`` — ``(serialized, type)``: true if a reaction with that
-              serialized form *and* type exists.
-            * ``Reaction`` — true if an equal reaction (same serialized form
-              and type; see :meth:`Reaction.__eq__`) is in the catalogue.
-
-        Returns
-        -------
-        bool
-        """
-        if isinstance(item, tuple):
-            ident, rtype = item
-            group = self._by_serialized.get(ident) or self._by_prop.get(ident, [])
-
-            return any(r.type == rtype for r in group)
-
-        if isinstance(item, str):
-            return item in self._by_prop or item in self._by_serialized
-
-        return item in self._list
 
     def from_serialized(self, serialized: str) -> list[Reaction]:
         """Return all reactions sharing a serialized form.

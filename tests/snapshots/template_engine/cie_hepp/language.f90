@@ -67,16 +67,16 @@ contains
     real(8), intent(out) :: J(:, :)
     real(8), intent(in) :: nden(nspec), tgas
     ! $$JAFF REPEAT idx, expr IN jacobian
-    J(1, 1) = -5.85d-11*sqrt(tgas)*nden(1)*exp(-157809.10000000001d0/tgas)
-    J(1, 2) = 4.1207223003989d-10*tgas**(-0.8d0)*nden(2) - 5.85d-11*sqrt(tgas)*nden(0)*exp( -157809.10000000001d0/tgas)
+    J(1, 1) = -5.85d-11*sqrt(tgas)*exp(-157809.10000000001d0/tgas)*nden(1)
+    J(1, 2) = 4.1207223003989d-10*tgas**(-0.8d0)*nden(2) - 5.85d-11*sqrt(tgas)*exp( -157809.10000000001d0/tgas)*nden(0)
     J(1, 3) = 4.1207223003989d-10*tgas**(-0.8d0)*nden(1)
-    J(2, 1) = 5.85d-11*sqrt(tgas)*nden(1)*exp(-157809.10000000001d0/tgas)
-    J(2, 2) = -4.1207223003989d-10*tgas**(-0.8d0)*nden(2) + 5.85d-11*sqrt(tgas)*nden(0)*exp( -157809.10000000001d0/tgas&
-          &) - nden(3)**2
+    J(2, 1) = 5.85d-11*sqrt(tgas)*exp(-157809.10000000001d0/tgas)*nden(1)
+    J(2, 2) = -4.1207223003989d-10*tgas**(-0.8d0)*nden(2) + 5.85d-11*sqrt(tgas)*exp( -157809.10000000001d0/tgas)*&
+          &nden(0) - nden(3)**2
     J(2, 3) = -4.1207223003989d-10*tgas**(-0.8d0)*nden(1)
     J(2, 4) = -2*nden(1)*nden(3)
-    J(3, 1) = 5.85d-11*sqrt(tgas)*nden(1)*exp(-157809.10000000001d0/tgas)
-    J(3, 2) = -4.1207223003989d-10*tgas**(-0.8d0)*nden(2) + 5.85d-11*sqrt(tgas)*nden(0)*exp( -157809.10000000001d0/tgas)
+    J(3, 1) = 5.85d-11*sqrt(tgas)*exp(-157809.10000000001d0/tgas)*nden(1)
+    J(3, 2) = -4.1207223003989d-10*tgas**(-0.8d0)*nden(2) + 5.85d-11*sqrt(tgas)*exp( -157809.10000000001d0/tgas)*nden(0)
     J(3, 3) = -4.1207223003989d-10*tgas**(-0.8d0)*nden(1)
     J(4, 2) = -nden(3)**2
     J(4, 4) = -2*nden(1)*nden(3)

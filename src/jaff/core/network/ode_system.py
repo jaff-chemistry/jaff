@@ -1,7 +1,7 @@
 # ABOUTME: OdeSystem: the state vector a generated solver integrates and its symbolic
-# ABOUTME: right-hand side, assembled from the network's components
+# ABOUTME: right-hand side and Jacobian, assembled from the network's components
 
-"""The ODE system of a :class:`~jaff.core.Network`: its state and right-hand side."""
+"""The ODE system of a :class:`~jaff.core.Network`: its state, rhs and Jacobian."""
 
 from __future__ import annotations
 
@@ -9,8 +9,9 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import TYPE_CHECKING, Literal
 
-from sympy import Basic, ImmutableMatrix
+from sympy import Basic, ImmutableMatrix, ImmutableSparseMatrix
 
+from ...io import jaff_progress
 from ...physics import Radiation
 
 if TYPE_CHECKING:
@@ -54,7 +55,7 @@ class OdeSystem:
     energy), then two moments per radiation band laid out by *rad_order* (see
     :meth:`~jaff.physics.Radiation.ordered_index`).  :attr:`rhs` has one row per
     state entry, in the same order, taken from the components that own the
-    physics.
+    physics; :attr:`jacobian` is its derivative with respect to the state.
 
     Examples
     --------
@@ -166,3 +167,63 @@ class OdeSystem:
             rows.extend(net.radiation.odes(self.rad_order))
 
         return ImmutableMatrix(rows)
+
+    @cached_property
+    def jacobian(self) -> ImmutableSparseMatrix:
+        """Derivative of :attr:`rhs` with respect to the state (n × n, sparse).
+
+        Entry ``(i, j)`` is ``∂ rhs[i] / ∂ state[j]``; only non-zero entries are
+        stored.  Species and radiation columns are plain derivatives.  The
+        thermal column is ``∂rhs/∂T`` with ``"dtdt"``; with ``"dedt"`` the
+        equations are written in ``T`` but the state holds the energy ``e``,
+        so the chain rule through the EOS
+        (:meth:`~jaff.physics.Thermodynamics.temperature_derivatives`) gives the
+        energy column ``(∂rhs/∂T)(∂T/∂e)`` and adds ``(∂rhs/∂T)(∂T/∂n_j)`` to
+        each species column.
+        """
+        rows = self.rhs.flat()
+        columns = {
+            var.symbol: j
+            for j, var in enumerate(self.state)
+            if var.kind not in ("energy", "temperature")
+        }
+        entries: dict[tuple[int, int], Basic] = {}
+        for i, row in enumerate(
+            jaff_progress.track(rows, description="Differentiating the rhs")
+        ):
+            # Only the state symbols a row contains give non-zero entries
+            for sym in row.free_symbols:
+                j = columns.get(sym)
+                if j is not None:
+                    entries[i, j] = row.diff(sym)
+        if self.thermal != "none":
+            self._add_thermal_column(rows, entries)
+
+        n = len(self.state)
+        return ImmutableSparseMatrix(
+            n, n, {key: expr for key, expr in entries.items() if expr != 0}
+        )
+
+    def _add_thermal_column(
+        self, rows: list[Basic], entries: dict[tuple[int, int], Basic]
+    ) -> None:
+        """Add the thermal column (and the ``dedt`` species corrections) to *entries*."""
+        net = self.network
+        t = net.species.count  # the thermal slot follows the species
+        tgas = net.symbols.tgas
+        df_dT = [
+            row.diff(tgas)
+            for row in jaff_progress.track(rows, description="Differentiating by T")
+        ]
+        if self.thermal == "dtdt":
+            for i, d in enumerate(df_dT):
+                entries[i, t] = d
+            return
+
+        dT_de, dT_dn = net.thermodynamics.temperature_derivatives(self.energy)
+        for i, d in enumerate(df_dT):
+            if d == 0:
+                continue
+            entries[i, t] = d * dT_de
+            for j, dT_dn_j in enumerate(dT_dn):
+                entries[i, j] = entries.get((i, j), 0) + d * dT_dn_j

@@ -230,3 +230,45 @@ class TestConfig:
         expected = sym.ntot * k_B.cgs.value * sym.tgas / (1.4 - 1.0)
 
         assert sp.simplify(th.eos.volumetric - expected) == 0
+
+
+ENERGY_FORMS = ["volumetric", "specific", "per_particle", "molar"]
+
+
+class TestTemperatureDerivatives:
+    """``temperature_derivatives(energy)``: how T responds to the evolved energy and n."""
+
+    @staticmethod
+    def _solved_temperature(net, energy: str) -> tuple[sp.Symbol, sp.Expr]:
+        """T(e, n) solved from the EOS, with ``e`` a plain symbol."""
+        e = sp.Symbol("e_state")
+        expr = net.thermodynamics.eos.normaliser(energy)
+        (tgas,) = sp.solve(sp.Eq(e, expr), net.symbols.tgas)
+        return e, tgas
+
+    @pytest.mark.parametrize("energy", ENERGY_FORMS)
+    def test_match_derivatives_of_solved_temperature(self, net, energy) -> None:
+        sym = net.symbols
+        e, t_of_e = self._solved_temperature(net, energy)
+        dT_de, dT_dn = net.thermodynamics.temperature_derivatives(energy)
+        n = net.species.count
+        assert len(dT_dn) == n
+
+        point = {sym.ndens[i]: 1.0e3 * (i + 1) for i in range(n)}
+        t0 = 250.0
+        e0 = float(
+            net.thermodynamics.eos.normaliser(energy).xreplace({**point, sym.tgas: t0})
+        )
+        at_t = {**point, sym.tgas: t0}
+        at_e = {**point, e: e0}
+        assert float(dT_de.xreplace(at_t)) == pytest.approx(
+            float(sp.diff(t_of_e, e).xreplace(at_e)), rel=1e-12
+        )
+        for j in range(n):
+            assert float(dT_dn[j].xreplace(at_t)) == pytest.approx(
+                float(sp.diff(t_of_e, sym.ndens[j]).xreplace(at_e)), rel=1e-12
+            )
+
+    def test_unknown_energy_form(self, net) -> None:
+        with pytest.raises(ValueError, match="bogus"):
+            net.thermodynamics.temperature_derivatives("bogus")

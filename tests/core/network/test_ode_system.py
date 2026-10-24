@@ -118,3 +118,74 @@ class TestValidation:
 
     def test_rad_order_ignored_without_radiation(self, rad_network) -> None:
         assert len(rad_network.ode_system(rad_order=7).state) == 3
+
+
+TGAS_NETWORK = [
+    "H+ + e- -> H [10,1e4] 2e-10*tgas**(-0.7)",
+    "H + H -> H2 [10,1e4] 1e-17*(tgas/300)**0.5",
+    "H2 + e- -> H + H + e- [10,1e4] 3e-9*exp(-5e4/tgas)",
+]
+
+
+@pytest.fixture(scope="module")
+def tgas_network(tmp_path_factory):
+    """Temperature-dependent rates on an ideal-gas EOS (T solvable from e)."""
+    path = tmp_path_factory.mktemp("ode") / "tgas.dat"
+    path.write_text("\n".join(TGAS_NETWORK) + "\n", encoding="utf-8")
+    return Network(str(path), funcfile=False)
+
+
+def _symbols(system: OdeSystem) -> list:
+    return [var.symbol for var in system.state]
+
+
+class TestJacobian:
+    @pytest.mark.parametrize("thermal", ["none", "dtdt"])
+    def test_is_plain_jacobian_without_energy(self, tgas_network, thermal) -> None:
+        system = tgas_network.ode_system(thermal=thermal)
+        expected = system.rhs.jacobian(_symbols(system))
+        assert system.jacobian == sp.ImmutableSparseMatrix(expected)
+
+    def test_radiation_columns(self, rad_network) -> None:
+        system = rad_network.ode_system(thermal="dtdt", radiation=True, rad_order=2)
+        expected = system.rhs.jacobian(_symbols(system))
+        assert system.jacobian == sp.ImmutableSparseMatrix(expected)
+
+    def test_is_sparse_immutable_and_cached(self, rad_network) -> None:
+        system = rad_network.ode_system(radiation=True)
+        jac = system.jacobian
+        assert isinstance(jac, sp.ImmutableSparseMatrix)
+        n = len(system.state)
+        assert jac.shape == (n, n)
+        assert 0 not in jac.todok().values()
+        assert system.jacobian is jac
+
+    @pytest.mark.parametrize(
+        "energy", ["volumetric", "specific", "per_particle", "molar"]
+    )
+    def test_dedt_matches_rhs_written_in_energy(self, tgas_network, energy) -> None:
+        """Independent check: substitute T(e, n) and differentiate by (n, e)."""
+        net = tgas_network
+        sym = net.symbols
+        system = net.ode_system(thermal="dedt", energy=energy)
+        e = sp.Symbol("e_state")
+        e_expr = net.thermodynamics.eos.normaliser(energy)
+        (t_of_e,) = sp.solve(sp.Eq(e, e_expr), sym.tgas)
+        rhs_in_e = system.rhs.xreplace({sym.tgas: t_of_e})
+        state_in_e = [e if var.kind == "energy" else var.symbol for var in system.state]
+        expected = rhs_in_e.jacobian(state_in_e)
+
+        n = net.species.count
+        point = {sym.ndens[i]: 1.0e2 * (i + 2) for i in range(n)}
+        t0 = 800.0
+        e0 = float(e_expr.xreplace({**point, sym.tgas: t0}))
+        got = system.jacobian.xreplace({**point, sym.tgas: t0})
+        want = expected.xreplace({**point, e: e0})
+        size = len(system.state)
+        for i in range(size):
+            # Exact zeros may come out as round-off of the row's scale
+            scale = max(abs(float(want[i, j])) for j in range(size))
+            for j in range(size):
+                assert float(got[i, j]) == pytest.approx(
+                    float(want[i, j]), rel=1e-9, abs=1e-12 * scale
+                ), (i, j)

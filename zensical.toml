@@ -228,6 +228,7 @@ nav = [
       { "core.OdeSystem" = [
         "reference/core/odesystem/index.md",
         "reference/core/odesystem/rhs.md",
+        "reference/core/odesystem/jacobian.md",
       ] },
       { "core.StateVariable" = [
         "reference/core/statevariable/index.md",
@@ -306,6 +307,7 @@ nav = [
         "reference/physics/thermodynamics/dTdt_chemical.md",
         "reference/physics/thermodynamics/dTdt_extra.md",
         "reference/physics/thermodynamics/dTdt_tot.md",
+        "reference/physics/thermodynamics/temperature_derivatives.md",
       ] },
       "reference/physics/constants/index.md",
     ] },

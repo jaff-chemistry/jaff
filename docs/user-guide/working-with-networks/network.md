@@ -292,8 +292,18 @@ system.rhs.shape    # (6, 1): one row per state entry, in the same order
 ```
 
 The species rows come from the reactions, the thermal row from
-`net.thermodynamics` and the radiation rows from `net.radiation`; `Codegen`'s
-`rhses` prints `system.rhs`.
+`net.thermodynamics` and the radiation rows from `net.radiation`.
+
+`system.jacobian` is the derivative of `rhs` with respect to the state, a sparse
+`n × n` matrix holding only the non-zero entries. With `thermal="dedt"` the
+equations are written in `tgas` while the state holds the energy `e`, so the
+energy column and the species columns go through the EOS chain rule
+(`net.thermodynamics.temperature_derivatives(energy)`):
+
+<!-- prettier-ignore -->
+$$ \frac{\partial F}{\partial e} = \frac{\partial F}{\partial T}\frac{\partial T}{\partial e}, \qquad \frac{\partial F}{\partial n_j}\Big|_e = \frac{\partial F}{\partial n_j}\Big|_T + \frac{\partial F}{\partial T}\frac{\partial T}{\partial n_j}\Big|_e $$
+
+`Codegen`'s `rhses` and `jacobian` print `system.rhs` and `system.jacobian`.
 
 ---
 
