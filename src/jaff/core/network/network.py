@@ -414,8 +414,8 @@ class Network:
         self.reactions.check_config()
         self.__post_process(parsers)
         self.reactions.link()
-        self.__set_emissivity()
-        self.__set_absorption_coefficient()
+        if self.radiation is not None:
+            self.radiation.compute()
         self.thermodynamics: Thermodynamics = Thermodynamics(
             self, self.config.thermodynamics
         )
@@ -598,46 +598,6 @@ class Network:
 
         for parser in parsers:
             parser.post_process(self)
-
-    def __set_emissivity(self) -> None:
-        """Integrate the ``globalEmissivity`` over the radiation groups.
-
-        Stores the spectrum on ``radiation.emissivity`` and its per-group
-        integrals on each ``group.emissivity``.  Does nothing without
-        radiation or without a ``globalEmissivity`` function.
-        """
-        if self.radiation is None or "globalemissivity" not in self.functions:
-            return
-
-        emissivity = self.functions.value("globalemissivity")
-
-        self.radiation.emissivity = emissivity
-        groups = self.radiation.groups
-        for group, value in zip(
-            groups, self.radiation.integrate_over_groups(emissivity), strict=True
-        ):
-            group.emissivity = self.reactions.resolve_rate_references(value)
-
-    def __set_absorption_coefficient(self) -> None:
-        """Average the ``globalAbsorptionCoefficient`` over the radiation groups.
-
-        Stores the spectrum on ``radiation.absorption_coefficient`` and its
-        per-group averages on each ``group.absorption_coefficient``.
-        Does nothing without radiation or without a
-        ``globalAbsorptionCoefficient`` function.
-        """
-        name = "globalabsorptioncoefficient"
-        if self.radiation is None or name not in self.functions:
-            return
-
-        coefficient = self.functions.value(name)
-
-        self.radiation.absorption_coefficient = coefficient
-        groups = self.radiation.groups
-        for group, value in zip(
-            groups, self.radiation.average_over_groups(coefficient), strict=True
-        ):
-            group.absorption_coefficient = self.reactions.resolve_rate_references(value)
 
     def __parse_rate(
         self,

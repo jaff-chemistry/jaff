@@ -112,3 +112,19 @@ def test_enters_density_equations_only(emissive_network):
     for i, group in enumerate(net.radiation.groups):
         assert sp.simplify(odes[i] - group.emissivity) == 0
         assert odes[nb + i].is_zero
+
+
+def test_radiation_computes_its_own_emissivity(emissive_network):
+    from jaff import Network
+
+    net = emissive_network(radiation=RadiationConfig(bands=BANDS))
+    groups = net.radiation.groups
+    before = [g.emissivity for g in groups]
+    for g in groups:
+        g.emissivity = None
+
+    net.radiation.compute()
+
+    assert [g.emissivity for g in groups] == before
+    assert not hasattr(Network, "_Network__set_emissivity")
+    assert not hasattr(Network, "_Network__set_absorption_coefficient")

@@ -361,12 +361,12 @@ class Radiation:
         (erg cm⁻³ s⁻¹ eV⁻¹), integrated over solid angle, as an expression in
         ``ph_E``.  ``None`` without one.  Its
         per-group integrals are ``grp.emissivity``; their sum is
-        :attr:`total_emissivity`.
+        :attr:`total_emissivity`.  Set by :meth:`compute`.
     absorption_coefficient : sympy.Expr or None
         The network ``.jfunc`` ``globalAbsorptionCoefficient``: the fraction of
         the radiation absorbed per unit path length (cm⁻¹) as a function of
         ``ph_E`` (eV).  ``None`` without one.  Its per-group averages are
-        ``grp.absorption_coefficient``.
+        ``grp.absorption_coefficient``.  Set by :meth:`compute`.
 
     Notes
     -----
@@ -868,6 +868,32 @@ class Radiation:
             norm = group.eden
 
         return smart_integrate(xsec * profile, ph_E, (group.lower, group.upper)) / norm
+
+    def compute(self) -> None:
+        """Integrate the network's ``.jfunc`` emissivity and absorption over the bands.
+
+        Sets :attr:`emissivity` (the ``globalEmissivity`` spectrum) and each
+        group's ``emissivity`` (its integral over the band), and
+        :attr:`absorption_coefficient` (the ``globalAbsorptionCoefficient``
+        spectrum) and each group's ``absorption_coefficient`` (its band
+        average).  Each is left ``None`` without its function.  Run by
+        :class:`~jaff.core.Network` once its reactions are linked, so an
+        ``rc_<N>`` in either function is reaction *N*'s final rate coefficient.
+        """
+        functions = self.network.functions
+        resolve = self.network.reactions.resolve_rate_references
+
+        if "globalemissivity" in functions:
+            self.emissivity = functions.value("globalemissivity")
+            values = self.integrate_over_groups(self.emissivity)
+            for group, value in zip(self.groups, values, strict=True):
+                group.emissivity = resolve(value)
+
+        if "globalabsorptioncoefficient" in functions:
+            self.absorption_coefficient = functions.value("globalabsorptioncoefficient")
+            values = self.average_over_groups(self.absorption_coefficient)
+            for group, value in zip(self.groups, values, strict=True):
+                group.absorption_coefficient = resolve(value)
 
     def integrate_over_groups(self, spectrum: sp.Expr) -> List[sp.Expr]:
         """Integrate an emitted spectrum over each group, in density-equation units.
