@@ -18,12 +18,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from sympy import Expr, Float
+
 from ...drivers.pooch import download_dust
 from .photoelectric_emission import PhotoelectricEmission
 from .tabular import Tabular
 
 if TYPE_CHECKING:
     from ...core.network import Network
+    from ..photo_reactions import RadiationGroup
     from .config import DustConfig
 
 
@@ -36,9 +39,9 @@ class Dust:
     table of a config file, and stores it as ``net.dust`` (``None`` without
     either).  It groups the dust processes as sub-objects: photoelectric
     emission (:attr:`pe`) and the tabulated dust cross sections
-    (:attr:`tabular`).  With a radiation field,
-    :func:`~jaff.physics.get_sradodes` subtracts the dust attenuation from each
-    band's moment equations:
+    (:attr:`tabular`).  With a radiation field, the radiation equations
+    subtract the dust attenuation (:meth:`attenuation`) from each band's
+    moment equations:
 
     ```
     d(den[i])/dt   -= Zd * c * den[i]   * n_hnuc * <σ_u>_i
@@ -111,3 +114,42 @@ class Dust:
         self.config: DustConfig = config
         self.pe: PhotoelectricEmission = PhotoelectricEmission(network, config.pe)
         self.tabular: Tabular = Tabular(self)
+
+    def attenuation(self, group: RadiationGroup) -> tuple[Expr, Expr]:
+        """The radiation the dust removes from *group*, per unit time.
+
+        ``Zd · c · den[i] · n_hnuc · <σ_u>_i`` from the band's density and
+        ``Zd · c · rflux[i] · n_hnuc · <σ_f>_i`` from its flux, with ``<σ_u>_i``
+        and ``<σ_f>_i`` the per-H-nucleus cross sections of the
+        ``u_reduction`` and ``f_reduction`` kinds averaged over the band
+        (``tabular.avg_cross_section_per_hnuc``); a kind of ``"none"`` gives
+        ``0``.
+
+        Parameters
+        ----------
+        group : RadiationGroup
+            The radiation band (``net.radiation`` must be set).
+
+        Returns
+        -------
+        tuple[sympy.Expr, sympy.Expr]
+            ``(density_loss, flux_loss)``, to subtract from the band's density
+            and flux equations.
+        """
+        radiation = self.net.radiation
+        assert radiation is not None
+
+        symbols = self.net.symbols
+        base = symbols.zd * radiation.c * symbols.n_hnuc
+        bounds = (group.lower, group.upper)
+
+        def loss(kind: str, moment: Expr) -> Expr:
+            if kind == "none":
+                return Float(0.0)
+
+            return base * moment * self.tabular.avg_cross_section_per_hnuc(kind, bounds)
+
+        return (
+            loss(self.config.u_reduction, radiation.den[group.index]),
+            loss(self.config.f_reduction, radiation.flux[group.index]),
+        )

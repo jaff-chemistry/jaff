@@ -282,6 +282,7 @@ nav = [
       ] },
       { "physics.Dust" = [
         "reference/physics/dust/index.md",
+        "reference/physics/dust/attenuation.md",
       ] },
       { "physics.EosFactory" = [
         "reference/physics/eosfactory/index.md",

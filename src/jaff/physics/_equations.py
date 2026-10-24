@@ -31,7 +31,6 @@ from ..io._logger import jaff_progress
 
 if TYPE_CHECKING:
     from .. import Network, Reactions, Species
-    from ..physics import RadiationGroup
 
 
 def get_sfluxes(
@@ -331,7 +330,9 @@ def get_sradodes(net: "Network", order: int = 0) -> list[Expr]:
             group_rate += group.emissivity
 
         if net.dust is not None:
-            group_rate, flux = handle_dust_reduction(net, group, group_rate, flux, rflux)
+            density_loss, flux_loss = net.dust.attenuation(group)
+            group_rate -= density_loss
+            flux -= flux_loss
 
         grate[group.index] = group_rate
         gflux[group.index] = flux
@@ -347,66 +348,3 @@ def get_sradodes(net: "Network", order: int = 0) -> list[Expr]:
         radodes[fi] = flux
 
     return radodes
-
-
-def handle_dust_reduction(
-    net: Network, group: RadiationGroup, grate: Expr, gflux: Expr, rflux: IndexedBase
-) -> tuple[Expr, Expr]:
-    """Subtract dust absorption/transport reductions from a band's ODE terms.
-
-    For a single radiation band, this removes the radiation lost to dust from
-    the energy-density source term ``grate`` and the flux source term
-    ``gflux``.  Each reduction term is
-    ``Zd * c * <moment> * n_hnuc * avg_cross_section_per_hnuc(kind, band)``,
-    where ``<moment>`` is the band symbol ``group.sym`` for the energy density
-    and ``rflux[group.index]`` for the flux.  The energy-density and flux
-    reductions use the dust's ``u_reduction`` and ``f_reduction`` kinds
-    respectively; a kind that is ``"none"`` is skipped.
-
-    Parameters
-    ----------
-    net : Network
-        The network supplying the radiation field (``net.radiation``) and the
-        dust module (``net.dust``); both must be enabled.
-    group : RadiationGroup
-        The radiation band whose symbol, index, and energy bounds
-        (``group.lower``, ``group.upper``) select the averaged cross-section.
-    grate : Expr
-        The band's energy-density source term to reduce.
-    gflux : Expr
-        The band's flux source term to reduce.
-    rflux : IndexedBase
-        Flux moment symbol, indexed by band to form the flux reduction term.
-
-    Returns
-    -------
-    tuple of sympy.Expr
-        The updated ``(grate, gflux)`` pair with dust reductions subtracted.
-    """
-    assert net.radiation is not None
-    assert net.dust is not None
-
-    u_reduction = net.dust.config.u_reduction
-    f_reduction = net.dust.config.f_reduction
-    if u_reduction != "none":
-        grate -= (
-            net.symbols.zd
-            * net.radiation.c
-            * group.sym
-            * net.symbols.n_hnuc
-            * net.dust.tabular.avg_cross_section_per_hnuc(
-                u_reduction, (group.lower, group.upper)
-            )
-        )
-    if f_reduction != "none":
-        gflux -= (
-            net.symbols.zd
-            * net.radiation.c
-            * rflux[group.index]
-            * net.symbols.n_hnuc
-            * net.dust.tabular.avg_cross_section_per_hnuc(
-                f_reduction, (group.lower, group.upper)
-            )
-        )
-
-    return grate, gflux

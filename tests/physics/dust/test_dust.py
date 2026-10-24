@@ -88,3 +88,36 @@ class TestNetworkDust:
         assert net.dust is not None
         assert net.dust.config.rv == pytest.approx(4.0)
         assert net.dust.config.f_reduction == "none"
+
+
+class TestAttenuation:
+    BANDS = {"bands": [6.0, 13.6, 100.0]}
+
+    def _net(self, make_network, **dust):
+        return make_network(
+            NET, name="d.jet", funcfile=False, radiation=self.BANDS, dust=dust
+        )
+
+    def test_loss_terms(self, make_network):
+        net = self._net(make_network)
+        rad, group = net.radiation, net.radiation.groups[1]
+        bounds = (group.lower, group.upper)
+        avg = net.dust.tabular.avg_cross_section_per_hnuc
+        base = net.symbols.zd * rad.c * net.symbols.n_hnuc
+
+        density_loss, flux_loss = net.dust.attenuation(group)
+
+        assert density_loss == base * rad.den[1] * avg("absorption", bounds)
+        assert flux_loss == base * rad.flux[1] * avg("transport", bounds)
+
+    def test_none_drops_the_term(self, make_network):
+        net = self._net(make_network, u_reduction="none", f_reduction="none")
+
+        losses = net.dust.attenuation(net.radiation.groups[0])
+
+        assert [float(loss) for loss in losses] == pytest.approx([0.0, 0.0])
+
+    def test_free_function_is_gone(self):
+        import jaff.physics._equations as equations
+
+        assert not hasattr(equations, "handle_dust_reduction")
