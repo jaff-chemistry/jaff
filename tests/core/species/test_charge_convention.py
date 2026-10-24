@@ -19,7 +19,7 @@ def test_template_uses_jk_identifiers(tmp_path, template, outfile):
     ``He++`` species (exercising the multi-charge, all-signs-replaced path ->
     ``hejj``) instead of depending on a bundled network file.
     """
-    from jaff.cli import JaffGen
+    from tests.jaffgen_run import run_jaffgen
 
     net = tmp_path / "net.dat"
     net.write_text(
@@ -44,7 +44,7 @@ def test_template_uses_jk_identifiers(tmp_path, template, outfile):
         files=None,
         template=template,
     )
-    JaffGen(args)
+    run_jaffgen(args)
     text = (outdir / outfile).read_text()
     assert "idx_hejj" in text  # He++ -> j/k
     assert "idx_hepp" not in text  # old p/n gone

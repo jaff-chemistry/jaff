@@ -1,10 +1,9 @@
-# ABOUTME: Dataclasses holding a jaffgen run's state (config, files, output dir)
-# ABOUTME: and the default output directory <repo_root>/generated.
-from dataclasses import dataclass, field
+# ABOUTME: ResolvedPath (a file to render and where it lands) and the default
+# ABOUTME: jaffgen output directory <repo_root>/generated.
+from dataclasses import dataclass
 from pathlib import Path
 
 from ...config import JAFF_DIR
-from .config import JaffgenConfig, JaffgenRunConfig
 
 #: Fallback output directory (``<repo_root>/generated``) when none is supplied.
 DEFAULT_OUTPUT: Path = JAFF_DIR.parent.parent / "generated"
@@ -25,32 +24,3 @@ class ResolvedPath:
 
     abspath: Path
     relpath: Path
-
-
-@dataclass
-class State:
-    """The loaded config and the files of a single ``jaffgen`` run.
-
-    Attributes
-    ----------
-    config_file : Path or None
-        The ``jaffgen.toml`` the config was loaded from (given or bundled), if any.
-    config : JaffgenRunConfig
-        The run's config: the validated ``[jaffgen]`` section and the
-        ``[network]`` settings handed to the network.
-    output_dir : ResolvedPath
-        Directory the generated files are written to (defaults to
-        :data:`DEFAULT_OUTPUT`).
-    output_files : list of ResolvedPath
-        Every file to render, gathered from the template (minus its bundled
-        ``jaffgen.toml``), the input directory and the individual input files.
-    """
-
-    config_file: Path | None = None
-    config: JaffgenRunConfig = field(
-        default_factory=lambda: JaffgenRunConfig(JaffgenConfig(), {}, None)
-    )
-    output_dir: ResolvedPath = field(
-        default_factory=lambda: ResolvedPath(DEFAULT_OUTPUT, Path())
-    )
-    output_files: list[ResolvedPath] = field(default_factory=list)

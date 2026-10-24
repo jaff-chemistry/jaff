@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from jaff.cli import JaffGen
+from tests.jaffgen_run import run_jaffgen
 from jaff.errors import ParserError
 from jaff.physics.photo_reactions.config import RadiationConfig
 
@@ -109,7 +109,7 @@ def test_jaffgen_global_flag_reaches_radiation(tmp_path):
         "[network.radiation]\nbands = [6, 13.6, 100]\n"
         "[network.reactions.photo]\noverride_custom_rate = true\n"
     )
-    gen = JaffGen(
+    gen = run_jaffgen(
         SimpleNamespace(
             network="h_photoionization",
             config=str(cfg),

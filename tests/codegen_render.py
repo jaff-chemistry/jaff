@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 
-from jaff.cli import JaffGen
+from tests.jaffgen_run import run_jaffgen
 from tests._paths import FIXTURES_DIR, GOLDEN_DIR, REPO_ROOT
 
 REPO = REPO_ROOT
@@ -55,7 +55,7 @@ def template_functions(path: Path) -> List[str]:
 
 def render(network: Path, files: Sequence[Path], outdir: Path) -> None:
     """Render *files* for *network* through the in-process ``jaffgen`` engine."""
-    JaffGen(
+    run_jaffgen(
         SimpleNamespace(
             network=str(network),
             config=str(CONFIG),

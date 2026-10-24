@@ -36,7 +36,7 @@ Usage
 import logging
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, List, Optional
+from typing import List, Optional
 
 import typer
 
@@ -48,42 +48,99 @@ from ...config.json_schema import SCHEMA_DIR
 from ...config.loader import dump_config
 from ...io import JaffLogger, jaff_progress
 from .._helper import DuplicatePolicy, command_line_layer, funcfile_arg, reports_errors
-from ._structs import DEFAULT_OUTPUT, ResolvedPath, State
-from .config import JaffgenTomlConfig, load_jaffgen_config
+from ._structs import DEFAULT_OUTPUT, ResolvedPath
+from .config import JaffgenRunConfig, JaffgenTomlConfig, load_jaffgen_config
 
 
-class JaffGen:
-    """
-    Engine for the ``jaffgen`` CLI command.
+def run_config(args: SimpleNamespace) -> JaffgenRunConfig:
+    """Load a ``jaffgen`` run's config from its command-line arguments.
 
-    Instantiating this class drives the full code-generation pipeline from a
-    namespace of parsed CLI arguments:
-
-    1. Load the config (``parse_args``): ``jaffgen.toml`` (or the template's)
-       < command line.
-    2. Build the chemical reaction network once (``build_network``); it merges
-       the run's ``[network]`` settings over its own ``jaff.toml``.
-    3. Collect the files to render (``collect_files``).
-    4. Write any config-declared data tables (``handle_data_tables``).
-    5. Write the network's shielding tables to the output directory
-       (:meth:`~jaff.Network.write_shielding_tables`).
-    6. Render every collected template file to the output directory
-       (``process_files``).
-    7. Write the run's whole config as ``config.toml`` (``write_config``).
+    The ``--config`` file (resolved against the working directory), else the
+    ``jaffgen.toml`` its template bundles, then the command-line options and
+    ``--set`` items; see :func:`~jaff.cli.jaffgen.config.load_jaffgen_config`.
 
     Parameters
     ----------
     args : types.SimpleNamespace
         Parsed command-line arguments, one attribute per CLI option (see
-        :data:`~jaff.cli._helper.CLI_KEYS`, plus ``config``).  Missing
-        attributes count as not given.
+        :data:`~jaff.cli._helper.CLI_KEYS`, plus ``config`` and ``set``).
+        Missing attributes count as not given.
+
+    Returns
+    -------
+    JaffgenRunConfig
+        The run's config.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``--config`` or another named config file does not exist.
+    ParserError
+        If a file is not valid TOML or ``[jaffgen]`` is invalid.
+    """
+    config_file = _config_file(getattr(args, "config", None))
+
+    return load_jaffgen_config(config_file, command_line_layer(args))
+
+
+def _config_file(config_file: Path | str | None) -> Path | None:
+    """Resolve the ``--config`` file against the working directory.
+
+    Raises
+    ------
+    FileNotFoundError
+        If *config_file* does not exist or is not a regular file.
+    """
+    if config_file is None:
+        return None
+
+    path = Path(config_file).resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"{config_file} is not a file")
+
+    return path
+
+
+class JaffGen:
+    """
+    Engine for the ``jaffgen`` CLI command: one code-generation run.
+
+    Built from the run's loaded config (:func:`run_config`, or
+    :func:`~jaff.cli.jaffgen.config.load_jaffgen_config`), it prepares the run
+    without writing anything:
+
+    1. Build the chemical reaction network once (``build_network``); it merges
+       the run's ``[network]`` settings over its own ``jaff.toml``.
+    2. Collect the files to render and choose the output directory
+       (``collect_files``).
+
+    :meth:`run` then writes the run's output:
+
+    3. Any config-declared data tables (``handle_data_tables``).
+    4. The network's shielding tables
+       (:meth:`~jaff.Network.write_shielding_tables`).
+    5. Every collected template file, rendered (``process_files``).
+    6. The run's whole config as ``config.toml`` (``write_config``).
+
+    Parameters
+    ----------
+    config : JaffgenRunConfig
+        The run's config.
 
     Attributes
     ----------
-    state : State
-        The loaded config and the files and directory of this run.
+    config : JaffgenRunConfig
+        The run's config (read-only): ``jaffgen`` (the ``[jaffgen]`` section),
+        ``network`` (the ``[network]`` settings handed to the network) and
+        ``config_file`` (the ``jaffgen.toml`` used).
     net : Network
         The reaction network built from the config.
+    output_dir : Path
+        Directory the generated files are written to (``[jaffgen]
+        output_dir``, else :data:`DEFAULT_OUTPUT`).
+    output_files : list of ResolvedPath
+        Every file to render, from the template (minus its bundled
+        ``jaffgen.toml``), the input directory and the individual input files.
 
     Raises
     ------
@@ -92,53 +149,49 @@ class JaffGen:
         contributes no files rather than raising), or no network file is
         provided.
     FileNotFoundError
-        If a specified config, network, individual input file, or
-        network-config path does not exist.
+        If the network or an individual input file does not exist.
     ParserError
-        If the config is invalid.
+        If the network's config is invalid.
     ValueError
         If an unsupported template name is given.
     """
 
-    def __init__(self, args: SimpleNamespace):
-        """Load the config, build the network, and generate all files.
+    def __init__(self, config: JaffgenRunConfig):
+        """Build the network and collect the files of the run; nothing is written.
 
         Parameters
         ----------
-        args : types.SimpleNamespace
-            Parsed command-line arguments (see the class docstring).
+        config : JaffgenRunConfig
+            The run's config.
         """
         self.logger: logging.Logger = JaffLogger().get_logger()
-        self.args: SimpleNamespace = args
-        self.state: State = State()
+        self.config: JaffgenRunConfig = config
+        self.output_dir: Path = DEFAULT_OUTPUT
+        self.output_files: list[ResolvedPath] = []
 
         print_motd("jaffgen")
-        self.parse_args()
         # The network validates its settings: build it before touching files.
         self.net: Network = self.build_network()
         self.collect_files()
+
+    def run(self) -> None:
+        """Write the run's output: tables, shielding tables, rendered files, config.
+
+        Creates :attr:`output_dir` first.
+        """
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         self.handle_data_tables()
-        self.net.write_shielding_tables(self.state.output_dir.abspath)
+        self.net.write_shielding_tables(self.output_dir)
         self.process_files()
         self.write_config()
 
     # ------------------------------------------------------------------
-    # Config and file collection
+    # File collection
     # ------------------------------------------------------------------
-
-    def parse_args(self) -> None:
-        """Load the run's config from ``--config`` (else the template's) and the command line.
-
-        A ``jaffgen.toml`` bundled with the template is used when no
-        ``--config`` was given (see :func:`~jaff.cli.jaffgen.config.load_jaffgen_config`).
-        """
-        cli = command_line_layer(self.args)
-        config_file = self._config_file(getattr(self.args, "config", None))
-        self.load_config(config_file, cli)
 
     def collect_files(self) -> None:
         """
-        Collect every file to render and create the output directory.
+        Collect every file to render and choose the output directory.
 
         Files come from the template (minus its bundled ``jaffgen.toml``, which
         is config), then the input directory, then the individual input files.
@@ -148,41 +201,15 @@ class JaffGen:
         RuntimeError
             If no input file/folder/template resolved.
         """
-        template_files = self._template_files(self.state.config.jaffgen.template)
-
-        self.state.output_files = [
+        template_files = self._template_files(self.config.jaffgen.template)
+        self.output_files = [
             f for f in template_files if f.abspath.name != "jaffgen.toml"
         ]
         self.collect_input_files()
         self.set_output_dir()
 
-        if not self.state.output_files:
+        if not self.output_files:
             raise RuntimeError("No valid input file/folder/template have been supplied")
-
-        self.state.output_dir.abspath.mkdir(parents=True, exist_ok=True)
-
-    def load_config(self, config_file: Path | None, cli: dict[str, Any]) -> None:
-        """Load the run's config from *config_file* (else the template's) and *cli*."""
-        self.state.config = load_jaffgen_config(config_file, cli)
-        self.state.config_file = self.state.config.config_file
-
-    @staticmethod
-    def _config_file(config_file: Path | str | None) -> Path | None:
-        """Resolve the ``--config`` file against the working directory.
-
-        Raises
-        ------
-        FileNotFoundError
-            If *config_file* does not exist or is not a regular file.
-        """
-        if config_file is None:
-            return None
-
-        path = Path(config_file).resolve()
-        if not path.is_file():
-            raise FileNotFoundError(f"{config_file} is not a file")
-
-        return path
 
     @staticmethod
     def _template_files(template: str | None) -> list[ResolvedPath]:
@@ -243,10 +270,10 @@ class JaffGen:
         is mirrored under the output directory; individual ``input_files``
         land flat (their bare name).
         """
-        run = self.state.config.jaffgen
+        run = self.config.jaffgen
         if run.input_dir is not None:
             idir = run.input_dir
-            self.state.output_files.extend(
+            self.output_files.extend(
                 ResolvedPath(f.resolve(), f.relative_to(idir))
                 for f in idir.rglob("*")
                 if not f.is_dir()
@@ -276,16 +303,16 @@ class JaffGen:
             raise FileNotFoundError(f"{path} is not a file")
 
         # relpath is the bare name so individual files land flat in outdir.
-        self.state.output_files.append(ResolvedPath(path, Path(path.name)))
+        self.output_files.append(ResolvedPath(path, Path(path.name)))
 
     def set_output_dir(self) -> None:
         """
         Set the output directory: the configured one, else the default
         ``<repo_root>/generated`` (with a warning).
         """
-        output_dir = self.state.config.jaffgen.output_dir
+        output_dir = self.config.jaffgen.output_dir
         if output_dir is not None:
-            self.state.output_dir = ResolvedPath(output_dir, output_dir)
+            self.output_dir = output_dir
             return
 
         self.logger.warning("No output directory has been supplied.")
@@ -311,7 +338,7 @@ class JaffGen:
         RuntimeError
             If no network file was supplied.
         """
-        config = self.state.config
+        config = self.config
         network_file = config.jaffgen.network_file
         if network_file is None:
             raise RuntimeError("No network file supplied. Please enter a network file")
@@ -326,11 +353,9 @@ class JaffGen:
         ``jaffgen.toml`` and the command line merged): an exact record of the
         run, loadable again with ``--config``.
         """
-        path = self.state.output_dir.abspath / "config.toml"
+        path = self.output_dir / "config.toml"
         schema = SCHEMA_DIR / "jaffgen.schema.json"
-        config = JaffgenTomlConfig(
-            jaffgen=self.state.config.jaffgen, network=self.net.config
-        )
+        config = JaffgenTomlConfig(jaffgen=self.config.jaffgen, network=self.net.config)
         path.write_text(dump_config(config, schema=schema))
         self.logger.info(f"[cyan]{path.name}[/] created at {path.parent}")
 
@@ -346,7 +371,7 @@ class JaffGen:
         -------
         None
         """
-        tables = self.state.config.jaffgen.table
+        tables = self.config.jaffgen.table
         if not tables:
             return
 
@@ -359,13 +384,13 @@ class JaffGen:
         from ._config_table import ConfigTable
 
         # Tables come from a config file; its directory anchors their paths.
-        assert self.state.config_file is not None
-        outdir = self.state.output_dir.abspath
+        assert self.config.config_file is not None
+        outdir = self.output_dir
 
         for table_props in tables:
             ct = ConfigTable(
                 table_props,
-                self.state.config_file,
+                self.config.config_file,
                 # Network resolved the final path (file or predefined name).
                 self.net.filename,
             )
@@ -395,25 +420,21 @@ class JaffGen:
         None
         """
         for file in jaff_progress.track(
-            self.state.output_files, description="Processing files"
+            self.output_files, description="Processing files"
         ):
             fparser = TemplateParser(
-                self.net, file.abspath, echo_directives=self.state.config.jaffgen.echo
+                self.net, file.abspath, echo_directives=self.config.jaffgen.echo
             )
             lines: str = fparser.parse_file()
 
-            outfile: Path = self.state.output_dir.abspath / file.relpath
+            outfile: Path = self.output_dir / file.relpath
             outfile.parent.mkdir(parents=True, exist_ok=True)
             outfile.write_text(lines)
 
-            self.logger.info(
-                f"[cyan]{file.relpath.name}[/] created at {self.state.output_dir.abspath}"
-            )
+            self.logger.info(f"[cyan]{file.relpath.name}[/] created at {self.output_dir}")
 
         self.logger.info("[green]Successfully generated files[/]")
-        self.logger.info(
-            f"Generated files can be found at {self.state.output_dir.abspath}"
-        )
+        self.logger.info(f"Generated files can be found at {self.output_dir}")
 
 
 app = typer.Typer(
@@ -559,7 +580,7 @@ def generate(
         echo=echo,
         set=set_,
     )
-    JaffGen(args)
+    JaffGen(run_config(args)).run()
 
 
 def main():

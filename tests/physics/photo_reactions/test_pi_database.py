@@ -10,7 +10,7 @@ import pytest
 import sympy as sp
 
 from jaff.core.network.config import NetworkConfig
-from jaff.cli import JaffGen
+from tests.jaffgen_run import run_jaffgen
 from jaff.common._integrators import get_bounds
 from jaff.core.network import NetworkSymbols
 from jaff.errors import ParserError
@@ -337,7 +337,7 @@ H_PHOTO = REPO / "networks" / "h_photoionization" / "h_photo.jet"
 def _jaffgen(tmp_path, toml):
     cfg = tmp_path / "jaffgen.toml"
     cfg.write_text(toml)
-    return JaffGen(
+    return run_jaffgen(
         SimpleNamespace(
             network=str(H_PHOTO),
             config=str(cfg),

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from jaff.cli import JaffGen
+from tests.jaffgen_run import run_jaffgen
 from tests._paths import FIXTURES_DIR, REPO_ROOT
 
 
@@ -29,7 +29,7 @@ def _jaffgen(network_path, template, outdir):
         files=None,
         template=template,
     )
-    JaffGen(args)
+    run_jaffgen(args)
 
 
 REPO = REPO_ROOT

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 import sympy as sp
 
-from jaff.cli import JaffGen
+from tests.jaffgen_run import run_jaffgen
 from jaff.errors import ParserError
 from jaff.physics import Dust, Radiation
 from tests._paths import REPO_ROOT
@@ -61,7 +61,7 @@ def gen(tmp_path):
     """Run the full jaffgen pipeline with dust + radiation enabled."""
     config = tmp_path / "jaffgen.toml"
     config.write_text(CONFIG_TOML)
-    return JaffGen(_args(config, tmp_path / "out"))
+    return run_jaffgen(_args(config, tmp_path / "out"))
 
 
 def test_radiation_enabled(gen):
@@ -95,7 +95,7 @@ def _gen_with_profile_index(tmp_path, profile_index):
     config.write_text(
         CONFIG_TOML.replace("profile_index = 0", f"profile_index = {profile_index}")
     )
-    return JaffGen(_args(config, tmp_path / "out"))
+    return run_jaffgen(_args(config, tmp_path / "out"))
 
 
 def test_list_profile_index_sets_per_band_index(tmp_path):

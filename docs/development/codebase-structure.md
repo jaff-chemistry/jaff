@@ -138,7 +138,7 @@ src/jaff/
 │   ├── _helper.py              # CLI_KEYS (option → config key), --set, funcfile_arg
 │   ├── jaffgen/                # jaffgen — template-driven code generation
 │   │   ├── _engine.py          # JaffGen pipeline + Typer `generate` command
-│   │   ├── _structs.py         # State / ResolvedPath
+│   │   ├── _structs.py         # ResolvedPath, DEFAULT_OUTPUT
 │   │   ├── config.py           # JaffgenConfig ([jaffgen]), load_jaffgen_config
 │   │   └── _config_table.py    # [[jaffgen.table]] config → HDF5/CSV output
 │   └── jaffx/                  # jaffx — network inspection / export
@@ -269,7 +269,7 @@ used by the solver plugins.
 
 | Step | Component                                    | What happens                                                                                       |
 | ---- | -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| 1    | `cli/jaffgen/_engine.py`, `config/`          | Parse CLI args (Typer); merge jaff.toml < jaffgen.toml < CLI < `--set` into one validated config; collect the template files |
+| 1    | `cli/jaffgen/_engine.py`, `config/`          | Parse CLI args (Typer); `run_config` merges jaffgen.toml (or the template's) < CLI < `--set` and validates `[jaffgen]`; `JaffGen(config)` builds the network (which merges `[network]` over its jaff.toml) and collects the template files; `run()` writes the output |
 | 2    | `core/parsers/network/_engine.py`            | Auto-detect format via registered plugins; turn each reaction line into a `ParsedRecord`            |
 | 3    | `core/parsers/auxiliary_func/_engine.py`     | Parse `.jfunc` file (if present); resolve `@var`/`@function` blocks into SymPy expressions         |
 | 4    | `core/network/network.py`                    | Build `Species`, `Reactions`, `Elements` catalogues; validate duplicates, sinks, isomers           |

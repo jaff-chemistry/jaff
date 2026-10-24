@@ -118,7 +118,7 @@ class TestCliOverConfigFile:
 
 
 class TestTyperFlags:
-    """The typer command turns flags into the args namespace JaffGen reads."""
+    """The typer command turns flags into the args namespace run_config reads."""
 
     def _args(self, *flags):
         from typer.testing import CliRunner
@@ -127,10 +127,13 @@ class TestTyperFlags:
 
         captured = {}
 
-        def _capture(self, args):
+        def _capture(args):
             captured["args"] = args
 
-        with patch.object(engine.JaffGen, "__init__", _capture):
+        with (
+            patch.object(engine, "run_config", _capture),
+            patch.object(engine, "JaffGen"),
+        ):
             CliRunner().invoke(engine.app, ["--network", "n", *flags])
 
         return captured["args"]
@@ -526,3 +529,58 @@ class TestCliErrors:
         assert result.exit_code == 1
         assert "network.reactions.t_cutoff" in result.output
         assert not isinstance(result.exception, ParserError)
+
+
+class TestJaffGenEngine:
+    """JaffGen(config) prepares a run from a loaded config; run() writes it."""
+
+    def _config(self, tmp_path, **options):
+        from jaff.cli.jaffgen._engine import run_config
+
+        (tmp_path / "net.dat").write_text(TestFuncfileWiring.NETWORK)
+        (tmp_path / "rates.py").write_text(TestFuncfileWiring.TEMPLATE)
+        args = SimpleNamespace(
+            network=str(tmp_path / "net.dat"),
+            files=[str(tmp_path / "rates.py")],
+            outdir=str(tmp_path / "out"),
+            **options,
+        )
+
+        return run_config(args)
+
+    def test_run_config_is_the_loaded_config(self, tmp_path):
+        from jaff.cli.jaffgen.config import JaffgenRunConfig
+
+        config = self._config(tmp_path, strict=True)
+
+        assert isinstance(config, JaffgenRunConfig)
+        assert config.network == {"strict": True}
+        assert config.jaffgen.output_dir == (tmp_path / "out").resolve()
+
+    def test_constructor_prepares_without_writing(self, tmp_path):
+        from jaff.cli import JaffGen
+
+        config = self._config(tmp_path)
+        gen = JaffGen(config)
+
+        assert gen.config is config
+        assert gen.net.reactions.count == 2
+        assert [f.relpath.name for f in gen.output_files] == ["rates.py"]
+        assert gen.output_dir == (tmp_path / "out").resolve()
+        assert not (tmp_path / "out").exists()
+
+    def test_run_writes_the_files_and_the_config(self, tmp_path):
+        from jaff.cli import JaffGen
+
+        JaffGen(self._config(tmp_path)).run()
+
+        assert (tmp_path / "out" / "rates.py").exists()
+        assert (tmp_path / "out" / "config.toml").exists()
+
+    def test_holds_no_cli_arguments_or_state(self, tmp_path):
+        from jaff.cli import JaffGen
+
+        gen = JaffGen(self._config(tmp_path))
+
+        assert not hasattr(gen, "args")
+        assert not hasattr(gen, "state")
