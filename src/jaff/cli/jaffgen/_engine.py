@@ -47,7 +47,12 @@ from ...config import TEMPLATES_DIR, predefined_templates
 from ...config.json_schema import SCHEMA_DIR
 from ...config.loader import dump_config
 from ...io import JaffLogger, jaff_progress
-from .._helper import DuplicatePolicy, command_line_layer, funcfile_arg, reports_errors
+from .._helper import (
+    DuplicatePolicyChoice,
+    command_line_layer,
+    funcfile_arg,
+    reports_errors,
+)
 from ._structs import DEFAULT_OUTPUT, ResolvedPath
 from .config import JaffgenRunConfig, JaffgenTomlConfig, load_jaffgen_config
 
@@ -343,7 +348,7 @@ class JaffGen:
         if network_file is None:
             raise RuntimeError("No network file supplied. Please enter a network file")
 
-        return Network(network_file, config=config.network, _from_cli=True)
+        return Network(network_file, config=config.network)
 
     def write_config(self) -> None:
         """Write the run's whole config to ``config.toml`` in the output directory.
@@ -355,7 +360,9 @@ class JaffGen:
         """
         path = self.output_dir / "config.toml"
         schema = SCHEMA_DIR / "jaffgen.schema.json"
-        config = JaffgenTomlConfig(jaffgen=self.config.jaffgen, network=self.net.config)
+        # Record the output directory actually used (the default when none was given).
+        jaffgen = self.config.jaffgen.model_copy(update={"output_dir": self.output_dir})
+        config = JaffgenTomlConfig(jaffgen=jaffgen, network=self.net.config)
         path.write_text(dump_config(config, schema=schema))
         self.logger.info(f"[cyan]{path.name}[/] created at {path.parent}")
 
@@ -383,8 +390,6 @@ class JaffGen:
         from ...types import HDF5Dict
         from ._config_table import ConfigTable
 
-        # Tables come from a config file; its directory anchors their paths.
-        assert self.config.config_file is not None
         outdir = self.output_dir
 
         for table_props in tables:
@@ -470,7 +475,7 @@ def generate(
         metavar="FILE",
         help="Path to auxiliary function file. Checks network dir for <network_name>.jfunc by default ('true'). Pass 'false' to skip",
     ),
-    duplicate_policy: Optional[DuplicatePolicy] = typer.Option(
+    duplicate_policy: Optional[DuplicatePolicyChoice] = typer.Option(
         None,
         "--duplicate-policy",
         metavar="POLICY",

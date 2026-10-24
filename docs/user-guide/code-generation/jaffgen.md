@@ -119,7 +119,8 @@ directory. Each option sets one config key; see the
 
 The output directory also receives `config.toml`: the run's whole config after
 merging, every key and default included — an exact record of what the run used,
-loadable again with `--config`. (The `jaffgen.toml` itself is not copied.)
+loadable again with `--config`. It records the output directory actually used,
+the default one included. (The `jaffgen.toml` itself is not copied.)
 
 ---
 

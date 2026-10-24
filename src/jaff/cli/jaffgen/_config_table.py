@@ -92,16 +92,18 @@ class ConfigTable:
         CSV extension.
     """
 
-    def __init__(self, table_dict: dict[str, Any], file: Path, network_file: Path):
+    def __init__(self, table_dict: dict[str, Any], file: Path | None, network_file: Path):
         """Initialise and immediately validate source/target configuration.
 
         Parameters
         ----------
         table_dict : dict[str, Any]
             Parsed ``[[jaffgen.table]]`` entry from the TOML config.
-        file : Path
-            Path to the ``jaffgen.toml`` file (relative source paths resolve
-            against its directory; also used in error messages).
+        file : Path or None
+            The ``jaffgen.toml`` file the entry came from: a relative source
+            path resolves against its directory (the working directory without
+            one).  :func:`~jaff.cli.jaffgen.config.load_jaffgen_config` already
+            makes them absolute.
         network_file : Path
             Path to the network file; its parent and stem resolve
             the ``"default"`` source path alias.
@@ -117,7 +119,7 @@ class ConfigTable:
         """
         self.config: dict[str, Any] = table_dict
         # Explicit relative source paths resolve against the config file's dir.
-        self.config_dir = file.parent
+        self.config_dir = file.parent if file is not None else Path.cwd()
         self.network_dir = network_file.parent
         self.default_data: Path = network_file.with_suffix(".hdf5")
         if (
@@ -130,7 +132,9 @@ class ConfigTable:
             )
 
         if "source" not in table_dict:
-            raise KeyError(f"source must be specified in {file}")
+            raise KeyError(
+                f"source must be specified in {file or 'the [[jaffgen.table]] entry'}"
+            )
         self.source_config: dict[str, Any] = self.config["source"]
         self.target_config: dict[str, Any] = self.config.get("target", {})
 

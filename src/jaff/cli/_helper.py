@@ -8,11 +8,12 @@ import functools
 import json
 import tomllib
 from enum import Enum
-from typing import Any, Callable, Dict, List, Tuple, TypeVar, cast
+from typing import Any, Callable, Dict, List, Tuple, TypeVar, cast, get_args
 
 import typer
 
 from ..config.loader import deep_merge
+from ..core.reaction import config as reaction_config
 from ..errors import ParserError
 
 #: Command-line option (its ``args`` attribute) → config key path it sets.
@@ -70,17 +71,17 @@ def reports_errors(command: _CommandT) -> _CommandT:
     return cast(_CommandT, wrapper)
 
 
-class DuplicatePolicy(str, Enum):
-    """Valid ``--duplicate-policy`` values shared by the JAFF CLI tools.
-
-    Selects how two rate coefficients sharing a reaction, mechanism, and
-    temperature range are resolved during network construction (see
-    :class:`~jaff.core.network.NetworkSpec`).
-    """
-
-    preserve_first = "preserve-first"
-    preserve_last = "preserve-last"
-    error = "error"
+#: ``--duplicate-policy`` choices of the JAFF CLI tools: built from the config's
+#: allowed values (:data:`~jaff.core.reaction.config.DuplicatePolicy`), so the two
+#: cannot drift apart.
+DuplicatePolicyChoice = Enum(  # type: ignore[misc]
+    "DuplicatePolicyChoice",
+    {
+        value.replace("-", "_"): value
+        for value in get_args(get_args(reaction_config.DuplicatePolicy)[0])
+    },
+    type=str,
+)
 
 
 def funcfile_arg(value: str) -> bool | str:

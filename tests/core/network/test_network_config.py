@@ -312,7 +312,6 @@ class TestNetworkKeywordSections:
             "radiation",
             "dust",
             "thermodynamics",
-            "_from_cli",
         ]
 
     def test_every_network_key_is_a_keyword(self):

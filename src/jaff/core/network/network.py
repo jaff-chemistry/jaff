@@ -273,7 +273,6 @@ class Network:
         radiation: RadiationConfig | Mapping[str, Any] | None = None,
         dust: DustConfig | Mapping[str, Any] | None = None,
         thermodynamics: ThermodynamicsConfig | Mapping[str, Any] | None = None,
-        _from_cli: bool = False,
     ):
         """Load a reaction network from *fname*.
 
@@ -377,8 +376,7 @@ class Network:
         )
         self.spec: NetworkSpec = NetworkSpec(fname, self.config.funcfile)
 
-        if not _from_cli:
-            print_motd()
+        print_motd()
 
         self.species: Species = Species()
         self.reactions: Reactions = Reactions(self.config.reactions)

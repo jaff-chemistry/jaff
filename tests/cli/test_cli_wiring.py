@@ -584,3 +584,76 @@ class TestJaffGenEngine:
 
         assert not hasattr(gen, "args")
         assert not hasattr(gen, "state")
+
+
+class TestDuplicatePolicyChoices:
+    def test_cli_choices_are_the_config_values(self):
+        from typing import get_args
+
+        from jaff.cli._helper import DuplicatePolicyChoice
+        from jaff.core.reaction.config import DuplicatePolicy
+
+        allowed = get_args(get_args(DuplicatePolicy)[0])
+
+        assert [choice.value for choice in DuplicatePolicyChoice] == list(allowed)
+
+    def test_cli_type_has_its_own_name(self):
+        import jaff.cli._helper as helper
+
+        assert not hasattr(helper, "DuplicatePolicy")
+
+
+class TestSetTables:
+    """[[jaffgen.table]] paths resolve against the layer that set them."""
+
+    TABLE = 'jaffgen.table=[{source={path="data.csv"}}]'
+
+    def test_set_table_resolves_against_the_working_directory(self, tmp_path):
+        config = load_jaffgen_config(None, parse_set([self.TABLE]), cwd=tmp_path)
+
+        assert config.jaffgen.table[0]["source"]["path"] == str(tmp_path / "data.csv")
+
+    def test_file_table_resolves_against_the_file(self, tmp_path):
+        (tmp_path / "run").mkdir()
+        cfg = tmp_path / "run" / "jaffgen.toml"
+        cfg.write_text('[[jaffgen.table]]\nsource = { path = "data.csv" }\n')
+
+        config = load_jaffgen_config(cfg, cwd=tmp_path)
+
+        assert config.jaffgen.table[0]["source"]["path"] == str(
+            (tmp_path / "run" / "data.csv").resolve()
+        )
+
+    def test_default_source_is_kept(self, tmp_path):
+        layer = parse_set(['jaffgen.table=[{source={path="default"}}]'])
+
+        config = load_jaffgen_config(None, layer, cwd=tmp_path)
+
+        assert config.jaffgen.table[0]["source"]["path"] == "default"
+
+    def test_table_needs_no_config_file(self, tmp_path):
+        from jaff.cli.jaffgen._config_table import ConfigTable
+
+        source = tmp_path / "data.csv"
+        source.write_text("a,b\n1,2\n")
+        table = ConfigTable({"source": {"path": str(source)}}, None, tmp_path / "n.jet")
+
+        assert table.source_config["path"] == str(source)
+
+
+class TestOutputDirRecorded:
+    def test_default_output_dir_is_in_config_toml(self, tmp_path, monkeypatch):
+        import jaff.cli.jaffgen._engine as engine
+        from jaff.cli import JaffGen
+
+        monkeypatch.setattr(engine, "DEFAULT_OUTPUT", tmp_path / "generated")
+        (tmp_path / "net.dat").write_text(TestFuncfileWiring.NETWORK)
+        (tmp_path / "rates.py").write_text(TestFuncfileWiring.TEMPLATE)
+        args = SimpleNamespace(
+            network=str(tmp_path / "net.dat"), files=[str(tmp_path / "rates.py")]
+        )
+
+        JaffGen(engine.run_config(args)).run()
+        written = tomllib.loads((tmp_path / "generated" / "config.toml").read_text())
+
+        assert written["jaffgen"]["output_dir"] == str(tmp_path / "generated")

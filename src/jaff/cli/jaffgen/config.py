@@ -131,14 +131,23 @@ def load_jaffgen_config(
         ``[jaffgen]`` is invalid.
     """
     atomic = atomic_tables(JaffgenTomlConfig)
-    cli = resolve_paths(cli_layer or {}, JaffgenTomlConfig, cwd or Path.cwd())
+    cwd = cwd or Path.cwd()
+    cli = _resolve_table_sources(
+        resolve_paths(cli_layer or {}, JaffgenTomlConfig, cwd), cwd
+    )
 
     if config_file is None:
         run = cli.get("jaffgen", {})
         config_file = (
             bundled_config(run.get("template")) if isinstance(run, Mapping) else None
         )
-    file_layer = load_layer(config_file, JaffgenTomlConfig) if config_file else {}
+    file_layer = (
+        _resolve_table_sources(
+            load_layer(config_file, JaffgenTomlConfig), config_file.parent
+        )
+        if config_file
+        else {}
+    )
 
     merged = deep_merge(file_layer, cli, atomic=atomic)
     network = merged.pop("network", {})
@@ -150,6 +159,38 @@ def load_jaffgen_config(
         network = deep_merge(base, {"network": network}, atomic=atomic)["network"]
 
     return JaffgenRunConfig(jaffgen, network, config_file)
+
+
+def _resolve_table_sources(layer: Dict[str, Any], base_dir: Path) -> Dict[str, Any]:
+    """Return *layer* with each ``[[jaffgen.table]]`` source path made absolute.
+
+    A relative ``source.path`` resolves against *base_dir* (the directory of the
+    file that set it, or the working directory for the command line);
+    ``"default"`` (the network's data file) is kept.
+    """
+    run = layer.get("jaffgen")
+    if not isinstance(run, Mapping) or not isinstance(run.get("table"), list):
+        return layer
+
+    resolved = [_resolve_table_source(table, base_dir) for table in run["table"]]
+
+    return {**layer, "jaffgen": {**run, "table": resolved}}
+
+
+def _resolve_table_source(table: Any, base_dir: Path) -> Any:
+    """*table* with a relative, non-``"default"`` ``source.path`` made absolute."""
+    if not isinstance(table, Mapping):
+        return table
+
+    source = table.get("source")
+    if not isinstance(source, Mapping):
+        return table
+
+    path = source.get("path")
+    if not isinstance(path, str) or path == "default":
+        return table
+
+    return {**table, "source": {**source, "path": str((base_dir / path).resolve())}}
 
 
 def bundled_config(template: str | None) -> Path | None:

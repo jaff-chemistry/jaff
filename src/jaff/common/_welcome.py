@@ -143,9 +143,17 @@ def motd(mode: str = "default") -> str:
     return f"{title}\n{sub_title}\n"
 
 
+#: Whether the banner was already printed in this process (see :func:`print_motd`).
+_SHOWN: bool = False
+
+
 def print_motd(mode: str = "default") -> None:
     """
-    Print the JAFF banner to ``sys.stdout`` on any output encoding.
+    Print the JAFF banner to ``sys.stdout`` once per process, on any encoding.
+
+    Only the first call prints: a CLI prints its own banner (``"jaffgen"``,
+    ``"jaffx"``) before building a :class:`~jaff.Network`, whose call is then a
+    no-op, and a session loading several networks shows it once.
 
     The banner's block-art characters are not representable in every encoding:
     on Windows, a piped or redirected stdout uses the locale code page (e.g.
@@ -157,6 +165,11 @@ def print_motd(mode: str = "default") -> None:
     mode : {"default", "jaffgen", "jaffx"}, optional
         Run mode passed to :func:`motd` (default ``"default"``).
     """
+    global _SHOWN
+    if _SHOWN:
+        return
+    _SHOWN = True
+
     text = motd(mode)
     encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
 

@@ -48,7 +48,7 @@ from ...errors import ParserError
 from ...io import JaffLogger
 from .._helper import (
     NETWORK_KEYS,
-    DuplicatePolicy,
+    DuplicatePolicyChoice,
     command_line_layer,
     funcfile_arg,
     reports_errors,
@@ -85,7 +85,7 @@ class JaffX:
                 f"jaffx only takes [network] keys; got {', '.join(unknown)}"
             )
 
-        return Network(args.network, config=layer.get("network", {}), _from_cli=True)
+        return Network(args.network, config=layer.get("network", {}))
 
     def export_table(self, args: SimpleNamespace, fmt: str) -> None:
         """Handle ``jaffx export hdf5`` / ``export txt``.
@@ -280,7 +280,7 @@ def export_txt(
     label: Optional[str] = _LABEL,
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
-    duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    duplicate_policy: Optional[DuplicatePolicyChoice] = _DUP_POLICY,
     set_: Optional[List[str]] = _SET,
     tmin: Optional[float] = typer.Option(
         None,
@@ -368,7 +368,7 @@ def export_hdf5(
     label: Optional[str] = _LABEL,
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
-    duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    duplicate_policy: Optional[DuplicatePolicyChoice] = _DUP_POLICY,
     set_: Optional[List[str]] = _SET,
     tmin: Optional[float] = typer.Option(
         None,
@@ -456,7 +456,7 @@ def export_jaff(
     label: Optional[str] = _LABEL,
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
-    duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    duplicate_policy: Optional[DuplicatePolicyChoice] = _DUP_POLICY,
     set_: Optional[List[str]] = _SET,
 ):
     """Export the network to a .jaff file (gzip-compressed JSON payload)."""
@@ -482,7 +482,7 @@ def get_num_species(
     label: Optional[str] = _LABEL,
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
-    duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    duplicate_policy: Optional[DuplicatePolicyChoice] = _DUP_POLICY,
     set_: Optional[List[str]] = _SET,
 ):
     """Print the number of species."""
@@ -507,7 +507,7 @@ def get_num_reactions(
     label: Optional[str] = _LABEL,
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
-    duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    duplicate_policy: Optional[DuplicatePolicyChoice] = _DUP_POLICY,
     set_: Optional[List[str]] = _SET,
 ):
     """Print the number of reactions."""

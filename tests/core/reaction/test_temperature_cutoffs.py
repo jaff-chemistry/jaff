@@ -23,7 +23,7 @@ def _load(config=None, upper=None):
 
     *upper* stands in for a jaffgen.toml: ``[network]`` keys merged over *config*.
     """
-    return Network(KIDA, funcfile=False, _from_cli=True, config=config, **(upper or {}))
+    return Network(KIDA, funcfile=False, config=config, **(upper or {}))
 
 
 def _reactions(**reactions):

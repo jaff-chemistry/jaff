@@ -173,8 +173,9 @@ The output currently starts with an unnamed row-index column:
 <!-- prettier-ignore -->
 !!! note "Relative paths"
     A table's `source.path` is resolved against the directory of the
-    `jaffgen.toml` that declares it; its `target.path` is resolved against the
-    run's output directory.  Table entries are passed to the converter as
+    `jaffgen.toml` that declares it, or against the working directory when the
+    table is given on the command line (`--set 'jaffgen.table=[...]'`); its
+    `target.path` is resolved against the run's output directory.  Table entries are passed to the converter as
     written: the [configuration schema](reference.md) does not check their keys.
 
 <!-- prettier-ignore -->

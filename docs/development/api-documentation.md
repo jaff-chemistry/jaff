@@ -57,7 +57,7 @@ it) decides what is documented:
 
 - **Members**: a class page lists only the members the class itself defines;
   inherited methods (e.g. `Species.count`, from `Catalogue`) get no page. Names
-  starting with `_` are skipped, and so are private parameters (`_from_cli`) in
+  starting with `_` are skipped, and so are private parameters (`_name`) in
   signatures.
 - **Constants** take their description from a string literal directly after the
   assignment (a `#:` comment is not read):
