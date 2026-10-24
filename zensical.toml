@@ -253,7 +253,6 @@ nav = [
       ] },
       { "physics.Photochemistry" = [
         "reference/physics/photochemistry/index.md",
-        "reference/physics/photochemistry/get_verner_xsec.md",
         "reference/physics/photochemistry/get_custom_xsec.md",
         "reference/physics/photochemistry/get_xsec.md",
         "reference/physics/photochemistry/log_fallback_summary.md",
@@ -266,7 +265,6 @@ nav = [
         "reference/physics/radiation/odes.md",
         "reference/physics/radiation/ordered_index.md",
         "reference/physics/radiation/get_photden_profile.md",
-        "reference/physics/radiation/get_eden_profile.md",
         "reference/physics/radiation/get_total_average_cross_section.md",
         "reference/physics/radiation/get_group_average_cross_section.md",
         "reference/physics/radiation/compute.md",
@@ -381,10 +379,6 @@ nav = [
         "reference/drivers/table/get_cell.md",
         "reference/drivers/table/set_cell.md",
         "reference/drivers/table/delete.md",
-      ] },
-      { "drivers.Toml" = [
-        "reference/drivers/toml/index.md",
-        "reference/drivers/toml/get_key.md",
       ] },
       { "drivers.HDF5" = [
         "reference/drivers/hdf5/index.md",

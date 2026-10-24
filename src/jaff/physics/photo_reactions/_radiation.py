@@ -137,11 +137,6 @@ class RadiationGroup:
         Lower energy bound in eV.
     upper : float, int, or sympy.Basic
         Upper energy bound in eV.
-    band : tuple
-        ``(lower, upper)`` convenience pair.
-    dE : float or None
-        Band width ``upper - lower`` in eV; ``None`` for an open band
-        (``upper`` is ``sympy.oo``).
     profile_idx : float
         Spectral index *α* of this band.
     ph_E : sympy.Symbol
@@ -183,14 +178,14 @@ class RadiationGroup:
     ...     radiation={"bands": [1, 13.6, 100, "inf"]},
     ... )
     >>> grp = net.radiation.groups[1]
-    >>> grp, grp.sym, grp.band, grp.dE
-    (Rad_group(1, band=(13.6, 100.0)), photden[1], (13.6, 100.0), 86.4)
+    >>> grp, grp.sym, grp.lower, grp.upper
+    (Rad_group(1, band=(13.6, 100.0)), photden[1], 13.6, 100.0)
     >>> grp.nph_profile, grp.energy_profile
     (ph_E**(-2.0), ph_E**(-1.0))
     >>> grp.photden  # ∫ E^-2 dE from 13.6 to 100 eV
     0.06352941176470589
-    >>> net.radiation.groups[2].dE is None  # open band (100 eV, oo)
-    True
+    >>> net.radiation.groups[2].upper  # open band (100 eV, oo)
+    oo
     """
 
     def __init__(
@@ -228,18 +223,11 @@ class RadiationGroup:
         self.sym: sp.Basic = sym
         self.lower: float | int = lower
         self.upper: float | int | sp.Basic = upper
-        self.band: tuple = (lower, upper)
 
         if not isinstance(self.lower, (int, float)):
             raise ValueError(
                 f"Radiation group lower bound must be a float or int. Found {self.lower}"
             )
-        # Band width; None for the open band (upper is sp.oo).
-        self.dE: float | None = (
-            self.upper - self.lower  # type: ignore
-            if all(isinstance(val, (int, float)) for val in [self.upper, self.lower])
-            else None
-        )
         from ...core.network import NetworkSymbols
 
         self.ph_E: sp.Symbol = NetworkSymbols.ph_E
@@ -269,7 +257,7 @@ class RadiationGroup:
         str
             String including group index and energy band.
         """
-        return f"Rad_group({self.index}, band={self.band})"
+        return f"Rad_group({self.index}, band={(self.lower, self.upper)})"
 
     def __str__(self):
         """Return human-readable description of this radiation group.
@@ -905,37 +893,6 @@ class Radiation:
         )
 
         return ph_energy ** (alphas[band_idx] - 2)
-
-    def get_eden_profile(self, ph_energy: np.ndarray) -> np.ndarray:
-        """Evaluate the energy-density spectral profile on an energy grid.
-
-        Parameters
-        ----------
-        ph_energy : numpy.ndarray
-            Photon energies in eV.
-
-        Returns
-        -------
-        numpy.ndarray
-            The piecewise energy-density profile ``E^(profile_idx_i - 1)``
-            evaluated at each energy, using each band's own spectral index
-            (see :meth:`get_photden_profile`).
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from jaff import Network
-        >>> net = Network(
-        ...     "h_photoionization",
-        ...     radiation={
-        ...         "bands": [1, 13.6, 100, "inf"],
-        ...         "profile_index": [0, 1, 0],
-        ...     },
-        ... )
-        >>> net.radiation.get_eden_profile(np.array([5.0, 50.0, 200.0]))
-        array([0.2  , 1.   , 0.005])
-        """
-        return ph_energy * self.get_photden_profile(ph_energy)
 
     def get_total_average_cross_section(
         self,

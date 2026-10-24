@@ -80,37 +80,21 @@ class Reactions(Catalogue[Reaction]):
     _by_prop: dict[str, list[Reaction]]  # type: ignore[assignment]
     _by_serialized: dict[str, list[Reaction]]  # type: ignore[assignment]
 
-    def __init__(self, config: ReactionsConfig, reactions: list[Reaction] | None = None):
-        """Initialise the reactions catalogue.
+    def __init__(self, config: ReactionsConfig):
+        """Initialise an empty reactions catalogue.
+
+        Reactions are appended with :meth:`add`.
 
         Parameters
         ----------
         config : ReactionsConfig
             The ``[network.reactions]`` settings; :class:`~jaff.core.Network`
             passes ``net.config.reactions``.
-        reactions : list[Reaction] | None, optional
-            Initial reactions.  If ``None``, an empty catalogue is created.
         """
         self.config: ReactionsConfig = config
-        _by_name: dict[str, list[Reaction]] | None = None
-        _by_serialized: dict[str, list[Reaction]] = {}
-        _by_source_index: dict[int, Reaction] = {}
-
-        if reactions is not None:
-            _by_name = {}
-            for pos, r in enumerate(reactions):
-                r.catalogue_index = pos
-                _by_name.setdefault(r.verbatim, []).append(r)
-                _by_serialized.setdefault(r.serialized, []).append(r)
-                _by_source_index[r.index] = r
-
-        super().__init__(
-            reactions,
-            cast("dict[Any, Reaction | list[Reaction]] | None", _by_name),
-            check_length=False,
-        )
-        self._by_serialized = _by_serialized
-        self._by_source_index = _by_source_index
+        super().__init__()
+        self._by_serialized = {}
+        self._by_source_index: dict[int, Reaction] = {}
         # Filter results keyed by (filter, argument); cleared by add().
         self.__filter_cache: dict[tuple[str, ...], Vector[Reaction]] = {}
         self.__frozen: bool = False

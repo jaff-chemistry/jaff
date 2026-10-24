@@ -58,6 +58,8 @@ class PhotoelectricEmission:
     ----------
     net : Network
         Back-reference to the parent network.
+    config : PhotoelectricEmissionConfig
+        The ``[network.dust.pe]`` settings (read-only).
     E_low : astropy.units.Quantity
         Lower edge of the photoelectric band, ``threshold_low`` (grain work
         function, default 6 eV).

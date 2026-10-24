@@ -49,7 +49,7 @@ class Dust:
     ```
 
     with ``<σ_u>_i`` and ``<σ_f>_i`` the per-H-nucleus cross sections of kinds
-    :attr:`u_reduction` and :attr:`f_reduction` averaged over band *i*
+    ``config.u_reduction`` and ``config.f_reduction`` averaged over band *i*
     (``tabular.avg_cross_section_per_hnuc``); a kind of ``"none"`` drops the
     term.
 

@@ -1,5 +1,5 @@
 # ABOUTME: I/O drivers for the file formats JAFF reads and writes: HDF5, SQLite,
-# ABOUTME: TOML and CSV; re-exports the driver classes and their modules.
+# ABOUTME: and CSV; re-exports the driver classes and their modules.
 """I/O drivers for the file formats used by JAFF.
 
 ``jaff.drivers`` wraps the libraries JAFF uses to read and write data:
@@ -11,7 +11,6 @@
   :class:`Table` gives row- and cell-level access to one of its tables.
 - :class:`JaffDb` is a :class:`Db` pre-configured for the database bundled
   with JAFF.
-- :class:`Toml` reads a TOML configuration file.
 - The :mod:`jaff.drivers.csv` module loads CSV files into
   :class:`pandas.DataFrame` objects (``csv_to_df``) or converts them to HDF5
   (``csv_to_hdf5``).
@@ -30,12 +29,6 @@ Write a dictionary to an HDF5 file and read it back:
 >>> h5.to_dict("rates.hdf5")["T"]["_data"]
 array([100., 200.])
 
-Read a TOML file:
-
->>> from jaff.drivers import Toml
->>> Toml("config.toml").get_key("network")
-{'host': 'localhost', 'port': 8080}
-
 Query the bundled SQLite database:
 
 >>> from jaff.drivers import JaffDb
@@ -50,9 +43,8 @@ Load a CSV file:
 >>> df = csv_to_df(Path("grid.csv"))
 """
 
-from . import csv, hdf5, sqlite, toml
+from . import csv, hdf5, sqlite
 from .hdf5 import HDF5
 from .sqlite import Db, JaffDb, Table
-from .toml import Toml
 
-__all__ = ["sqlite", "toml", "csv", "Db", "JaffDb", "Table", "Toml", "hdf5", "HDF5"]
+__all__ = ["sqlite", "csv", "Db", "JaffDb", "Table", "hdf5", "HDF5"]

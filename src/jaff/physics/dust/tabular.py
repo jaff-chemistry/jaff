@@ -91,11 +91,6 @@ class Tabular:
         """Mean scattering-angle cosine <cos theta> (dimensionless)."""
         return self._data["cos"]["_data"]
 
-    @cached_property
-    def scattering_cos2(self) -> np.ndarray:
-        """Mean squared scattering-angle cosine <cos^2 theta> (dimensionless)."""
-        return self._data["cos2"]["_data"]
-
     def avg_cross_section_per_hnuc(
         self, kind: str, bounds: tuple[float | Basic, float | Basic]
     ) -> Expr | float:

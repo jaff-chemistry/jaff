@@ -9,9 +9,8 @@ class ElementProps(TypedDict):
 
     The mass dictionary maps an element symbol (e.g. ``"H"``) to an
     ``ElementProps`` dict.  It is loaded from the bundled ``atomic_masses``
-    table by default and can be replaced with ``Elements.configure``
-    (or ``Element.configure``).  Each key becomes the attribute of the
-    same name on :class:`Element`.
+    table (:func:`~jaff.core.chemistry.element_table`).  Each key becomes the
+    attribute of the same name on :class:`Element`.
 
     Attributes
     ----------

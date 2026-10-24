@@ -464,6 +464,5 @@ thereafter), so reuse it:
 
 ```python
 photo = net.reactions.photochemistry
-photo.get_xsec(rxn)         # XsecProps from the tabulated databases
-photo.get_verner_xsec(rxn)  # analytic Verner σ(E) (sympy) or None
+photo.get_xsec(rxn)  # XsecProps from the reaction's pi_database (or a fallback)
 ```

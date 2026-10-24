@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, cast
+from typing import TYPE_CHECKING, cast
 
 from sympy import Float
 
@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 class EosFactory:
     """Build the symbolic :class:`InternalEnergy` selected by an EOS config.
 
-    Each EOS type maps to a builder method through :attr:`_BUILDERS`; the
-    valid types must match :data:`~jaff.physics.thermodynamics.eos.config.EOS_TYPES`.
+    Each EOS type is built by the method of the same name; there is one for
+    every type in :data:`~jaff.physics.thermodynamics.eos.config.EOS_TYPES`.
     A network builds its EOS through this factory on first access to
     ``net.thermodynamics.eos``.
 
@@ -62,13 +62,6 @@ class EosFactory:
     2.0709735e-16*tgas
     """
 
-    _BUILDERS: Dict[str, str] = {
-        "ideal": "ideal",
-        "multi_gamma": "multi_gamma",
-        "fermi_degenerate": "fermi_degenerate",
-        "relativistic_fermi_degenerate": "relativistic_fermi_degenerate",
-    }
-
     def __init__(self, net: Network, config: EosConfig) -> None:
         """Bind the factory to a network and an EOS configuration.
 
@@ -92,7 +85,7 @@ class EosFactory:
         InternalEnergy
             Symbolic internal energy of the bound network.
         """
-        return getattr(self, self._BUILDERS[self.config.type])()
+        return getattr(self, self.config.type)()
 
     def ideal(self) -> InternalEnergy:
         """Volumetric ideal-gas internal energy with a single adiabatic index.

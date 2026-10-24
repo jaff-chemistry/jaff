@@ -126,8 +126,7 @@ src/jaff/
 │   ├── json_schema.py          # Editor JSON Schemas (schemas/*.schema.json)
 │   └── reference.py            # Generated configuration reference page
 │
-├── drivers/                    # Config / data format adapters
-│   ├── toml.py                 # TOML config reader
+├── drivers/                    # Data format adapters
 │   ├── csv.py                  # CSV I/O
 │   ├── hdf5.py                 # HDF5 I/O
 │   ├── sqlite.py               # SQLite I/O

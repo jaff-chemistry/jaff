@@ -181,37 +181,6 @@ class Photochemistry:
 
         return reaction.serialized
 
-    def get_verner_xsec(self, reaction: Reaction) -> Expr | None:
-        """
-        Query the JAFF database for the Verner photoionisation cross section.
-
-        Verner cross sections are analytic fits to photoionisation cross
-        sections from Verner et al. (1996) stored as SymPy-parseable strings
-        in the ``verner_cross_sections`` SQLite table.
-
-        Parameters
-        ----------
-        reaction : Reaction
-            Reaction whose look-up key (see :meth:`_lookup_key`) is queried.
-
-        Returns
-        -------
-        sympy.Expr or None
-            The SymPy expression for σ(E) if the reaction is found, or
-            ``None`` if no entry exists.
-
-        Notes
-        -----
-        The expression uses the symbol ``ph_E`` (photon energy in eV) as the
-        independent variable and returns cross sections in cm²; it is zero
-        outside ``[E_th, E_max]``.
-
-        References
-        ----------
-        Verner, D. A. et al. 1996, ApJ, 465, 487
-        """
-        return self._verner_expr(self._lookup_key(reaction))
-
     @staticmethod
     def _verner_expr(key: str) -> Expr | None:
         with JaffDb() as jdb:
@@ -247,7 +216,8 @@ class Photochemistry:
     def _pi_order(self, reaction: Reaction) -> list[str]:
         """Databases to try: the chosen one, then :data:`PI_DATABASES` order."""
         photo = reaction.photo
-        chosen = (photo.config.pi_database if photo is not None else None) or "norad"
+        chosen = photo.config.pi_database if photo is not None else None
+        assert chosen is not None, f"{reaction}: unresolved photo config"
 
         return list(dict.fromkeys([chosen, *PI_DATABASES]))
 

@@ -124,16 +124,6 @@ def test_photden_tot_is_sum_of_band_integrals_for_per_band_index():
     assert float(rad.photden_tot) == pytest.approx(1.0 + math.log(2.0))
 
 
-def test_eden_profile_uses_per_band_index():
-    """get_eden_profile = E * get_photden_profile, piecewise by band index."""
-    with patch("jaff.physics.photo_reactions._radiation.BackgroundField"):
-        props = RadiationConfig(bands=[1.0, 2.0, 4.0], profile_index=[2.0, 1.0], c=1.0)
-        rad = Radiation(None, props)
-    E = np.array([1.5, 3.0])
-    # band 0: E^(2-1) = 1.5; band 1: E^(1-1) = 1
-    assert rad.get_eden_profile(E) == pytest.approx([1.5, 1.0])
-
-
 class TestBandHelpers:
     """Radiation offers the mode-dependent band pieces; photo reactions assemble."""
 

@@ -173,7 +173,9 @@ class TestFilterCache:
 
         net = make_network(self.NET, name="r.jet")
         # A separate catalogue, so the test never depends on the network's own.
-        cat = Reactions(net.config.reactions, [net.reactions[0], net.reactions[1]])
+        cat = Reactions(net.config.reactions)
+        cat.add(net.reactions[0])
+        cat.add(net.reactions[1])
         before = cat.with_type("photo")
         cat.add(net.reactions[2])
         after = cat.with_type("photo")
@@ -190,7 +192,9 @@ class TestFreeze:
         from jaff.core.reaction import Reactions
 
         net = make_network("H + H -> H2 [] 1e-17\n", name="r.jet")
-        cat = Reactions(net.config.reactions, list(net.reactions._list))
+        cat = Reactions(net.config.reactions)
+        for reaction in net.reactions:
+            cat.add(reaction)
         cat._freeze()
 
         with pytest.raises(RuntimeError, match="Reactions catalogue is frozen"):
@@ -296,7 +300,9 @@ class TestCheckConfig:
         config = ReactionsConfig.model_validate(
             {"reaction": {"C.O__CO": {"t_cutoff": "clip"}}}
         )
-        cat = Reactions(config, list(net.reactions._list))
+        cat = Reactions(config)
+        for reaction in net.reactions:
+            cat.add(reaction)
 
         with pytest.raises(ParserError, match=r"reaction\.\"C\.O__CO\""):
             cat.check_config()

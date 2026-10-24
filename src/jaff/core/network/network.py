@@ -392,7 +392,6 @@ class Network:
         self.dust: Dust | None = (
             Dust(self, self.config.dust) if self.config.dust is not None else None
         )
-        self.__tgas_clamp_cache: dict[tuple[float | None, float | None], Expr] = {}
 
         self.logger.info(f"Loading network from {self.spec.fname}")
         self.logger.info(f"Network label: [yellow]{self.label}[/]")

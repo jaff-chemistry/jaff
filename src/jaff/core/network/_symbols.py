@@ -53,7 +53,7 @@ class NetworkSymbols:
         Velocity dispersion [cm s⁻¹].
     ph_E : Symbol
         Photon energy [eV]: the variable of cross sections, spectral profiles
-        and ``deltaRad`` functions.
+        and ``spectralYield`` functions.
     photorates : UndefinedFunction
         Placeholder function for photo-reaction rates.
 
@@ -342,11 +342,7 @@ class NetworkSymbols:
 
     @cached_property
     def _element_lookup(self) -> dict[str, str]:
-        """Lower-cased element token -> canonical element symbol.
-
-        Valid only once ``net.mass_dict`` is loaded; first touched by
-        :meth:`standardize`, which runs after loading.
-        """
+        """Lower-cased element token -> canonical element symbol (``net.mass_dict``)."""
         return {s.lower(): s for s in self._net.mass_dict}
 
     @cached_property

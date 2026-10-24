@@ -76,8 +76,8 @@ class TestEosFactoryDispatch:
         eos = EosFactory(net, IdealEosConfig(gamma=GAMMA)).generate()
         assert isinstance(eos, InternalEnergy)
 
-    def test_builder_registry_matches_props_types(self) -> None:
-        assert set(EosFactory._BUILDERS) == set(EOS_TYPES)
+    def test_every_eos_type_has_a_builder(self) -> None:
+        assert all(callable(getattr(EosFactory, t, None)) for t in EOS_TYPES)
 
 
 class TestEosForms:

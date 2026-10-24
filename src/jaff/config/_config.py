@@ -9,7 +9,6 @@ NETWORKS_DIR = SRC_DIR.parent / "networks"
 DATA_DIR = JAFF_DIR / "data"
 XSECS_DATA_DIR = DATA_DIR / "xsecs"
 SHIELDING_DATA_DIR = DATA_DIR / "shielding"
-SHIELDING_FUNCTIONS_DIR = JAFF_DIR / "physics" / "photo_reactions" / "shielding"
 TEMPLATES_DIR = JAFF_DIR / "templates"
 DB_DIR = JAFF_DIR / "db"
 

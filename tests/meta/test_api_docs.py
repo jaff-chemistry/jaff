@@ -206,8 +206,8 @@ def test_committed_nav_matches():
 @pytest.mark.parametrize(
     "rest, markdown",
     [
-        (":meth:`~jaff.core.Element.configure`", "`configure`"),
-        (":meth:`Element.configure`", "`Element.configure`"),
+        (":meth:`~jaff.core.Species.add`", "`add`"),
+        (":meth:`Species.add`", "`Species.add`"),
         (":class:`Network`", "`Network`"),
         ("``net.config``", "`net.config`"),
         ("``a long\n    literal``", "`a long literal`"),
