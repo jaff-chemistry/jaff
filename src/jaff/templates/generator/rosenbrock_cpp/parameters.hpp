@@ -63,6 +63,11 @@ constexpr int use_number_densities = 0;
 // for the linear algebra, do we allow pivoting?
 constexpr int linalg_do_pivoting = 1;
 
+// LU factorization order (both give bitwise-identical results):
+//   0 = right-looking LINPACK dgefa/dgesl (vectorizes well on CPUs)
+//   1 = left-looking Crout with the matrix shift fused in (for GPU lanes)
+constexpr int linalg_left_looking = 0;
+
 // for the step rejection logic on mass fractions, we only consider
 // species that are > X_reject_buffer * atol_spec
 constexpr double X_reject_buffer = 1.0;

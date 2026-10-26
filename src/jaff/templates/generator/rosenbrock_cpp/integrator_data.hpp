@@ -2,9 +2,9 @@
 #define INTEGRATOR_DATA_H
 
 #include "parameters.hpp"
+#include <array>
 #include <cstdint>
 #include <limits>
-#include <vector>
 
 // Define the size of the ODE system that will be integrated
 // INT_NEQS = NumSpec (species) + 1 (energy)
@@ -28,9 +28,11 @@ enum integrator_errors : std::int8_t {
   IERR_ENTERED_NSE = -100
 };
 
-using DArray1D = std::vector<double>;
-using SArray1D = std::vector<short>;
-using IArray1D = std::vector<int>;
-using DArray2D = std::vector<std::vector<double>>;
+// Fixed-size storage, so the integrator state, the Jacobian and its LU
+// factors need no heap and can live in registers or private memory when
+// the integrator runs inside a GPU kernel.
+using DArray1D = std::array<double, INT_NEQS>;
+using IArray1D = std::array<int, INT_NEQS>;
+using DArray2D = std::array<std::array<double, INT_NEQS>, INT_NEQS>;
 
 #endif

@@ -3,12 +3,15 @@
 
 #include "integrator_data.hpp"
 
+#include <vector>
+
 // When checking the integration time to see if we're done,
 // be careful with roundoff issues.
 
 const double timestep_safety_factor = 1.0e-4;
 
 template <int int_neqs> struct rosenbrock_t {
+  static_assert(int_neqs == INT_NEQS, "storage is sized for INT_NEQS");
 
   double t;    // the starting time
   double tout; // the stopping time
@@ -24,24 +27,18 @@ template <int int_neqs> struct rosenbrock_t {
   double atol_echem;
   double rtol_echem;
 
-  DArray1D y = DArray1D(int_neqs);
-  DArray1D ynew = DArray1D(int_neqs);
-  DArray1D ak1 = DArray1D(int_neqs);
-  DArray1D ak2 = DArray1D(int_neqs);
-  DArray1D ak3 = DArray1D(int_neqs);
-  DArray1D ak4 = DArray1D(int_neqs);
-  DArray1D ak5 = DArray1D(int_neqs);
-  DArray1D ak6 = DArray1D(int_neqs);
-  DArray1D ak7 = DArray1D(int_neqs);
-  DArray1D ak8 = DArray1D(int_neqs);
-  DArray1D work = DArray1D(int_neqs);
+  DArray1D y{};
+  DArray1D ynew{};
+  // stage vectors k_1 .. k_8, indexed from 0
+  std::array<DArray1D, 8> ak{};
+  DArray1D work{};
 
   // scratch buffers for the numerical Jacobian (avoid per-call allocation)
-  DArray1D jac_ewt = DArray1D(int_neqs);
-  DArray1D jac_ybase = DArray1D(int_neqs);
+  DArray1D jac_ewt{};
+  DArray1D jac_ybase{};
 
-  DArray2D jac = DArray2D(int_neqs, DArray1D(int_neqs));
-  IArray1D pivot = IArray1D(int_neqs);
+  DArray2D jac{};
+  IArray1D pivot{};
 
   short jacobian_type;
 

@@ -6,7 +6,7 @@
 #include "eos.hpp"
 
 template <typename T> struct state {
-  DArray1D rho = DArray1D(params::NumSpec);  // Species number densities [cm^-3]
+  std::array<double, params::NumSpec> rho{};  // Species number densities [cm^-3]
   double e = 0.0;                            // Thermal energy density [erg/cm^3]
 
   // Total number density of all species

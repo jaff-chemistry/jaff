@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <vector>
 
 #include "integrator_data.hpp"
 #include "linpack.hpp"
@@ -15,75 +14,18 @@ namespace rosenbrock {
 
 template <int int_neqs>
 inline double &stage(rosenbrock_t<int_neqs> &rstate, const int i, const int n) {
-  switch (i) {
-  case 0:
-    return rstate.ak1[n];
-  case 1:
-    return rstate.ak2[n];
-  case 2:
-    return rstate.ak3[n];
-  case 3:
-    return rstate.ak4[n];
-  case 4:
-    return rstate.ak5[n];
-  case 5:
-    return rstate.ak6[n];
-  case 6:
-    return rstate.ak7[n];
-  case 7:
-    return rstate.ak8[n];
-  default:
-    return rstate.work[n];
-  }
+  return rstate.ak[i][n];
 }
 
 template <int int_neqs>
 inline double stage(const rosenbrock_t<int_neqs> &rstate, const int i,
                     const int n) {
-  switch (i) {
-  case 0:
-    return rstate.ak1[n];
-  case 1:
-    return rstate.ak2[n];
-  case 2:
-    return rstate.ak3[n];
-  case 3:
-    return rstate.ak4[n];
-  case 4:
-    return rstate.ak5[n];
-  case 5:
-    return rstate.ak6[n];
-  case 6:
-    return rstate.ak7[n];
-  case 7:
-    return rstate.ak8[n];
-  default:
-    return rstate.work[n];
-  }
+  return rstate.ak[i][n];
 }
 
 template <int int_neqs>
 inline DArray1D &stage_vector(rosenbrock_t<int_neqs> &rstate, const int i) {
-  switch (i) {
-  case 0:
-    return rstate.ak1;
-  case 1:
-    return rstate.ak2;
-  case 2:
-    return rstate.ak3;
-  case 3:
-    return rstate.ak4;
-  case 4:
-    return rstate.ak5;
-  case 5:
-    return rstate.ak6;
-  case 6:
-    return rstate.ak7;
-  case 7:
-    return rstate.ak8;
-  default:
-    return rstate.work;
-  }
+  return rstate.ak[i];
 }
 
 template <typename RosenbrockT>
@@ -171,7 +113,7 @@ inline void evaluate_jacobian(BurnT &state, rosenbrock_t<int_neqs> &rstate,
                               const double time) {
 
   vector_to_state<BurnT, int_neqs>(state, rstate.y);
-  rhs(state, rstate.ak1);
+  rhs(state, rstate.ak[0]);
   rstate.n_rhs += 1;
 
   if (rstate.jacobian_type == 1) {
@@ -206,7 +148,7 @@ inline void evaluate_jacobian(BurnT &state, rosenbrock_t<int_neqs> &rstate,
   for (int i = 0; i < int_neqs; ++i) {
     ewt[i] = 1.0 / (rtol_for(rstate, i) * std::abs(rstate.y[i]) +
                     atol_for(rstate, i));
-    fac += (rstate.ak1[i] * ewt[i]) * (rstate.ak1[i] * ewt[i]);
+    fac += (rstate.ak[0][i] * ewt[i]) * (rstate.ak[0][i] * ewt[i]);
   }
   fac = std::sqrt(fac / static_cast<double>(int_neqs));
 
@@ -229,7 +171,7 @@ inline void evaluate_jacobian(BurnT &state, rosenbrock_t<int_neqs> &rstate,
 
     fac = 1.0 / R;
     for (int i = 0; i < int_neqs; ++i) {
-      rstate.jac[i][j] = (rstate.work[i] - rstate.ak1[i]) * fac;
+      rstate.jac[i][j] = (rstate.work[i] - rstate.ak[0][i]) * fac;
     }
 
     for (int n = 0; n < int_neqs; ++n) {
@@ -246,8 +188,8 @@ inline void evaluate_jacobian(BurnT &state, rosenbrock_t<int_neqs> &rstate,
 
 template <typename BurnT, int int_neqs>
 inline void rhs_at(const double time, BurnT &state,
-                   rosenbrock_t<int_neqs> &rstate, const std::vector<double> &y,
-                   std::vector<double> &ydot) {
+                   rosenbrock_t<int_neqs> &rstate, const DArray1D &y,
+                   DArray1D &ydot) {
   // Evaluate the RHS at the trial vector y by syncing it into the
   // thermodynamic state, then restore the state to the current solution.
   vector_to_state<BurnT, int_neqs>(state, y);
@@ -257,19 +199,20 @@ inline void rhs_at(const double time, BurnT &state,
 
 template <int int_neqs>
 inline int decompose(rosenbrock_t<int_neqs> &rstate, const double fac) {
-  for (int j = 0; j < int_neqs; ++j) {
-    for (int i = 0; i < int_neqs; ++i) {
-      rstate.jac[i][j] = -rstate.jac[i][j];
-    }
-    rstate.jac[j][j] += fac;
-  }
-
+  constexpr bool allow_pivot = integrator::linalg_do_pivoting == 1;
   int ierr_linpack = 0;
-  if (integrator::linalg_do_pivoting == 1) {
-    constexpr bool allow_pivot{true};
-    dgefa<int_neqs, allow_pivot>(rstate.jac, rstate.pivot, ierr_linpack);
+
+  if constexpr (integrator::linalg_left_looking == 1) {
+    // factor fac * I - J; the shift is applied column by column inside the LU
+    lu_decompose_shifted<int_neqs, allow_pivot>(rstate.jac, fac, rstate.pivot,
+                                                ierr_linpack);
   } else {
-    constexpr bool allow_pivot{false};
+    for (int j = 0; j < int_neqs; ++j) {
+      for (int i = 0; i < int_neqs; ++i) {
+        rstate.jac[i][j] = -rstate.jac[i][j];
+      }
+      rstate.jac[j][j] += fac;
+    }
     dgefa<int_neqs, allow_pivot>(rstate.jac, rstate.pivot, ierr_linpack);
   }
 
@@ -278,11 +221,10 @@ inline int decompose(rosenbrock_t<int_neqs> &rstate, const double fac) {
 
 template <int int_neqs>
 inline void solve(rosenbrock_t<int_neqs> &rstate, DArray1D &b) {
-  if (integrator::linalg_do_pivoting == 1) {
-    constexpr bool allow_pivot{true};
-    dgesl<int_neqs, allow_pivot>(rstate.jac, rstate.pivot, b);
+  constexpr bool allow_pivot = integrator::linalg_do_pivoting == 1;
+  if constexpr (integrator::linalg_left_looking == 1) {
+    lu_solve<int_neqs, allow_pivot>(rstate.jac, rstate.pivot, b);
   } else {
-    constexpr bool allow_pivot{false};
     dgesl<int_neqs, allow_pivot>(rstate.jac, rstate.pivot, b);
   }
 }
@@ -349,7 +291,7 @@ inline int rosenbrock_integrator(BurnT &state, rosenbrock_t<INT_NEQS> &rstate) {
   double errold = 1.0;
   double hopt = h;
   double x = rstate.t;
-  std::vector<double> rhs_tmp(int_neqs);
+  DArray1D rhs_tmp{};
 
   // main evolution loop
 
@@ -415,7 +357,7 @@ inline int rosenbrock_integrator(BurnT &state, rosenbrock_t<INT_NEQS> &rstate) {
         continue;
       }
 
-      rosenbrock::solve(rstate, rstate.ak1);
+      rosenbrock::solve(rstate, rstate.ak[0]);
 
       bool valid_stage_state = true;
       for (int istage = 1; istage < C::stages; ++istage) {
