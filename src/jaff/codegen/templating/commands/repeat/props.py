@@ -69,6 +69,7 @@ _THERMAL = {
         "ORDER": Setting("rad_order", parse_int),
     },
 }
+_THERMAL_ONLY = {"THERMAL": _THERMAL["THERMAL"]}
 _RADODES = {"RADIATION": {"ORDER": Setting("order", parse_int)}}
 _SIGN = {"SIGN": {"POS": Setting("pos", parse_text), "NEG": Setting("neg", parse_text)}}
 
@@ -101,6 +102,19 @@ PROPERTIES: Dict[str, RepeatProp] = {
     "radodes": _expressions("radode", "get_indexed_radodes", _RADODES),
     "rhses": _expressions("rhs", "get_indexed_rhs", _THERMAL),
     "jacobian": _expressions("expr", "get_indexed_jacobian", _THERMAL),
+    # One evaluation of the RHS and the Jacobian with shared temporaries: emit
+    # rhs_jacobian (temporaries and RHS rows) first, then rhs_jacobian_entries
+    # (Jacobian entries only) in the same scope, with the same options.
+    "rhs_jacobian": RepeatProp(
+        ("idx", "rhs", "cse"),
+        lambda c, kw: c.cg.get_indexed_rhs_jacobian(part="rhs", **kw),
+        _THERMAL_ONLY,
+    ),
+    "rhs_jacobian_entries": RepeatProp(
+        ("idx", "expr"),
+        lambda c, kw: c.cg.get_indexed_rhs_jacobian(part="jacobian", **kw)["expressions"],
+        _THERMAL_ONLY,
+    ),
     "reactions": _items("reaction", lambda c: c.net.reactions.verbatim()),
     "species": _items("specie", lambda c: c.net.species.names()),
     "species_with_normalized_sign": RepeatProp(
