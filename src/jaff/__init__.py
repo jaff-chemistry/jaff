@@ -11,7 +11,7 @@ from .codegen.builder import Builder
 from .codegen.codegen import Codegen
 from .codegen.preprocessor import Preprocessor
 from .core.elements import Element, Elements
-from .core.network import Network, NetworkSpec
+from .core.network import Network
 from .core.reaction import Reaction, Reactions
 from .core.species import Specie, Species
 
@@ -19,7 +19,6 @@ __all__ = [
     "Element",
     "Elements",
     "Network",
-    "NetworkSpec",
     "Reaction",
     "Reactions",
     "Specie",

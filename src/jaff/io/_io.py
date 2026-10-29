@@ -155,7 +155,7 @@ def to_jaff_file(filename: str | Path, net: "Network"):
         "sympy_schema_version": SYMPY_SCHEMA,
         "sympy_version": __version__,
         "label": net.label,
-        "file_name": str(net.filename),
+        "file_name": str(net.filepath),
         "species": [
             {
                 "name": sp.name,

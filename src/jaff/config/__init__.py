@@ -1,5 +1,5 @@
 # ABOUTME: jaff.config package: re-exports the package paths and the bundled
-# ABOUTME: network / template listings
+# ABOUTME: network / template listings and network-name resolution
 from ._config import (
     CONFIG_DIR,
     DATA_DIR,
@@ -13,6 +13,7 @@ from ._config import (
     list_subdirs,
     predefined_networks,
     predefined_templates,
+    resolve_network_path,
 )
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "list_subdirs",
     "predefined_networks",
     "predefined_templates",
+    "resolve_network_path",
 ]

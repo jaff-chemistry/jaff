@@ -1,5 +1,5 @@
 # ABOUTME: Tests for duplicate_policy resolution and duplicate rate-segment handling
-# ABOUTME: NetworkSpec precedence + end-to-end dedup behaviour (CLI wiring lives elsewhere)
+# ABOUTME: duplicate_policy config precedence + end-to-end dedup behaviour (CLI wiring lives elsewhere)
 
 
 import pytest
@@ -34,7 +34,7 @@ def _write_toml(tmp_path, body):
 
 
 class TestPolicyResolution:
-    """duplicate_policy resolution on NetworkSpec."""
+    """duplicate_policy resolution in the network config."""
 
     def test_default_is_preserve_first(self):
         assert _load().config.reactions.duplicate_policy == "preserve-first"

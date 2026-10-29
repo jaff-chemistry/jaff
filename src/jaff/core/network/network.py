@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 import sys
 from dataclasses import dataclass
-from functools import cached_property, lru_cache
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Mapping
 
@@ -37,6 +37,7 @@ from sympy import (
 )
 
 from ...common import is_jaff_file, print_motd, resolve_dependencies
+from ...config import resolve_network_path
 from ...config.base import as_layer
 from ...drivers import HDF5
 from ...errors import ParserError
@@ -62,7 +63,6 @@ from ..reaction import (
 from ..reaction.config import ReactionsConfig
 from ..species import Specie, Species
 from ._functions import NetworkFunctions
-from ._spec import NetworkSpec
 from ._symbols import NetworkSymbols
 from .config import NetworkConfig, NetworkConfigSource, load_network_config
 from .ode_system import OdeSystem
@@ -186,8 +186,9 @@ class Network:
 
     Attributes
     ----------
-    filename : Path
-        Absolute path to the source network file.
+    filepath : Path
+        Absolute, resolved path to the source network file (a predefined
+        network name resolves to its ``.jet`` file).
     label : str
         Human-readable label for this network (defaults to the file stem).
     species : Species
@@ -223,11 +224,9 @@ class Network:
     dust : Dust or None
         Dust module; ``None`` when no ``[network.dust]`` table (in the config or
         the ``dust`` argument) is given.
-    spec : NetworkSpec
-        Facts about the source files (not settings): the resolved ``fname``,
-        the ``.jfunc`` file used (``jfunc_path``).
     functions : NetworkFunctions
-        The ``.jfunc`` file's functions, standardized on use.
+        The ``.jfunc`` file's functions, standardized on use; the file itself
+        is ``functions.filepath``.
     config : NetworkConfig
         The validated config: the ``jaff.toml`` next to the network, the
         ``config`` layers, then the keyword arguments.
@@ -366,19 +365,19 @@ class Network:
             dust=dust,
             thermodynamics=thermodynamics,
         )
+        self.filepath: Path = resolve_network_path(fname)
         self.config: NetworkConfig = load_network_config(
-            Path(fname),
+            self.filepath,
             config,
             overrides=overrides,
         )
-        self.spec: NetworkSpec = NetworkSpec(fname, self.config.funcfile)
 
         print_motd()
 
         self.species: Species = Species()
         self.reactions: Reactions = Reactions(self.config.reactions)
         self.symbols: NetworkSymbols = NetworkSymbols(self)
-        self.functions: NetworkFunctions = NetworkFunctions(self, self.spec.jfunc_path)
+        self.functions: NetworkFunctions = NetworkFunctions(self, self.config.funcfile)
         self.reactant_matrix: np.ndarray | None = None
         self.product_matrix: np.ndarray | None = None
         self.radiation: Radiation | None = (
@@ -390,7 +389,7 @@ class Network:
             Dust(self, self.config.dust) if self.config.dust is not None else None
         )
 
-        self.logger.info(f"Loading network from {self.spec.fname}")
+        self.logger.info(f"Loading network from {self.filepath}")
         self.logger.info(f"Network label: [yellow]{self.label}[/]")
 
         parsers = self.__load_network()
@@ -414,15 +413,15 @@ class Network:
 
         self.logger.info("[green]Network loaded successfully![/]")
 
-    @cached_property
-    def filename(self) -> Path:
-        """Absolute path to the source network file (from :attr:`spec`)."""
-        return self.spec.fname
+    @property
+    def filename(self) -> str:
+        """Name of the source network file (:attr:`filepath`), e.g. ``"GOW.jet"``."""
+        return self.filepath.name
 
     @property
     def label(self) -> str:
         """Human-readable label: the ``label`` setting, else the file stem."""
-        return self.config.label or self.spec.fname.stem
+        return self.config.label or self.filepath.stem
 
     def __load_network(self) -> list[Parser]:
         """Parse the network file, then build the species and the reactions.
@@ -435,7 +434,7 @@ class Network:
         list[Parser]
             The parsers that produced reactions, for :meth:`__post_process`.
         """
-        with NetworkParser(self.spec.fname, self.logger) as netp:
+        with NetworkParser(self.filepath, self.logger) as netp:
             rows, global_vars = netp.get_parsed()
             parsers = netp.get_parsers()
 

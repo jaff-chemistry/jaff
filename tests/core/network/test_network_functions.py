@@ -92,10 +92,10 @@ class TestTable:
         assert "F" in net.functions
         assert "g" not in net.functions
 
-    def test_raw_table_is_not_on_the_spec(self, func_network):
+    def test_raw_table_is_not_on_the_network(self, func_network):
         net = func_network("@function f(x)\n@return x\n")
 
-        assert not hasattr(net.spec, "aux_funcs")
+        assert not hasattr(net, "aux_funcs")
 
     def test_unused_helper_with_unknown_species_loads(self, func_network):
         net = func_network("@function unused(x)\n@return x*n_Xe\n")

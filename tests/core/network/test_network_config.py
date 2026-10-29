@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from jaff import Network
 from jaff.config import NETWORKS_DIR
 from jaff.core.network.config import (
     JaffTomlConfig,
@@ -385,30 +386,62 @@ class TestNetworkKeywordSections:
             self._net(make_network, **{old: None})
 
 
-class TestNetworkSpec:
-    """NetworkSpec holds facts about the network file, never copies of settings."""
+class TestNetworkFiles:
+    """The network and ``.jfunc`` files: ``filepath`` stored, ``filename`` derived."""
 
     NET = "H + H -> H2 [10,1000] 1e-10\nH2 -> H + H [10,1000] 1e-10\n"
 
-    @pytest.mark.parametrize(
-        "name",
-        ["config", "strict", "label", "funcfile", "duplicate_policy", "expand_nuclei"],
-    )
-    def test_settings_are_not_copied(self, make_network, name):
-        net = make_network(self.NET, name="n.dat", funcfile=False)
+    def test_network_file(self, make_network, tmp_path):
+        net = make_network(self.NET, name="n.dat")
 
-        assert not hasattr(net.spec, name)
+        assert net.filepath == (tmp_path / "n.dat").resolve()
+        assert net.filename == "n.dat"
 
-    def test_jfunc_path_is_the_file_found(self, make_network, tmp_path):
+    def test_predefined_network_file(self):
+        net = Network("h_photoionization")
+
+        assert (
+            net.filepath == (NETWORKS_DIR / "h_photoionization" / "h_photo.jet").resolve()
+        )
+        assert net.filename == "h_photo.jet"
+
+    def test_jfunc_found_next_to_the_network(self, make_network, tmp_path):
         (tmp_path / "n.jfunc").write_text("@function f(x)\n@return x\n")
 
         net = make_network(self.NET, name="n.dat")
 
-        assert net.spec.jfunc_path == tmp_path / "n.jfunc"
+        assert net.functions.filepath == tmp_path / "n.jfunc"
+        assert net.functions.filename == "n.jfunc"
         assert "f" in net.functions
 
-    def test_jfunc_path_none_without_one(self, make_network):
-        assert make_network(self.NET, name="n.dat").spec.jfunc_path is None
+    def test_jfunc_given_explicitly(self, make_network, tmp_path):
+        jfunc = tmp_path / "other.jfunc"
+        jfunc.write_text("@function g(x)\n@return x\n")
+
+        net = make_network(self.NET, name="n.dat", funcfile=jfunc)
+
+        assert net.functions.filepath == jfunc
+        assert "g" in net.functions
+
+    def test_explicit_jfunc_must_exist(self, make_network, tmp_path):
+        with pytest.raises(FileNotFoundError, match="missing.jfunc"):
+            make_network(self.NET, name="n.dat", funcfile=tmp_path / "missing.jfunc")
+
+    @pytest.mark.parametrize("funcfile", [True, False])
+    def test_no_jfunc(self, make_network, funcfile):
+        net = make_network(self.NET, name="n.dat", funcfile=funcfile)
+
+        assert net.functions.filepath is None
+        assert net.functions.filename is None
+
+    def test_network_spec_is_gone(self, make_network):
+        import jaff
+        import jaff.core
+        import jaff.core.network
+
+        assert not hasattr(make_network(self.NET, name="n.dat"), "spec")
+        for module in (jaff, jaff.core, jaff.core.network):
+            assert not hasattr(module, "NetworkSpec")
 
     def test_label_is_the_setting_else_the_file_stem(self, make_network):
         assert make_network(self.NET, name="n.dat").label == "n"

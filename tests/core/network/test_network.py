@@ -13,7 +13,7 @@ class TestConstruction:
 
     def test_attributes_initialised(self, fixtures_dir):
         net = Network(str(fixtures_dir / "sample_kida.dat"))
-        assert net.filename == (fixtures_dir / "sample_kida.dat").resolve()
+        assert net.filepath == (fixtures_dir / "sample_kida.dat").resolve()
         assert net.label == "sample_kida"
         assert isinstance(net.species, Species)
         assert isinstance(net.reactions, Reactions)

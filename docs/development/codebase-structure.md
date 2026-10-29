@@ -14,8 +14,7 @@ This page maps the `src/jaff` source tree, explains what each package owns, and 
 src/jaff/
 ├── core/                       # Domain model
 │   ├── network/                # network.py (Network — main entry point; validation reports)
-│   │   ├── _functions.py       # NetworkFunctions — the .jfunc functions (net.functions)
-│   │   ├── _spec.py            # NetworkSpec — source-file paths (net.spec)
+│   │   ├── _functions.py       # NetworkFunctions — the .jfunc file and its functions (net.functions)
 │   │   ├── _symbols.py         # NetworkSymbols — fixed physics symbols, densities (net.symbols)
 │   │   ├── config.py           # NetworkConfig ([network]), JaffTomlConfig, load_network_config
 │   │   └── ode_system.py       # OdeSystem, StateVariable — state vector + rhs (net.ode_system())
@@ -122,7 +121,7 @@ src/jaff/
 │   └── _logger.py              # JaffLogger + progress bars
 │
 ├── config/                     # Path constants + the config machinery
-│   ├── _config.py              # SRC_DIR, DATA_DIR, XSECS/SHIELDING dirs, ...
+│   ├── _config.py              # SRC_DIR, DATA_DIR, ...; predefined_networks, resolve_network_path
 │   ├── base.py                 # ConfigModel base, LowerStr, PathLike, docstring descriptions
 │   ├── loader.py               # Layers: load_layer, deep_merge, load_config, dump_config
 │   ├── json_schema.py          # Editor JSON Schemas (schemas/*.schema.json)

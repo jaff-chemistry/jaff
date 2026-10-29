@@ -397,7 +397,7 @@ class JaffGen:
                 table_props,
                 self.config.config_file,
                 # Network resolved the final path (file or predefined name).
-                self.net.filename,
+                self.net.filepath,
             )
             parsed_out = ct.parse()
 

@@ -29,8 +29,9 @@ from ...io import JaffLogger
 from ..elements import Elements
 
 if TYPE_CHECKING:
-    from ..elements import Element
     import logging
+
+    from ..elements import Element
 
 
 class Specie:

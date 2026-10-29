@@ -41,7 +41,7 @@ Elements can also be built directly from a list of species names:
 
 from . import elements, network, reaction, species
 from .elements import Element, Elements
-from .network import Network, NetworkSpec, NetworkSymbols, OdeSystem, StateVariable
+from .network import Network, NetworkSymbols, OdeSystem, StateVariable
 from .reaction import (
     PhotoReaction,
     ReactionRadiation,
@@ -58,7 +58,6 @@ __all__ = [
     "Element",
     "Elements",
     "Network",
-    "NetworkSpec",
     "Reaction",
     "Reactions",
     "Specie",

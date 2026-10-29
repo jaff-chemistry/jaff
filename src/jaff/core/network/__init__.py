@@ -1,8 +1,7 @@
-# ABOUTME: Network package: Network, NetworkFunctions, NetworkSpec, NetworkSymbols,
+# ABOUTME: Network package: Network, NetworkFunctions, NetworkSymbols,
 # ABOUTME: OdeSystem, reports
 
 from ._functions import NetworkFunctions
-from ._spec import NetworkSpec
 from ._symbols import NetworkSymbols
 from .network import (
     ConservationReport,
@@ -18,7 +17,6 @@ __all__ = [
     "IsomerReport",
     "Network",
     "NetworkFunctions",
-    "NetworkSpec",
     "OdeSystem",
     "RecombinationReport",
     "SinkSourceReport",

@@ -98,7 +98,7 @@ def _(mo, net):
     mo.ui.table(
         [
             {"attribute": "net.label", "value": net.label},
-            {"attribute": "net.filename", "value": net.filename.name},
+            {"attribute": "net.filename", "value": net.filename},
             {"attribute": "net.species.count", "value": net.species.count},
             {"attribute": "net.reactions.count", "value": net.reactions.count},
             {

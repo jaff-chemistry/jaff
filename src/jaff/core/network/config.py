@@ -13,13 +13,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Union, cast
 
+from ...config import resolve_network_path
 from ...config.loader import load_config, load_layer, resolve_paths
 from ...config.base import ConfigModel, PathLike, as_layer
 from ...physics.dust.config import DustConfig
 from ...physics.photo_reactions.config import RadiationConfig
 from ...physics.thermodynamics.config import ThermodynamicsConfig
 from ..reaction.config import ReactionsConfig
-from ._spec import NetworkSpec
 
 __all__ = [
     "JaffTomlConfig",
@@ -88,7 +88,7 @@ def jaff_toml_for(network_file: Path) -> Path:
     FileNotFoundError
         If *network_file* is neither a file nor a predefined network.
     """
-    return NetworkSpec._resolve_network_path(network_file).parent / "jaff.toml"
+    return resolve_network_path(network_file).parent / "jaff.toml"
 
 
 #: The ``config`` of a network: a ``jaff.toml``-style file (its ``[network]``

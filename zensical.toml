@@ -110,9 +110,6 @@ nav = [
         "reference/core/network/to_txt.md",
         "reference/core/network/write_table.md",
       ] },
-      { "core.NetworkSpec" = [
-        "reference/core/networkspec/index.md",
-      ] },
       { "core.Reaction" = [
         "reference/core/reaction/index.md",
         "reference/core/reaction/function.md",
@@ -423,6 +420,7 @@ nav = [
       "reference/config/list_subdirs.md",
       "reference/config/predefined_networks.md",
       "reference/config/predefined_templates.md",
+      "reference/config/resolve_network_path.md",
       { "Base" = [
         "reference/config/base/index.md",
         { "ConfigModel" = [

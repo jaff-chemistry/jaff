@@ -41,6 +41,14 @@ class NetworkFunctions:
 
     Names are case-insensitive.
 
+    Attributes
+    ----------
+    filepath : Path or None
+        The ``.jfunc`` file used: the ``funcfile`` setting when it is a path,
+        else the file found next to the network file (``<file name>.jfunc``,
+        then ``<stem>.jfunc``); ``None`` when there is none or ``funcfile`` is
+        ``False``.
+
     Examples
     --------
     >>> net = Network("GOW")
@@ -48,25 +56,60 @@ class NetworkFunctions:
     True
     """
 
-    def __init__(self, net: Network, jfunc_path: Path | None):
-        """Load the functions of *jfunc_path*.
+    def __init__(self, net: Network, funcfile: bool | Path):
+        """Find the network's ``.jfunc`` file and load its functions.
 
         Parameters
         ----------
         net : Network
-            The network whose symbols standardize the functions.
-        jfunc_path : Path or None
-            The ``.jfunc`` file (``net.spec.jfunc_path``); ``None`` for none.
+            The network whose symbols standardize the functions; a ``.jfunc``
+            file is looked for next to its :attr:`~jaff.core.Network.filepath`.
+        funcfile : bool | Path
+            The ``network.funcfile`` setting: a ``.jfunc`` path, ``True`` to
+            look next to the network file, or ``False`` for none.
 
         Raises
         ------
+        FileNotFoundError
+            If *funcfile* is an explicit path that does not exist.
         ParserError
             If the ``.jfunc`` file is malformed.
         """
         self._net: Network = net
-        self._functions: dict[str, AuxiliaryFunctionProps] = self._load(jfunc_path)
+        self.filepath: Path | None = self._find(net.filepath, funcfile)
+        self._functions: dict[str, AuxiliaryFunctionProps] = self._load(self.filepath)
         self._bodies: dict[str, Expr] = {}
         self._values: dict[str, Expr] = {}
+
+    @property
+    def filename(self) -> str | None:
+        """Name of the ``.jfunc`` file used (:attr:`filepath`), or ``None``."""
+        return self.filepath.name if self.filepath is not None else None
+
+    @staticmethod
+    def _find(network_file: Path, funcfile: bool | Path) -> Path | None:
+        """Return the ``.jfunc`` file *funcfile* selects, or ``None``.
+
+        Raises
+        ------
+        FileNotFoundError
+            If *funcfile* is an explicit path that does not exist.
+        """
+        if funcfile is False:
+            return None
+
+        if funcfile is True:
+            candidates = [
+                Path(f"{network_file}.jfunc"),
+                network_file.with_suffix(".jfunc"),
+            ]
+
+            return next((c for c in candidates if c.exists()), None)
+
+        if not funcfile.exists():
+            raise FileNotFoundError(funcfile)
+
+        return funcfile
 
     @staticmethod
     def _load(jfunc_path: Path | None) -> dict[str, AuxiliaryFunctionProps]:
