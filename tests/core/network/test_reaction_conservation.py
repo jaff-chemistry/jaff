@@ -68,14 +68,20 @@ class TestNetworkCheck:
 
     def test_constructor_does_not_check(self, make_network):
         # A hand-built reaction is checked by the network, not on construction.
-        from jaff.core.reaction import Reaction
+        from jaff.core.reaction import Reaction, ReactionSource
 
         net = make_network(
             ["H + H -> H2 [10,1000] 1", "H2 -> H + H [10,1000] 1"], strict=True
         )
         h, h2 = net.species["H"], net.species["H2"]
         rxn = Reaction(
-            net, [h], [h2], net.reactions[0].rate_coefficient, None, None, "H -> H2", 99
+            net,
+            [h],
+            [h2],
+            net.reactions[0].rate_coefficient,
+            None,
+            None,
+            ReactionSource("H -> H2", 1, 99),
         )
 
         assert not rxn.check_mass()

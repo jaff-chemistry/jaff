@@ -69,7 +69,7 @@ from ..species import Specie, Species
 from .config import PhotoConfig, ReactionConfig
 from .photo_reaction import PhotoReaction
 from .reaction_radiation import ReactionRadiation
-from .types import RateSegment, RateSegments
+from .types import RateSegment, RateSegments, ReactionSource
 
 if TYPE_CHECKING:
     import matplotlib.pyplot as plt
@@ -94,8 +94,11 @@ class Reaction:
     net : Network
         Network the reaction belongs to.  Supplies the ``.jfunc`` auxiliary
         functions, the radiation field and the cross-section lookup.
-    original_string : str
-        The raw network-file line that produced this reaction.
+    source : ReactionSource
+        The network-file line that produced this reaction: raw ``line``, its
+        line number ``nline``, ``index`` and the parser ``format``.  A
+        reaction merged from several lines keeps each line on its rate
+        segments (``rate_segments[i].source``); this is the first.
     reactants : Species
         Ordered species catalogue of reactant species.
     products : Species
@@ -214,11 +217,9 @@ class Reaction:
         rate_coefficient: Expr,
         tmin: float | None,
         tmax: float | None,
-        original_string: str,
-        index: int,
+        source: ReactionSource,
         dE: Expr | None = None,
         type: str = "unknown",
-        format: str | None = None,
         metadata: dict | None = None,
     ):
         """Construct a ``Reaction`` from its species and rate.
@@ -238,12 +239,9 @@ class Reaction:
             Lower temperature bound in Kelvin, or ``None``.
         tmax : float or None
             Upper temperature bound in Kelvin, or ``None``.
-        original_string : str
-            The raw network-file line that produced this reaction.
-        index : int
-            File-side source number (``source_index``): the file-order row
-            number of this reaction, gapped when rows merge.  Not an array
-            subscript; see the ``index`` / ``catalogue_index`` attributes.
+        source : ReactionSource
+            The network-file line that produced this reaction.  Its ``index``
+            becomes the reaction's ``index``.
         dE : Expr or None, optional
             Energy change per event (erg).  A ``.jfunc`` ``deltaE<N>``
             function takes precedence; ``None`` (default) without one means
@@ -253,9 +251,6 @@ class Reaction:
             ``"photo"``, ``"cosmic_ray"``, ``"3_body"``, ``"unknown"``, or a
             grain surface-mechanism type).  Stored verbatim on the ``type``
             attribute; defaults to ``"unknown"``.
-        format : str or None, optional
-            Name of the network-format parser that produced the reaction
-            (e.g. ``"prizmo"``); ``None`` (default) when unknown.
         metadata : dict or None, optional
             Parser-private data attached at parse time; ``None`` (default)
             starts empty.
@@ -269,9 +264,9 @@ class Reaction:
         """
         self.logger = JaffLogger().get_logger()
         self.net: "Network" = net
-        self._format: str | None = format
         self._metadata: dict = metadata if metadata is not None else {}
-        self.index: int = index
+        self.source: ReactionSource = source
+        self.index: int = source.index
         self._rate: tuple[Expr, Expr] | None = None
         self.__check_functions()
         self.reactants: Species = Species(reactants, check_length=False)
@@ -279,7 +274,7 @@ class Reaction:
         self.serialized: str = self.serialize(self.reactants, self.products)
         self.config: ReactionConfig = self.net.reactions.config.resolve(self.serialized)
         self.rate_segments: RateSegments = RateSegments(
-            self, [RateSegment(rate_coefficient, tmin, tmax)]
+            self, [RateSegment(rate_coefficient, tmin, tmax, source)]
         )
         function_dE = self.function("deltaE")
         self.dE: Expr = (
@@ -288,9 +283,8 @@ class Reaction:
             else (dE if dE is not None else Float(0.0))
         )
         self.rad: ReactionRadiation = ReactionRadiation(self)
-        self.original_string = original_string
         # verbatim is the "R1 + R2 -> P1 + P2" form built from the species
-        # names; original_string keeps the raw source line
+        # names; source.line keeps the raw source line
         self.verbatim: str = self.get_verbatim()
         self.catalogue_index: int = -1
 

@@ -66,6 +66,7 @@ class KromeParser(Parser):
                     ParsedRecord(
                         **fields,
                         source_index=rec.source_index,
+                        nline=rec.nline,
                         sub_order=rec.sub_order,
                     )
                 )

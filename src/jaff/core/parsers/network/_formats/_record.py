@@ -71,6 +71,8 @@ class ParsedRecord:
         The network-file line the reaction came from.
     source_index : int
         File-side reaction number (0-based, in file order).
+    nline : int
+        1-based line number of ``line`` in the network file.
     sub_order : int
         Tie-breaker for a single line expanding into several reactions.
     metadata : dict
@@ -92,6 +94,7 @@ class ParsedRecord:
         type: str,
         line: str,
         source_index: int,
+        nline: int,
         sub_order: int = 0,
         metadata: dict | None = None,
         format: str | None = None,
@@ -105,6 +108,7 @@ class ParsedRecord:
         self.type: str = type
         self.line: str = line
         self.source_index: int = source_index
+        self.nline: int = nline
         self.sub_order: int = sub_order
         self.metadata: dict = metadata if metadata is not None else {}
         self.format: str | None = format

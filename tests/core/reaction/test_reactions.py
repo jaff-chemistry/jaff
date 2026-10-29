@@ -102,7 +102,7 @@ class TestParserMetadata:
 
     @staticmethod
     def _build(net, **kwargs):
-        from jaff.core.reaction import Reaction
+        from jaff.core.reaction import Reaction, ReactionSource
 
         h, h2 = net.species["H"], net.species["H2"]
 
@@ -113,8 +113,7 @@ class TestParserMetadata:
             rate_coefficient=net.reactions[0].rate_coefficient,
             tmin=None,
             tmax=None,
-            original_string="H + H -> H2",
-            index=99,
+            source=ReactionSource("H + H -> H2", 1, 99, kwargs.pop("format", None)),
             **kwargs,
         )
 
@@ -122,20 +121,20 @@ class TestParserMetadata:
         net = make_network("H + H -> H2 [] 1e-17\n", name="r.jet")
         rxn = self._build(net)
 
-        assert rxn._format is None
+        assert rxn.source.format is None
         assert rxn._metadata == {}
 
     def test_constructor_stores_format_and_metadata(self, make_network):
         net = make_network("H + H -> H2 [] 1e-17\n", name="r.jet")
         rxn = self._build(net, format="prizmo", metadata={"band": (13.6, 1e99)})
 
-        assert rxn._format == "prizmo"
+        assert rxn.source.format == "prizmo"
         assert rxn._metadata == {"band": (13.6, 1e99)}
 
     def test_network_reactions_record_their_format(self, make_network):
         net = make_network("H + H -> H2 [] 1e-17\n", name="r.jet")
 
-        assert net.reactions[0]._format == "prizmo"
+        assert net.reactions[0].source.format == "prizmo"
         assert net.reactions[0]._metadata == {}
 
     def test_metadata_default_is_not_shared(self, make_network):

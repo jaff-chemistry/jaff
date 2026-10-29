@@ -1,5 +1,7 @@
 # ABOUTME: Record carries source identity + a state snapshot
 
+from typing import Any
+
 from jaff.core.parsers.network._formats import ParsedRecord, Record
 
 
@@ -27,7 +29,7 @@ def test_record_metadata_defaults_to_fresh_dict():
 
 
 def _parsed(**kwargs):
-    fields = dict(
+    fields: dict[str, Any] = dict(
         reactants=["H"],
         products=["H"],
         tmin=None,
@@ -36,6 +38,7 @@ def _parsed(**kwargs):
         type="unknown",
         line="H -> H",
         source_index=0,
+        nline=1,
     )
 
     return ParsedRecord(**{**fields, **kwargs})
@@ -52,6 +55,7 @@ def test_parsed_record_fields():
     rec = _parsed(metadata={"k": 1})
 
     assert (rec.reactants, rec.products, rec.line) == (["H"], ["H"], "H -> H")
+    assert rec.nline == 1
     assert rec.metadata == {"k": 1}
     assert rec.format is None  # set by the engine
 

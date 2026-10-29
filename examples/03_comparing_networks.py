@@ -100,12 +100,12 @@ def _(mo, net1, net2):
         [
             {
                 "network": net1.label,
-                "original line": _r1.original_string,
+                "original line": _r1.source.line,
                 "serialized": _r1.serialized,
             },
             {
                 "network": net2.label,
-                "original line": _r2.original_string,
+                "original line": _r2.source.line,
                 "serialized": _r2.serialized,
             },
             {"network": "equal?", "original line": "", "serialized": str(_r1 == _r2)},

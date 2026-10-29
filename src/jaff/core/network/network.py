@@ -57,6 +57,7 @@ from ..reaction import (
     RateSegment,
     Reaction,
     Reactions,
+    ReactionSource,
 )
 from ..reaction.config import ReactionsConfig
 from ..species import Specie, Species
@@ -540,10 +541,12 @@ class Network:
             rate_expr = resolve_dependencies(rate_expr, local_subs_dict, functions)
             rate_expr = self.symbols.standardize(rate_expr)
 
+            source = ReactionSource(reaction.line, reaction.nline, si, reaction.format)
             rtype = reaction.type
             if (srxn, rtype) in self.reactions:
                 self.reactions.add_rate(
-                    self.reactions[srxn, rtype], RateSegment(rate_expr, tmin, tmax)
+                    self.reactions[srxn, rtype],
+                    RateSegment(rate_expr, tmin, tmax, source),
                 )
                 continue
 
@@ -554,10 +557,8 @@ class Network:
                 rate_coefficient=rate_expr,
                 tmin=tmin,
                 tmax=tmax,
-                original_string=reaction.line,
-                index=si,
+                source=source,
                 type=rtype,
-                format=reaction.format,
                 metadata=reaction.metadata,
             )
             self.reactions.add(rea)

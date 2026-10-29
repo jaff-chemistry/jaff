@@ -620,8 +620,8 @@ class Reactions(Catalogue[Reaction]):
         ----------
         format : str
             Parser name, e.g. ``"prizmo"``, ``"krome"``, ``"kida"``,
-            ``"udfa"``, ``"uclchem"``; compared against the reaction's private
-            ``_format`` field.
+            ``"udfa"``, ``"uclchem"``; compared against the reaction's
+            ``source.format``.
 
         Returns
         -------
@@ -631,7 +631,9 @@ class Reactions(Catalogue[Reaction]):
         """
         key = ("format", format)
         if key not in self.__filter_cache:
-            self.__filter_cache[key] = Vector([r for r in self if r._format == format])
+            self.__filter_cache[key] = Vector(
+                [r for r in self if r.source.format == format]
+            )
 
         return self.__filter_cache[key]
 

@@ -31,7 +31,12 @@ class KidaParser(Parser):
         _resolve_open_tmax([fields for _, fields in parsed])
 
         reactions = [
-            ParsedRecord(**fields, source_index=rec.source_index, sub_order=rec.sub_order)
+            ParsedRecord(
+                **fields,
+                source_index=rec.source_index,
+                nline=rec.nline,
+                sub_order=rec.sub_order,
+            )
             for rec, fields in parsed
         ]
 

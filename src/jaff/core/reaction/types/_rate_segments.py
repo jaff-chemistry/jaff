@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Callable
 
 from sympy import Basic, Expr, Piecewise
@@ -78,16 +79,14 @@ class RateSegments(Catalogue[RateSegment]):
         self._equivalent = None
 
     def map_rates(self, function: Callable[[Expr], Expr]) -> None:
-        """Replace each segment's rate with ``function(rate)``, keeping its range.
+        """Swap each segment's rate for ``function(rate)``, keeping its range and source.
 
         Parameters
         ----------
         function : Callable[[Expr], Expr]
             Maps a segment's rate to its new rate.
         """
-        self._list = [
-            RateSegment(function(seg.rate), seg.tmin, seg.tmax) for seg in self._list
-        ]
+        self._list = [replace(seg, rate=function(seg.rate)) for seg in self._list]
         self._by_prop = {(seg.tmin, seg.tmax): seg for seg in self._list}
         self._equivalent = None
 
