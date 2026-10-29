@@ -8,14 +8,16 @@ import pytest
 from sympy import Integer, Rational, symbols
 
 from jaff import Network
-from jaff.core.reaction.types import RateSegment, RateSegments
+from jaff.core.reaction.types import RateSegment, RateSegments, ReactionSource
 
 TGAS = symbols("tgas")
 
 
 def _owner(mode):
     """A stand-in reaction whose ``t_cutoff`` setting is *mode*."""
-    return SimpleNamespace(config=SimpleNamespace(t_cutoff=mode))
+    return SimpleNamespace(
+        config=SimpleNamespace(t_cutoff=mode), verbatim="H + H -> H2", type="unknown"
+    )
 
 
 def _eval(segments, mode, t):
@@ -259,3 +261,87 @@ def test_reaction_temperature_range_is_derived(tmp_path):
     assert (rxn.tmin, rxn.tmax) == (10, 200)
     with pytest.raises(AttributeError):
         rxn.tmin = 5
+
+
+# --------------------------------------------------------------------------- #
+# range errors name the reaction and each segment's source line               #
+# --------------------------------------------------------------------------- #
+def _sourced(bounds):
+    """Segments over *bounds*, the i-th read from file line ``10 + i``."""
+    return [
+        RateSegment(Integer(i), lo, hi, ReactionSource(f"rate {i}", 10 + i, i, "krome"))
+        for i, (lo, hi) in enumerate(bounds)
+    ]
+
+
+def _error(bounds, mode="clip"):
+    segs = RateSegments(_owner(mode), _sourced(bounds))
+    with pytest.raises(ValueError) as info:
+        segs.sort().evaluate_equivalent_rate()
+
+    return str(info.value)
+
+
+@pytest.mark.parametrize(
+    "bounds",
+    [
+        [(None, 400), (None, None), (400, None)],  # open below, not lowest
+        [(10, None), (300, 500)],  # open above, not highest
+        [(10, 200), (100, 300)],  # overlapping ranges
+    ],
+)
+def test_range_error_names_reaction(bounds):
+    assert "H + H -> H2 [type=unknown]" in _error(bounds)
+
+
+@pytest.mark.parametrize(
+    "bounds",
+    [
+        [(None, 400), (None, None), (400, None)],
+        [(10, None), (300, 500)],
+        [(10, 200), (100, 300)],
+    ],
+)
+def test_range_error_lists_every_source_line(bounds):
+    msg = _error(bounds)
+
+    assert all(f"line {10 + i}: rate {i}" in msg for i in range(len(bounds)))
+
+
+def test_range_error_lists_ranges_in_sorted_order():
+    msg = _error([(400, None), (None, 400), (None, None)])
+    rows = [ln.strip() for ln in msg.splitlines()[1:]]
+
+    assert [r.split(")")[0] + ")" for r in rows] == [
+        "(None, 400)",
+        "(None, None)",
+        "(400, None)",
+    ]
+
+
+def test_range_error_without_source():
+    segs = RateSegments(
+        _owner("clip"),
+        [RateSegment(Integer(1), 10, 200), RateSegment(Integer(2), 100, 300)],
+    )
+    with pytest.raises(ValueError, match="no source line"):
+        segs.sort().evaluate_equivalent_rate()
+
+
+def test_network_range_error_names_file_lines(tmp_path):
+    dat = tmp_path / "open.dat"
+    dat.write_text(
+        "@format:idx,R,R,P,tmin,tmax,rate\n"
+        "1,H,H,H2,NONE,400,1\n"
+        "2,H,H,H2,400,NONE,2\n"
+        "@format:idx,R,R,P,rate\n"
+        "3,H,H,H2,3\n"
+    )
+    with pytest.raises(ValueError) as info:
+        Network(str(dat), funcfile=False)
+
+    msg = str(info.value)
+    assert "H + H -> H2" in msg
+    assert "line 2: 1,H,H,H2,NONE,400,1" in msg
+    assert "line 3: 2,H,H,H2,400,NONE,2" in msg
+    assert "line 5: 3,H,H,H2,3" in msg

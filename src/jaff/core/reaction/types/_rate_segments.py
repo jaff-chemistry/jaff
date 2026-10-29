@@ -172,11 +172,11 @@ class RateSegments(Catalogue[RateSegment]):
         for i, seg in enumerate(ls[1:]):
             prev = ls[i]
             if prev.tmax is None or seg.tmin is None:
-                raise ValueError(
-                    f"Reaction {r} should have a well defined temperature since it's a multi temperature range reaction"
+                raise self._range_error(
+                    "interior bounds of a multi-range rate must be defined"
                 )
             if prev.tmax > seg.tmin:
-                raise ValueError(f"Temperature ranges shouldn't overlap for reaction {r}")
+                raise self._range_error("temperature ranges overlap")
 
             a = prev.tmax  # left boundary
             b = seg.tmin  # right boundary
@@ -218,16 +218,42 @@ class RateSegments(Catalogue[RateSegment]):
         """
         self._list = sorted(self._list, key=lambda s: (s.tmin is not None, s.tmin))
 
-        ranges = [(s.tmin, s.tmax) for s in self._list]
-        for i, (tmin, tmax) in enumerate(ranges):
-            if tmin is None and i > 0:
-                raise ValueError(
-                    f"Only the lowest temperature range may be open below; got {ranges}"
+        last = len(self._list) - 1
+        for i, seg in enumerate(self._list):
+            if seg.tmin is None and i > 0:
+                raise self._range_error(
+                    "only the lowest temperature range may be open below"
                 )
 
-            if tmax is None and i < len(ranges) - 1:
-                raise ValueError(
-                    f"Only the highest temperature range may be open above; got {ranges}"
+            if seg.tmax is None and i < last:
+                raise self._range_error(
+                    "only the highest temperature range may be open above"
                 )
 
         return self
+
+    def _range_error(self, problem: str) -> ValueError:
+        """Build the error for an invalid set of temperature ranges.
+
+        Names the reaction and lists every segment's range with the network
+        line it came from, in the current order.
+
+        Parameters
+        ----------
+        problem : str
+            What is wrong with the ranges.
+
+        Returns
+        -------
+        ValueError
+            The error to raise.
+        """
+        r = self.reaction
+        spans = [f"({seg.tmin}, {seg.tmax})" for seg in self._list]
+        width = max(map(len, spans))
+        rows = "\n".join(
+            f"  {span:<{width}}  {seg.source or 'no source line'}"
+            for span, seg in zip(spans, self._list)
+        )
+
+        return ValueError(f"{r.verbatim} [type={r.type}]: {problem}:\n{rows}")
