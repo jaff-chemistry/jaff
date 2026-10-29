@@ -24,9 +24,9 @@ from __future__ import annotations
 import logging
 import sys
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Mapping
+from typing import TYPE_CHECKING, Any, Callable, Dict, Mapping
 
 import numpy as np
 from sympy import (
@@ -201,12 +201,6 @@ class Network:
     elements : Elements
         Unique elements derived from all species; used for composition
         matrices.
-    reactant_matrix : np.ndarray
-        Integer stoichiometry matrix, shape ``(n_reactions, n_species)``.
-        Entry ``[i, j]`` counts how many times species *j* appears as a
-        reactant in reaction *i*.
-    product_matrix : np.ndarray
-        Integer stoichiometry matrix for products, same shape.
     thermodynamics : Thermodynamics
         Equation of state and thermal rates, built lazily: ``eos`` (internal
         energy for the configured EOS, an ideal gas by default),
@@ -378,8 +372,6 @@ class Network:
         self.reactions: Reactions = Reactions(self.config.reactions)
         self.symbols: NetworkSymbols = NetworkSymbols(self)
         self.functions: NetworkFunctions = NetworkFunctions(self, self.config.funcfile)
-        self.reactant_matrix: np.ndarray | None = None
-        self.product_matrix: np.ndarray | None = None
         self.radiation: Radiation | None = (
             Radiation(self, self.config.radiation)
             if self.config.radiation is not None
@@ -408,8 +400,6 @@ class Network:
         self.check_sink_sources(self.config.strict)
         self.check_recombinations(self.config.strict)
         self.check_isomers(self.config.strict)
-
-        self.__generate_reaction_matrices()
 
         self.logger.info("[green]Network loaded successfully![/]")
 
@@ -958,21 +948,52 @@ class Network:
 
         return report
 
-    def __generate_reaction_matrices(self) -> None:
-        """Build integer stoichiometry matrices: shape (n_reactions × n_species)."""
-        self.reactant_matrix = np.zeros(
-            (self.reactions.count, self.species.count), dtype=int
-        )
-        self.product_matrix = np.zeros(
-            (self.reactions.count, self.species.count), dtype=int
-        )
+    @cached_property
+    def reactant_matrix(self) -> np.ndarray:
+        """Reactant stoichiometry, shape ``(n_reactions, n_species)``, built on first use.
 
+        Entry ``[i, j]`` counts how many times species *j* (``species[j]``) is a
+        reactant of reaction *i*; pseudo-species are not counted.  The array is
+        read-only, as it is shared by every caller.
+
+        Returns
+        -------
+        np.ndarray
+            Integer matrix.
+
+        Examples
+        --------
+        >>> net = Network("COthin")
+        >>> net.reactant_matrix.shape
+        (238, 37)
+        """
+        return self._stoichiometry(lambda reaction: reaction.reactants.core)
+
+    @cached_property
+    def product_matrix(self) -> np.ndarray:
+        """Product stoichiometry, shape ``(n_reactions, n_species)``, built on first use.
+
+        Entry ``[i, j]`` counts how many times species *j* is a product of
+        reaction *i*; pseudo-species are not counted.  Read-only, like
+        :attr:`reactant_matrix`.
+
+        Returns
+        -------
+        np.ndarray
+            Integer matrix.
+        """
+        return self._stoichiometry(lambda reaction: reaction.products.core)
+
+    def _stoichiometry(self, side: Callable[[Reaction], Species]) -> np.ndarray:
+        """Count each reaction's *side* species into a read-only integer matrix."""
+        matrix = np.zeros((self.reactions.count, self.species.count), dtype=int)
         for i, reaction in enumerate(self.reactions):
-            for reactant in reaction.reactants.core:
-                self.reactant_matrix[i, reactant.index] += 1
+            for specie in side(reaction):
+                matrix[i, specie.index] += 1
 
-            for product in reaction.products.core:
-                self.product_matrix[i, product.index] += 1
+        matrix.flags.writeable = False
+
+        return matrix
 
     def sfluxes(self) -> list[Expr]:
         """Return symbolic flux expressions for all reactions.

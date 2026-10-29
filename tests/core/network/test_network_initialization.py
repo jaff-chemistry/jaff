@@ -88,12 +88,7 @@ class TestNetworkInitialization:
                 with patch.object(Network, "check_sink_sources", MagicMock()):
                     with patch.object(Network, "check_recombinations", MagicMock()):
                         with patch.object(Network, "check_isomers", MagicMock()):
-                            with patch.object(
-                                Network,
-                                "_Network__generate_reaction_matrices",
-                                MagicMock(),
-                            ):
-                                network = Network(test_path)
+                            network = Network(test_path)
 
         assert network.label == "network_file"
 
@@ -126,17 +121,13 @@ class TestNetworkInitialization:
                 with patch.object(Network, "check_sink_sources") as mock_sink:
                     with patch.object(Network, "check_recombinations") as mock_recomb:
                         with patch.object(Network, "check_isomers") as mock_isomers:
-                            with patch.object(
-                                Network, "_Network__generate_reaction_matrices"
-                            ) as mock_matrices:
-                                network = Network(sample_kida_file, strict=True)
+                            network = Network(sample_kida_file, strict=True)
 
         # Verify all methods were called
         mock_load.assert_called_once_with()
         mock_sink.assert_called_once_with(True)
         mock_recomb.assert_called_once_with(True)
         mock_isomers.assert_called_once_with(True)
-        mock_matrices.assert_called_once()
 
     def test_empty_network_file(self, fixtures_dir):
         """Test initialization with empty network file."""
@@ -158,7 +149,7 @@ class TestNetworkInitialization:
         # Check data structure types and initial states
         assert isinstance(network.species, Species)
         assert isinstance(network.reactions, Reactions)
-        # Check that reactant_matrix and product_matrix are generated
+        # reactant_matrix and product_matrix are built on first use
         assert network.reactant_matrix is not None
         assert network.product_matrix is not None
         assert hasattr(network.reactant_matrix, "shape")  # Should be numpy array

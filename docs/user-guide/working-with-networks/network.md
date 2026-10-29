@@ -140,8 +140,8 @@ net = Network(
 | `species`         | `Species`         | Ordered [`Species`](species.md) catalogue                                                                           |
 | `reactions`       | `Reactions`       | Ordered [`Reactions`](reactions.md) catalogue                                                                       |
 | `elements`        | `Elements`        | [`Elements`](elements.md) catalogue derived from the species                                                        |
-| `reactant_matrix` | `np.ndarray`      | Integer stoichiometry, shape `(n_reactions, n_species)` — reactant counts                                           |
-| `product_matrix`  | `np.ndarray`      | Integer stoichiometry, same shape — product counts                                                                  |
+| `reactant_matrix` | `np.ndarray`      | Integer stoichiometry, shape `(n_reactions, n_species)` — reactant counts; built on first use, read-only            |
+| `product_matrix`  | `np.ndarray`      | Integer stoichiometry, same shape — product counts; built on first use, read-only                                   |
 | `thermodynamics`  | `Thermodynamics`  | Thermal equations: `eos`, `dEdt_chemical`, `dEdt_extra`, `dEdt_tot`, `dTdt_chemical`, `dTdt_extra`, `dTdt_tot`; see [thermodynamics](../../reference/physics/thermodynamics/index.md) |
 | `radiation`       | `Radiation\|None` | Radiation field object; `None` when the config has no `[network.radiation]` table                                   |
 | `dust`            | `Dust\|None`      | Dust module; `None` when the config has no `[network.dust]` table                                                   |

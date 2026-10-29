@@ -128,3 +128,41 @@ class TestRobustness:
         assert net.reactions.count == 50
         assert net.reactant_matrix.shape[0] == 50
         assert net.product_matrix.shape[0] == 50
+
+
+class TestStoichiometryMatrices:
+    """``reactant_matrix`` / ``product_matrix``: built on first use, cached, read-only."""
+
+    LINES = [
+        "H + H -> H2 [10,1000] 1e-10",
+        "H2 + H+ -> H2+ + H [10,1000] 1e-9",
+    ]
+
+    def test_counts_per_reaction_and_species(self, make_network) -> None:
+        net = make_network(self.LINES)
+        h, h2 = net.species["H"].index, net.species["H2"].index
+
+        assert net.reactant_matrix.shape == (2, net.species.count)
+        assert net.reactant_matrix[0, h] == 2
+        assert net.product_matrix[0, h2] == 1
+        assert net.product_matrix[1, h] == 1
+        assert net.reactant_matrix.dtype == int
+
+    def test_not_built_until_used(self, make_network) -> None:
+        net = make_network(self.LINES)
+
+        assert "reactant_matrix" not in vars(net)
+        assert "product_matrix" not in vars(net)
+
+    def test_cached(self, make_network) -> None:
+        net = make_network(self.LINES)
+
+        assert net.reactant_matrix is net.reactant_matrix
+        assert net.product_matrix is net.product_matrix
+
+    @pytest.mark.parametrize("name", ["reactant_matrix", "product_matrix"])
+    def test_read_only(self, make_network, name) -> None:
+        matrix = getattr(make_network(self.LINES), name)
+
+        with pytest.raises(ValueError, match="read-only"):
+            matrix[0, 0] += 1

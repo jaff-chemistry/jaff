@@ -102,6 +102,8 @@ nav = [
         "reference/core/network/check_sink_sources.md",
         "reference/core/network/check_recombinations.md",
         "reference/core/network/check_isomers.md",
+        "reference/core/network/reactant_matrix.md",
+        "reference/core/network/product_matrix.md",
         "reference/core/network/sfluxes.md",
         "reference/core/network/ode_system.md",
         "reference/core/network/sodes.md",
