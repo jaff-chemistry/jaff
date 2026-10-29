@@ -3367,7 +3367,7 @@
     ],
     null,
     null,
-    "7.1e-7*exp(-.5*user_av)",
+    "7.1e-7*exp(-.5*av)",
     "photo"
   ],
   [
@@ -3381,7 +3381,7 @@
     ],
     null,
     null,
-    "1.1e-9*exp(-1.9*user_av)",
+    "1.1e-9*exp(-1.9*av)",
     "photo"
   ],
   [
@@ -3395,7 +3395,7 @@
     ],
     null,
     null,
-    "5.6e-11*exp(-3.74*user_av)*user_h2self",
+    "5.6e-11*exp(-3.74*av)*user_h2self",
     "photo"
   ],
   [
@@ -3409,7 +3409,7 @@
     ],
     null,
     null,
-    "4.9e-13*exp(-1.8*user_av)",
+    "4.9e-13*exp(-1.8*av)",
     "photo"
   ],
   [
@@ -3423,7 +3423,7 @@
     ],
     null,
     null,
-    "4.9e-13*exp(-2.3*user_av)",
+    "4.9e-13*exp(-2.3*av)",
     "photo"
   ],
   [
@@ -3437,7 +3437,7 @@
     ],
     null,
     null,
-    "3.1e-10*exp(-3.*user_av)",
+    "3.1e-10*exp(-3.*av)",
     "photo"
   ],
   [
@@ -3451,7 +3451,7 @@
     ],
     null,
     null,
-    "2.4e-7*exp(-.9*user_av)",
+    "2.4e-7*exp(-.9*av)",
     "photo"
   ],
   [
@@ -3465,7 +3465,7 @@
     ],
     null,
     null,
-    "8.7e-10*exp(-1.2*user_av)",
+    "8.7e-10*exp(-1.2*av)",
     "photo"
   ],
   [
@@ -3479,7 +3479,7 @@
     ],
     null,
     null,
-    "7.7e-10*exp(-2.8*user_av)",
+    "7.7e-10*exp(-2.8*av)",
     "photo"
   ],
   [
@@ -3493,7 +3493,7 @@
     ],
     null,
     null,
-    "2.6e-10*exp(-2.5*user_av)",
+    "2.6e-10*exp(-2.5*av)",
     "photo"
   ],
   [
@@ -3507,7 +3507,7 @@
     ],
     null,
     null,
-    "7.1e-10*exp(-1.7*user_av)",
+    "7.1e-10*exp(-1.7*av)",
     "photo"
   ],
   [
@@ -3521,7 +3521,7 @@
     ],
     null,
     null,
-    "5.9e-10*exp(-2.3*user_av)",
+    "5.9e-10*exp(-2.3*av)",
     "photo"
   ],
   [
@@ -3535,7 +3535,7 @@
     ],
     null,
     null,
-    "4.6e-10*exp(-1.7*user_av)",
+    "4.6e-10*exp(-1.7*av)",
     "photo"
   ],
   [
@@ -3549,7 +3549,7 @@
     ],
     null,
     null,
-    "1e-9*exp(-1.7*user_av)",
+    "1e-9*exp(-1.7*av)",
     "photo"
   ],
   [
@@ -3563,7 +3563,7 @@
     ],
     null,
     null,
-    "1e-9*exp(-1.7*user_av)",
+    "1e-9*exp(-1.7*av)",
     "photo"
   ],
   [
@@ -3577,7 +3577,7 @@
     ],
     null,
     null,
-    "1.5e-10*exp(-2.1*user_av)",
+    "1.5e-10*exp(-2.1*av)",
     "photo"
   ],
   [
@@ -3591,7 +3591,7 @@
     ],
     null,
     null,
-    "2.4e-7*exp(-.5*user_av)",
+    "2.4e-7*exp(-.5*av)",
     "photo"
   ],
   [
@@ -3605,7 +3605,7 @@
     ],
     null,
     null,
-    "3.7e-10*exp(-1.7*user_av)",
+    "3.7e-10*exp(-1.7*av)",
     "photo"
   ],
   [
@@ -3619,7 +3619,7 @@
     ],
     null,
     null,
-    "1.6e-12*exp(-3.1*user_av)",
+    "1.6e-12*exp(-3.1*av)",
     "photo"
   ],
   [
@@ -3633,7 +3633,7 @@
     ],
     null,
     null,
-    "1e-12*exp(-1.8*user_av)",
+    "1e-12*exp(-1.8*av)",
     "photo"
   ],
   [
@@ -3647,7 +3647,7 @@
     ],
     null,
     null,
-    "6e-10*exp(-1.7*user_av)",
+    "6e-10*exp(-1.7*av)",
     "photo"
   ],
   [
@@ -3661,7 +3661,7 @@
     ],
     null,
     null,
-    "3.2e-11*exp(-3.9*user_av)",
+    "3.2e-11*exp(-3.9*av)",
     "photo"
   ],
   [
@@ -3787,7 +3787,7 @@
     ],
     null,
     null,
-    "5.6e-11*exp(-3.7*user_av)",
+    "5.6e-11*exp(-3.7*av)",
     "photo"
   ],
   [
@@ -3801,7 +3801,7 @@
     ],
     null,
     null,
-    "7e-10*exp(-1.8*user_av)",
+    "7e-10*exp(-1.8*av)",
     "photo"
   ],
   [
@@ -3815,7 +3815,7 @@
     ],
     null,
     null,
-    "2.e-10*exp(-3.53*user_av)",
+    "2.e-10*exp(-3.53*av)",
     "photo"
   ],
   [

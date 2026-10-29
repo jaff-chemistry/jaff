@@ -49,6 +49,11 @@ class KromeReaction:
         "user_crate": "crate",
         "user_av": "av",
     }
+    """Rate-variable aliases, matched as whole words in any case."""
+
+    _RATE_REPS_RE = re.compile(r"\b(" + "|".join(RATE_REPS) + r")\b", flags=re.IGNORECASE)
+
+    _AV_RE = re.compile(r"\bav\b", flags=re.IGNORECASE)
 
     def local_re(self, state: dict) -> re.Pattern:
         """Build the field-extraction regex for the active KROME column layout."""
@@ -72,7 +77,8 @@ class KromeReaction:
         normalisation (``E``/``e`` → ``e-``, ``g`` → ``_GRAIN``,
         ``HE`` → ``He``), normalises exotic pseudo-species
         (``CR``/``CRP``/``CRPHOT``/``PHOTON`` → underscore form), and converts
-        ``user_crflux``/``user_av`` aliases.  Fortran exponent
+        ``user_crflux``/``user_crate``/``user_av`` aliases (whole words, any
+        case).  Fortran exponent
         notation is converted to Python notation via :func:`~jaff.common.f90_convert`.
 
         Raises
@@ -138,8 +144,7 @@ class KromeReaction:
                 tmax = tmax.replace(k, v)
             t_max = float(tmax)
 
-        for k, v in self.RATE_REPS.items():
-            rate = rate.replace(k, v)
+        rate = self._RATE_REPS_RE.sub(lambda m: self.RATE_REPS[m[1].lower()], rate)
 
         rate = f90_convert(rate)
         # ``KromeParser.post_process`` numbers the placeholder into photorates().
@@ -167,8 +172,9 @@ class KromeReaction:
         auxiliary-function rates: a ``_PHOTON`` reactant -> ``"photo"``, a
         cosmic-ray pseudo-species (``_CR``/``_CRP``/``_CRPHOT``) ->
         ``"cosmic_ray"``, three or more real reactants -> ``"3_body"``. Only
-        then is the rate inspected (``photo``/``av`` -> ``"photo"``, ``crate``
-        -> ``"cosmic_ray"``, ``ntot`` -> ``"3_body"``); otherwise ``"unknown"``.
+        then is the rate inspected (``photo``, or ``av`` as a whole word in any
+        case, -> ``"photo"``, ``crate`` -> ``"cosmic_ray"``, ``ntot`` ->
+        ``"3_body"``); otherwise ``"unknown"``.
         """
         if "_PHOTON" in rr:
             return "photo"
@@ -182,7 +188,7 @@ class KromeReaction:
             return "photo"
         if "crate" in r:
             return "cosmic_ray"
-        if "av" in r:
+        if KromeReaction._AV_RE.search(r):
             return "photo"
         if "ntot" in r:
             return "3_body"
