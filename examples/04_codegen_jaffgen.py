@@ -127,14 +127,15 @@ def _(DEMO2, mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    Generate the `python_solve_ivp` collection for it into a scratch directory:
+    Generate the `python_solve_ivp` collection for it into a scratch directory.
+    Each run writes into a new folder there, named
+    `<network>_<template>_<date>-<time>`, so earlier runs are kept:
     """)
     return
 
 
 @app.cell
 def _(DEMO2, JAFFGEN, run, scratch):
-    py_out = scratch / "python_solve_ivp"
     run(
         [
             JAFFGEN,
@@ -143,9 +144,10 @@ def _(DEMO2, JAFFGEN, run, scratch):
             "--template",
             "python_solve_ivp",
             "--outdir",
-            py_out,
+            scratch / "python_solve_ivp",
         ]
     )
+    (py_out,) = (scratch / "python_solve_ivp").iterdir()
     return (py_out,)
 
 
@@ -272,7 +274,6 @@ def _(mo):
 
 @app.cell
 def _(DEMO2, JAFFGEN, run, scratch):
-    f90_out = scratch / "fortran_dlsodes"
     run(
         [
             JAFFGEN,
@@ -281,9 +282,10 @@ def _(DEMO2, JAFFGEN, run, scratch):
             "--template",
             "fortran_dlsodes",
             "--outdir",
-            f90_out,
+            scratch / "fortran_dlsodes",
         ]
     )
+    (f90_out,) = (scratch / "fortran_dlsodes").iterdir()
     return (f90_out,)
 
 

@@ -14,6 +14,7 @@ from jaff.physics.photo_reactions.shielding import ShieldingFunction, ShieldingR
 from jaff.physics.photo_reactions.shielding.global_.leiden import Leiden
 from jaff.physics.photo_reactions.shielding.H2__PHOTON__H_H.db1996 import DB1996
 from jaff.physics.photo_reactions.shielding.H2__PHOTON__H_H.hg2015 import HG2015
+from tests.jaffgen_run import run_folder
 
 H2_PHOTO = "H2 -> H + H  []  PHOTO, 11.2\n"
 H2_KEY = "H2._PHOTON__H.H"
@@ -189,7 +190,7 @@ def test_jaffgen_writes_shielding_tables_to_output(tmp_path):
         result = CliRunner().invoke(app, ["--config", str(cfg), "--outdir", str(out)])
 
     assert result.exit_code == 0, result.output
-    assert (out / f"shielding_{CO_KEY}.hdf5").exists()
+    assert (run_folder(out) / f"shielding_{CO_KEY}.hdf5").exists()
 
 
 class TestPhotoReactionShielding:

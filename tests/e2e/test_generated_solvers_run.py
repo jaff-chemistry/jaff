@@ -10,13 +10,14 @@ from pathlib import Path
 
 import pytest
 from tests._paths import REPO_ROOT
+from tests.jaffgen_run import run_folder
 
 REPO = REPO_ROOT
 DEMO2 = REPO / "networks" / "demos" / "demo2.jet"
 
 
-def _jaffgen(network: Path, template: str, outdir: Path) -> None:
-    """Run the jaffgen CLI the way a user would and require success."""
+def _jaffgen(network: Path, template: str, outdir: Path) -> Path:
+    """Run the jaffgen CLI the way a user would, require success; return the run folder."""
     # The console script installed next to this interpreter (jaffgen.exe on Windows).
     jaffgen = shutil.which("jaffgen", path=str(Path(sys.executable).parent))
     assert jaffgen is not None, "jaffgen console script not found"
@@ -36,13 +37,15 @@ def _jaffgen(network: Path, template: str, outdir: Path) -> None:
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
+    return run_folder(outdir)
+
 
 def test_python_solve_ivp_driver_runs(tmp_path):
-    _jaffgen(DEMO2, "python_solve_ivp", tmp_path)
+    out = _jaffgen(DEMO2, "python_solve_ivp", tmp_path)
 
     proc = subprocess.run(
         [sys.executable, "main.py"],
-        cwd=tmp_path,
+        cwd=out,
         capture_output=True,
         text=True,
         env={**os.environ, "MPLBACKEND": "Agg"},
@@ -58,12 +61,12 @@ def test_python_solve_ivp_driver_runs(tmp_path):
     reason="needs Linux with gfortran and make",
 )
 def test_fortran_dlsodes_builds_and_runs(tmp_path):
-    _jaffgen(DEMO2, "fortran_dlsodes", tmp_path)
+    out = _jaffgen(DEMO2, "fortran_dlsodes", tmp_path)
 
-    build = subprocess.run(["make"], cwd=tmp_path, capture_output=True, text=True)
+    build = subprocess.run(["make"], cwd=out, capture_output=True, text=True)
     assert build.returncode == 0, build.stdout + build.stderr
 
-    run = subprocess.run(["./test"], cwd=tmp_path, capture_output=True, text=True)
+    run = subprocess.run(["./test"], cwd=out, capture_output=True, text=True)
     output = run.stdout + run.stderr
 
     assert run.returncode == 0, output
@@ -82,14 +85,14 @@ def test_fortran_dlsodes_builds_and_runs(tmp_path):
     reason="needs Linux with cmake and clang++ (and network access for FetchContent)",
 )
 def test_kokkos_ode_builds_and_runs(tmp_path):
-    _jaffgen(DEMO2, "kokkos_ode", tmp_path)
+    out = _jaffgen(DEMO2, "kokkos_ode", tmp_path)
 
     for cmd in (
         ["cmake", "-S", ".", "-B", "build", "-DCMAKE_CXX_COMPILER=clang++"],
         ["cmake", "--build", "build", "-j"],
         ["./build/chemistry_ode"],
     ):
-        proc = subprocess.run(cmd, cwd=tmp_path, capture_output=True, text=True)
+        proc = subprocess.run(cmd, cwd=out, capture_output=True, text=True)
         assert proc.returncode == 0, f"{cmd}:\n{proc.stdout}{proc.stderr}"
 
     assert "Number of reactions: 2" in proc.stdout, proc.stdout

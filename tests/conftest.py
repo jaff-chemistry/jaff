@@ -126,8 +126,8 @@ def rendered(tmp_path_factory: pytest.TempPathFactory) -> Callable[[str], Path]:
 
     def get(name: str) -> Path:
         if name not in cache:
-            out = tmp_path_factory.mktemp(f"render_{name}")
-            render(NETWORKS[name], template_files(name), out)
+            outdir = tmp_path_factory.mktemp(f"render_{name}")
+            out = render(NETWORKS[name], template_files(name), outdir)
             if UPDATE:
                 refresh_golden(name, out)
             cache[name] = out

@@ -122,7 +122,7 @@
         "output_dir": {
           "format": "path",
           "type": "string",
-          "description": "Output directory; without it, `<repo_root>/generated`.",
+          "description": "Output directory; without it, `<repo_root>/generated`. Each run writes into a new folder in it, `<network>_<template>_<YYYYmmdd-HHMMSS>`.",
           "title": "Output Dir"
         },
         "network_file": {

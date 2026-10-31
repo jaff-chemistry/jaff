@@ -24,7 +24,7 @@ $$JAFF DEFINE microphysics {
         "c_hat" -> "state.c_hat"
     }
     THERMAL { MODE -> dedt  ENERGY -> specific }
-    RADIATION { ENABLED -> True }
+    # RADIATION { ENABLED -> True }
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_INLINE void

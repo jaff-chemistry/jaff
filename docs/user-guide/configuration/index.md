@@ -183,8 +183,10 @@ jaffgen --network GOW --template microphysics \
 ## What a run used: `config.toml`
 
 `jaffgen` writes the run's whole config, every key and default after merging
-all layers, to `config.toml` in the output directory. It records what the run
-used and loads again with `--config`. As TOML has no null, keys left unset
+all layers, to `config.toml` in the run's folder in the output directory. It
+records what the run used and loads again with `--config`; its `output_dir` is
+the output directory, not the run folder, so a rerun writes a new folder beside
+it. As TOML has no null, keys left unset
 (`None`) and empty tables are omitted; the file starts with a `#:schema` line
 for [editors](editor-setup.md) and puts `[jaffgen]` first.
 
@@ -192,8 +194,8 @@ for [editors](editor-setup.md) and puts `[jaffgen]` first.
 !!! note "Data-table paths in `config.toml`"
     `[[jaffgen.table]]` entries are written as they were given, so a relative
     `source.path` is resolved against the directory of the loaded file: when
-    `config.toml` is reloaded from the output directory, that is the output
-    directory rather than the original `jaffgen.toml`'s. Use absolute source
+    `config.toml` is reloaded from the run folder, that is the run folder
+    rather than the original `jaffgen.toml`'s directory. Use absolute source
     paths (or `"default"`) if you plan to rerun from `config.toml`.
 
 ---

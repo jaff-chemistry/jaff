@@ -44,8 +44,8 @@ def test_template_uses_jk_identifiers(tmp_path, template, outfile):
         files=None,
         template=template,
     )
-    run_jaffgen(args)
-    text = (outdir / outfile).read_text()
+    gen = run_jaffgen(args)
+    text = (gen.output_dir / outfile).read_text()
     assert "idx_hejj" in text  # He++ -> j/k
     assert "idx_hepp" not in text  # old p/n gone
 

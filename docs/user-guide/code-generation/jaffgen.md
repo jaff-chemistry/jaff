@@ -31,10 +31,11 @@ A `jaffgen` run is five phases:
 3. **Gather template files** — from `--indir`, `--files`, and `--template`.
    These **combine** — a single run can pull from all three.
 4. **Generate** — run [`TemplateParser`](template-syntax.md) on every gathered
-   file and write the result to `--outdir`, preserving each file's path
-   relative to its source directory, together with any data tables
+   file and write the result to a new [run folder](#run-folders) in
+   `--outdir`, preserving each file's path relative to its source directory,
+   together with any data tables
    ([`[[jaffgen.table]]`](../configuration/data-tables.md), shielding tables).
-5. **Record** — write the run's whole config to `config.toml` in `--outdir`.
+5. **Record** — write the run's whole config to `config.toml` in the run folder.
 
 The mental model: _jaffgen is the template engine driven over a file set with
 one loaded network behind it._
@@ -81,7 +82,7 @@ performs this resolution.
 
 | Argument   | Description                                                           |
 | ---------- | --------------------------------------------------------------------- |
-| `--outdir` | Output directory (created if absent; defaults to `<repo>/generated/`) |
+| `--outdir` | Output directory; each run writes into a new [run folder](#run-folders) in it (created if absent; defaults to `<repo>/generated/`) |
 | `--echo`   | `--echo` / `--no-echo` — copy `$$JAFF` directives into the output as comments (default: on; overrides `echo` in `jaffgen.toml`) |
 
 ### Input sources
@@ -117,10 +118,32 @@ directory**; paths given on the CLI are resolved relative to the current
 directory. Each option sets one config key; see the
 [option table](../configuration/index.md#from-the-command-line).
 
-The output directory also receives `config.toml`: the run's whole config after
+The run folder also receives `config.toml`: the run's whole config after
 merging, every key and default included — an exact record of what the run used,
 loadable again with `--config`. It records the output directory actually used,
-the default one included. (The `jaffgen.toml` itself is not copied.)
+the default one included, not the run folder, so a rerun from it writes a new
+run folder next to this one. (The `jaffgen.toml` itself is not copied.)
+
+### Run folders
+
+Each run writes into a new folder in the output directory, named
+`<network>_<template>_<YYYYmmdd-HHMMSS>`, so earlier runs are never
+overwritten:
+
+```text
+output/
+├── GOW_microphysics_20261031-101500/
+└── GOW_microphysics_20261031-103012/
+```
+
+- `<network>` is the network's [`label`](../configuration/index.md) (by
+  default the network file's name without its extension).
+- `<template>` is the `--template` name; without one, the `--indir` folder's
+  name; with only `--files`, `custom`.
+- Characters other than letters, digits, `_`, `.` and `-` become `_`.
+- A second run in the same second gets `-2` appended (then `-3`, ...).
+
+The last log line names the run folder ("Generated files can be found at ...").
 
 ---
 

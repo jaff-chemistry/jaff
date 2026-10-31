@@ -34,6 +34,8 @@ Usage
 """
 
 import logging
+import re
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import List, Optional
@@ -106,6 +108,11 @@ def _config_file(config_file: Path | str | None) -> Path | None:
     return path
 
 
+def _timestamp() -> str:
+    """The current local time as ``YYYYmmdd-HHMMSS``, for run folder names."""
+    return datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
 class JaffGen:
     """
     Engine for the ``jaffgen`` CLI command: one code-generation run.
@@ -116,7 +123,7 @@ class JaffGen:
 
     1. Build the chemical reaction network once (``build_network``); it merges
        the run's ``[network]`` settings over its own ``jaff.toml``.
-    2. Collect the files to render and choose the output directory
+    2. Collect the files to render and choose the run folder
        (``collect_files``).
 
     :meth:`run` then writes the run's output:
@@ -140,9 +147,13 @@ class JaffGen:
         ``config_file`` (the ``jaffgen.toml`` used).
     net : Network
         The reaction network built from the config.
+    output_root : Path
+        The configured output directory (``[jaffgen] output_dir``, else
+        :data:`DEFAULT_OUTPUT`).
     output_dir : Path
-        Directory the generated files are written to (``[jaffgen]
-        output_dir``, else :data:`DEFAULT_OUTPUT`).
+        The run folder the generated files are written to:
+        ``<network>_<template>_<YYYYmmdd-HHMMSS>`` in :attr:`output_root`, with
+        ``-2``, ``-3``, ... appended when that folder already exists.
     output_files : list of ResolvedPath
         Every file to render, from the template (minus its bundled
         ``jaffgen.toml``), the input directory and the individual input files.
@@ -171,6 +182,7 @@ class JaffGen:
         """
         self.logger: logging.Logger = JaffLogger().get_logger()
         self.config: JaffgenRunConfig = config
+        self.output_root: Path = DEFAULT_OUTPUT
         self.output_dir: Path = DEFAULT_OUTPUT
         self.output_files: list[ResolvedPath] = []
 
@@ -182,7 +194,7 @@ class JaffGen:
     def run(self) -> None:
         """Write the run's output: tables, shielding tables, rendered files, config.
 
-        Creates :attr:`output_dir` first.
+        Creates the run folder, :attr:`output_dir`, first.
         """
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.handle_data_tables()
@@ -196,7 +208,7 @@ class JaffGen:
 
     def collect_files(self) -> None:
         """
-        Collect every file to render and choose the output directory.
+        Collect every file to render and choose the run folder.
 
         Files come from the template (minus its bundled ``jaffgen.toml``, which
         is config), then the input directory, then the individual input files.
@@ -313,15 +325,42 @@ class JaffGen:
     def set_output_dir(self) -> None:
         """
         Set the output directory: the configured one, else the default
-        ``<repo_root>/generated`` (with a warning).
+        ``<repo_root>/generated`` (with a warning), and the run folder in it.
         """
         output_dir = self.config.jaffgen.output_dir
         if output_dir is not None:
-            self.output_dir = output_dir
-            return
+            self.output_root = output_dir
+        else:
+            self.output_root = DEFAULT_OUTPUT
+            self.logger.warning("No output directory has been supplied.")
+            self.logger.warning(f"Files will be generated at {DEFAULT_OUTPUT}")
 
-        self.logger.warning("No output directory has been supplied.")
-        self.logger.warning(f"Files will be generated at {DEFAULT_OUTPUT}")
+        self.output_dir = self._run_folder()
+
+    def _run_folder(self) -> Path:
+        """
+        The run folder ``<network>_<template>_<YYYYmmdd-HHMMSS>`` in the output
+        directory, made unique with a ``-2``, ``-3``, ... suffix.
+
+        The network is its label; the template is the template name, else the
+        input directory's name, else ``custom``.
+        """
+        run = self.config.jaffgen
+        if run.template is not None:
+            template = run.template
+        elif run.input_dir is not None:
+            template = run.input_dir.name
+        else:
+            template = "custom"
+
+        name = re.sub(r"[^\w.-]", "_", f"{self.net.label}_{template}_{_timestamp()}")
+        folder = self.output_root / name
+        suffix = 2
+        while folder.exists():
+            folder = self.output_root / f"{name}-{suffix}"
+            suffix += 1
+
+        return folder
 
     # ------------------------------------------------------------------
     # Execution
@@ -360,8 +399,9 @@ class JaffGen:
         """
         path = self.output_dir / "config.toml"
         schema = SCHEMA_DIR / "jaffgen.schema.json"
-        # Record the output directory actually used (the default when none was given).
-        jaffgen = self.config.jaffgen.model_copy(update={"output_dir": self.output_dir})
+        # Record the output directory used (the default when none was given), not
+        # the run folder: a rerun from this file makes a new folder beside this one.
+        jaffgen = self.config.jaffgen.model_copy(update={"output_dir": self.output_root})
         config = JaffgenTomlConfig(jaffgen=jaffgen, network=self.net.config)
         path.write_text(dump_config(config, schema=schema))
         self.logger.info(f"[cyan]{path.name}[/] created at {path.parent}")
@@ -505,7 +545,8 @@ def generate(
         None,
         "--outdir",
         metavar="DIR",
-        help="Output directory for generated files (default: <repo_root>/generated)",
+        help="Output directory; each run writes into a new "
+        "<network>_<template>_<datetime> folder in it (default: <repo_root>/generated)",
     ),
     indir: Optional[str] = typer.Option(
         None,

@@ -98,7 +98,8 @@ INFO     Network loaded successfully!
 INFO     Successfully generated files
 ```
 
-`generated/` now holds a complete Fortran solver that builds with `make`
+`generated/demo2_fortran_dlsodes_<date>-<time>/` (a new folder for each run)
+now holds a complete Fortran solver that builds with `make`
 (using `gfortran`), plus `config.toml`, a record of the settings `jaffgen` ran
 with:
 

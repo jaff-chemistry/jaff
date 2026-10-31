@@ -1,6 +1,7 @@
 # ABOUTME: Tests for jaffgen/jaffx CLI wiring: command-line options become a config
 # ABOUTME: layer (CLI_KEYS) over jaffgen.toml and jaff.toml, end to end through jaffgen
 
+import shutil
 import tomllib
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -14,6 +15,7 @@ from jaff.cli.jaffgen.config import load_jaffgen_config
 from jaff.errors import ParserError
 from jaff.physics.thermodynamics.eos.config import IdealEosConfig
 from tests._paths import FIXTURES_DIR
+from tests.jaffgen_run import run_folder
 
 FIXTURES = FIXTURES_DIR
 DUP = str(FIXTURES / "duplicate_temp_range.dat")
@@ -191,12 +193,14 @@ class TestFuncfileWiring:
 
         (tmp_path / "net.dat").write_text(self.NETWORK)
         (tmp_path / "rates.py").write_text(self.TEMPLATE)
+        # A fresh output directory, so it holds this run's folder alone.
+        shutil.rmtree(tmp_path / "out", ignore_errors=True)
         args = ["--network", str(tmp_path / "net.dat")]
         args += ["--files", str(tmp_path / "rates.py")]
         args += ["--outdir", str(tmp_path / "out"), *extra]
         result = CliRunner().invoke(app, args)
         assert result.exit_code == 0, result.output
-        return (tmp_path / "out" / "rates.py").read_text()
+        return (run_folder(tmp_path / "out") / "rates.py").read_text()
 
     def test_cli_false_skips_sibling_jfunc(self, tmp_path):
         (tmp_path / "net.jfunc").write_text(self.JFUNC)
@@ -281,7 +285,7 @@ class TestConfigRelativeNetworkPaths:
         args = ["--config", str(cfg), "--outdir", str(out), *extra]
         result = CliRunner().invoke(app, args)
         assert result.exit_code == 0, result.output
-        return (out / "rates.py").read_text()
+        return (run_folder(out) / "rates.py").read_text()
 
     def test_cli_uses_config_relative_funcfile(self, dirs):
         cfg_dir, _ = dirs
@@ -323,7 +327,7 @@ class TestEchoWiring:
             args += ["--config", str(cfg)]
         result = CliRunner().invoke(app, args)
         assert result.exit_code == 0, result.output
-        return (tmp_path / "out" / "rates.py").read_text()
+        return (run_folder(tmp_path / "out") / "rates.py").read_text()
 
     def test_echo_is_on_by_default(self, tmp_path):
         assert "# $$JAFF REPEAT" in self._generate(tmp_path)
@@ -333,8 +337,11 @@ class TestEchoWiring:
         assert "$$JAFF" not in out and "k[0] = 1" in out
 
     def test_cli_overrides_config(self, tmp_path):
-        assert "$$JAFF" not in self._generate(tmp_path, "--no-echo", echo="true")
-        assert "# $$JAFF" in self._generate(tmp_path, "--echo", echo="false")
+        (tmp_path / "a").mkdir()
+        (tmp_path / "b").mkdir()
+
+        assert "$$JAFF" not in self._generate(tmp_path / "a", "--no-echo", echo="true")
+        assert "# $$JAFF" in self._generate(tmp_path / "b", "--echo", echo="false")
 
 
 class TestDataTables:
@@ -364,7 +371,7 @@ class TestDataTables:
         result = CliRunner().invoke(app, ["--config", str(cfg), "--outdir", str(out)])
 
         assert result.exit_code == 0, result.output
-        assert (out / "out.csv").exists()
+        assert (run_folder(out) / "out.csv").exists()
 
 
 class TestParseSet:
@@ -474,7 +481,7 @@ class TestConfigToml:
         gen = TestFuncfileWiring()
         gen._generate(tmp_path, "--config", str(cfg), "--label", "from_cli")
 
-        out = tmp_path / "out"
+        out = run_folder(tmp_path / "out")
         written = tomllib.loads((out / "config.toml").read_text())
         assert not (out / "jaffgen.toml").exists()
         assert written["network"]["label"] == "from_cli"
@@ -483,7 +490,7 @@ class TestConfigToml:
 
     def test_reloads_as_the_same_config(self, tmp_path):
         TestFuncfileWiring()._generate(tmp_path, "--label", "x")
-        written = tmp_path / "out" / "config.toml"
+        written = run_folder(tmp_path / "out") / "config.toml"
 
         reloaded = load_jaffgen_config(written)
 
@@ -566,16 +573,18 @@ class TestJaffGenEngine:
         assert gen.config is config
         assert gen.net.reactions.count == 2
         assert [f.relpath.name for f in gen.output_files] == ["rates.py"]
-        assert gen.output_dir == (tmp_path / "out").resolve()
+        assert gen.output_root == (tmp_path / "out").resolve()
+        assert gen.output_dir.parent == gen.output_root
         assert not (tmp_path / "out").exists()
 
     def test_run_writes_the_files_and_the_config(self, tmp_path):
         from jaff.cli import JaffGen
 
-        JaffGen(self._config(tmp_path)).run()
+        gen = JaffGen(self._config(tmp_path))
+        gen.run()
 
-        assert (tmp_path / "out" / "rates.py").exists()
-        assert (tmp_path / "out" / "config.toml").exists()
+        assert (gen.output_dir / "rates.py").exists()
+        assert (gen.output_dir / "config.toml").exists()
 
     def test_holds_no_cli_arguments_or_state(self, tmp_path):
         from jaff.cli import JaffGen
@@ -653,7 +662,87 @@ class TestOutputDirRecorded:
             network=str(tmp_path / "net.dat"), files=[str(tmp_path / "rates.py")]
         )
 
-        JaffGen(engine.run_config(args)).run()
-        written = tomllib.loads((tmp_path / "generated" / "config.toml").read_text())
+        gen = JaffGen(engine.run_config(args))
+        gen.run()
+        written = tomllib.loads((gen.output_dir / "config.toml").read_text())
 
         assert written["jaffgen"]["output_dir"] == str(tmp_path / "generated")
+
+    def test_configured_output_dir_is_in_config_toml(self, tmp_path):
+        """The base directory is recorded, not the run folder inside it."""
+        from jaff.cli import JaffGen
+
+        gen = JaffGen(TestRunFolder._config(tmp_path))
+        gen.run()
+        written = tomllib.loads((gen.output_dir / "config.toml").read_text())
+
+        assert written["jaffgen"]["output_dir"] == str((tmp_path / "out").resolve())
+
+
+class TestRunFolder:
+    """Each run writes into a new <network>_<template>_<datetime> folder in output_dir."""
+
+    STAMP = "20261031-101500"
+
+    @staticmethod
+    def _config(tmp_path, **options):
+        from jaff.cli.jaffgen._engine import run_config
+
+        (tmp_path / "net.dat").write_text(TestFuncfileWiring.NETWORK)
+        (tmp_path / "rates.py").write_text(TestFuncfileWiring.TEMPLATE)
+        options.setdefault("files", [str(tmp_path / "rates.py")])
+        args = SimpleNamespace(
+            network=str(tmp_path / "net.dat"), outdir=str(tmp_path / "out"), **options
+        )
+
+        return run_config(args)
+
+    @pytest.fixture(autouse=True)
+    def _fixed_time(self, monkeypatch):
+        import jaff.cli.jaffgen._engine as engine
+
+        monkeypatch.setattr(engine, "_timestamp", lambda: self.STAMP)
+
+    def _gen(self, tmp_path, **options):
+        from jaff.cli import JaffGen
+
+        return JaffGen(self._config(tmp_path, **options))
+
+    def test_named_after_network_template_and_time(self, tmp_path):
+        gen = self._gen(tmp_path, files=None, template="python_solve_ivp")
+
+        assert gen.output_dir == gen.output_root / f"net_python_solve_ivp_{self.STAMP}"
+
+    def test_input_dir_name_without_template(self, tmp_path):
+        (tmp_path / "mytemplates").mkdir()
+        (tmp_path / "mytemplates" / "rates.py").write_text(TestFuncfileWiring.TEMPLATE)
+
+        gen = self._gen(tmp_path, files=None, indir=str(tmp_path / "mytemplates"))
+
+        assert gen.output_dir.name == f"net_mytemplates_{self.STAMP}"
+
+    def test_custom_with_only_input_files(self, tmp_path):
+        assert self._gen(tmp_path).output_dir.name == f"net_custom_{self.STAMP}"
+
+    def test_label_names_the_network(self, tmp_path):
+        gen = self._gen(tmp_path, label="my net/v2")
+
+        assert gen.output_dir.name == f"my_net_v2_custom_{self.STAMP}"
+
+    def test_same_second_runs_get_a_suffix(self, tmp_path):
+        first = self._gen(tmp_path)
+        first.run()
+        second = self._gen(tmp_path)
+        second.run()
+        third = self._gen(tmp_path)
+
+        assert second.output_dir.name == f"net_custom_{self.STAMP}-2"
+        assert third.output_dir.name == f"net_custom_{self.STAMP}-3"
+        assert (first.output_dir / "rates.py").exists()
+
+    def test_timestamp_format(self):
+        import re
+
+        from jaff.cli.jaffgen._engine import _timestamp
+
+        assert re.fullmatch(r"\d{8}-\d{6}", _timestamp())

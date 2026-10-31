@@ -29,7 +29,8 @@ def _jaffgen(network_path, template, outdir):
         files=None,
         template=template,
     )
-    run_jaffgen(args)
+
+    return run_jaffgen(args).output_dir
 
 
 REPO = REPO_ROOT
@@ -47,7 +48,7 @@ ALL_TEMPLATES = ["python_solve_ivp", "microphysics", "fortran_dlsodes", "kokkos_
 @pytest.mark.parametrize("template", ALL_TEMPLATES)
 def test_gow_generates_for_all_templates(template, tmp_path):
     """The GOW network builds without error and emits non-empty files."""
-    _jaffgen(GOW, template=template, outdir=tmp_path)
-    files = [p for p in tmp_path.iterdir() if p.is_file()]
+    out = _jaffgen(GOW, template=template, outdir=tmp_path)
+    files = [p for p in out.iterdir() if p.is_file()]
     assert files, f"template {template} produced no files"
     assert all(p.stat().st_size > 0 for p in files), f"empty output file for {template}"

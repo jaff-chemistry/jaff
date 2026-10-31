@@ -55,8 +55,19 @@ def _(mo):
 
 @app.cell
 def _(COTHIN, JAFFGEN, run, scratch):
-    out = scratch / "kokkos_ode"
-    run([JAFFGEN, "--network", COTHIN, "--template", "kokkos_ode", "--outdir", out])
+    run(
+        [
+            JAFFGEN,
+            "--network",
+            COTHIN,
+            "--template",
+            "kokkos_ode",
+            "--outdir",
+            scratch / "kokkos_ode",
+        ]
+    )
+    # jaffgen writes into a new <network>_<template>_<date>-<time> folder.
+    (out,) = (scratch / "kokkos_ode").iterdir()
     return (out,)
 
 

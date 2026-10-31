@@ -53,9 +53,9 @@ def template_functions(path: Path) -> List[str]:
 # --------------------------------------------------------------------------- #
 
 
-def render(network: Path, files: Sequence[Path], outdir: Path) -> None:
-    """Render *files* for *network* through the in-process ``jaffgen`` engine."""
-    run_jaffgen(
+def render(network: Path, files: Sequence[Path], outdir: Path) -> Path:
+    """Render *files* for *network* in-process; return the run folder in *outdir*."""
+    gen = run_jaffgen(
         SimpleNamespace(
             network=str(network),
             config=str(CONFIG),
@@ -71,6 +71,8 @@ def render(network: Path, files: Sequence[Path], outdir: Path) -> None:
             template=None,
         )
     )
+
+    return gen.output_dir
 
 
 def refresh_golden(name: str, rendered: Path) -> None:
