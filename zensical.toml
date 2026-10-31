@@ -40,6 +40,7 @@ nav = [
       "user-guide/working-with-networks/species.md",
       "user-guide/working-with-networks/reactions.md",
       "user-guide/working-with-networks/elements.md",
+      "user-guide/working-with-networks/visualization.md",
       "user-guide/working-with-networks/jaffx.md"
     ] },
     { "Configuration" = [
@@ -104,6 +105,7 @@ nav = [
         "reference/core/network/check_isomers.md",
         "reference/core/network/reactant_matrix.md",
         "reference/core/network/product_matrix.md",
+        "reference/core/network/visualize.md",
         "reference/core/network/sfluxes.md",
         "reference/core/network/ode_system.md",
         "reference/core/network/sodes.md",
@@ -409,6 +411,14 @@ nav = [
       { "plotting.SeriesSpec" = [
         "reference/plotting/seriesspec/index.md",
         "reference/plotting/seriesspec/from_dict.md",
+      ] },
+      { "plotting.NetworkVisualizer" = [
+        "reference/plotting/networkvisualizer/index.md",
+        "reference/plotting/networkvisualizer/graph.md",
+        "reference/plotting/networkvisualizer/stoichiometry.md",
+      ] },
+      { "plotting.NetworkTheme" = [
+        "reference/plotting/networktheme/index.md",
       ] },
       "reference/plotting/plot.md",
       "reference/plotting/plot_rates.md",

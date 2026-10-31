@@ -309,6 +309,8 @@ docs/           # Documentation
 - `core/reaction/`, `core/species/`, `core/elements/`: reactions, species, elements
 - `core/parsers/`: network file formats and `.jfunc` auxiliary functions
 - `physics/`: radiation and photo-reactions, dust, thermodynamics/EOS, constants
+- `plotting/network/`: `net.visualize` (`NetworkVisualizer`): graph and
+  stoichiometry-matrix figures of a network's species and reactions
 - `codegen/`: `Codegen`, `Language`s, the `$$JAFF` template engine (`templating/`)
 - `config/`: config base models, loader, JSON schemas, reference generator
 - `cli/`: `jaffgen` and `jaffx`

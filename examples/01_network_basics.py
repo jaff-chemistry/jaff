@@ -230,6 +230,32 @@ def _(mo, net):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
+    `net.visualize` draws the same structure. `stoichiometry()` is the matrix
+    above as a figure: consumed species filled, produced species outlined, each
+    row numbered and coloured by reaction type. `graph()` lays the network out
+    with species in columns by atom count and each reaction as a numbered
+    square between its reactants and products.
+    """)
+    return
+
+
+@app.cell
+def _(net):
+    matrix_fig, _ = net.visualize.stoichiometry(show=False)
+    matrix_fig
+    return
+
+
+@app.cell
+def _(net):
+    graph_fig, _ = net.visualize.graph(show=False)
+    graph_fig
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
     Every reaction should conserve mass and charge, so each row's changes,
     weighted by species mass (or charge), must sum to zero. JAFF already checked
     this during loading (phase 4); here is the charge check done by hand for every

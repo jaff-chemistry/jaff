@@ -68,6 +68,7 @@ from .config import NetworkConfig, NetworkConfigSource, load_network_config
 from .ode_system import OdeSystem
 
 if TYPE_CHECKING:
+    from ...plotting.network import NetworkVisualizer
     from ..parsers.network._formats import Parser
 
 
@@ -983,6 +984,24 @@ class Network:
             Integer matrix.
         """
         return self._stoichiometry(lambda reaction: reaction.products.core)
+
+    @cached_property
+    def visualize(self) -> NetworkVisualizer:
+        """Figures of the species and reactions, built on first use.
+
+        ``net.visualize.graph()`` draws a layered graph and
+        ``net.visualize.stoichiometry()`` the net stoichiometry matrix; see
+        :class:`~jaff.plotting.NetworkVisualizer`.
+
+        Returns
+        -------
+        NetworkVisualizer
+            The network's visualizer.
+        """
+        # Imported here so loading a network does not import matplotlib.
+        from ...plotting.network import NetworkVisualizer
+
+        return NetworkVisualizer(self)
 
     def _stoichiometry(self, side: Callable[[Reaction], Species]) -> np.ndarray:
         """Count each reaction's *side* species into a read-only integer matrix."""

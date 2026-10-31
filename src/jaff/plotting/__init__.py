@@ -141,6 +141,9 @@ from .render import render
 from .spec import AxesSpec, FigureSpec, SeriesSpec
 from .themes import PALETTES, STYLES, register_palette, register_style
 
+# Last: network._common imports .api and .themes.
+from .network import NETWORK_THEMES, NetworkTheme, NetworkVisualizer  # noqa: E402
+
 __all__ = [
     "plot",
     "plot_rates",
@@ -153,4 +156,7 @@ __all__ = [
     "PALETTES",
     "register_style",
     "register_palette",
+    "NetworkVisualizer",
+    "NetworkTheme",
+    "NETWORK_THEMES",
 ]
