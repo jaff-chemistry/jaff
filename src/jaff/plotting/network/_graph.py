@@ -16,11 +16,11 @@ from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Patch, PathPatch
 
 from ._common import FONT_RC, bezier_path, text_on, text_width
 from ._layout import (
+    drawing_bottom,
     EQUATION_FONT,
     HEADER,
     HEADER_FONT,
     INDEX_FONT,
-    LEGEND,
     MARGIN,
     MARKER,
     PILL_HEIGHT,
@@ -60,15 +60,15 @@ def draw_graph(
     return fig, ax
 
 
-def legend_width(net: Network, theme: NetworkTheme) -> float:
-    """Width in inches of the graph legend of *net* in *theme*."""
+def legend_widths(net: Network, theme: NetworkTheme) -> list[float]:
+    """Width in inches of each entry of the graph legend of *net* in *theme*."""
     labels = [t for t, _ in legend_types(theme, [r.type for r in net.reactions])]
 
-    return sum(text_width(t, EQUATION_FONT) + LEGEND_ENTRY for t in [*labels, *ROLES])
+    return [text_width(t, EQUATION_FONT) + LEGEND_ENTRY for t in [*labels, *ROLES]]
 
 
 def _columns(ax: Axes, layout: GraphLayout, theme: NetworkTheme) -> None:
-    bottom = layout.size[1] - LEGEND - MARGIN
+    bottom = drawing_bottom(layout)
     for lane in (lane for lane in layout.lanes if lane.header is not None):
         ax.add_patch(
             FancyBboxPatch(
@@ -214,8 +214,10 @@ def _legend(ax, layout, theme, types) -> None:
     ax.legend(
         handles=handles,
         loc="lower center",
-        bbox_to_anchor=(0.5, MARGIN / height),
-        ncol=len(handles),
+        # Anchored in inches, so cropping (tight) leaves it in place.
+        bbox_to_anchor=(width / 2, height - MARGIN),
+        bbox_transform=ax.transData,
+        ncol=layout.legend_columns,
         frameon=False,
         fontsize=EQUATION_FONT,
         labelcolor=theme.text,

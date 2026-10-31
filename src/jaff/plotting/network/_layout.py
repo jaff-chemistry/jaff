@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -31,9 +31,9 @@ PSEUDO_LABELS: dict[str, str] = {
 }
 
 SPECIES_FONT = 9.0
-EQUATION_FONT = 7.0
-HEADER_FONT = 6.5
-INDEX_FONT = 6.0
+EQUATION_FONT = 9.0
+HEADER_FONT = 8.5
+INDEX_FONT = 7.0
 ROW_PITCH = 0.6
 LANE_BELOW = 0.2
 PILL_HEIGHT = 0.22
@@ -49,6 +49,40 @@ INDEX_COLUMN = 0.3
 LABEL_GAP = 0.1
 GROUP_GAP = 0.06
 EMPTY_WIDTH = 1.0
+#: Height of each legend row after the first, inches.
+LEGEND_ROW = 0.22
+
+
+def legend_columns(widths: Sequence[float], available: float) -> int:
+    """Legend columns for the fewest rows that fit in *available* inches.
+
+    For ``r`` rows the entries are spread evenly over ``ceil(n / r)`` columns.
+    Matplotlib fills a legend column by column, giving the first ``n % k`` of
+    ``k`` columns one entry more than the rest; each column is as wide as its
+    widest entry. One column when nothing narrower fits (and for no entries).
+    """
+    n = len(widths)
+    for rows in range(1, n + 1):
+        k = math.ceil(n / rows)
+        per, large = divmod(n, k)
+        sizes = [per + 1] * large + [per] * (k - large)
+        starts = [sum(sizes[:c]) for c in range(k)]
+        if sum(max(widths[a : a + size]) for a, size in zip(starts, sizes)) <= available:
+            return k
+
+    return 1
+
+
+def _legend(widths: Sequence[float], width: float) -> tuple[int, int]:
+    """Columns and rows of a legend under a drawing *width* inches wide."""
+    columns = legend_columns(widths, width - 2 * MARGIN)
+
+    return columns, max(math.ceil(len(widths) / columns), 1)
+
+
+def drawing_bottom(layout: GraphLayout | MatrixLayout | SpeciesLayout) -> float:
+    """Lowest height (inches, y down) the drawing may reach: the legend's top."""
+    return layout.size[1] - MARGIN - LEGEND - (layout.legend_rows - 1) * LEGEND_ROW
 
 
 def atom_count(specie: Specie) -> int:
@@ -157,6 +191,8 @@ class GraphLayout:
     pill_width: dict[int, float]
     labels: dict[int, str]
     edges: tuple[Edge, ...]
+    legend_columns: int = 1
+    legend_rows: int = 1
 
 
 def _row_y(row: float) -> float:
@@ -265,7 +301,7 @@ def _lanes(
 
 
 def graph_layout(
-    net: Network, measure: Measure, legend_width: float = 0.0
+    net: Network, measure: Measure, legend: Sequence[float] = ()
 ) -> GraphLayout:
     """Lay out *net* as a layered species-reaction graph.
 
@@ -280,8 +316,9 @@ def graph_layout(
         The network to draw.
     measure : callable
         ``measure(text, size)``: width in inches of mathtext *text* at *size* points.
-    legend_width : float, optional
-        Width in inches of the legend; the figure is at least this wide.
+    legend : sequence of float, optional
+        Width in inches of each legend entry; a legend wider than the drawing
+        wraps onto more rows (the figure grows taller, not wider).
 
     Returns
     -------
@@ -292,8 +329,10 @@ def graph_layout(
     reactions = list(net.reactions)
     labels = {i: equation_label(r) for i, r in enumerate(reactions)}
     if not core:
-        size = (2 * MARGIN + max(EMPTY_WIDTH, legend_width), 2 * MARGIN + HEADER + LEGEND)
-        return GraphLayout(size, (), {}, {}, {}, {}, {}, labels, ())
+        width = 2 * MARGIN + EMPTY_WIDTH
+        columns, legend_rows = _legend(legend, width)
+        size = (width, 2 * MARGIN + HEADER + LEGEND + (legend_rows - 1) * LEGEND_ROW)
+        return GraphLayout(size, (), {}, {}, {}, {}, {}, labels, (), columns, legend_rows)
 
     links = [_links(r) for r in reactions]
     members, lane_headers = _lanes(core, column, headers, links)
@@ -359,9 +398,10 @@ def graph_layout(
             edges.append(Edge(s, i, role, tuple(points)))
 
     bottom = max(y for _, y in [*species_xy.values(), *reaction_xy.values()])
+    columns, legend_rows = _legend(legend, x + MARGIN)
     size = (
-        max(x + MARGIN, legend_width + 2 * MARGIN),
-        bottom + ROW_PITCH / 2 + LEGEND + MARGIN,
+        x + MARGIN,
+        bottom + ROW_PITCH / 2 + LEGEND + (legend_rows - 1) * LEGEND_ROW + MARGIN,
     )
 
     return GraphLayout(
@@ -374,6 +414,8 @@ def graph_layout(
         pill,
         labels,
         tuple(edges),
+        columns,
+        legend_rows,
     )
 
 
@@ -404,9 +446,13 @@ class MatrixLayout:
     equation_x: float
     index_x: float
     label_y: float
+    legend_columns: int = 1
+    legend_rows: int = 1
 
 
-def matrix_layout(net: Network, measure: Measure) -> MatrixLayout:
+def matrix_layout(
+    net: Network, measure: Measure, legend: Sequence[float] = ()
+) -> MatrixLayout:
     """Lay out the net stoichiometry matrix of *net*.
 
     Parameters
@@ -415,6 +461,9 @@ def matrix_layout(net: Network, measure: Measure) -> MatrixLayout:
         The network to draw.
     measure : callable
         ``measure(text, size)``: width in inches of mathtext *text* at *size* points.
+    legend : sequence of float, optional
+        Width in inches of each legend entry; a legend wider than the drawing
+        wraps onto more rows (the figure grows taller, not wider).
 
     Returns
     -------
@@ -449,7 +498,11 @@ def matrix_layout(net: Network, measure: Measure) -> MatrixLayout:
         x += GROUP_GAP
 
     row_y = tuple(top + (i + 0.5) * CELL for i in range(len(labels)))
-    size = (x + MARGIN, top + len(labels) * CELL + LEGEND + MARGIN)
+    columns, legend_rows = _legend(legend, x + MARGIN)
+    size = (
+        x + MARGIN,
+        top + len(labels) * CELL + LEGEND + (legend_rows - 1) * LEGEND_ROW + MARGIN,
+    )
 
     return MatrixLayout(
         size,
@@ -462,6 +515,8 @@ def matrix_layout(net: Network, measure: Measure) -> MatrixLayout:
         equation_x,
         index_x,
         label_y,
+        columns,
+        legend_rows,
     )
 
 
@@ -486,6 +541,8 @@ class SpeciesLayout:
     pill_width: dict[int, float]
     labels: dict[int, str]
     edges: tuple[Edge, ...]
+    legend_columns: int = 1
+    legend_rows: int = 1
 
 
 #: Space each side of a pill in the species view's outer lanes, inches.
@@ -507,7 +564,7 @@ def _stack(
 
 
 def species_layout(
-    net: Network, specie: Specie, measure: Measure, legend_width: float = 0.0
+    net: Network, specie: Specie, measure: Measure, legend: Sequence[float] = ()
 ) -> SpeciesLayout:
     """Lay out the reactions forming and destroying *specie*.
 
@@ -524,8 +581,9 @@ def species_layout(
         The species to draw.
     measure : callable
         ``measure(text, size)``: width in inches of mathtext *text* at *size* points.
-    legend_width : float, optional
-        Width in inches of the legend; the figure is at least this wide.
+    legend : sequence of float, optional
+        Width in inches of each legend entry; a legend wider than the drawing
+        wraps onto more rows (the figure grows taller, not wider).
 
     Returns
     -------
@@ -624,9 +682,10 @@ def species_layout(
             *product_xy.values(),
         ]
     )
+    columns, legend_rows = _legend(legend, x + MARGIN)
     size = (
-        max(x + MARGIN, legend_width + 2 * MARGIN),
-        bottom + ROW_PITCH / 2 + LEGEND + MARGIN,
+        x + MARGIN,
+        bottom + ROW_PITCH / 2 + LEGEND + (legend_rows - 1) * LEGEND_ROW + MARGIN,
     )
 
     return SpeciesLayout(
@@ -642,4 +701,6 @@ def species_layout(
         pill,
         labels,
         tuple(edges),
+        columns,
+        legend_rows,
     )

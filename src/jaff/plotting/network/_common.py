@@ -8,6 +8,7 @@ from pathlib import Path
 
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.artist import Artist
 from matplotlib.axes import Axes
 from matplotlib.colors import to_rgb
 from matplotlib.figure import Figure
@@ -24,6 +25,8 @@ FONT_RC: dict = _BASE_RC
 #: Resolution of raster files (PNG, JPEG, ...), as in the ``paper`` plot style;
 #: vector formats (PDF, SVG, ...) are resolution-free.
 SAVE_DPI = 400
+#: Space left around the drawn content of a ``tight`` figure, inches.
+TIGHT_PAD = 0.03
 _FONT = FontProperties(family="DejaVu Sans", math_fontfamily="stix")
 
 
@@ -66,6 +69,28 @@ def bezier_path(points: tuple[tuple[float, float], ...]) -> MplPath:
     return MplPath(vertices, codes)
 
 
+def crop(fig: Figure, ax: Axes, pad: float = TIGHT_PAD) -> None:
+    """Shrink *fig* to its drawn content plus *pad* inches on each side.
+
+    The axes span the figure in inches (y down), so cropping sets their limits
+    and the figure size to the content's bounding box; artists anchored in data
+    coordinates, the legend included, keep their place.
+    """
+    artists: list[Artist] = [*ax.patches, *ax.texts]
+    legend = ax.get_legend()
+    if legend is not None:
+        artists.append(legend)
+    to_data = ax.transData.inverted()
+    corners = [to_data.transform(a.get_window_extent().corners()) for a in artists]
+    xs = [x for c in corners for x, _ in c]
+    ys = [y for c in corners for _, y in c]
+    x0, x1 = min(xs) - pad, max(xs) + pad
+    y0, y1 = min(ys) - pad, max(ys) + pad
+    fig.set_size_inches(x1 - x0, y1 - y0)
+    ax.set_xlim(x0, x1)
+    ax.set_ylim(y1, y0)
+
+
 def finish(
     fig: Figure,
     ax: Axes,
@@ -74,17 +99,22 @@ def finish(
     save: str | Path | None,
     show: bool,
     close: bool,
+    tight: bool = False,
 ) -> tuple[Figure, Axes]:
-    """Save, show and close *fig* as :func:`jaff.plotting.plot` does."""
+    """Crop (when *tight*), save, show and close *fig* as :func:`jaff.plotting.plot` does."""
+    if tight:
+        crop(fig, ax)
     if save is not None:
         path = Path(save)
         dpi = None if path.suffix.lower() in _VECTOR else SAVE_DPI
+        # A cropped figure is saved as is; otherwise trim to the drawn area.
+        bbox = None if tight else "tight"
         with plt.rc_context(FONT_RC):
             fig.savefig(
                 path,
                 dpi=dpi,
                 facecolor=theme.surface,
-                bbox_inches="tight",
+                bbox_inches=bbox,
                 pad_inches=0.05,
             )
     shown = show and matplotlib.get_backend().lower() not in _NON_INTERACTIVE

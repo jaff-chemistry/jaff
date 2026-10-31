@@ -13,14 +13,15 @@ from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.patches import Circle, FancyBboxPatch, Patch
 
-from ._common import FONT_RC, text_on
+from ._common import FONT_RC, text_on, text_width
+from ._graph import LEGEND_ENTRY
 from ._layout import (
+    drawing_bottom,
     CELL,
     EQUATION_FONT,
     HEADER,
     HEADER_FONT,
     INDEX_FONT,
-    LEGEND,
     MARGIN,
     SPECIES_FONT,
     MatrixLayout,
@@ -32,6 +33,16 @@ if TYPE_CHECKING:
 
 INSET = 0.02
 RADIUS = 0.085
+
+
+def stoichiometry_legend_widths(net: Network, theme: NetworkTheme) -> list[float]:
+    """Width in inches of each entry of the stoichiometry legend of *net*."""
+    labels = [t for t, _ in legend_types(theme, [r.type for r in net.reactions])]
+
+    return [
+        text_width(t, EQUATION_FONT) + LEGEND_ENTRY
+        for t in ["consumed", "produced", *labels]
+    ]
 
 
 def draw_stoichiometry(
@@ -57,7 +68,7 @@ def draw_stoichiometry(
 
 
 def _groups(ax, layout, theme) -> None:
-    bottom = layout.size[1] - LEGEND - MARGIN
+    bottom = drawing_bottom(layout)
     for group in layout.groups:
         ax.add_patch(
             FancyBboxPatch(
@@ -204,8 +215,10 @@ def _legend(ax, layout, theme, types) -> None:
     ax.legend(
         handles=handles,
         loc="lower center",
-        bbox_to_anchor=(0.5, MARGIN / height),
-        ncol=len(handles),
+        # Anchored in inches, so cropping (tight) leaves it in place.
+        bbox_to_anchor=(width / 2, height - MARGIN),
+        bbox_transform=ax.transData,
+        ncol=layout.legend_columns,
         frameon=False,
         fontsize=EQUATION_FONT,
         labelcolor=theme.text,

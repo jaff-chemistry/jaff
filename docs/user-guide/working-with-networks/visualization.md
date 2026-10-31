@@ -82,6 +82,7 @@ All three take the same keywords (`species` takes the species name first):
 | `save`  | `None`    | file to save the figure to; the format follows the suffix                   |
 | `show`  | `True`    | show the figure (skipped on non-interactive backends)                       |
 | `close` | `True`    | close the figure in pyplot afterwards; the returned figure still works      |
+| `tight` | `False`   | crop the figure to its drawn content, with no padding around it             |
 
 ### Themes
 
@@ -107,6 +108,8 @@ net.visualize.graph(theme="print", save="water_co_graph.pdf", show=False)
 ## Size
 
 Spacing is fixed, so labels never shrink: the figure grows with the network.
+A legend wider than the drawing wraps onto more rows, in balanced columns, so
+it never makes the figure wider.
 `water_co.jet` (20 reactions) is about 10 × 5 in, GOW (50 reactions) about
 11 × 10 in, and a network of a few hundred reactions is a poster. Save large
 networks as PDF or SVG and zoom in; raster formats beyond matplotlib's

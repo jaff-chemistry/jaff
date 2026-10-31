@@ -14,6 +14,7 @@ from jaff.plotting.network._layout import (
     atom_count,
     equation_label,
     graph_layout,
+    legend_columns,
     matrix_layout,
 )
 
@@ -219,10 +220,18 @@ class TestGraphLayout:
             assert all(_on_a_row(y) for y in ys)
             assert all(b - a >= ROW_PITCH - 1e-9 for a, b in zip(ys, ys[1:]))
 
-    def test_wide_enough_for_the_legend(self, net):
-        layout = graph_layout(net, fake_measure, legend_width=30.0)
+    def test_short_legend_is_one_row(self, net):
+        layout = graph_layout(net, fake_measure, legend=[0.1] * 4)
 
-        assert layout.size[0] >= 30.0 + 2 * MARGIN
+        assert layout.legend_columns == 4
+
+    def test_long_legend_wraps_instead_of_widening(self, net):
+        bare = graph_layout(net, fake_measure)
+        wrapped = graph_layout(net, fake_measure, legend=[bare.size[0] / 3] * 6)
+
+        assert wrapped.legend_columns < 6
+        assert wrapped.size[0] == pytest.approx(bare.size[0])
+        assert wrapped.size[1] > bare.size[1]
 
     def test_deterministic(self, net):
         assert graph_layout(net, fake_measure) == graph_layout(net, fake_measure)
@@ -278,3 +287,32 @@ class TestMatrixLayout:
         layout = matrix_layout(net, fake_measure)
 
         assert layout.equation_x < layout.index_x < layout.column_x[0]
+
+
+class TestLegendColumns:
+    def test_all_in_one_row_when_they_fit(self):
+        assert legend_columns([1.0, 1.0, 1.0], available=3.0) == 3
+
+    def test_wraps_to_the_widest_fit(self):
+        # Two rows of two: columns are 1.0 and 2.0 wide (filled column by column).
+        assert legend_columns([1.0, 1.0, 2.0, 2.0], available=3.0) == 2
+
+    def test_rows_are_balanced(self):
+        # Seven entries that need two rows: four columns (4 + 3), not six (2 + 1 ...).
+        assert legend_columns([1.0] * 7, available=5.0) == 4
+
+    def test_one_column_when_nothing_fits(self):
+        assert legend_columns([5.0, 5.0], available=1.0) == 1
+
+    def test_no_entries(self):
+        assert legend_columns([], available=1.0) == 1
+
+
+class TestMatrixLegend:
+    def test_long_legend_wraps_instead_of_widening(self, net):
+        bare = matrix_layout(net, fake_measure)
+        wrapped = matrix_layout(net, fake_measure, legend=[bare.size[0] / 3] * 6)
+
+        assert wrapped.legend_columns < 6
+        assert wrapped.size[0] == pytest.approx(bare.size[0])
+        assert wrapped.size[1] > bare.size[1]

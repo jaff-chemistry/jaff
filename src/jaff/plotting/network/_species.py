@@ -14,7 +14,14 @@ from matplotlib.patches import FancyBboxPatch, Patch
 
 from ._common import FONT_RC, text_width
 from ._graph import LEGEND_ENTRY, ROLES, _edges, _reactions, pill, role_handles
-from ._layout import EQUATION_FONT, HEADER, HEADER_FONT, LEGEND, MARGIN, SpeciesLayout
+from ._layout import (
+    drawing_bottom,
+    EQUATION_FONT,
+    HEADER,
+    HEADER_FONT,
+    MARGIN,
+    SpeciesLayout,
+)
 from ._themes import NetworkTheme, legend_entries, type_colours
 
 if TYPE_CHECKING:
@@ -30,12 +37,14 @@ def _shown(net: Network, specie: Specie) -> list[str]:
     return [r.type for i, r in enumerate(net.reactions) if change[i] != 0]
 
 
-def species_legend_width(net: Network, specie: Specie, theme: NetworkTheme) -> float:
-    """Width in inches of the legend of the species view of *specie*."""
+def species_legend_widths(
+    net: Network, specie: Specie, theme: NetworkTheme
+) -> list[float]:
+    """Width in inches of each entry of the legend of the species view of *specie*."""
     colours = type_colours(theme, [r.type for r in net.reactions])
     labels = [t for t, _ in legend_entries(theme, colours, _shown(net, specie))]
 
-    return sum(text_width(t, EQUATION_FONT) + LEGEND_ENTRY for t in [*labels, *ROLES])
+    return [text_width(t, EQUATION_FONT) + LEGEND_ENTRY for t in [*labels, *ROLES]]
 
 
 def draw_species(
@@ -63,7 +72,7 @@ def draw_species(
 
 def _lanes(ax: Axes, layout: SpeciesLayout, theme: NetworkTheme) -> None:
     """Bands behind the species lanes; headers above every lane that has one."""
-    bottom = layout.size[1] - LEGEND - MARGIN
+    bottom = drawing_bottom(layout)
     for k, lane in enumerate(layout.lanes):
         if k % 2 == 0:
             ax.add_patch(
@@ -117,12 +126,14 @@ def _legend(
         for t, c in legend_entries(theme, colours, shown)
     ]
     handles += role_handles(theme)
-    _, height = layout.size
+    width, height = layout.size
     ax.legend(
         handles=handles,
         loc="lower center",
-        bbox_to_anchor=(0.5, MARGIN / height),
-        ncol=len(handles),
+        # Anchored in inches, so cropping (tight) leaves it in place.
+        bbox_to_anchor=(width / 2, height - MARGIN),
+        bbox_transform=ax.transData,
+        ncol=layout.legend_columns,
         frameon=False,
         fontsize=EQUATION_FONT,
         labelcolor=theme.text,

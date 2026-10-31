@@ -7,7 +7,6 @@ from matplotlib.colors import to_hex
 
 from jaff.plotting.network import NETWORK_THEMES, NetworkVisualizer
 from jaff.plotting.network._layout import (
-    MARGIN,
     MARKER,
     ROW_PITCH,
     species_layout,
@@ -111,10 +110,14 @@ class TestSpeciesLayout:
         assert layout.formation == ()
         assert layout.destruction == (0,)
 
-    def test_wide_enough_for_the_legend(self, net):
-        layout = species_layout(net, net.species["H3+"], fake_measure, legend_width=20.0)
+    def test_long_legend_wraps_instead_of_widening(self, net):
+        specie = net.species["H3+"]
+        bare = species_layout(net, specie, fake_measure)
+        wrapped = species_layout(net, specie, fake_measure, legend=[bare.size[0] / 3] * 6)
 
-        assert layout.size[0] >= 20.0 + 2 * MARGIN
+        assert wrapped.legend_columns < 6
+        assert wrapped.size[0] == pytest.approx(bare.size[0])
+        assert wrapped.size[1] > bare.size[1]
 
 
 class TestSpeciesView:

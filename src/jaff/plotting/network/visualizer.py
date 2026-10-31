@@ -11,10 +11,10 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 from ._common import finish, text_width
-from ._graph import draw_graph, legend_width
+from ._graph import draw_graph, legend_widths
 from ._layout import graph_layout, matrix_layout, species_layout
-from ._species import draw_species, species_legend_width
-from ._stoichiometry import draw_stoichiometry
+from ._species import draw_species, species_legend_widths
+from ._stoichiometry import draw_stoichiometry, stoichiometry_legend_widths
 from ._themes import NetworkTheme, resolve_theme
 
 if TYPE_CHECKING:
@@ -56,6 +56,7 @@ class NetworkVisualizer:
         save: str | Path | None = None,
         show: bool = True,
         close: bool = True,
+        tight: bool = False,
     ) -> tuple[Figure, Axes]:
         """Draw the species and reactions as a layered graph.
 
@@ -77,6 +78,9 @@ class NetworkVisualizer:
         close : bool, optional
             Close the figure in pyplot afterwards, by default ``True``; the
             returned figure still works.
+        tight : bool, optional
+            Crop the figure to its drawn content, with no padding around it, by
+            default ``False``.
 
         Returns
         -------
@@ -89,10 +93,10 @@ class NetworkVisualizer:
             If *theme* names no registered theme.
         """
         th = resolve_theme(theme)
-        layout = graph_layout(self.network, text_width, legend_width(self.network, th))
+        layout = graph_layout(self.network, text_width, legend_widths(self.network, th))
         fig, ax = draw_graph(self.network, layout, th)
 
-        return finish(fig, ax, theme=th, save=save, show=show, close=close)
+        return finish(fig, ax, theme=th, save=save, show=show, close=close, tight=tight)
 
     def stoichiometry(
         self,
@@ -101,6 +105,7 @@ class NetworkVisualizer:
         save: str | Path | None = None,
         show: bool = True,
         close: bool = True,
+        tight: bool = False,
     ) -> tuple[Figure, Axes]:
         """Draw the net stoichiometry matrix: products minus reactants.
 
@@ -122,6 +127,9 @@ class NetworkVisualizer:
         close : bool, optional
             Close the figure in pyplot afterwards, by default ``True``; the
             returned figure still works.
+        tight : bool, optional
+            Crop the figure to its drawn content, with no padding around it, by
+            default ``False``.
 
         Returns
         -------
@@ -134,10 +142,11 @@ class NetworkVisualizer:
             If *theme* names no registered theme.
         """
         th = resolve_theme(theme)
-        layout = matrix_layout(self.network, text_width)
+        widths = stoichiometry_legend_widths(self.network, th)
+        layout = matrix_layout(self.network, text_width, widths)
         fig, ax = draw_stoichiometry(self.network, layout, th)
 
-        return finish(fig, ax, theme=th, save=save, show=show, close=close)
+        return finish(fig, ax, theme=th, save=save, show=show, close=close, tight=tight)
 
     def species(
         self,
@@ -147,6 +156,7 @@ class NetworkVisualizer:
         save: str | Path | None = None,
         show: bool = True,
         close: bool = True,
+        tight: bool = False,
     ) -> tuple[Figure, Axes]:
         """Draw the reactions that form and destroy one species.
 
@@ -172,6 +182,9 @@ class NetworkVisualizer:
         close : bool, optional
             Close the figure in pyplot afterwards, by default ``True``; the
             returned figure still works.
+        tight : bool, optional
+            Crop the figure to its drawn content, with no padding around it, by
+            default ``False``.
 
         Returns
         -------
@@ -187,8 +200,8 @@ class NetworkVisualizer:
         """
         th = resolve_theme(theme)
         specie = self.network.species[name]
-        width = species_legend_width(self.network, specie, th)
-        layout = species_layout(self.network, specie, text_width, width)
+        widths = species_legend_widths(self.network, specie, th)
+        layout = species_layout(self.network, specie, text_width, widths)
         fig, ax = draw_species(self.network, layout, th)
 
-        return finish(fig, ax, theme=th, save=save, show=show, close=close)
+        return finish(fig, ax, theme=th, save=save, show=show, close=close, tight=tight)

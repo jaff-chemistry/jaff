@@ -122,3 +122,22 @@ def test_raster_saves_at_print_resolution(make_network, tmp_path):
 
     assert SAVE_DPI == 400
     assert height == pytest.approx(fig.get_size_inches()[1] * SAVE_DPI, rel=0.05)
+
+
+def test_wide_legend_stays_inside_the_figure(make_network):
+    # Four reaction types plus reactant/product: wider than this small graph.
+    net = make_network(
+        [
+            "H2 -> H + H  []  PHOTO, 11.2",
+            "H -> H+ + e-  []  1e-17*crate",
+            "H + H + H -> H2 + H  []  1e-30",
+            "H+ + e- -> H  []  1e-12",
+        ]
+    )
+    fig, ax = NetworkVisualizer(net).graph(show=False, close=False)
+    box = ax.get_legend().get_window_extent()
+
+    assert ax.get_legend()._ncols < 6
+    assert box.x0 >= 0 and box.x1 <= fig.bbox.width
+    # Nothing drawn reaches down into the legend.
+    assert box.y1 <= min(p.get_window_extent().y0 for p in ax.patches) + 1e-6
