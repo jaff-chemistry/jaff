@@ -15,12 +15,15 @@ from matplotlib.font_manager import FontProperties
 from matplotlib.path import Path as MplPath
 from matplotlib.textpath import TextPath
 
-from ..api import _NON_INTERACTIVE
+from ..api import _NON_INTERACTIVE, _VECTOR
 from ..themes import _BASE_RC
 from ._themes import NetworkTheme
 
 #: rcParams the network figures are drawn and saved with (font, maths font).
 FONT_RC: dict = _BASE_RC
+#: Resolution of raster files (PNG, JPEG, ...), as in the ``paper`` plot style;
+#: vector formats (PDF, SVG, ...) are resolution-free.
+SAVE_DPI = 400
 _FONT = FontProperties(family="DejaVu Sans", math_fontfamily="stix")
 
 
@@ -74,9 +77,15 @@ def finish(
 ) -> tuple[Figure, Axes]:
     """Save, show and close *fig* as :func:`jaff.plotting.plot` does."""
     if save is not None:
+        path = Path(save)
+        dpi = None if path.suffix.lower() in _VECTOR else SAVE_DPI
         with plt.rc_context(FONT_RC):
             fig.savefig(
-                Path(save), facecolor=theme.surface, bbox_inches="tight", pad_inches=0.05
+                path,
+                dpi=dpi,
+                facecolor=theme.surface,
+                bbox_inches="tight",
+                pad_inches=0.05,
             )
     shown = show and matplotlib.get_backend().lower() not in _NON_INTERACTIVE
     if shown:

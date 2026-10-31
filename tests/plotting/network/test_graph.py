@@ -109,3 +109,16 @@ def test_legend_is_centred(drawn):
 
     assert legend._loc == 8  # "lower center"
     assert legend.get_bbox_to_anchor().bounds[0] == pytest.approx(ax.bbox.width / 2)
+
+
+def test_raster_saves_at_print_resolution(make_network, tmp_path):
+    from matplotlib.image import imread
+
+    from jaff.plotting.network._common import SAVE_DPI
+
+    net = make_network(LINES)
+    fig, _ = NetworkVisualizer(net).graph(save=tmp_path / "g.png", show=False)
+    height = imread(tmp_path / "g.png").shape[0]
+
+    assert SAVE_DPI == 400
+    assert height == pytest.approx(fig.get_size_inches()[1] * SAVE_DPI, rel=0.05)
