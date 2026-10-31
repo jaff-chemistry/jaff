@@ -14,7 +14,7 @@ earlier ones, so they read best in order.
 
 | Notebook                     | Network(s)                 | What it covers                                                                                                                                         |
 | ---------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `01_network_basics.py`       | `demo1`                    | Loading a network, the mixed input formats in one file, the load pipeline, species, catalogue queries, stoichiometry and a hand-made charge check      |
+| `01_network_basics.py`       | `demo1`, `water_co`        | Loading a network, the mixed input formats in one file, the load pipeline, species, catalogue queries, stoichiometry and a hand-made charge check      |
 | `02_reactions_and_rates.py`  | `demo1`, `h_photo`         | Reaction identity and types, symbolic rates, printing a rate in seven languages, flux expressions, rate plots, multi-range rates, photo cross-sections |
 | `03_comparing_networks.py`   | `demo1`, `demo2`           | Matching species and reactions by their serialized form, and why shared reactions can still have different rates                                      |
 | `04_codegen_jaffgen.py`      | `demo2`                    | Template collections and directives; generating, building and running a Python and a Fortran solver with `jaffgen`                                     |

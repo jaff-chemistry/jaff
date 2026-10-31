@@ -13,9 +13,9 @@ produces, not rates or physics. There are two views:
 ```python
 from jaff import Network
 
-net = Network("GOW")
-net.visualize.graph(save="gow_graph.pdf")
-net.visualize.stoichiometry(save="gow_matrix.pdf")
+net = Network("networks/demos/water_co.jet")
+net.visualize.graph(save="water_co_graph.pdf")
+net.visualize.stoichiometry(save="water_co_matrix.pdf")
 ```
 
 Both return `(fig, ax)`; see
@@ -81,7 +81,7 @@ Reaction types get colours in order of first appearance. Reactions of type
 share a grey "other" colour.
 
 ```python
-net.visualize.graph(theme="print", save="gow_graph.pdf", show=False)
+net.visualize.graph(theme="print", save="water_co_graph.pdf", show=False)
 ```
 
 ---
@@ -89,6 +89,7 @@ net.visualize.graph(theme="print", save="gow_graph.pdf", show=False)
 ## Size
 
 Spacing is fixed, so labels never shrink: the figure grows with the network.
-GOW (50 reactions) is about 11 × 10 in; a network of a few hundred reactions is
-a poster. Save large networks as PDF or SVG and zoom in; raster formats beyond
-matplotlib's 65 536-pixel limit fail to save.
+`water_co.jet` (20 reactions) is about 10 × 5 in, GOW (50 reactions) about
+11 × 10 in, and a network of a few hundred reactions is a poster. Save large
+networks as PDF or SVG and zoom in; raster formats beyond matplotlib's
+65 536-pixel limit fail to save.

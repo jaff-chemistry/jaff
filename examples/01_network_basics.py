@@ -230,25 +230,35 @@ def _(mo, net):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    `net.visualize` draws the same structure. `stoichiometry()` is the matrix
-    above as a figure: consumed species filled, produced species outlined, each
-    row numbered and coloured by reaction type. `graph()` lays the network out
-    with species in columns by atom count and each reaction as a numbered
-    square between its reactants and products.
+    `net.visualize` draws this structure as figures, with reactions coloured by
+    type. Most of demo1's reactions are written in formats that carry no
+    reaction type, so here we draw `networks/demos/water_co.jet`: a small,
+    chemically consistent network (cosmic-ray-driven formation of water and CO)
+    whose every reaction is typed. `stoichiometry()` is the net-change matrix as
+    a figure: consumed species filled, produced species outlined, each row
+    numbered and coloured by reaction type. `graph()` lays the network out with
+    species in columns by atom count and each reaction as a numbered square
+    between its reactants and products.
     """)
     return
 
 
 @app.cell
-def _(net):
-    matrix_fig, _ = net.visualize.stoichiometry(show=False, theme="vivid")
+def _(WATER_CO, load_network):
+    water = load_network(WATER_CO)
+    return (water,)
+
+
+@app.cell
+def _(water):
+    matrix_fig, _ = water.visualize.stoichiometry(show=False, theme="vivid")
     matrix_fig
     return
 
 
 @app.cell
-def _(net):
-    graph_fig, _ = net.visualize.graph(show=False)
+def _(water):
+    graph_fig, _ = water.visualize.graph(show=False)
     graph_fig
     return
 
@@ -302,13 +312,14 @@ def _():
     logging.disable(logging.WARNING)
 
     DEMO1 = mo.notebook_dir().parent / "networks" / "demos" / "demo1.jet"
+    WATER_CO = mo.notebook_dir().parent / "networks" / "demos" / "water_co.jet"
 
     def load_network(path: Path, **kwargs) -> Network:
         """Load a network, hiding the banner JAFF prints on stdout."""
         with contextlib.redirect_stdout(io.StringIO()):
             return Network(str(path), **kwargs)
 
-    return DEMO1, load_network, mo
+    return DEMO1, WATER_CO, load_network, mo
 
 
 @app.cell

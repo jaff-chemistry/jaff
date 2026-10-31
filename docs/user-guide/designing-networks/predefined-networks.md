@@ -50,14 +50,15 @@ H+ + E -> H          []         2.63e-13*(Tgas/1e4)**(-0.7)
 
 ## demos
 
-**Files:** `networks/demos/demo1.jet`, `networks/demos/demo2.jet`
+**Files:** `networks/demos/demo1.jet`, `networks/demos/demo2.jet`, `networks/demos/water_co.jet`
 
-Demonstration files, not intended for scientific use. The directory holds two `.jet`
+Demonstration files, not intended for scientific use. The directory holds several `.jet`
 files, so `Network("demos")` raises a `ParserError`; load a file by path instead, e.g.
 `Network("networks/demos/demo1.jet")`.
 
 - **`demo1.jet`** — A mixed-format file containing reactions written in PRIZMO, KIDA, UDFA, and KROME syntax side-by-side. Useful for checking format auto-detection and as a format cheat-sheet.
 - **`demo2.jet`** — A two-reaction PRIZMO snippet used in the documentation examples.
+- **`water_co.jet`** — Cosmic-ray-driven formation of water and CO in a diffuse cloud: 15 species, 20 reactions in KIDA format, so every reaction has a type (cosmic ray, two-body, recombination, grain, photo). Chemically consistent but with rounded rates; used for the [`net.visualize`](../working-with-networks/visualization.md) examples.
 
 ---
 
