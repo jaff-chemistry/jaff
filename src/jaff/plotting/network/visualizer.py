@@ -12,7 +12,8 @@ from matplotlib.figure import Figure
 
 from ._common import finish, text_width
 from ._graph import draw_graph, legend_width
-from ._layout import graph_layout
+from ._layout import graph_layout, matrix_layout
+from ._stoichiometry import draw_stoichiometry
 from ._themes import NetworkTheme, resolve_theme
 
 if TYPE_CHECKING:
@@ -89,5 +90,50 @@ class NetworkVisualizer:
         th = resolve_theme(theme)
         layout = graph_layout(self.network, text_width, legend_width(self.network, th))
         fig, ax = draw_graph(self.network, layout, th)
+
+        return finish(fig, ax, theme=th, save=save, show=show, close=close)
+
+    def stoichiometry(
+        self,
+        *,
+        theme: str | NetworkTheme = "vivid",
+        save: str | Path | None = None,
+        show: bool = True,
+        close: bool = True,
+    ) -> tuple[Figure, Axes]:
+        """Draw the net stoichiometry matrix: products minus reactants.
+
+        One row per reaction (its equation, then its position in
+        ``net.reactions`` in a circle coloured by type) and one column per
+        species, grouped by atom count. A cell shows how many of the species the
+        reaction consumes or produces; the theme's colours tell which.
+
+        Parameters
+        ----------
+        theme : str or NetworkTheme, optional
+            Colour theme: a name in :data:`~jaff.plotting.NETWORK_THEMES` or a
+            theme object, by default ``"vivid"``.
+        save : str or Path, optional
+            File to save the figure to; the format follows the suffix.
+        show : bool, optional
+            Show the figure (skipped on non-interactive backends), by default
+            ``True``.
+        close : bool, optional
+            Close the figure in pyplot afterwards, by default ``True``; the
+            returned figure still works.
+
+        Returns
+        -------
+        tuple of (Figure, Axes)
+            The figure and its single axes (inches, y pointing down).
+
+        Raises
+        ------
+        ValueError
+            If *theme* names no registered theme.
+        """
+        th = resolve_theme(theme)
+        layout = matrix_layout(self.network, text_width)
+        fig, ax = draw_stoichiometry(self.network, layout, th)
 
         return finish(fig, ax, theme=th, save=save, show=show, close=close)
