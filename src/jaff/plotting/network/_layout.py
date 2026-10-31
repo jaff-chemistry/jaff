@@ -1,0 +1,384 @@
+# ABOUTME: Geometry for net.visualize: layered graph and stoichiometry-matrix layouts
+# ABOUTME: Positions in inches; text widths come from a measure callable (no matplotlib)
+"""Layout of the network figures, in inches, with the y axis pointing down."""
+
+from __future__ import annotations
+
+import math
+from collections import defaultdict
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+import numpy as np
+
+from ...chemistry._periodic_table import periodic_table
+
+if TYPE_CHECKING:
+    from ...core.network.network import Network
+    from ...core.reaction.reaction import Reaction
+    from ...core.species.specie import Specie
+
+#: Width in inches of a (mathtext) string at a font size in points.
+Measure = Callable[[str, float], float]
+
+#: Equation text for pseudo-species; other pseudo-species show their name.
+PSEUDO_LABELS: dict[str, str] = {
+    "_PHOTON": r"\gamma",
+    "_CR": r"{\rm CR}",
+    "_CRP": r"{\rm CR}",
+    "_CRPHOT": r"{\rm CR}\gamma",
+}
+
+SPECIES_FONT = 9.0
+EQUATION_FONT = 7.0
+HEADER_FONT = 6.5
+INDEX_FONT = 6.0
+ROW_PITCH = 0.5
+PILL_HEIGHT = 0.22
+PILL_PAD = 0.1
+MARKER = 0.17
+GUTTER_PAD = 0.25
+MARGIN = 0.25
+HEADER = 0.35
+LEGEND = 0.45
+SWEEPS = 4
+CELL = 0.26
+INDEX_COLUMN = 0.3
+LABEL_GAP = 0.1
+GROUP_GAP = 0.06
+EMPTY_WIDTH = 1.0
+
+
+def atom_count(specie: Specie) -> int:
+    """Number of atoms in *specie*: its element tokens (charges, ``e-``, tags not)."""
+    table = periodic_table()
+
+    # Charges, electrons, grains and name tags are table entries without protons.
+    return sum(
+        token in table and table[token].protons is not None for token in specie.exploded
+    )
+
+
+def _column_key(specie: Specie) -> int:
+    """Atom-count group: atom-free species share the 1-atom group."""
+    return max(atom_count(specie), 1)
+
+
+def _header(key: int, counts: set[int]) -> str:
+    if key == 1:
+        return "0–1 ATOMS" if 0 in counts else "1 ATOM"
+
+    return f"{key} ATOMS"
+
+
+def specie_label(specie: Specie) -> str:
+    """Mathtext (without ``$``) for a species or pseudo-species."""
+    if specie.is_special:
+        return PSEUDO_LABELS.get(specie.name, rf"{{\rm {specie.name.lstrip('_')}}}")
+
+    return specie.latex()
+
+
+def equation_label(reaction: Reaction) -> str:
+    """Mathtext equation ``$A + B \\rightarrow C$`` of *reaction*."""
+    left = " + ".join(specie_label(s) for s in reaction.reactants)
+    right = " + ".join(specie_label(s) for s in reaction.products)
+
+    return f"${left} \\rightarrow {right}$"
+
+
+def _groups(net: Network) -> tuple[list[Specie], dict[int, int], list[str]]:
+    """Core species, their atom-count column, and the column headers."""
+    core = [s for s in net.species if s.is_core]
+    keys = sorted({_column_key(s) for s in core})
+    column = {s.index: keys.index(_column_key(s)) for s in core}
+    headers = [
+        _header(k, {atom_count(s) for s in core if _column_key(s) == k}) for k in keys
+    ]
+
+    return core, column, headers
+
+
+def _links(reaction: Reaction) -> list[tuple[int, str]]:
+    """``(specie index, role)`` once per core species and side of *reaction*."""
+    links: list[tuple[int, str]] = []
+    for role, side in (
+        ("reactant", reaction.reactants.core),
+        ("product", reaction.products.core),
+    ):
+        for specie in side:
+            if (specie.index, role) not in links:
+                links.append((specie.index, role))
+
+    return links
+
+
+@dataclass(frozen=True)
+class Lane:
+    """A vertical strip: a species column (with a header) or a reaction gutter."""
+
+    x0: float
+    x1: float
+    header: str | None
+
+    @property
+    def centre(self) -> float:
+        """Horizontal centre of the lane."""
+        return (self.x0 + self.x1) / 2
+
+
+@dataclass(frozen=True)
+class Edge:
+    """A species-reaction connection; *points* are the Bézier waypoints."""
+
+    specie: int
+    reaction: int
+    role: str
+    points: tuple[tuple[float, float], ...]
+
+
+@dataclass(frozen=True)
+class GraphLayout:
+    """Geometry of the graph view (inches, y down).
+
+    Lanes alternate species columns (even positions) and reaction gutters (odd);
+    ``species_lane`` / ``reaction_lane`` give the column / gutter number.
+    """
+
+    size: tuple[float, float]
+    lanes: tuple[Lane, ...]
+    species_lane: dict[int, int]
+    reaction_lane: dict[int, int]
+    species_xy: dict[int, tuple[float, float]]
+    reaction_xy: dict[int, tuple[float, float]]
+    pill_width: dict[int, float]
+    labels: dict[int, str]
+    edges: tuple[Edge, ...]
+
+
+def _row_y(row: float) -> float:
+    return MARGIN + HEADER + (row + 0.5) * ROW_PITCH
+
+
+def _channel(y0: float, y1: float) -> float:
+    """The between-rows channel nearest the mean height of *y0* and *y1*."""
+    mean_row = ((y0 + y1) / 2 - MARGIN - HEADER) / ROW_PITCH - 0.5
+
+    return _row_y(math.floor(mean_row) + 0.5)
+
+
+def _sweep(
+    members: list[list[tuple[str, int]]], links: list[list[tuple[int, str]]]
+) -> None:
+    """Order each lane by the mean row of its neighbours (barycentre sweeps)."""
+    neighbours: dict[tuple[str, int], list[tuple[str, int]]] = defaultdict(list)
+    for i, reaction_links in enumerate(links):
+        for s, _ in reaction_links:
+            neighbours[("r", i)].append(("s", s))
+            neighbours[("s", s)].append(("r", i))
+
+    row = {node: k for lane in members for k, node in enumerate(lane)}
+    order = list(range(len(members)))
+    for _ in range(SWEEPS):
+        for sweep in (order, order[::-1]):
+            for lane in (members[i] for i in sweep):
+
+                def key(node: tuple[str, int]) -> tuple[float, int]:
+                    near = neighbours[node]
+                    bary = sum(row[n] for n in near) / len(near) if near else row[node]
+                    return bary, node[1]
+
+                lane.sort(key=key)
+                row.update({node: k for k, node in enumerate(lane)})
+
+
+def graph_layout(net: Network, measure: Measure) -> GraphLayout:
+    """Lay out *net* as a layered species-reaction graph.
+
+    Parameters
+    ----------
+    net : Network
+        The network to draw.
+    measure : callable
+        ``measure(text, size)``: width in inches of mathtext *text* at *size* points.
+
+    Returns
+    -------
+    GraphLayout
+        Node positions, edges and the figure size, in inches.
+    """
+    core, column, headers = _groups(net)
+    reactions = list(net.reactions)
+    labels = {i: equation_label(r) for i, r in enumerate(reactions)}
+    if not core:
+        size = (2 * MARGIN + EMPTY_WIDTH, 2 * MARGIN + HEADER + LEGEND)
+        return GraphLayout(size, (), {}, {}, {}, {}, {}, labels, ())
+
+    ncols = len(headers)
+    ngutters = max(ncols - 1, 1)
+    links = [_links(r) for r in reactions]
+
+    def gutter(i: int) -> int:
+        cols = [column[s] for s, _ in links[i]]
+        if not cols:
+            return 0
+        lo, hi = min(cols), max(cols)
+        return lo + (hi - 1 - lo) // 2 if lo < hi else min(lo, ngutters - 1)
+
+    reaction_lane = {i: gutter(i) for i in range(len(reactions))}
+    members: list[list[tuple[str, int]]] = [[] for _ in range(ncols + ngutters)]
+    for s in core:
+        members[2 * column[s.index]].append(("s", s.index))
+    for i, g in reaction_lane.items():
+        members[2 * g + 1].append(("r", i))
+    _sweep(members, links)
+
+    pill = {s.index: measure(f"${s.latex()}$", SPECIES_FONT) + 2 * PILL_PAD for s in core}
+    lanes: list[Lane] = []
+    x = MARGIN
+    for li, lane in enumerate(members):
+        if li % 2 == 0:
+            width = max([pill[n[1]] for n in lane], default=PILL_HEIGHT)
+            header: str | None = headers[li // 2]
+        else:
+            texts = [measure(labels[n[1]], EQUATION_FONT) for n in lane]
+            width = max([*texts, MARKER]) + 2 * GUTTER_PAD
+            header = None
+        lanes.append(Lane(x, x + width, header))
+        x += width
+
+    species_xy: dict[int, tuple[float, float]] = {}
+    reaction_xy: dict[int, tuple[float, float]] = {}
+    for li, lane in enumerate(members):
+        for k, (kind, idx) in enumerate(lane):
+            target = species_xy if kind == "s" else reaction_xy
+            target[idx] = (lanes[li].centre, _row_y(k))
+
+    edges: list[Edge] = []
+    for i, reaction_links in enumerate(links):
+        rx, ry = reaction_xy[i]
+        rlane = 2 * reaction_lane[i] + 1
+        for s, role in reaction_links:
+            sx, sy = species_xy[s]
+            slane = 2 * column[s]
+            side = 1 if sx > rx else -1
+            at_species = (sx - side * pill[s] / 2, sy)
+            at_reaction = (rx + side * MARKER / 2, ry)
+            start, end = (
+                (at_species, at_reaction)
+                if role == "reactant"
+                else (at_reaction, at_species)
+            )
+            points = [start]
+            if abs(slane - rlane) > 1:
+                lo, hi = sorted((slane, rlane))
+                channel = _channel(sy, ry)
+                xa, xb = lanes[lo + 1].x0, lanes[hi - 1].x1
+                via = [(xa, channel), (xb, channel)]
+                points += via if start[0] < end[0] else via[::-1]
+            points.append(end)
+            edges.append(Edge(s, i, role, tuple(points)))
+
+    rows = max(len(lane) for lane in members)
+    size = (x + MARGIN, MARGIN + HEADER + rows * ROW_PITCH + LEGEND + MARGIN)
+
+    return GraphLayout(
+        size,
+        tuple(lanes),
+        {s.index: column[s.index] for s in core},
+        reaction_lane,
+        species_xy,
+        reaction_xy,
+        pill,
+        labels,
+        tuple(edges),
+    )
+
+
+@dataclass(frozen=True)
+class Group:
+    """An atom-count group of matrix columns."""
+
+    x0: float
+    x1: float
+    header: str
+
+
+@dataclass(frozen=True)
+class MatrixLayout:
+    """Geometry of the stoichiometry view (inches, y down).
+
+    ``values[i, j]`` is the net change of species ``species[j]`` (a catalogue
+    index) in reaction ``i``.
+    """
+
+    size: tuple[float, float]
+    species: tuple[int, ...]
+    values: np.ndarray = field(compare=False)
+    labels: tuple[str, ...]
+    groups: tuple[Group, ...]
+    column_x: tuple[float, ...]
+    row_y: tuple[float, ...]
+    equation_x: float
+    index_x: float
+    label_y: float
+
+
+def matrix_layout(net: Network, measure: Measure) -> MatrixLayout:
+    """Lay out the net stoichiometry matrix of *net*.
+
+    Parameters
+    ----------
+    net : Network
+        The network to draw.
+    measure : callable
+        ``measure(text, size)``: width in inches of mathtext *text* at *size* points.
+
+    Returns
+    -------
+    MatrixLayout
+        Cell, label and group positions and the figure size, in inches.
+    """
+    core, column, headers = _groups(net)
+    order = sorted(core, key=lambda s: (column[s.index], s.index))
+    species = tuple(s.index for s in order)
+    values = (net.product_matrix - net.reactant_matrix)[:, list(species)]
+    labels = tuple(equation_label(r) for r in net.reactions)
+
+    equation_w = max([measure(t, EQUATION_FONT) for t in labels], default=0.0)
+    species_w = max([measure(f"${s.latex()}$", SPECIES_FONT) for s in order], default=0.0)
+    # A label rotated 45 degrees, centred on its column: half its extent above and below.
+    label_h = (species_w + SPECIES_FONT / 72) * math.sqrt(0.5)
+    label_y = MARGIN + HEADER + label_h / 2
+    top = MARGIN + HEADER + label_h + LABEL_GAP
+
+    equation_x = MARGIN + equation_w
+    index_x = equation_x + LABEL_GAP + INDEX_COLUMN / 2
+    x = equation_x + LABEL_GAP + INDEX_COLUMN + LABEL_GAP
+    column_x: list[float] = []
+    groups: list[Group] = []
+    for c, header in enumerate(headers):
+        x0 = x
+        for s in order:
+            if column[s.index] == c:
+                column_x.append(x + CELL / 2)
+                x += CELL
+        groups.append(Group(x0, x, header))
+        x += GROUP_GAP
+
+    row_y = tuple(top + (i + 0.5) * CELL for i in range(len(labels)))
+    size = (x + MARGIN, top + len(labels) * CELL + LEGEND + MARGIN)
+
+    return MatrixLayout(
+        size,
+        species,
+        values,
+        labels,
+        tuple(groups),
+        tuple(column_x),
+        row_y,
+        equation_x,
+        index_x,
+        label_y,
+    )
