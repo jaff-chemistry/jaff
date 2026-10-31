@@ -32,86 +32,86 @@ def aux_functions():
     # $$JAFF GET aux_func IN fshield_c
     out["fshield_c"] = math.exp(-1.6e-17*ncol_C)*math.exp(-2.808e-22*ncol_H2)/(2.808e-22*ncol_H2 + 1)
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate0
-    out["chemrate0"] = crate*(1.5*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 2.3*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]))
+    # $$JAFF GET aux_func IN chemratecoeff0
+    out["chemratecoeff0"] = crate*(1.5*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 2.3*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]))
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate1
-    out["chemrate1"] = 2*crate*(1.5*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 2.3*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]))
+    # $$JAFF GET aux_func IN chemratecoeff1
+    out["chemratecoeff1"] = 2*crate*(1.5*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 2.3*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]))
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate4
-    out["chemrate4"] = 6.52*crate/nden[0]
+    # $$JAFF GET aux_func IN chemratecoeff4
+    out["chemratecoeff4"] = 6.52*crate/nden[0]
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate8
-    out["chemrate8"] = 3.5e-10*chi*math.exp(-3.76*av)*math.exp(-1.6e-17*ncol_C)*math.exp(-2.808e-22*ncol_H2)/(2.808e-22*ncol_H2 + 1)
+    # $$JAFF GET aux_func IN chemratecoeff8
+    out["chemratecoeff8"] = 3.5e-10*chi*math.exp(-3.76*av)*math.exp(-1.6e-17*ncol_C)*math.exp(-2.808e-22*ncol_H2)/(2.808e-22*ncol_H2 + 1)
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate10
-    out["chemrate10"] = 2.4e-10*chi*fshield_co_interp2d(ncol_CO, ncol_H2)*math.exp(-3.88*av)
+    # $$JAFF GET aux_func IN chemratecoeff10
+    out["chemratecoeff10"] = 2.4e-10*chi*fshield_co_interp2d(ncol_CO, ncol_H2)*math.exp(-3.88*av)
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate13
-    out["chemrate13"] = 5.7e-11*chi*(0.965/(1.4142135623731e-10*ncol_H2/vdisp + 1)**2 + 0.035*math.exp(-0.00085*math.sqrt(2.0e-15*ncol_H2 + 1))/math.sqrt(2.0e-15*ncol_H2 + 1))*math.exp(-4.18*av)
+    # $$JAFF GET aux_func IN chemratecoeff13
+    out["chemratecoeff13"] = 5.7e-11*chi*(0.965/(1.4142135623731e-10*ncol_H2/vdisp + 1)**2 + 0.035*math.exp(-0.00085*math.sqrt(2.0e-15*ncol_H2 + 1))/math.sqrt(2.0e-15*ncol_H2 + 1))*math.exp(-4.18*av)
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate14
-    out["chemrate14"] = 3.0e-15*d2g*(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])/nden[0]
+    # $$JAFF GET aux_func IN chemratecoeff14
+    out["chemratecoeff14"] = 3.0e-15*d2g*(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])/nden[0]
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate15
-    out["chemrate15"] = 1.225e-11*d2g*(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])/((1.67744140517115e-5*(chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**1.378*(508.7*tgas**0.01586*(1.7*chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**(-1.102e-5*math.log(tgas) - 0.4723) + 1) + 1)*nden[2])
+    # $$JAFF GET aux_func IN chemratecoeff15
+    out["chemratecoeff15"] = 1.225e-11*d2g*(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])/((1.67744140517115e-5*(chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**1.378*(508.7*tgas**0.01586*(1.7*chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**(-1.102e-5*math.log(tgas) - 0.4723) + 1) + 1)*nden[2])
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate16
-    out["chemrate16"] = 4.558e-11*d2g*(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])/((0.0110787906895991*(chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**1.128*(433.1*tgas**0.04845*(1.7*chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**(-0.0001333*math.log(tgas) - 0.812) + 1) + 1)*nden[2])
+    # $$JAFF GET aux_func IN chemratecoeff16
+    out["chemratecoeff16"] = 4.558e-11*d2g*(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])/((0.0110787906895991*(chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**1.128*(433.1*tgas**0.04845*(1.7*chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**(-0.0001333*math.log(tgas) - 0.812) + 1) + 1)*nden[2])
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate17
-    out["chemrate17"] = 5.572e-12*d2g*(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])/((7.10474026783849e-7*(chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**1.512*(5115.0*tgas**3.903e-7*(1.7*chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**(-5.494e-7*math.log(tgas) - 0.4956) + 1) + 1)*nden[2])
+    # $$JAFF GET aux_func IN chemratecoeff17
+    out["chemratecoeff17"] = 5.572e-12*d2g*(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])/((7.10474026783849e-7*(chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**1.512*(5115.0*tgas**3.903e-7*(1.7*chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**(-5.494e-7*math.log(tgas) - 0.4956) + 1) + 1)*nden[2])
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate18
-    out["chemrate18"] = 2.166e-12*d2g*(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])/((1.53481723307147e-7*(chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**1.874*(43750.0*tgas**1.635e-6*(1.7*chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**(-7.538e-5*math.log(tgas) - 0.8964) + 1) + 1)*nden[2])
+    # $$JAFF GET aux_func IN chemratecoeff18
+    out["chemratecoeff18"] = 2.166e-12*d2g*(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])/((1.53481723307147e-7*(chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**1.874*(43750.0*tgas**1.635e-6*(1.7*chi*math.sqrt(tgas)*math.exp(-1.87*av)/nden[2])**(-7.538e-5*math.log(tgas) - 0.8964) + 1) + 1)*nden[2])
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate19
-    out["chemrate19"] = (tgas**(-1.5)*(0.000151*math.exp(-8110.0/tgas) + 1.31e-7*math.exp(-26.6/tgas) + 3.4e-8*math.exp(-7.62/tgas) + 6.97e-9*math.exp(-1.38/tgas)) + 1.05379343682409e-9*(1/tgas)**0.00231)/nden[2]
+    # $$JAFF GET aux_func IN chemratecoeff19
+    out["chemratecoeff19"] = (tgas**(-1.5)*(0.000151*math.exp(-8110.0/tgas) + 1.31e-7*math.exp(-26.6/tgas) + 3.4e-8*math.exp(-7.62/tgas) + 6.97e-9*math.exp(-1.38/tgas)) + 1.05379343682409e-9*(1/tgas)**0.00231)/nden[2]
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate20
-    out["chemrate20"] = 1.99e-9*tgas**(-0.19)*((10000000000.0) if (nden[2]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (0.000113207547169811*math.sqrt(tgas)*nden[3]/nden[2]))/((((10000000000.0) if (nden[2]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (0.000113207547169811*math.sqrt(tgas)*nden[3]/nden[2])) + 1)*nden[2])
+    # $$JAFF GET aux_func IN chemratecoeff20
+    out["chemratecoeff20"] = 1.99e-9*tgas**(-0.19)*((10000000000.0) if (nden[2]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (0.000113207547169811*math.sqrt(tgas)*nden[3]/nden[2]))/((((10000000000.0) if (nden[2]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (0.000113207547169811*math.sqrt(tgas)*nden[3]/nden[2])) + 1)*nden[2])
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate21
-    out["chemrate21"] = 1.99e-9*tgas**(-0.19)/((min(10000000000.0, 0.000113207547169811*math.sqrt(tgas)*nden[3]/nden[2]) + 1)*nden[2])
+    # $$JAFF GET aux_func IN chemratecoeff21
+    out["chemratecoeff21"] = 1.99e-9*tgas**(-0.19)/((min(10000000000.0, 0.000113207547169811*math.sqrt(tgas)*nden[3]/nden[2]) + 1)*nden[2])
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate22
-    out["chemrate22"] = 1.6e-9*min(10000000000.0, 0.000113207547169811*math.sqrt(tgas)*nden[3]/nden[2])/((min(10000000000.0, 0.000113207547169811*math.sqrt(tgas)*nden[3]/nden[2]) + 1)*nden[2])
+    # $$JAFF GET aux_func IN chemratecoeff22
+    out["chemratecoeff22"] = 1.6e-9*min(10000000000.0, 0.000113207547169811*math.sqrt(tgas)*nden[3]/nden[2])/((min(10000000000.0, 0.000113207547169811*math.sqrt(tgas)*nden[3]/nden[2]) + 1)*nden[2])
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate23
-    out["chemrate23"] = 1.6e-9/((min(10000000000.0, 0.000113207547169811*math.sqrt(tgas)*nden[3]/nden[2]) + 1)*nden[2])
+    # $$JAFF GET aux_func IN chemratecoeff23
+    out["chemratecoeff23"] = 1.6e-9/((min(10000000000.0, 0.000113207547169811*math.sqrt(tgas)*nden[3]/nden[2]) + 1)*nden[2])
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate27
-    out["chemrate27"] = 2.31e-13*tgas**(-1.3)*math.exp(-23/tgas)/nden[2]
+    # $$JAFF GET aux_func IN chemratecoeff27
+    out["chemratecoeff27"] = 2.31e-13*tgas**(-1.3)*math.exp(-23/tgas)/nden[2]
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate28
-    out["chemrate28"] = 9.9e-14*tgas**(-1.3)*math.exp(-23/tgas)/nden[2]
+    # $$JAFF GET aux_func IN chemratecoeff28
+    out["chemratecoeff28"] = 9.9e-14*tgas**(-1.3)*math.exp(-23/tgas)/nden[2]
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate32
-    out["chemrate32"] = 1.0e-11*tgas**(-0.5)*(((0.04433*math.log(tgas)/math.log(10) - 0.2852)*math.log(tgas)/math.log(10) - 1.676)*math.log(tgas)/math.log(10) + 11.19)
+    # $$JAFF GET aux_func IN chemratecoeff32
+    out["chemratecoeff32"] = 1.0e-11*tgas**(-0.5)*(((0.04433*math.log(tgas)/math.log(10) - 0.2852)*math.log(tgas)/math.log(10) - 1.676)*math.log(tgas)/math.log(10) + 11.19)
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate35
-    out["chemrate35"] = 2.44601853529363e-10*(0.000717403679328989*math.sqrt(tgas) + 1)**(-1.7849 - 0.1597*math.exp(-49550.0/tgas))*(12.2443879994575*math.sqrt(tgas) + 1)**(-0.2151 + 0.1597*math.exp(-49550.0/tgas))/math.sqrt(tgas) + (1.634e-6*math.exp(-15230.0/tgas) + 9.793e-9*math.exp(-73.8/tgas) + 6.346e-9*math.exp(-12.17/tgas))/tgas**(3/2)
+    # $$JAFF GET aux_func IN chemratecoeff35
+    out["chemratecoeff35"] = 2.44601853529363e-10*(0.000717403679328989*math.sqrt(tgas) + 1)**(-1.7849 - 0.1597*math.exp(-49550.0/tgas))*(12.2443879994575*math.sqrt(tgas) + 1)**(-0.2151 + 0.1597*math.exp(-49550.0/tgas))/math.sqrt(tgas) + (1.634e-6*math.exp(-15230.0/tgas) + 9.793e-9*math.exp(-73.8/tgas) + 6.346e-9*math.exp(-12.17/tgas))/tgas**(3/2)
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate37
-    out["chemrate37"] = 1.76e-9*tgas**0.042*math.exp(-2.14592274678112e-5*tgas)
+    # $$JAFF GET aux_func IN chemratecoeff37
+    out["chemratecoeff37"] = 1.76e-9*tgas**0.042*math.exp(-2.14592274678112e-5*tgas)
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate39
-    out["chemrate39"] = 4.88135733001309e-6*(114.813444344886*(1/tgas)**0.407 + 1)**(-2.242)*(1/tgas)**1.5
+    # $$JAFF GET aux_func IN chemratecoeff39
+    out["chemratecoeff39"] = 4.88135733001309e-6*(114.813444344886*(1/tgas)**0.407 + 1)**(-2.242)*(1/tgas)**1.5
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate40
-    out["chemrate40"] = ((10**((nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])*((1.0e-50) if (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])))*math.log(3.52e-9*math.exp(-43900/tgas))/(((nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])*((1.0e-50) if (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]))) + 1)*math.log(10)) + math.log(6.67e-12*math.sqrt(tgas)*math.exp(-1 - 63590/tgas))/(((nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])*((1.0e-50) if (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]))) + 1)*math.log(10)))) if (tgas > 700.0) else (0.0))
+    # $$JAFF GET aux_func IN chemratecoeff40
+    out["chemratecoeff40"] = ((10**((nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])*((1.0e-50) if (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])))*math.log(3.52e-9*math.exp(-43900/tgas))/(((nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])*((1.0e-50) if (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]))) + 1)*math.log(10)) + math.log(6.67e-12*math.sqrt(tgas)*math.exp(-1 - 63590/tgas))/(((nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])*((1.0e-50) if (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]))) + 1)*math.log(10)))) if (tgas > 700.0) else (0.0))
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate41
-    out["chemrate41"] = ((10**((nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])*((1.0e-50) if (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])))*math.log(1.3e-9*math.exp(-53300/tgas))/(((nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])*((1.0e-50) if (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]))) + 1)*math.log(10)) + math.log(5.996e-30*tgas**4.1881*(6.761e-6*tgas + 1)**(-5.6881)*math.exp(-54657.4/tgas))/(((nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])*((1.0e-50) if (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]))) + 1)*math.log(10)))) if (tgas > 700.0) else (0.0))
+    # $$JAFF GET aux_func IN chemratecoeff41
+    out["chemratecoeff41"] = ((10**((nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])*((1.0e-50) if (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])))*math.log(1.3e-9*math.exp(-53300/tgas))/(((nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])*((1.0e-50) if (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]))) + 1)*math.log(10)) + math.log(5.996e-30*tgas**4.1881*(6.761e-6*tgas + 1)**(-5.6881)*math.exp(-54657.4/tgas))/(((nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])*((1.0e-50) if (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) < 1.0e-50) else (10**(-1.62*math.log((1/10000)*tgas)**2/math.log(10)**2 + 1.3*math.log((1/10000)*tgas)/math.log(10) - 4.845)*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 10**(0.327*math.log((1/10000)*tgas)**2/math.log(10)**2 + 0.416*math.log((1/10000)*tgas)/math.log(10) - 3)*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]))) + 1)*math.log(10)))) if (tgas > 700.0) else (0.0))
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate42
-    out["chemrate42"] = ((5.90784479463828e-70*tgas**13.536556*math.exp(-2.03914985e-6*math.log(8.6173e-5*tgas)**8 + 0.000111954395*math.log(8.6173e-5*tgas)**7 - 0.00263197617*math.log(8.6173e-5*tgas)**6 + 0.0348255977*math.log(8.6173e-5*tgas)**5 - 0.2877056*math.log(8.6173e-5*tgas)**4 + 1.56315498*math.log(8.6173e-5*tgas)**3 - 5.73932875*math.log(8.6173e-5*tgas)**2)) if (tgas > 700.0) else (0.0))
+    # $$JAFF GET aux_func IN chemratecoeff42
+    out["chemratecoeff42"] = ((5.90784479463828e-70*tgas**13.536556*math.exp(-2.03914985e-6*math.log(8.6173e-5*tgas)**8 + 0.000111954395*math.log(8.6173e-5*tgas)**7 - 0.00263197617*math.log(8.6173e-5*tgas)**6 + 0.0348255977*math.log(8.6173e-5*tgas)**5 - 0.2877056*math.log(8.6173e-5*tgas)**4 + 1.56315498*math.log(8.6173e-5*tgas)**3 - 5.73932875*math.log(8.6173e-5*tgas)**2)) if (tgas > 700.0) else (0.0))
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate48
-    out["chemrate48"] = (4.0e-10*tgas**0.00669 + 1.1e-11*tgas**0.517)*math.exp(-227/tgas)
+    # $$JAFF GET aux_func IN chemratecoeff48
+    out["chemratecoeff48"] = (4.0e-10*tgas**0.00669 + 1.1e-11*tgas**0.517)*math.exp(-227/tgas)
     # $$JAFF END
-    # $$JAFF GET aux_func IN chemrate49
-    out["chemrate49"] = 7.5e-10*tgas**(-0.458) + 4.99e-11*tgas**0.405
+    # $$JAFF GET aux_func IN chemratecoeff49
+    out["chemratecoeff49"] = 7.5e-10*tgas**(-0.458) + 4.99e-11*tgas**0.405
     # $$JAFF END
     # $$JAFF GET aux_func IN deltae0
     out["deltae0"] = 1.602177e-12*(26.4*(nden[2]/((0.07 + nden[2]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]))*(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4])))**0.5 + 6.5)/(1.5*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + 2.3*nden[3]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]))

@@ -45,8 +45,8 @@ def test_no_placeholder_left(make_network):
         assert all("prizmo_photo" not in str(s.rate) for s in rxn.rate_segments)
 
 
-def test_chemrate_reaction_keeps_its_number_unused(make_network, tmp_path):
-    (tmp_path / "p.jfunc").write_text("@function chemrate0()\n@return 1e-10\n")
+def test_chemratecoeff_reaction_keeps_its_number_unused(make_network, tmp_path):
+    (tmp_path / "p.jfunc").write_text("@function chemratecoeff0()\n@return 1e-10\n")
     net = make_network(NETWORK, name="p.jet")
 
     o = _rxn(net, "O + _PHOTON -> O+ + e-")

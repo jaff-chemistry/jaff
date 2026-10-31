@@ -20,7 +20,7 @@ class PhotoBand:
 
     Built for every band, in ``net.radiation.groups`` order, and held in
     ``reaction.photo.bands``.  A photo reaction whose rate comes from a
-    ``.jfunc`` ``chemRate<N>`` is not coupled to the bands and gets none.
+    ``.jfunc`` ``chemRateCoeff<N>`` is not coupled to the bands and gets none.
     Immutable: :meth:`~jaff.core.reaction.PhotoReaction.substitute` replaces
     the bands.
 

@@ -126,7 +126,7 @@ def test_get_rejects_entity_of_the_wrong_kind_or_unknown(ctx, prop, entity, mess
         ("specie_idx", "H+"),
         ("element_idx", "He"),
         ("reaction_tmin", "H+ + e- -> H"),
-        ("aux_func", "chemrate2"),
+        ("aux_func", "chemratecoeff2"),
     ],
 )
 def test_get_accepts_existing_entities(ctx, prop, entity):

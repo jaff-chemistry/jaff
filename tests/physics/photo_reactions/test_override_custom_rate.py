@@ -1,5 +1,5 @@
 # ABOUTME: override_custom_rate: under radiation, recompute a photo reaction's rate from
-# ABOUTME: its cross sections instead of its .jfunc chemRate (global + per-reaction)
+# ABOUTME: its cross sections instead of its .jfunc chemRateCoeff (global + per-reaction)
 
 from types import SimpleNamespace
 
@@ -11,7 +11,7 @@ from jaff.physics.photo_reactions.config import RadiationConfig
 
 BANDS = [6.0, 13.6, 100.0]
 PHOTO = "C -> C+ + E  []  PHOTO, 11.3\n"
-CHEMRATE = "@function chemrate0()\n@return 1e-10\n"
+CHEMRATECOEFF = "@function chemratecoeff0()\n@return 1e-10\n"
 KEY = "C._PHOTON__C+.e-"
 
 
@@ -21,8 +21,8 @@ def _photo(net):
 
 @pytest.fixture
 def custom_network(make_network, tmp_path):
-    """C photoionisation with a .jfunc chemRate; kwargs go to ``Network``."""
-    (tmp_path / "p.jfunc").write_text(CHEMRATE)
+    """C photoionisation with a .jfunc chemRateCoeff; kwargs go to ``Network``."""
+    (tmp_path / "p.jfunc").write_text(CHEMRATECOEFF)
 
     def _make(**kwargs):
         return make_network(PHOTO, name="p.jet", **kwargs)

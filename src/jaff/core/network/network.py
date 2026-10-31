@@ -513,7 +513,7 @@ class Network:
             tmax: float | None = reaction.tmax
             rate: str = reaction.rate
             si = reaction.source_index
-            aux_chem_rate = f"chemrate{si}"
+            aux_chem_rate = f"chemratecoeff{si}"
 
             rr = [
                 special_species[r] if r.startswith("_") else self.species[r]
@@ -595,7 +595,7 @@ class Network:
         Parameters
         ----------
         aux_chem_rate : str
-            Key for the optional custom-rate auxiliary function (e.g. ``"chemrate0"``).
+            Key for the optional custom-rate auxiliary function (e.g. ``"chemratecoeff0"``).
         rate : str
             Raw rate string from the network file.
         global_vars : dict[str, Expr]

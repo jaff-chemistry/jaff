@@ -1,4 +1,4 @@
-# ABOUTME: Photo reactions with a .jfunc chemRate under radiation: the custom rate is
+# ABOUTME: Photo reactions with a .jfunc chemRateCoeff under radiation: the custom rate is
 # ABOUTME: kept but not coupled to the bands, and a warning names each such reaction
 
 import logging
@@ -9,7 +9,7 @@ from jaff.physics.photo_reactions.config import RadiationConfig
 
 BANDS = [6.0, 13.6, 100.0]
 PHOTO = "C -> C+ + E  []  PHOTO, 11.3\n"
-CHEMRATE = "@function chemrate0()\n@return 1e-10\n"
+CHEMRATECOEFF = "@function chemratecoeff0()\n@return 1e-10\n"
 
 
 def _photo(net):
@@ -18,8 +18,8 @@ def _photo(net):
 
 @pytest.fixture
 def custom_network(make_network, tmp_path):
-    """C photoionisation with a .jfunc chemRate; kwargs go to ``Network``."""
-    (tmp_path / "p.jfunc").write_text(CHEMRATE)
+    """C photoionisation with a .jfunc chemRateCoeff; kwargs go to ``Network``."""
+    (tmp_path / "p.jfunc").write_text(CHEMRATECOEFF)
 
     def _make(**kwargs):
         return make_network(PHOTO, name="p.jet", **kwargs)
@@ -68,7 +68,7 @@ def test_under_radiation_removes_no_photons(custom_network):
 def test_under_radiation_warns_naming_the_reaction(custom_network, warnings):
     custom_network(radiation=RadiationConfig(bands=BANDS))
 
-    msgs = [m for m in warnings() if "chemRate0" in m]
+    msgs = [m for m in warnings() if "chemRateCoeff0" in m]
     assert len(msgs) == 1
     assert "C + _PHOTON -> C+ + e-" in msgs[0]
     assert "not coupled" in msgs[0]
@@ -78,7 +78,7 @@ def test_under_radiation_warns_naming_the_reaction(custom_network, warnings):
 def test_without_radiation_no_warning(custom_network, warnings):
     custom_network()
 
-    assert not [m for m in warnings() if "chemRate0" in m]
+    assert not [m for m in warnings() if "chemRateCoeff0" in m]
 
 
 def test_overridden_custom_rate_does_not_warn(custom_network, warnings):
@@ -87,4 +87,4 @@ def test_overridden_custom_rate_does_not_warn(custom_network, warnings):
         config={"reactions": {"photo": {"override_custom_rate": True}}},
     )
 
-    assert not [m for m in warnings() if "chemRate0" in m]
+    assert not [m for m in warnings() if "chemRateCoeff0" in m]

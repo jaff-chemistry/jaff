@@ -50,9 +50,9 @@ class PhotoConfig(ConfigModel):
         Photoionisation cross-section database: ``"norad"``, ``"verner"`` or
         ``"leiden"``.
     override_custom_rate : bool or None
-        Replace a reaction's ``.jfunc`` ``chemRate<N>`` rate with one computed
+        Replace a reaction's ``.jfunc`` ``chemRateCoeff<N>`` rate with one computed
         from its cross section over the radiation bands.  Has no effect without
-        a ``[network.radiation]`` table: the ``chemRate`` is then always kept.
+        a ``[network.radiation]`` table: the ``chemRateCoeff`` is then always kept.
     override_custom_cross_section : bool or None
         Ignore a reaction's ``.jfunc`` ``photoCrossSection<N>`` and take its
         cross section from the database.  The global value only applies with a

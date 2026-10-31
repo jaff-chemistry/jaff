@@ -27,20 +27,20 @@ def _std(net, name):
 
 class TestValue:
     def test_parameters_are_network_inputs(self, func_network):
-        net = func_network("@function chemRate0(tgas, n_e)\n@return 1e-10*n_e*tgas\n")
-        value = net.functions.value("chemRate0")
+        net = func_network("@function chemRateCoeff0(tgas, n_e)\n@return 1e-10*n_e*tgas\n")
+        value = net.functions.value("chemRateCoeff0")
 
         assert value == 1e-10 * _std(net, "n_e") * sp.Symbol("tgas")
 
     def test_name_is_case_insensitive(self, func_network):
-        net = func_network("@function chemRate0(n_e)\n@return 2*n_e\n")
+        net = func_network("@function chemRateCoeff0(n_e)\n@return 2*n_e\n")
 
-        assert net.functions.value("CHEMRATE0") == net.functions.value("chemrate0")
+        assert net.functions.value("CHEMRATECOEFF0") == net.functions.value("chemratecoeff0")
 
     def test_is_cached(self, func_network):
-        net = func_network("@function chemRate0(n_e)\n@return 2*n_e\n")
+        net = func_network("@function chemRateCoeff0(n_e)\n@return 2*n_e\n")
 
-        assert net.functions.value("chemrate0") is net.functions.value("chemrate0")
+        assert net.functions.value("chemratecoeff0") is net.functions.value("chemratecoeff0")
 
     def test_nested_call_is_standardized(self, func_network):
         jfunc = (
@@ -120,15 +120,22 @@ class TestReactionFunction:
 
         assert not hasattr(net.reactions[0], "aux_funcs")
 
+    def test_old_chem_rate_name_is_not_a_rate(self, func_network):
+        # Renamed to chemRateCoeff<N>; no alias for the old name.
+        net = func_network("@function chemRate0(n_e)\n@return 2*n_e\n")
+
+        assert net.reactions[0].function("chemRateCoeff") is None
+        assert net.reactions[0].rate_coefficient == pytest.approx(1e-10)
+
     def test_chem_rate_parameters_are_standardized(self, func_network):
-        net = func_network("@function chemRate0(tgas, n_H2)\n@return 1e-10*n_H2\n")
+        net = func_network("@function chemRateCoeff0(tgas, n_H2)\n@return 1e-10*n_H2\n")
 
         assert net.reactions[0].rate_coefficient == 1e-10 * _std(net, "n_H2")
 
 
 class TestRateReferences:
     def test_rate_reference_resolves_to_target_rate(self, func_network):
-        net = func_network("@function chemRate1(n_e)\n@return 2*rc_2*n_e\n")
+        net = func_network("@function chemRateCoeff1(n_e)\n@return 2*rc_2*n_e\n")
         target = net.reactions.by_source_index(2)
 
         assert net.reactions.by_source_index(1).rate_coefficient == (

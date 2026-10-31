@@ -27,9 +27,9 @@ class NetworkFunctions:
       does (``fselfH2(1e21*n_CO, 1e5)``): each parameter is a placeholder for
       its argument;
     - :meth:`value` without arguments, as the network does when it reads a
-      function itself (``chemRate<N>``, ``deltaE<N>``, ``heatingCoolingRate``,
+      function itself (``chemRateCoeff<N>``, ``deltaE<N>``, ``heatingCoolingRate``,
       ...): each parameter names the network quantity it stands for, so
-      ``chemRate3(tgas, n_e)`` uses the gas temperature and the electron
+      ``chemRateCoeff3(tgas, n_e)`` uses the gas temperature and the electron
       density.
 
     Bodies are standardized (``n_X``, ``ntot``, ... become ``nden``

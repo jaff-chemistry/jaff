@@ -32,86 +32,86 @@ def aux_functions():
     $$JAFF GET aux_func IN fshield_c
     out["fshield_c"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate0
-    out["chemrate0"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff0
+    out["chemratecoeff0"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate1
-    out["chemrate1"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff1
+    out["chemratecoeff1"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate4
-    out["chemrate4"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff4
+    out["chemratecoeff4"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate8
-    out["chemrate8"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff8
+    out["chemratecoeff8"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate10
-    out["chemrate10"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff10
+    out["chemratecoeff10"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate13
-    out["chemrate13"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff13
+    out["chemratecoeff13"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate14
-    out["chemrate14"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff14
+    out["chemratecoeff14"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate15
-    out["chemrate15"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff15
+    out["chemratecoeff15"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate16
-    out["chemrate16"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff16
+    out["chemratecoeff16"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate17
-    out["chemrate17"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff17
+    out["chemratecoeff17"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate18
-    out["chemrate18"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff18
+    out["chemratecoeff18"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate19
-    out["chemrate19"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff19
+    out["chemratecoeff19"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate20
-    out["chemrate20"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff20
+    out["chemratecoeff20"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate21
-    out["chemrate21"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff21
+    out["chemratecoeff21"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate22
-    out["chemrate22"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff22
+    out["chemratecoeff22"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate23
-    out["chemrate23"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff23
+    out["chemratecoeff23"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate27
-    out["chemrate27"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff27
+    out["chemratecoeff27"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate28
-    out["chemrate28"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff28
+    out["chemratecoeff28"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate32
-    out["chemrate32"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff32
+    out["chemratecoeff32"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate35
-    out["chemrate35"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff35
+    out["chemratecoeff35"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate37
-    out["chemrate37"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff37
+    out["chemratecoeff37"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate39
-    out["chemrate39"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff39
+    out["chemratecoeff39"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate40
-    out["chemrate40"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff40
+    out["chemratecoeff40"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate41
-    out["chemrate41"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff41
+    out["chemratecoeff41"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate42
-    out["chemrate42"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff42
+    out["chemratecoeff42"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate48
-    out["chemrate48"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff48
+    out["chemratecoeff48"] = $aux_func$
     $$JAFF END
-    $$JAFF GET aux_func IN chemrate49
-    out["chemrate49"] = $aux_func$
+    $$JAFF GET aux_func IN chemratecoeff49
+    out["chemratecoeff49"] = $aux_func$
     $$JAFF END
     $$JAFF GET aux_func IN deltae0
     out["deltae0"] = $aux_func$

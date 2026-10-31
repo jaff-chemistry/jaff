@@ -92,7 +92,7 @@ whitespace-separated. JAFF reads `α`, `β`, `γ`, `itype`, `Tmin`, `Tmax` and `
 | 5      | ionpol2                     | `α β (1 + 0.0967 γ √(300/tgas) + γ² · 300/(10.526 tgas))` |
 
 Any other `frml` (e.g. `6` Troe fall-off, `7` custom) gives a rate of `0.0`; supply the
-rate yourself through a `chemRate<N>` function in an
+rate yourself through a `chemRateCoeff<N>` function in an
 [auxiliary function file](auxiliary-functions.md), as `networks/GOW/GOW.jfunc` does.
 
 ### Example

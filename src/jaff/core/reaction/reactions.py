@@ -454,7 +454,7 @@ class Reactions(Catalogue[Reaction]):
         """Return the reaction whose file-side number (``source_index``) is *n*.
 
         This is the file-order reaction number (``Reaction.index``), the same
-        one ``.jfunc`` ``chemRateN`` binds to — NOT the positional catalogue
+        one ``.jfunc`` ``chemRateCoeffN`` binds to — NOT the positional catalogue
         slot returned by ``self[n]``. Returns ``None`` if no reaction carries
         that number (e.g. a reaction merged away by ``duplicate_policy``).
 

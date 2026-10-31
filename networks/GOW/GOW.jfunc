@@ -3,7 +3,7 @@
 # https://github.com/PrincetonUniversity/athena/blob/chemistry_zsfr/src/chemistry/network/kida_network_files/gow17/kida_gow17.cpp
 
 # There are three main types of functions found in this file:
-# 1. Rate coefficient functions with names of the form @function chemRateN
+# 1. Rate coefficient functions with names of the form @function chemRateCoeffN
 # where N indicates which reaction in the reaction list this rate
 # coefficient is for (starting the count at N = 0), and
 # 2. Change in thermal energy functions with names of the form @function deltaEN,
@@ -15,7 +15,7 @@
 # chemical reactions, in units of erg / s / cm^3
 
 # Note that not every reaction is represented in this file. If there
-# is no @function chemRate function for a given reaction number, that means
+# is no @function chemRateCoeff function for a given reaction number, that means
 # the reaction rate does not use a customized functional form, and
 # is instead derived from the standard chemical network format. If there
 # is no deltaE function for a given reaction, that means that the change
@@ -26,7 +26,7 @@
 
 # There are also other functions with names of the form @XXXX, which
 # are helper functions that will be substituted into the expressions
-# used in the @function chemRate and @function deltaE functions.
+# used in the @function chemRateCoeff and @function deltaE functions.
 
 # A note to help interpret the rate coefficient functions:
 # rates in JAFF are always computed as k * n1 * n2 * ...,
@@ -200,7 +200,7 @@
 # Rate coefficient functions
 ################################################################
 
-@function chemRate0(crate, n_H_nuc, n_H, n_H2)
+@function chemRateCoeff0(crate, n_H_nuc, n_H, n_H2)
     # Reaction 0: H + CR -> H+ + e-
     # crate Primary ionization rate per H nucleon in s^-1
     # n_H_nuc Number density of H nuclei in cm^-3
@@ -209,7 +209,7 @@
 
     @return kcr_H_fac(n_H_nuc, n_H, n_H2) * crate
 
-@function chemRate1(crate, n_H_nuc, n_H, n_H2)
+@function chemRateCoeff1(crate, n_H_nuc, n_H, n_H2)
     # Reaction 1: H2 + CR -> H2+ + e-
     # crate Primary ionization rate per H nucleon in s^-1
     # n_H_nuc Number density of H nuclei in cm^-3
@@ -218,7 +218,7 @@
 
     @return 2 * kcr_H_fac(n_H_nuc, n_H, n_H2) * crate
 
-@function chemRate4(crate, n_H)
+@function chemRateCoeff4(crate, n_H)
     # Reaction 4: CO + H -> HCO+ + e^-
     # n_H Number densty of H0 atoms in cm^-3
     # This is a composite reaction that is actually a proxy for
@@ -229,10 +229,10 @@
 
     @return 6.52 * crate / n_H
 
-@function chemRate8(chi, av, d2g, n_H_nuc, n_C, n_H2)
+@function chemRateCoeff8(chi, av, d2g, n_H_nuc, n_C, n_H2)
     # Reaction 8 (network ID 9): C + Photon -> C+ + e-
     # Base Draine photo rate (alpha*chi*exp(-gamma*av)) times C
-    # self-shielding. Providing this chemRate replaces the standard
+    # self-shielding. Providing this chemRateCoeff replaces the standard
     # .jet rate, so the dust attenuation term is included explicitly.
     # chi Radiation field in Draine (1978) units
     # av  V-band extinction in magnitudes
@@ -246,7 +246,7 @@
 
     @return alpha * chi * exp(-gamma * av) * fshield_C(ncol_C, ncol_H2)
 
-@function chemRate10(chi, av, d2g, n_H_nuc, n_CO, n_H2)
+@function chemRateCoeff10(chi, av, d2g, n_H_nuc, n_CO, n_H2)
     # Reaction 10 (network ID 11): CO + Photon -> C + O
     # Base Draine photo rate times CO self-shielding + shielding by H2
     # (Visser+2009, via wrapper-provided fShield_CO_interp2d).
@@ -262,7 +262,7 @@
 
     @return alpha * chi * exp(-gamma * av) * fShield_CO_interp2d(ncol_CO, ncol_H2)
 
-@function chemRate13(chi, av, d2g, n_H_nuc, n_H2)
+@function chemRateCoeff13(chi, av, d2g, n_H_nuc, n_H2)
     # Reaction 13 (network ID 14): H2 + Photon -> H + H
     # Base Draine photo rate times H2 self-shielding (Draine & Bertoldi
     # 1996).
@@ -277,7 +277,7 @@
 
     @return alpha * chi * exp(-gamma * av) * fshield_H2(ncol_H2)
 
-@function chemRate14(d2g, n_H_nuc, n_H)
+@function chemRateCoeff14(d2g, n_H_nuc, n_H)
     # Reaction 14: H + H -> H2 (grain-assisted)
     # d2g Dust to gas mass ratio
     # n_H_nuc Number density of H nuclei in cm^-3
@@ -286,7 +286,7 @@
 
     @return 3.0e-17 * (d2g / d2g_solar) * (n_H_nuc / n_H)
 
-@function chemRate15(d2g, tgas, chi, av, n_H_nuc, n_e)
+@function chemRateCoeff15(d2g, tgas, chi, av, n_H_nuc, n_e)
     # Reaction 15: H+ + e- -> H (grain-assisted)
     # d2g Dust to gas mass ratio
     # tgas Gas temperature in K
@@ -311,7 +311,7 @@
     @return kgr_gong(tgas, chi, av, n_e, c0, c1, c2, c3, c4, c5, c6) * \
         (d2g / d2g_solar) * n_H_nuc/n_e
 
-@function chemRate16(d2g, tgas, chi, av, n_H_nuc, n_e)
+@function chemRateCoeff16(d2g, tgas, chi, av, n_H_nuc, n_e)
     # Reaction 16: C+ + e- -> C (grain-assisted)
     # d2g Dust to gas mass ratio
     # tgas Gas temperature in K
@@ -336,7 +336,7 @@
     @return kgr_gong(tgas, chi, av, n_e, c0, c1, c2, c3, c4, c5, c6) * \
         (d2g / d2g_solar) * n_H_nuc/n_e
 
-@function chemRate17(d2g, tgas, chi, av, n_H_nuc, n_e)
+@function chemRateCoeff17(d2g, tgas, chi, av, n_H_nuc, n_e)
     # Reaction 17: He+ + e- -> He (grain-assisted)
     # d2g Dust to gas mass ratio
     # tgas Gas temperature in K
@@ -361,7 +361,7 @@
     @return kgr_gong(tgas, chi, av, n_e, c0, c1, c2, c3, c4, c5, c6) * \
         (d2g / d2g_solar) * n_H_nuc/n_e
 
-@function chemRate18(d2g, tgas, chi, av, n_H_nuc, n_e)
+@function chemRateCoeff18(d2g, tgas, chi, av, n_H_nuc, n_e)
     # Reaction 18: Si+ + e- -> Si (grain-assisted)
     # d2g Dust to gas mass ratio
     # tgas Gas temperature in K
@@ -386,7 +386,7 @@
     @return kgr_gong(tgas, chi, av, n_e, c0, c1, c2, c3, c4, c5, c6) * \
         (d2g / d2g_solar) * n_H_nuc/n_e
 
-@function chemRate19(tgas, n_e)
+@function chemRateCoeff19(tgas, n_e)
     # Reaction 19: C + H3+ + e- -> H2 + CHx
     # tgas Gas temperature in K
     # n_e Number density of free electrons in cm^-3
@@ -416,7 +416,7 @@
     k = (k1 + tgas**-1.5 * k2) / n_e
     @return k
 
-@function chemRate20(tgas, n_e, n_H_nuc, n_H2)
+@function chemRateCoeff20(tgas, n_e, n_H_nuc, n_H2)
     # Reaction 20: O + H3+ + e- -> H2 + OHx
     # tgas Gas temperature in K
     # n_e Number density of free electrons in cm^-3
@@ -438,7 +438,7 @@
     k = 1.99e-9 * tgas**-0.19 * fac_H2Oplus_H2 / n_e
     @return k
 
-@function chemRate21(tgas, n_e, n_H2)
+@function chemRateCoeff21(tgas, n_e, n_H2)
     # Reaction 21: O + H3+ + e- -> H2 + O + H
     # tgas Gas temperature in K
     # n_e Number density of free electrons in cm^-3
@@ -457,7 +457,7 @@
     k = 1.99e-9 * tgas**-0.19 * fac_H2Oplus_e / n_e
     @return k
 
-@function chemRate22(tgas, n_e, n_H2)
+@function chemRateCoeff22(tgas, n_e, n_H2)
     # Reaction 22: H2 + O+ + e- -> H + OHx
     # tgas Gas temperature in K
     # n_e Number density of free electrons in cm^-3
@@ -476,7 +476,7 @@
     k = 1.6e-9 * fac_H2Oplus_H2 / n_e
     @return k
 
-@function chemRate23(tgas, n_e, n_H2)
+@function chemRateCoeff23(tgas, n_e, n_H2)
     # Reaction 23: H2 + O+ + e- -> H + H + O
     # tgas Gas temperature in K
     # n_e Number density of free electrons in cm^-3
@@ -495,7 +495,7 @@
     k = 1.6e-9 * fac_H2Oplus_e / n_e
     @return k
 
-@function chemRate27(tgas, n_e)
+@function chemRateCoeff27(tgas, n_e)
     # Reaction 27: H2 + C+ + e- -> CHx + H
     # tgas Gas temperature in K
     # n_e Number density of free electrons in cm^-3
@@ -506,7 +506,7 @@
 
     @return 2.31e-13 * tgas**-1.3 * exp(-23/tgas) / n_e
 
-@function chemRate28(tgas, n_e)
+@function chemRateCoeff28(tgas, n_e)
     # Reaction 28: H2 + C+ + e- -> CH + H + H
     # tgas Gas temperature in K
     # n_e Number density of free electrons in cm^-3
@@ -517,7 +517,7 @@
 
     @return 0.99e-13 * tgas**-1.3 * exp(-23/tgas) / n_e
 
-@function chemRate32(tgas)
+@function chemRateCoeff32(tgas)
     # Reaction 33: He+ + e- -> He
     # tgas Gas temperature in K
 
@@ -525,7 +525,7 @@
     @return 1e-11 * tgas**-0.5 * (11.19 + (-1.676 + \
         (-0.2852 + 0.04433 * logT) * logT) * logT)
 
-@function chemRate35(tgas)
+@function chemRateCoeff35(tgas)
     # Reaction 36: C+ + e- -> C
     # tgas Gas temperature in K
 
@@ -548,20 +548,20 @@
     # @return
     @return alpharr + alphadr
 
-@function chemRate37(tgas)
+@function chemRateCoeff37(tgas)
     # Reaction 38: H2 + H2+ -> H + H3+
     # tgas Gas temperature in K
 
     @return 1.76e-9 * tgas**0.042 * exp(-tgas / 46600.)
 
-@function chemRate39(tgas)
+@function chemRateCoeff39(tgas)
     # Reaction 40: H+ + e- -> H
     # tgas Gas temperature in K
 
     @return 2.753e-14 * (315614/tgas)**1.5 * (1 + \
         (115188./tgas)**0.407)**-2.242
 
-@function chemRate40(tgas, n_H_nuc, n_H, n_H2)
+@function chemRateCoeff40(tgas, n_H_nuc, n_H, n_H2)
     # Reaction 41: H2 + H -> H + H + H
     # tgas Gas temperature in K
     # n_H_nuc Number density of H nuclei in cm^-3
@@ -577,7 +577,7 @@
     @return Piecewise((10**(logk9h * n2ncr_ / (1 + n2ncr_) + \
         logk9l / (1 + n2ncr_)), tgas > 7.0e2), (0, True))
 
-@function chemRate41(tgas, n_H_nuc, n_H, n_H2)
+@function chemRateCoeff41(tgas, n_H_nuc, n_H, n_H2)
     # Reaction 42: H2 + H2 -> H + H + H2
     # tgas Gas temperature in K
     # n_H_nuc Number density of H nuclei in cm^-3
@@ -595,7 +595,7 @@
         (1 + n2ncr_) + logk10l / (1 + n2ncr_)), tgas > 7.0e2), \
         (0, True))
 
-@function chemRate42(tgas)
+@function chemRateCoeff42(tgas)
     # Reaction 43: H + e- -> H+ + e- + e-
     # tgas Gas temperature in K
 
@@ -606,14 +606,14 @@
         - 2.63197617e-3 * lnTe**6 + 1.11954395e-4 * lnTe**7 \
         - 2.03914985e-6 * lnTe**8), tgas > 7.0e2), (0, True))
 
-@function chemRate48(tgas)
+@function chemRateCoeff48(tgas)
     # Reaction 49: O + H+ -> O+ + H
     # tgas Gas temperature in K
 
     @return (1.1e-11 * tgas**0.517 + 4.0e-10 * tgas**6.69e-3 ) \
         * exp(-227/tgas)
 
-@function chemRate49(tgas)
+@function chemRateCoeff49(tgas)
     # Reaction 50: O+ + H -> O + H+
     # tgas Gas temperature in K
 

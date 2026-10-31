@@ -76,9 +76,9 @@ Functions may call any other function defined in the same file; the order of the
 
 A parameter means one of two things, depending on how the function is used:
 
-- **Read by JAFF** (the reserved names below: `chemRate<N>`, `deltaE<N>`,
+- **Read by JAFF** (the reserved names below: `chemRateCoeff<N>`, `deltaE<N>`,
   `heatingCoolingRate`, ...): nothing passes arguments, so each parameter names
-  the network quantity it stands for. In `chemRate3(tgas, n_e)`, `n_e` is the
+  the network quantity it stands for. In `chemRateCoeff3(tgas, n_e)`, `n_e` is the
   electron density (see [Referencing species densities](#referencing-species-densities)).
 - **Called with arguments** (from another function, or from a rate or `@var`
   in the network file, e.g. `fselfH2(1e21*n_CO, 1e5)`): each parameter is a
@@ -142,14 +142,14 @@ variable that the host code supplies at run time.
 Inside a custom `@function` body you can reference the auto-generated rate
 coefficient of another reaction with the reserved symbol `rc_<N>`, where `N` is
 the reaction's 0-based **file-order number** — the same number used by
-`chemRate<N>` (see [Reaction numbers](#reaction-numbers)). JAFF resolves `rc_<N>`
+`chemRateCoeff<N>` (see [Reaction numbers](#reaction-numbers)). JAFF resolves `rc_<N>`
 to that reaction's `rate_coefficient` (looked up with
 `network.reactions.by_source_index(N)`, not `network.reactions[N]`), so you can
 build one reaction's rate or energy term out of another's without restating its
 Arrhenius expression.
 
 ```text
-@function chemRate7(tgas)
+@function chemRateCoeff7(tgas)
     # Reuse the coefficient of reaction 3 (e.g. a shared temperature fit)
     @return 0.5 * rc_3
 ```
@@ -174,7 +174,7 @@ JAFF recognises seven reserved naming conventions:
 
 | Pattern              | Role                                                                                                                                                                                                                                         |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chemRate<N>`        | Custom rate coefficient for reaction number _N_ (0-based, file order). Replaces the Arrhenius expression in the network file.                                                                                                                             |
+| `chemRateCoeff<N>`        | Custom rate coefficient for reaction number _N_ (0-based, file order). Replaces the Arrhenius expression in the network file.                                                                                                                             |
 | `deltaE<N>`          | Change in gas thermal energy per occurrence of reaction _N_ (erg). Positive = exothermic.                                                                                                                                                    |
 | `photoCrossSection<N>` | Photodecay cross section (cm²) of photo reaction number _N_ as a function of photon energy `ph_E` (eV). Replaces the database cross section (see [Custom cross sections](#custom-cross-sections-photocrosssectionn)). |
 | `spectralYield<N>`   | Radiation energy (erg) reaction _N_ adds to the field per event per unit photon energy `ph_E` (eV), integrated over solid angle (see [Spectral yield](#spectral-yield-spectralyieldn)). |
@@ -191,7 +191,7 @@ JAFF recognises seven reserved naming conventions:
 
 ### Reaction numbers
 
-The `<N>` in `chemRate<N>`, `deltaE<N>`, `photoCrossSection<N>`,
+The `<N>` in `chemRateCoeff<N>`, `deltaE<N>`, `photoCrossSection<N>`,
 `spectralYield<N>` and `rc_<N>` is the reaction's 0-based **file-order number**: its
 position among the reaction lines of the network file (`Reaction.index`). It counts
 every reaction, not only photo reactions. When several rows merge into one reaction
@@ -242,24 +242,24 @@ The GOW (Gong, Ostriker & Wolfire 2017) network ships with a detailed `.jfunc` f
     @return k_gr
 ```
 
-### Custom rate coefficients — `chemRate<N>`
+### Custom rate coefficients — `chemRateCoeff<N>`
 
-Reactions whose rate cannot be written as a simple Arrhenius expression get a `chemRate<N>` function where `N` is the 0-based file-order [reaction number](#reaction-numbers). The arguments must match the symbolic free variables used in the expression.
+Reactions whose rate cannot be written as a simple Arrhenius expression get a `chemRateCoeff<N>` function where `N` is the 0-based file-order [reaction number](#reaction-numbers). The arguments must match the symbolic free variables used in the expression.
 
 ```text
-@function chemRate0(crate, n_H_nuc, n_H, n_H2)
+@function chemRateCoeff0(crate, n_H_nuc, n_H, n_H2)
     # Reaction 0: H + CR -> H+ + e-
     # crate  Primary ionisation rate per H nucleon (s^-1)
     @return kcr_H_fac(n_H_nuc, n_H, n_H2) * crate
 
-@function chemRate14(d2g, n_H_nuc, n_H)
+@function chemRateCoeff14(d2g, n_H_nuc, n_H)
     # Reaction 14: H + H -> H2  (grain-assisted)
     # True rate = 3e-17 * n_H * n_H_nuc * (d2g / d2g_solar)
     # JAFF multiplies by the reactant densities automatically,
     # so we derive k by dividing out the extra n_H factor.
     @return 3.0e-17 * (d2g / d2g_solar) * (n_H_nuc / n_H)
 
-@function chemRate15(d2g, tgas, chi, av, n_H_nuc, n_e)
+@function chemRateCoeff15(d2g, tgas, chi, av, n_H_nuc, n_e)
     # Reaction 15: H+ + e- -> H  (grain-assisted)
     c0 = 12.25
     c1 = 8.074e-6
@@ -272,7 +272,7 @@ Reactions whose rate cannot be written as a simple Arrhenius expression get a `c
         (d2g / d2g_solar) * n_H_nuc / n_e
 ```
 
-With radiation transport enabled, a photo reaction with a `chemRate<N>` keeps that rate but is **not coupled** to the radiation bands (it removes no photons), because a custom rate does not depend on the transported field. JAFF logs a warning naming each such reaction. To couple it, supply a [`photoCrossSection<N>`](#custom-cross-sections-photocrosssectionn) instead, or set [`override_custom_rate`](../configuration/reference.md#networkreactionsphoto) to use the database cross sections without editing the `.jfunc`. A reaction cannot have both a `chemRate<N>` and a `photoCrossSection<N>`.
+With radiation transport enabled, a photo reaction with a `chemRateCoeff<N>` keeps that rate but is **not coupled** to the radiation bands (it removes no photons), because a custom rate does not depend on the transported field. JAFF logs a warning naming each such reaction. To couple it, supply a [`photoCrossSection<N>`](#custom-cross-sections-photocrosssectionn) instead, or set [`override_custom_rate`](../configuration/reference.md#networkreactionsphoto) to use the database cross sections without editing the `.jfunc`. A reaction cannot have both a `chemRateCoeff<N>` and a `photoCrossSection<N>`.
 
 ### Thermal energy change — `deltaE<N>`
 
@@ -307,7 +307,7 @@ A `photoCrossSection<N>` function replaces the database cross section of photo r
     @return Piecewise((1e-18, ph_E >= 11.26), (0, True))
 ```
 
-The reaction stores it as `photo.xsec` with `database = "custom"` and no photo-absorption cross section. With radiation enabled it is averaged over each band and over the whole spectrum exactly like a Verner fit, and the band averages set the photo rate. A reaction cannot have both a `chemRate<N>` and a `photoCrossSection<N>` (`ParserError`), nor a per-reaction `pi_database` while its custom cross section is in use.
+The reaction stores it as `photo.xsec` with `database = "custom"` and no photo-absorption cross section. With radiation enabled it is averaged over each band and over the whole spectrum exactly like a Verner fit, and the band averages set the photo rate. A reaction cannot have both a `chemRateCoeff<N>` and a `photoCrossSection<N>` (`ParserError`), nor a per-reaction `pi_database` while its custom cross section is in use.
 
 Setting [`override_custom_cross_section`](../configuration/reference.md#networkreactionsphoto) `= true` (for every photo reaction in `[network.reactions.photo]`, or for one in its own `photo` table) ignores the function and uses the database cross section instead. Like the global flag, a per-reaction value has an effect only with radiation.
 

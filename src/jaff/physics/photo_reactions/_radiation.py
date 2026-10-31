@@ -656,7 +656,7 @@ class Radiation:
 
         - the losses to photo reactions (each band's loss coefficient
           ``bands[i].k`` times the reaction's reactant densities); photo
-          reactions whose rate comes from a ``.jfunc`` ``chemRate<N>`` are not
+          reactions whose rate comes from a ``.jfunc`` ``chemRateCoeff<N>`` are not
           coupled to the bands and are skipped;
         - the absorption by the medium ``-c · <α>_i · den[i]`` (a
           ``globalAbsorptionCoefficient``);

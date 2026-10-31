@@ -181,9 +181,9 @@ class TestJaffxWiring:
 class TestFuncfileWiring:
     """--funcfile false disables aux loading, over a sibling file or a config path."""
 
-    # chemRate0 overrides reaction 0's rate of 1 with 9 when aux loading is on.
+    # chemRateCoeff0 overrides reaction 0's rate of 1 with 9 when aux loading is on.
     NETWORK = "H + H -> H2 [10,1000] 1\nH2 -> H + H [10,1000] 1\n"
-    JFUNC = "@function chemRate0(tgas)\n    @return 9\n"
+    JFUNC = "@function chemRateCoeff0(tgas)\n    @return 9\n"
     TEMPLATE = "$$JAFF REPEAT idx, rate IN rates\nk[$idx$] = $rate$\n$$JAFF END\n"
 
     def _generate(self, tmp_path, *extra):
@@ -226,7 +226,7 @@ class TestConfigRelativeNetworkPaths:
 
     @staticmethod
     def _jfunc(rate):
-        return f"@function chemRate0(tgas)\n    @return {rate}\n"
+        return f"@function chemRateCoeff0(tgas)\n    @return {rate}\n"
 
     @pytest.fixture
     def dirs(self, tmp_path, monkeypatch):

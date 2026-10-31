@@ -1,9 +1,9 @@
 # ABOUTME: Sibling auxiliary-function file for react_cie_hepp.jet
-# ABOUTME: chemRate2() overrides reaction index 2 with the He++ number density
+# ABOUTME: chemRateCoeff2() overrides reaction index 2 with the He++ number density
 
-# chemRate2 overrides the rate of reaction index 2 (He++ + E -> He+) with the
+# chemRateCoeff2 overrides the rate of reaction index 2 (He++ + E -> He+) with the
 # He++ number density.  n_Hejj is a density shorthand: under the j/k charge
 # convention it decodes to nden[<He++ index>, 0].  The tgas argument is unused;
 # it only keeps the declaration a well-formed function.
-@function chemRate2(tgas)
+@function chemRateCoeff2(tgas)
     @return n_Hejj

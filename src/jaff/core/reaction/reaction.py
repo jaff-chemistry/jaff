@@ -140,7 +140,7 @@ class Reaction:
         File-side source number (``source_index``) of the reaction, i.e. its
         file-order row number.  Stable per parsed row and gapped when rows
         merge (``duplicate_policy`` or a temperature-range merge), so it is
-        NOT a valid array subscript.  Used for ``.jfunc`` lookups (``chemRateN``,
+        NOT a valid array subscript.  Used for ``.jfunc`` lookups (``chemRateCoeffN``,
         ``deltaEN``, ...; see :meth:`function`) and
         :meth:`Reactions.by_source_index`.
     catalogue_index : int
@@ -188,7 +188,7 @@ class Reaction:
     cross-section databases) and, when the network has a radiation field,
     replaces :attr:`rate_coefficient` with the sum of its per-band rate
     coefficients.  A photo reaction whose rate comes from a ``.jfunc``
-    ``chemRate<N>`` keeps that rate (``photo.custom_rad_rate`` is ``True``)
+    ``chemRateCoeff<N>`` keeps that rate (``photo.custom_rad_rate`` is ``True``)
     and is not coupled to the bands, unless ``override_custom_rate`` is set.
 
     Two reactions compare equal when both their :attr:`serialized` form and
@@ -394,7 +394,7 @@ class Reaction:
         Parameters
         ----------
         kind : str
-            The function kind (case-insensitive): ``"chemRate"``, ``"deltaE"``,
+            The function kind (case-insensitive): ``"chemRateCoeff"``, ``"deltaE"``,
             ``"photoCrossSection"``, ``"spectralYield"``, ...
 
         Returns
@@ -454,11 +454,11 @@ class Reaction:
         """Reject a reaction with both a custom rate and a custom cross section."""
         functions = self.net.functions
         if (
-            f"chemrate{self.index}" in functions
+            f"chemratecoeff{self.index}" in functions
             and f"photocrosssection{self.index}" in functions
         ):
             raise ParserError(
-                "A reaction cannot have both a chemRate and a photoCrossSection "
+                "A reaction cannot have both a chemRateCoeff and a photoCrossSection "
                 "auxiliary function"
             )
 

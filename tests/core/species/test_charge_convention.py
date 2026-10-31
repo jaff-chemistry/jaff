@@ -135,11 +135,11 @@ def test_decode_electron(make_network):
     assert expr == net.symbols.ndens[idx]
 
 
-def test_cie_h_chemrate_resolves_hepp_density(fixtures_dir):
-    """react_cie_hepp.jfunc's chemRate2() returns ``n_Hejj`` (He++ density).
+def test_cie_h_chemratecoeff_resolves_hepp_density(fixtures_dir):
+    """react_cie_hepp.jfunc's chemRateCoeff2() returns ``n_Hejj`` (He++ density).
 
     The ``react_cie_hepp`` fixture network pairs a small CIE-hydrogen network
-    with a sibling ``.jfunc`` whose ``chemRate2()`` overrides reaction index 2
+    with a sibling ``.jfunc`` whose ``chemRateCoeff2()`` overrides reaction index 2
     (``He++ + E -> He+``) with the He++ number density ``n_Hejj``.
 
     After migrating the density symbol to the j/k convention, that symbol must

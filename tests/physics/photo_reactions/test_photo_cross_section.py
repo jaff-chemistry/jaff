@@ -40,7 +40,7 @@ def xsec_network(make_network, tmp_path):
 
 class TestFunctionConflicts:
     def test_jfunc_with_both_raises(self, xsec_network):
-        jfunc = XSEC + "@function chemRate0()\n@return 1e-10\n"
+        jfunc = XSEC + "@function chemRateCoeff0()\n@return 1e-10\n"
         with pytest.raises(ParserError, match="photoCrossSection"):
             xsec_network(jfunc=jfunc)
 

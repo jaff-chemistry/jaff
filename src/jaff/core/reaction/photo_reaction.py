@@ -29,7 +29,7 @@ class PhotoReaction:
     Built by :class:`~jaff.core.reaction.Reaction` for every reaction of type
     ``"photo"`` from the reaction's resolved photo settings
     (``reaction.config.photo``).  It decides where the rate comes from (a
-    ``.jfunc`` ``chemRate<N>`` or the cross sections), looks up the cross
+    ``.jfunc`` ``chemRateCoeff<N>`` or the cross sections), looks up the cross
     sections (a ``photoCrossSection<N>`` function or the databases) and, with
     a radiation field, builds the per-band rate data and the shielding.
 
@@ -50,7 +50,7 @@ class PhotoReaction:
         ``custom_rad_rate`` reaction.  An expression when a
         ``photoCrossSection<N>`` uses other symbols (e.g. ``tgas``).
     custom_rad_rate : bool
-        ``True`` when the rate comes from a ``.jfunc`` ``chemRate<N>``
+        ``True`` when the rate comes from a ``.jfunc`` ``chemRateCoeff<N>``
         function rather than from the cross sections; such a reaction is not
         coupled to the radiation bands.
     bands : list[PhotoBand] or None
@@ -125,7 +125,7 @@ class PhotoReaction:
             reaction is shielded without a radiation field.
         """
         reaction = self.reaction
-        if reaction.function("chemRate") is not None:
+        if reaction.function("chemRateCoeff") is not None:
             self.custom_rad_rate = not self._overrides_custom_rate()
 
         self._set_xsec()
@@ -154,10 +154,10 @@ class PhotoReaction:
         )
 
     def _overrides_custom_rate(self) -> bool:
-        """Whether radiation recomputes the reaction's ``chemRate`` rate.
+        """Whether radiation recomputes the reaction's ``chemRateCoeff`` rate.
 
         From ``config.override_custom_rate``; without radiation there is no
-        cross-section rate to use, so the ``chemRate`` is always kept.
+        cross-section rate to use, so the ``chemRateCoeff`` is always kept.
         """
         if self.reaction.net.radiation is None:
             return False
@@ -224,7 +224,7 @@ class PhotoReaction:
         if self.custom_rad_rate:
             reaction.logger.warning(
                 f"Photo reaction [cyan]{reaction}[/] (index {reaction.index}) uses "
-                f"the custom rate chemRate{reaction.index}: it is not coupled to "
+                f"the custom rate chemRateCoeff{reaction.index}: it is not coupled to "
                 "the radiation bands and removes no photons. Supply a "
                 f"photoCrossSection{reaction.index} instead, or set "
                 "override_custom_rate = true to compute its rate from the "
@@ -448,7 +448,7 @@ class PhotoReaction:
         configured, e.g. through the ``radiation`` argument of
         :class:`~jaff.core.Network` or ``[network.radiation]``), with the edges
         and mean energy of its ``group``.  A photo reaction whose rate comes from a
-        ``.jfunc`` ``chemRate<N>`` is not coupled to the bands and has no band
+        ``.jfunc`` ``chemRateCoeff<N>`` is not coupled to the bands and has no band
         data, so its frame is empty.  Intended as the data source for band bar
         plots (the ``bands`` option of :meth:`plot_xsecs`).
 

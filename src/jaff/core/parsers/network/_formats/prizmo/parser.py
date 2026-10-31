@@ -74,7 +74,7 @@ class PrizmoParser(Parser):
         ``n`` is the reaction's 1-based position in
         ``network.reactions.with_type("photo")``, so every format numbers photo
         reactions the same way.  A photo reaction without the placeholder (e.g.
-        one whose rate comes from a ``.jfunc`` ``chemRate``) leaves its number
+        one whose rate comes from a ``.jfunc`` ``chemRateCoeff``) leaves its number
         unused.
 
         Raises
