@@ -6,7 +6,11 @@ import pytest
 
 from jaff.core.species import Specie
 from jaff.plotting.network._layout import (
+    HEADER,
+    LANE_BELOW,
+    MARGIN,
     MARKER,
+    ROW_PITCH,
     atom_count,
     equation_label,
     graph_layout,
@@ -21,12 +25,25 @@ def fake_measure(text: str, size: float) -> float:
 
 # Columns by atom count: 1 = H, H+, O, e-; 2 = H2, H2+, CO, CO+; 3 = H2O, HCN, HNC
 LINES = [
-    "H + H -> H2 [10,1000] 1e-10",  # 0: columns 0 -> 1: gutter 0
-    "H2 + H+ -> H2+ + H [10,1000] 1e-9",  # 1: columns 0..1: gutter 0
-    "H2 + O -> H2O [10,1000] 1e-10",  # 2: columns 0..2: left middle gutter 0
-    "H2+ + CO -> H2 + CO+ [10,1000] 1e-9",  # 3: all column 1: gutter 1
-    "HCN + H2O -> HNC + H2O [10,1000] 1e-9",  # 4: all last column 2: gutter 1
-    "H+ + e- -> H [10,1000] 1e-12",  # 5: all column 0: gutter 0
+    "H + H -> H2 [10,1000] 1e-10",  # 0: columns 0..1: between-gutter 0|1
+    "H2 + H+ -> H2+ + H [10,1000] 1e-9",  # 1: columns 0..1: between-gutter 0|1
+    "H2 + O -> H2O [10,1000] 1e-10",  # 2: columns 0..2: left middle gutter 0|1
+    "H2+ + CO -> H2 + CO+ [10,1000] 1e-9",  # 3: column 1 only: its side gutter
+    "HCN + H2O -> HNC + H2O [10,1000] 1e-9",  # 4: last column only: its side gutter
+    "H+ + e- -> H [10,1000] 1e-12",  # 5: column 0 only: its side gutter (left)
+]
+
+# Columns: 1 = H, O; 2 = H2, O2, OH; 3 = H2O.  Eight reactions span the first
+# gutter, the tallest column has 3 species: the gutter splits into 3 sub-columns.
+CROWDED = [
+    "H + H -> H2 [10,1000] 1e-10",
+    "O + O -> O2 [10,1000] 1e-10",
+    "H + O -> OH [10,1000] 1e-10",
+    "H2 + O -> OH + H [10,1000] 1e-10",
+    "O2 + H -> OH + O [10,1000] 1e-10",
+    "OH + H -> H2 + O [10,1000] 1e-10",
+    "OH + O -> O2 + H [10,1000] 1e-10",
+    "H + OH -> H2O [10,1000] 1e-10",  # 7: reaches column 2
 ]
 
 
@@ -65,37 +82,78 @@ def test_equation_label_names_photons(make_network):
     assert r"\gamma" in equation_label(net.reactions[0])
 
 
+def _column_of(layout, lane):
+    """Header of the species column a lane belongs to (None for gutters)."""
+    return layout.lanes[lane].header
+
+
+def _column_lanes(layout):
+    return [k for k, lane in enumerate(layout.lanes) if lane.header is not None]
+
+
+def _on_a_row(y):
+    """Whether *y* is a row centre."""
+    row = (y - MARGIN - HEADER) / ROW_PITCH - 0.5
+    return row == pytest.approx(round(row))
+
+
 class TestGraphLayout:
     def test_species_columns_by_atom_count(self, net):
         layout = graph_layout(net, fake_measure)
-        column = {net.species[i].name: c for i, c in layout.species_lane.items()}
+        column = {
+            net.species[i].name: _column_of(layout, lane)
+            for i, lane in layout.species_lane.items()
+        }
 
-        assert column["H"] == column["H+"] == column["O"] == column["e-"] == 0
-        assert column["H2"] == column["CO"] == column["CO+"] == 1
-        assert column["H2O"] == column["HCN"] == 2
+        assert column["H"] == column["H+"] == column["O"] == column["e-"] == "0–1 ATOMS"
+        assert column["H2"] == column["CO"] == column["CO+"] == "2 ATOMS"
+        assert column["H2O"] == column["HCN"] == "3 ATOMS"
 
     def test_headers(self, net):
         layout = graph_layout(net, fake_measure)
 
-        assert [lane.header for lane in layout.lanes[::2]] == [
+        assert [layout.lanes[k].header for k in _column_lanes(layout)] == [
             "0–1 ATOMS",
             "2 ATOMS",
             "3 ATOMS",
         ]
-        assert all(lane.header is None for lane in layout.lanes[1::2])
 
-    def test_reaction_gutters(self, net):
+    def test_single_column_reactions_get_a_side_gutter(self, net):
         layout = graph_layout(net, fake_measure)
+        first, middle, last = _column_lanes(layout)
 
-        assert layout.reaction_lane == {0: 0, 1: 0, 2: 0, 3: 1, 4: 1, 5: 0}
+        assert layout.reaction_lane[5] == first - 1  # left of the first column
+        assert layout.reaction_lane[3] == middle + 1  # right of its column
+        assert layout.reaction_lane[4] == last + 1  # right of the last column
 
-    def test_single_column_network_gets_a_gutter(self, make_network):
+    def test_spanning_reactions_sit_between_their_columns(self, net):
+        layout = graph_layout(net, fake_measure)
+        first, middle, _ = _column_lanes(layout)
+
+        assert all(first < layout.reaction_lane[i] < middle for i in (0, 1, 2))
+
+    def test_single_column_network(self, make_network):
         layout = graph_layout(
             make_network(["H+ + e- -> H [10,1000] 1e-12"]), fake_measure
         )
 
-        assert len(layout.lanes) == 2
+        assert [lane.header for lane in layout.lanes] == [None, "0–1 ATOMS"]
         assert layout.reaction_lane == {0: 0}
+
+    def test_crowded_gutter_splits_into_sub_columns(self, make_network):
+        layout = graph_layout(make_network(CROWDED), fake_measure)
+        first, middle, _ = _column_lanes(layout)
+        gutters = range(first + 1, middle)
+        rows = [sum(lane == g for lane in layout.reaction_lane.values()) for g in gutters]
+
+        assert len(gutters) == 3
+        assert max(rows) <= 3
+
+    def test_sub_columns_ordered_by_reach(self, make_network):
+        layout = graph_layout(make_network(CROWDED), fake_measure)
+        _, middle, _ = _column_lanes(layout)
+
+        assert layout.reaction_lane[7] == middle - 1  # reaches furthest right
 
     def test_no_two_nodes_share_a_slot(self, net):
         layout = graph_layout(net, fake_measure)
@@ -123,22 +181,48 @@ class TestGraphLayout:
 
         assert edge.points[-1] == pytest.approx((rx - MARKER / 2, ry))
 
-    def test_long_edges_route_between_rows(self, net):
+    def test_long_edges_use_the_lane_below_a_row(self, net):
         layout = graph_layout(net, fake_measure)
-        o = net.species["O"].index
-        edge = next(e for e in layout.edges if e.reaction == 2 and e.specie == o)
-
-        # O (column 0) to reaction 2 (gutter 0) is adjacent: no detour.
-        assert len(edge.points) == 2
         h2o = net.species["H2O"].index
         h2 = net.species["H2"].index
         far = next(e for e in layout.edges if e.reaction == 2 and e.specie == h2o)
         near = next(e for e in layout.edges if e.reaction == 2 and e.specie == h2)
-        # H2O (column 2) from gutter 0 crosses column 1: two waypoints on a channel.
+
+        # H2O (column 2) from the 0|1 gutter crosses column 1: a detour.
         assert len(far.points) == 4
         assert far.points[1][1] == far.points[2][1]
-        assert far.points[1][1] not in {y for _, y in layout.species_xy.values()}
+        assert _on_a_row(far.points[1][1] - LANE_BELOW)
         assert len(near.points) == 2
+
+    def test_species_sit_beside_their_reactions(self, make_network):
+        net = make_network(
+            [
+                "H + H -> H2 [10,1000] 1e-10",
+                "O + O -> O2 [10,1000] 1e-10",
+                "C + C -> C2 [10,1000] 1e-10",
+            ]
+        )
+        layout = graph_layout(net, fake_measure)
+
+        for i, reaction in enumerate(net.reactions):
+            for specie in [*reaction.reactants.core, *reaction.products.core]:
+                assert layout.species_xy[specie.index][1] == layout.reaction_xy[i][1]
+
+    def test_species_on_rows_and_a_row_apart(self, net):
+        layout = graph_layout(net, fake_measure)
+        for lane in _column_lanes(layout):
+            ys = sorted(
+                layout.species_xy[s][1]
+                for s, k in layout.species_lane.items()
+                if k == lane
+            )
+            assert all(_on_a_row(y) for y in ys)
+            assert all(b - a >= ROW_PITCH - 1e-9 for a, b in zip(ys, ys[1:]))
+
+    def test_wide_enough_for_the_legend(self, net):
+        layout = graph_layout(net, fake_measure, legend_width=30.0)
+
+        assert layout.size[0] >= 30.0 + 2 * MARGIN
 
     def test_deterministic(self, net):
         assert graph_layout(net, fake_measure) == graph_layout(net, fake_measure)

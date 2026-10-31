@@ -34,7 +34,8 @@ SPECIES_FONT = 9.0
 EQUATION_FONT = 7.0
 HEADER_FONT = 6.5
 INDEX_FONT = 6.0
-ROW_PITCH = 0.5
+ROW_PITCH = 0.6
+LANE_BELOW = 0.2
 PILL_HEIGHT = 0.22
 PILL_PAD = 0.1
 MARKER = 0.17
@@ -142,8 +143,9 @@ class Edge:
 class GraphLayout:
     """Geometry of the graph view (inches, y down).
 
-    Lanes alternate species columns (even positions) and reaction gutters (odd);
-    ``species_lane`` / ``reaction_lane`` give the column / gutter number.
+    ``lanes`` run left to right: species columns (with a header) and reaction
+    gutters (header ``None``). ``species_lane`` / ``reaction_lane`` give each
+    node's lane.
     """
 
     size: tuple[float, float]
@@ -161,11 +163,17 @@ def _row_y(row: float) -> float:
     return MARGIN + HEADER + (row + 0.5) * ROW_PITCH
 
 
-def _channel(y0: float, y1: float) -> float:
-    """The between-rows channel nearest the mean height of *y0* and *y1*."""
-    mean_row = ((y0 + y1) / 2 - MARGIN - HEADER) / ROW_PITCH - 0.5
+def _row_of(y: float) -> float:
+    return (y - MARGIN - HEADER) / ROW_PITCH - 0.5
 
-    return _row_y(math.floor(mean_row) + 0.5)
+
+def _channel(y0: float, y1: float) -> float:
+    """The routing lane below the row nearest the mean height of *y0* and *y1*.
+
+    Equations sit above their marker, so an edge running under a row never
+    crosses one.
+    """
+    return _row_y(round(_row_of((y0 + y1) / 2))) + LANE_BELOW
 
 
 def _sweep(
@@ -193,8 +201,78 @@ def _sweep(
                 row.update({node: k for k, node in enumerate(lane)})
 
 
-def graph_layout(net: Network, measure: Measure) -> GraphLayout:
+def _sub_columns(
+    entries: list[tuple[int, int]], target: int
+) -> list[list[tuple[str, int]]]:
+    """Split ``(reach, reaction)`` entries into sub-columns of at most *target*.
+
+    Sorted by reach, so reactions reaching further right land further right.
+    """
+    if not entries:
+        return []
+    entries = sorted(entries)
+    size = math.ceil(len(entries) / math.ceil(len(entries) / target))
+
+    return [
+        [("r", i) for _, i in entries[k : k + size]] for k in range(0, len(entries), size)
+    ]
+
+
+def _lanes(
+    core: list[Specie],
+    column: dict[int, int],
+    headers: list[str],
+    links: list[list[tuple[int, str]]],
+) -> tuple[list[list[tuple[str, int]]], list[str | None]]:
+    """Lane members (nodes) and headers, left to right.
+
+    A reaction whose species share one column goes in that column's side gutter
+    (left of the first column, right of any other); one spanning columns goes in
+    the gutter between the middle of its span. Crowded gutters are split into
+    sub-columns no taller than the tallest species column.
+    """
+    ncols = len(headers)
+    own: dict[int, list[tuple[int, int]]] = defaultdict(list)
+    between: dict[int, list[tuple[int, int]]] = defaultdict(list)
+    for i, reaction_links in enumerate(links):
+        cols = [column[s] for s, _ in reaction_links] or [0]
+        lo, hi = min(cols), max(cols)
+        if lo == hi:
+            own[lo].append((0, i))
+        else:
+            g = lo + (hi - 1 - lo) // 2
+            between[g].append(((hi - g - 1) - (g - lo), i))
+
+    target = max(sum(column[s.index] == c for s in core) for c in range(ncols))
+    members: list[list[tuple[str, int]]] = []
+    headers_: list[str | None] = []
+
+    def gutters(subs: list[list[tuple[str, int]]]) -> None:
+        members.extend(subs)
+        headers_.extend([None] * len(subs))
+
+    for c in range(ncols):
+        if c == 0:
+            gutters(_sub_columns(own[0], target))
+        members.append([("s", s.index) for s in core if column[s.index] == c])
+        headers_.append(headers[c])
+        if c > 0:
+            gutters(_sub_columns(own[c], target))
+        if c < ncols - 1:
+            gutters(_sub_columns(between[c], target) or [[]])
+
+    return members, headers_
+
+
+def graph_layout(
+    net: Network, measure: Measure, legend_width: float = 0.0
+) -> GraphLayout:
     """Lay out *net* as a layered species-reaction graph.
+
+    Species stand in columns by atom count. Reactions sit in gutters: a reaction
+    within one column beside that column, one spanning columns between them,
+    and a crowded gutter splits into sub-columns. Each species sits at the mean
+    row of its reactions; edges crossing lanes run in the lane below a row.
 
     Parameters
     ----------
@@ -202,6 +280,8 @@ def graph_layout(net: Network, measure: Measure) -> GraphLayout:
         The network to draw.
     measure : callable
         ``measure(text, size)``: width in inches of mathtext *text* at *size* points.
+    legend_width : float, optional
+        Width in inches of the legend; the figure is at least this wide.
 
     Returns
     -------
@@ -212,56 +292,55 @@ def graph_layout(net: Network, measure: Measure) -> GraphLayout:
     reactions = list(net.reactions)
     labels = {i: equation_label(r) for i, r in enumerate(reactions)}
     if not core:
-        size = (2 * MARGIN + EMPTY_WIDTH, 2 * MARGIN + HEADER + LEGEND)
+        size = (2 * MARGIN + max(EMPTY_WIDTH, legend_width), 2 * MARGIN + HEADER + LEGEND)
         return GraphLayout(size, (), {}, {}, {}, {}, {}, labels, ())
 
-    ncols = len(headers)
-    ngutters = max(ncols - 1, 1)
     links = [_links(r) for r in reactions]
-
-    def gutter(i: int) -> int:
-        cols = [column[s] for s, _ in links[i]]
-        if not cols:
-            return 0
-        lo, hi = min(cols), max(cols)
-        return lo + (hi - 1 - lo) // 2 if lo < hi else min(lo, ngutters - 1)
-
-    reaction_lane = {i: gutter(i) for i in range(len(reactions))}
-    members: list[list[tuple[str, int]]] = [[] for _ in range(ncols + ngutters)]
-    for s in core:
-        members[2 * column[s.index]].append(("s", s.index))
-    for i, g in reaction_lane.items():
-        members[2 * g + 1].append(("r", i))
+    members, lane_headers = _lanes(core, column, headers, links)
     _sweep(members, links)
+    lane_of = {node: k for k, lane in enumerate(members) for node in lane}
 
     pill = {s.index: measure(f"${s.latex()}$", SPECIES_FONT) + 2 * PILL_PAD for s in core}
     lanes: list[Lane] = []
     x = MARGIN
-    for li, lane in enumerate(members):
-        if li % 2 == 0:
+    for lane, header in zip(members, lane_headers):
+        if header is not None:
             width = max([pill[n[1]] for n in lane], default=PILL_HEIGHT)
-            header: str | None = headers[li // 2]
         else:
             texts = [measure(labels[n[1]], EQUATION_FONT) for n in lane]
             width = max([*texts, MARKER]) + 2 * GUTTER_PAD
-            header = None
         lanes.append(Lane(x, x + width, header))
         x += width
 
-    species_xy: dict[int, tuple[float, float]] = {}
     reaction_xy: dict[int, tuple[float, float]] = {}
-    for li, lane in enumerate(members):
-        for k, (kind, idx) in enumerate(lane):
-            target = species_xy if kind == "s" else reaction_xy
-            target[idx] = (lanes[li].centre, _row_y(k))
+    for k, lane in enumerate(members):
+        if lane_headers[k] is None:
+            for row, (_, i) in enumerate(lane):
+                reaction_xy[i] = (lanes[k].centre, _row_y(row))
+
+    # Each species at the mean row of its reactions, at least one row apart.
+    species_xy: dict[int, tuple[float, float]] = {}
+    for k, lane in enumerate(members):
+        if lane_headers[k] is None:
+            continue
+        previous = -1
+        for _, s in lane:
+            ys = [
+                reaction_xy[i][1]
+                for i, ls in enumerate(links)
+                if any(t == s for t, _ in ls)
+            ]
+            wanted = round(_row_of(sum(ys) / len(ys))) if ys else 0
+            previous = max(wanted, previous + 1)
+            species_xy[s] = (lanes[k].centre, _row_y(previous))
 
     edges: list[Edge] = []
     for i, reaction_links in enumerate(links):
         rx, ry = reaction_xy[i]
-        rlane = 2 * reaction_lane[i] + 1
+        rlane = lane_of[("r", i)]
         for s, role in reaction_links:
             sx, sy = species_xy[s]
-            slane = 2 * column[s]
+            slane = lane_of[("s", s)]
             side = 1 if sx > rx else -1
             at_species = (sx - side * pill[s] / 2, sy)
             at_reaction = (rx + side * MARKER / 2, ry)
@@ -274,20 +353,22 @@ def graph_layout(net: Network, measure: Measure) -> GraphLayout:
             if abs(slane - rlane) > 1:
                 lo, hi = sorted((slane, rlane))
                 channel = _channel(sy, ry)
-                xa, xb = lanes[lo + 1].x0, lanes[hi - 1].x1
-                via = [(xa, channel), (xb, channel)]
+                via = [(lanes[lo + 1].x0, channel), (lanes[hi - 1].x1, channel)]
                 points += via if start[0] < end[0] else via[::-1]
             points.append(end)
             edges.append(Edge(s, i, role, tuple(points)))
 
-    rows = max(len(lane) for lane in members)
-    size = (x + MARGIN, MARGIN + HEADER + rows * ROW_PITCH + LEGEND + MARGIN)
+    bottom = max(y for _, y in [*species_xy.values(), *reaction_xy.values()])
+    size = (
+        max(x + MARGIN, legend_width + 2 * MARGIN),
+        bottom + ROW_PITCH / 2 + LEGEND + MARGIN,
+    )
 
     return GraphLayout(
         size,
         tuple(lanes),
-        {s.index: column[s.index] for s in core},
-        reaction_lane,
+        {s.index: lane_of[("s", s.index)] for s in core},
+        {i: lane_of[("r", i)] for i in range(len(reactions))},
         species_xy,
         reaction_xy,
         pill,
