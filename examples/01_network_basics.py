@@ -251,7 +251,7 @@ def _(WATER_CO, load_network):
 
 @app.cell
 def _(water):
-    matrix_fig, _ = water.visualize.stoichiometry(show=False, theme="vivid")
+    matrix_fig, _ = water.visualize.stoichiometry(show=False)
     matrix_fig
     return
 
@@ -260,6 +260,23 @@ def _(water):
 def _(water):
     graph_fig, _ = water.visualize.graph(show=False)
     graph_fig
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
+    `species(name)` zooms in on one species: the reactions forming it on the
+    left (with their other reactants), those destroying it on the right (with
+    their other products). Here is water.
+    """)
+    return
+
+
+@app.cell
+def _(water):
+    water_fig, _ = water.visualize.species("H2O", show=False)
+    water_fig
     return
 
 

@@ -216,3 +216,20 @@ def legend_types(theme: NetworkTheme, types: Sequence[str]) -> list[tuple[str, s
         entries.append(("other", theme.other))
 
     return entries
+
+
+def legend_entries(
+    theme: NetworkTheme, colours: dict[str, str], types: Sequence[str]
+) -> list[tuple[str, str]]:
+    """Legend entries ``(label, colour)`` for the reaction *types* drawn.
+
+    *colours* is the whole network's assignment (:func:`type_colours`), so a
+    figure showing only some reactions keeps their colours; types drawn in the
+    "other" colour share one ``other`` entry, listed where it first appears.
+    """
+    entries: dict[str, str] = {}
+    for t in types:
+        label = "other" if colours[t] == theme.other else t.replace("_", " ")
+        entries.setdefault(label, colours[t])
+
+    return list(entries.items())

@@ -416,6 +416,7 @@ nav = [
         "reference/plotting/networkvisualizer/index.md",
         "reference/plotting/networkvisualizer/graph.md",
         "reference/plotting/networkvisualizer/stoichiometry.md",
+        "reference/plotting/networkvisualizer/species.md",
       ] },
       { "plotting.NetworkTheme" = [
         "reference/plotting/networktheme/index.md",

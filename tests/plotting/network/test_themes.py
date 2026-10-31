@@ -122,3 +122,15 @@ def test_text_on_picks_the_higher_contrast(name):
         chosen = text_on(fill, theme)
         other = theme.ink if chosen == theme.surface else theme.surface
         assert _contrast(fill, chosen) >= _contrast(fill, other), fill
+
+
+def test_legend_entries_keep_the_network_colours():
+    from jaff.plotting.network._themes import legend_entries
+
+    theme = NETWORK_THEMES["vivid"]
+    colours = type_colours(theme, ["two_body", "photo", "unknown"])
+
+    assert legend_entries(theme, colours, ["photo", "unknown", "photo"]) == [
+        ("photo", theme.types[1]),
+        ("other", theme.other),
+    ]

@@ -164,30 +164,44 @@ def _reactions(ax, layout, theme, colours, types) -> None:
 def _species(ax, net, layout, theme) -> None:
     for index, (x, y) in layout.species_xy.items():
         specie = net.species[index]
-        w = layout.pill_width[index]
-        ax.add_patch(
-            FancyBboxPatch(
-                (x - w / 2, y - PILL_HEIGHT / 2),
-                w,
-                PILL_HEIGHT,
-                boxstyle=f"round,pad=0,rounding_size={PILL_HEIGHT / 2}",
-                facecolor=theme.surface,
-                edgecolor=theme.ink,
-                lw=0.8,
-                zorder=3,
-                gid=f"specie:{specie.name}",
-            )
+        pill(ax, x, y, specie, layout.pill_width[index], theme, f"specie:{specie.name}")
+
+
+def pill(ax, x, y, specie, width, theme, gid, bold=False) -> None:
+    """A species pill centred on ``(x, y)``; *bold* draws a heavier outline."""
+    ax.add_patch(
+        FancyBboxPatch(
+            (x - width / 2, y - PILL_HEIGHT / 2),
+            width,
+            PILL_HEIGHT,
+            boxstyle=f"round,pad=0,rounding_size={PILL_HEIGHT / 2}",
+            facecolor=theme.surface,
+            edgecolor=theme.ink,
+            lw=1.8 if bold else 0.8,
+            zorder=3,
+            gid=gid,
         )
-        ax.text(
-            x,
-            y,
-            f"${specie.latex()}$",
-            ha="center",
-            va="center",
-            fontsize=SPECIES_FONT,
-            color=theme.ink,
-            zorder=4,
-        )
+    )
+    ax.text(
+        x,
+        y,
+        f"${specie.latex()}$",
+        ha="center",
+        va="center",
+        fontsize=SPECIES_FONT,
+        color=theme.ink,
+        zorder=4,
+    )
+
+
+def role_handles(theme) -> list[Artist]:
+    """Legend handles for reactant lines and product arrows."""
+    return [
+        Line2D([], [], color=theme.edge, lw=0.8, label="reactant"),
+        Line2D(
+            [], [], color=theme.ink, lw=1.1, marker=">", markersize=6, label="product"
+        ),
+    ]
 
 
 def _legend(ax, layout, theme, types) -> None:
@@ -195,12 +209,7 @@ def _legend(ax, layout, theme, types) -> None:
         Patch(facecolor=c, edgecolor="none", label=t)
         for t, c in legend_types(theme, types)
     ]
-    handles += [
-        Line2D([], [], color=theme.edge, lw=0.8, label="reactant"),
-        Line2D(
-            [], [], color=theme.ink, lw=1.1, marker=">", markersize=6, label="product"
-        ),
-    ]
+    handles += role_handles(theme)
     width, height = layout.size
     ax.legend(
         handles=handles,

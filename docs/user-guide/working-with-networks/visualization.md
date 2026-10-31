@@ -8,7 +8,7 @@ tags:
 
 `net.visualize` draws a network's species and reactions as static matplotlib
 figures. It shows structure only: which species each reaction consumes and
-produces, not rates or physics. There are two views:
+produces, not rates or physics. There are three views:
 
 ```python
 from jaff import Network
@@ -16,9 +16,10 @@ from jaff import Network
 net = Network("networks/demos/water_co.jet")
 net.visualize.graph(save="water_co_graph.pdf")
 net.visualize.stoichiometry(save="water_co_matrix.pdf")
+net.visualize.species("H2O", save="water.pdf")
 ```
 
-Both return `(fig, ax)`; see
+All return `(fig, ax)`; see
 [`NetworkVisualizer`](../../reference/plotting/networkvisualizer/index.md) for
 the full reference.
 
@@ -52,11 +53,28 @@ the species the reaction consumes or produces; colour tells which (in the
 default theme consumed cells are filled, produced cells outlined). A species
 that appears on both sides with no net change gets no cell.
 
+## One species
+
+`species(name)` draws the reactions that form and destroy one species, which
+stays readable in networks of any size:
+
+- the species sits in the middle, outlined in bold;
+- on its left, the reactions **forming** it (numbered squares coloured by type,
+  equation above), each linked to its other reactants further left;
+- on its right, the reactions **destroying** it, each linked to its other
+  products further right.
+
+A reaction forms the species when it produces more of it than it consumes, and
+destroys it when it consumes more; one with the species on both sides and no
+net change (a catalyst) is left out. Co-products of forming reactions and
+co-reactants of destroying ones appear only in the equations. The legend lists
+the reaction types shown, in the colours of the whole network.
+
 ---
 
 ## Options
 
-Both methods take the same keywords:
+All three take the same keywords (`species` takes the species name first):
 
 | keyword | default   | meaning                                                                     |
 | ------- | --------- | --------------------------------------------------------------------------- |

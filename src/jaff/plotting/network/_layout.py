@@ -463,3 +463,183 @@ def matrix_layout(net: Network, measure: Measure) -> MatrixLayout:
         index_x,
         label_y,
     )
+
+
+@dataclass(frozen=True)
+class SpeciesLayout:
+    """Geometry of the species view (inches, y down).
+
+    Five lanes, left to right: other reactants of the reactions forming the
+    species, those reactions, the species itself, the reactions destroying it,
+    and their other products.
+    """
+
+    size: tuple[float, float]
+    lanes: tuple[Lane, ...]
+    target: int
+    target_xy: tuple[float, float]
+    formation: tuple[int, ...]
+    destruction: tuple[int, ...]
+    reaction_xy: dict[int, tuple[float, float]]
+    reactant_xy: dict[int, tuple[float, float]]
+    product_xy: dict[int, tuple[float, float]]
+    pill_width: dict[int, float]
+    labels: dict[int, str]
+    edges: tuple[Edge, ...]
+
+
+#: Space each side of a pill in the species view's outer lanes, inches.
+SIDE_PAD = 0.15
+
+
+def _stack(
+    partners: dict[int, list[int]], reaction_y: dict[int, float], top: float
+) -> dict[int, float]:
+    """Heights of partner species: each at the mean of its reactions, a row apart."""
+    mean = {s: sum(reaction_y[i] for i in rs) / len(rs) for s, rs in partners.items()}
+    heights: dict[int, float] = {}
+    previous = top - ROW_PITCH / 2
+    for s in sorted(partners, key=lambda s: (mean[s], s)):
+        previous = max(mean[s], previous + ROW_PITCH)
+        heights[s] = previous
+
+    return heights
+
+
+def species_layout(
+    net: Network, specie: Specie, measure: Measure, legend_width: float = 0.0
+) -> SpeciesLayout:
+    """Lay out the reactions forming and destroying *specie*.
+
+    A reaction forms the species when its net change in it is positive and
+    destroys it when negative; a reaction with the species on both sides and no
+    net change is left out. Reactions stack in their lanes, centred on each
+    other; each partner species sits at the mean height of its reactions.
+
+    Parameters
+    ----------
+    net : Network
+        The network the species belongs to.
+    specie : Specie
+        The species to draw.
+    measure : callable
+        ``measure(text, size)``: width in inches of mathtext *text* at *size* points.
+    legend_width : float, optional
+        Width in inches of the legend; the figure is at least this wide.
+
+    Returns
+    -------
+    SpeciesLayout
+        Node positions, edges and the figure size, in inches.
+    """
+    reactions = list(net.reactions)
+    j = specie.index
+    change = net.product_matrix[:, j] - net.reactant_matrix[:, j]
+    formation = tuple(i for i in range(len(reactions)) if change[i] > 0)
+    destruction = tuple(i for i in range(len(reactions)) if change[i] < 0)
+    labels = {i: equation_label(reactions[i]) for i in formation + destruction}
+
+    reactants: dict[int, list[int]] = defaultdict(list)
+    for i in formation:
+        for s in dict.fromkeys(reactions[i].reactants.core):
+            if s.index != j:
+                reactants[s.index].append(i)
+    products: dict[int, list[int]] = defaultdict(list)
+    for i in destruction:
+        for s in dict.fromkeys(reactions[i].products.core):
+            if s.index != j:
+                products[s.index].append(i)
+
+    rows = max(len(formation), len(destruction), len(reactants), len(products), 1)
+    top = MARGIN + HEADER
+    reaction_y: dict[int, float] = {}
+    for column in (formation, destruction):
+        offset = (rows - len(column)) / 2
+        for k, i in enumerate(column):
+            reaction_y[i] = _row_y(k + offset)
+
+    pill = {
+        s: measure(f"${net.species[s].latex()}$", SPECIES_FONT) + 2 * PILL_PAD
+        for s in {j, *reactants, *products}
+    }
+
+    def equations(column: tuple[int, ...]) -> float:
+        texts = [measure(labels[i], EQUATION_FONT) for i in column]
+        return max([*texts, MARKER]) + 2 * GUTTER_PAD
+
+    widths = [
+        max([pill[s] for s in reactants], default=PILL_HEIGHT) + 2 * SIDE_PAD,
+        equations(formation),
+        pill[j] + 2 * GUTTER_PAD,
+        equations(destruction),
+        max([pill[s] for s in products], default=PILL_HEIGHT) + 2 * SIDE_PAD,
+    ]
+    headers = ["REACTANTS", "FORMS", None, "DESTROYS", "PRODUCTS"]
+    lanes: list[Lane] = []
+    x = MARGIN
+    for width, header in zip(widths, headers):
+        lanes.append(Lane(x, x + width, header))
+        x += width
+
+    reaction_xy = {
+        i: (lanes[1 if i in formation else 3].centre, y) for i, y in reaction_y.items()
+    }
+    target_xy = (lanes[2].centre, _row_y((rows - 1) / 2))
+    reactant_xy = {
+        s: (lanes[0].centre, y) for s, y in _stack(reactants, reaction_y, top).items()
+    }
+    product_xy = {
+        s: (lanes[4].centre, y) for s, y in _stack(products, reaction_y, top).items()
+    }
+
+    tx, ty = target_xy
+    edges: list[Edge] = []
+    for i in formation:
+        rx, ry = reaction_xy[i]
+        for s in dict.fromkeys(t for t, rs in reactants.items() if i in rs):
+            sx, sy = reactant_xy[s]
+            edges.append(
+                Edge(s, i, "reactant", ((sx + pill[s] / 2, sy), (rx - MARKER / 2, ry)))
+            )
+        edges.append(
+            Edge(j, i, "product", ((rx + MARKER / 2, ry), (tx - pill[j] / 2, ty)))
+        )
+    for i in destruction:
+        rx, ry = reaction_xy[i]
+        edges.append(
+            Edge(j, i, "reactant", ((tx + pill[j] / 2, ty), (rx - MARKER / 2, ry)))
+        )
+        for s in dict.fromkeys(t for t, rs in products.items() if i in rs):
+            sx, sy = product_xy[s]
+            edges.append(
+                Edge(s, i, "product", ((rx + MARKER / 2, ry), (sx - pill[s] / 2, sy)))
+            )
+
+    bottom = max(
+        y
+        for _, y in [
+            target_xy,
+            *reaction_xy.values(),
+            *reactant_xy.values(),
+            *product_xy.values(),
+        ]
+    )
+    size = (
+        max(x + MARGIN, legend_width + 2 * MARGIN),
+        bottom + ROW_PITCH / 2 + LEGEND + MARGIN,
+    )
+
+    return SpeciesLayout(
+        size,
+        tuple(lanes),
+        j,
+        target_xy,
+        formation,
+        destruction,
+        reaction_xy,
+        reactant_xy,
+        product_xy,
+        pill,
+        labels,
+        tuple(edges),
+    )
