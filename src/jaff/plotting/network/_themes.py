@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 OKABE_ITO = ("#0072b2", "#d55e00", "#009e73", "#cc79a7", "#e69f00", "#56b4e9", "#f0e442")
-SLATE = ("#7b8794", "#3e4c59")
+SLATE = ("#cbd2d9", "#46525e")
 
 
 @dataclass(frozen=True)
@@ -74,7 +74,7 @@ _LIGHT = dict(
     muted="#8a8f98",
     halo="#ffffff",
     edge="#9aa0a8",
-    other="#8a8f98",
+    other="#c3c8ce",
     outline="#3e4c59",
 )
 
@@ -162,7 +162,7 @@ NETWORK_THEMES: dict[str, NetworkTheme] = {
             "#ff7f50",
             "#a6d854",
         ),
-        other="#8b949e",
+        other="#adb5bd",
         consumed=("#8b949e", "#c9d1d9"),
         produced=("#1e2228", "#1e2228"),
         produced_outline=True,

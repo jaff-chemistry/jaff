@@ -91,3 +91,21 @@ def test_bundled_networks_draw(name, tmp_path):
     NetworkVisualizer(Network(name)).graph(save=tmp_path / "g.png", show=False)
 
     assert (tmp_path / "g.png").exists()
+
+
+def test_arrowheads_are_readable(drawn):
+    from matplotlib.patches import FancyArrowPatch
+
+    _, _, ax = drawn
+    heads = [p for p in ax.patches if isinstance(p, FancyArrowPatch)]
+
+    assert heads
+    assert all(p.get_mutation_scale() >= 11 for p in heads)
+
+
+def test_legend_is_centred(drawn):
+    _, _, ax = drawn
+    legend = ax.get_legend()
+
+    assert legend._loc == 8  # "lower center"
+    assert legend.get_bbox_to_anchor().bounds[0] == pytest.approx(ax.bbox.width / 2)

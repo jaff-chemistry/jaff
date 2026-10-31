@@ -203,8 +203,8 @@ def _legend(ax, layout, theme, types) -> None:
     width, height = layout.size
     ax.legend(
         handles=handles,
-        loc="lower left",
-        bbox_to_anchor=(MARGIN / width, MARGIN / height),
+        loc="lower center",
+        bbox_to_anchor=(0.5, MARGIN / height),
         ncol=len(handles),
         frameon=False,
         fontsize=EQUATION_FONT,

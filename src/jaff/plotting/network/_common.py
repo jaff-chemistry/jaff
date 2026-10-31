@@ -30,16 +30,25 @@ def text_width(text: str, size: float) -> float:
 
 
 def _luminance(colour: str) -> float:
-    r, g, b = to_rgb(colour)
+    """Relative luminance (WCAG) of *colour*."""
+    r, g, b = (
+        c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+        for c in to_rgb(colour)
+    )
 
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
-def text_on(fill: str, theme: NetworkTheme) -> str:
-    """The theme's surface or ink, whichever reads better on *fill*."""
-    light, dark = sorted((theme.surface, theme.ink), key=_luminance, reverse=True)
+def _contrast(a: str, b: str) -> float:
+    """WCAG contrast ratio of colours *a* and *b* (1 to 21)."""
+    high, low = sorted((_luminance(a), _luminance(b)), reverse=True)
 
-    return dark if _luminance(fill) > 0.5 else light
+    return (high + 0.05) / (low + 0.05)
+
+
+def text_on(fill: str, theme: NetworkTheme) -> str:
+    """The theme's surface or ink, whichever contrasts more with *fill*."""
+    return max((theme.ink, theme.surface), key=lambda text: _contrast(fill, text))
 
 
 def bezier_path(points: tuple[tuple[float, float], ...]) -> MplPath:

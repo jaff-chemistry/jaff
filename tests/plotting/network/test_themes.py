@@ -78,3 +78,47 @@ def test_legend_labels_are_readable():
     theme = NETWORK_THEMES["vivid"]
 
     assert legend_types(theme, ["two_body"])[0][0] == "two body"
+
+
+def _contrast(a: str, b: str) -> float:
+    """WCAG contrast ratio of two colours."""
+    from matplotlib.colors import to_rgb
+
+    def luminance(colour: str) -> float:
+        r, g, b = (
+            c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+            for c in to_rgb(colour)
+        )
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    high, low = sorted((luminance(a), luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+@pytest.mark.parametrize("name", ["vivid", "neutral", "print"])
+def test_slate_cell_counts_are_easy_to_read(name):
+    from jaff.plotting.network._common import text_on
+
+    theme = NETWORK_THEMES[name]
+    for fill in theme.consumed:
+        assert _contrast(fill, text_on(fill, theme)) >= 7, fill
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_other_marker_numbers_are_easy_to_read(name):
+    from jaff.plotting.network._common import text_on
+
+    theme = NETWORK_THEMES[name]
+
+    assert _contrast(theme.other, text_on(theme.other, theme)) >= 7
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_text_on_picks_the_higher_contrast(name):
+    from jaff.plotting.network._common import text_on
+
+    theme = NETWORK_THEMES[name]
+    for fill in [*theme.types, theme.other, *theme.consumed]:
+        chosen = text_on(fill, theme)
+        other = theme.ink if chosen == theme.surface else theme.surface
+        assert _contrast(fill, chosen) >= _contrast(fill, other), fill

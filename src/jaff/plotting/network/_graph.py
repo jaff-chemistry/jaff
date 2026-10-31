@@ -32,7 +32,7 @@ from ._themes import NetworkTheme, legend_types, type_colours
 if TYPE_CHECKING:
     from ...core.network.network import Network
 
-ARROW = 0.05
+ARROW = 0.08
 #: Legend space per entry besides its text: handle and column spacing, inches.
 LEGEND_ENTRY = 0.4
 ROLES = ("reactant", "product")
@@ -111,7 +111,7 @@ def _edges(ax, layout, theme, colours, types) -> None:
                 (xb - step, yb),
                 (xb, yb),
                 arrowstyle="-|>",
-                mutation_scale=7,
+                mutation_scale=11,
                 color=head,
                 lw=0,
                 shrinkA=0,
@@ -198,14 +198,14 @@ def _legend(ax, layout, theme, types) -> None:
     handles += [
         Line2D([], [], color=theme.edge, lw=0.8, label="reactant"),
         Line2D(
-            [], [], color=theme.ink, lw=1.1, marker=">", markersize=4, label="product"
+            [], [], color=theme.ink, lw=1.1, marker=">", markersize=6, label="product"
         ),
     ]
     width, height = layout.size
     ax.legend(
         handles=handles,
-        loc="lower left",
-        bbox_to_anchor=(MARGIN / width, MARGIN / height),
+        loc="lower center",
+        bbox_to_anchor=(0.5, MARGIN / height),
         ncol=len(handles),
         frameon=False,
         fontsize=EQUATION_FONT,

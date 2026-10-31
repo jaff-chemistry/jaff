@@ -241,7 +241,7 @@ def _(mo):
 
 @app.cell
 def _(net):
-    matrix_fig, _ = net.visualize.stoichiometry(show=False)
+    matrix_fig, _ = net.visualize.stoichiometry(show=False, theme="vivid")
     matrix_fig
     return
 

@@ -68,3 +68,11 @@ def test_save_and_bundled_network(tmp_path):
     NetworkVisualizer(Network("GOW")).stoichiometry(save=tmp_path / "s.pdf", show=False)
 
     assert (tmp_path / "s.pdf").stat().st_size > 0
+
+
+def test_legend_is_centred(drawn):
+    _, _, ax = drawn
+    legend = ax.get_legend()
+
+    assert legend._loc == 8  # "lower center"
+    assert legend.get_bbox_to_anchor().bounds[0] == pytest.approx(ax.bbox.width / 2)
