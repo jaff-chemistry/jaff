@@ -39,20 +39,51 @@ A `.jfunc` file contains two kinds of declarations: **global constants** (`@var`
 `expression` is a SymPy-compatible expression. It is resolved once and substituted into every function body and variable that references `name`.
 
 ```text
-@var kB      = 1.380649e-16       # Boltzmann constant  (erg / K)
-@var eV      = 1.602177e-12       # 1 eV in erg
-@var amu     = 1.66054e-24        # 1 amu in gram
-@var TCMB    = 2.73               # CMB temperature at z = 0
+@var TCMB      = 2.73             # CMB temperature at z = 0
 @var d2g_solar = 0.01             # Solar dust-to-gas ratio
+@var H2_OPR    = 3.0              # ortho-to-para ratio of H2
 ```
 
-Expressions may reference previously declared `@var` names:
+Expressions may reference previously declared `@var` names and the
+[built-in constants](#built-in-constants):
 
-```text hl_lines="3"
-@var sigma_SB = 5.670374419e-5
-@var c_light  = 2.99892458e10
-@var a_R      = 4 * sigma_SB / c_light    # radiation constant
+```text hl_lines="2 3"
+@var H2_OPR = 3.0
+@var f_oH2  = H2_OPR / (H2_OPR + 1)   # fraction of ortho-H2
+@var c_a    = c_light * a_rad         # c times the radiation constant
 ```
+
+### Built-in constants
+
+Physical and astronomical constants need no `@var`: these names are built in,
+with their CGS values from `jaff.physics.constants` (CODATA / IAU). Names are
+case-sensitive. A `@var`, `@function`, function argument or local variable with
+one of these names raises a `ParserError`.
+
+| name       | constant                  | value           | unit             |
+| ---------- | ------------------------- | --------------- | ---------------- |
+| `c_light`  | speed of light            | 2.99792458e+10  | cm s⁻¹           |
+| `h_planck` | Planck constant           | 6.62607015e-27  | erg s            |
+| `hbar`     | reduced Planck constant   | 1.054571818e-27 | erg s            |
+| `kB`       | Boltzmann constant        | 1.380649e-16    | erg K⁻¹          |
+| `G_grav`   | gravitational constant    | 6.6743e-08      | cm³ g⁻¹ s⁻²      |
+| `e_charge` | elementary charge         | 4.803204713e-10 | esu              |
+| `m_e`      | electron mass             | 9.109383714e-28 | g                |
+| `m_p`      | proton mass               | 1.672621926e-24 | g                |
+| `m_n`      | neutron mass              | 1.674927501e-24 | g                |
+| `amu`      | atomic mass unit          | 1.660539069e-24 | g                |
+| `N_A`      | Avogadro constant         | 6.02214076e+23  | mol⁻¹            |
+| `sigma_SB` | Stefan-Boltzmann constant | 5.670374419e-05 | erg cm⁻² s⁻¹ K⁻⁴ |
+| `a_rad`    | radiation constant        | 7.56573325e-15  | erg cm⁻³ K⁻⁴     |
+| `sigma_T`  | Thomson cross section     | 6.652458705e-25 | cm²              |
+| `a_bohr`   | Bohr radius               | 5.291772105e-09 | cm               |
+| `alpha_fs` | fine-structure constant   | 0.007297352564  | —                |
+| `Ry`       | Rydberg energy            | 2.179872361e-11 | erg              |
+| `pc`       | parsec                    | 3.085677581e+18 | cm               |
+| `au`       | astronomical unit         | 1.495978707e+13 | cm               |
+| `M_sun`    | solar mass                | 1.988409871e+33 | g                |
+| `L_sun`    | solar luminosity          | 3.828e+33       | erg s⁻¹          |
+| `R_sun`    | solar radius              | 6.957e+10       | cm               |
 
 ### Functions — `@function`
 
@@ -194,16 +225,16 @@ case): loading raises a `ParserError`.
 
 JAFF recognises seven reserved naming conventions:
 
-| Pattern              | Role                                                                                                                                                                                                                                         |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chemRateCoeff<N>`        | Custom rate coefficient for reaction number _N_ (0-based, file order). Replaces the Arrhenius expression in the network file.                                                                                                                             |
-| `deltaE<N>`          | Change in gas thermal energy per occurrence of reaction _N_ (erg). Positive = exothermic.                                                                                                                                                    |
-| `photoCrossSection<N>` | Photodecay cross section (cm²) of photo reaction number _N_ as a function of photon energy `ph_E` (eV). Replaces the database cross section (see [Custom cross sections](#custom-cross-sections-photocrosssectionn)). |
-| `spectralYield<N>`   | Radiation energy (erg) reaction _N_ adds to the field per event per unit photon energy `ph_E` (eV), integrated over solid angle (see [Spectral yield](#spectral-yield-spectralyieldn)). |
-| `globalEmissivity`   | **Volume** emissivity: radiation energy emitted per unit volume, time and photon energy `ph_E` (erg cm⁻³ s⁻¹ eV⁻¹) by processes not tied to a reaction, integrated over solid angle (see [Global emissivity](#global-emissivity-globalemissivity)). |
-| `globalAbsorptionCoefficient` | Absorption coefficient of the medium: fraction of the radiation absorbed per unit path length (cm⁻¹) as a function of photon energy `ph_E` (eV) (see [Global absorption coefficient](#global-absorption-coefficient-globalabsorptioncoefficient)). |
-| `heatingCoolingRate` | Net gas heating minus cooling rate from all non-chemical radiative processes (erg s⁻¹ cm⁻³).                                                                                                                                                 |
-| Any other name       | Helper function — substituted symbolically into the bodies that call it.                                                                                                                                                                     |
+| Pattern                       | Role                                                                                                                                                                                                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chemRateCoeff<N>`            | Custom rate coefficient for reaction number _N_ (0-based, file order). Replaces the Arrhenius expression in the network file.                                                                                                                       |
+| `deltaE<N>`                   | Change in gas thermal energy per occurrence of reaction _N_ (erg). Positive = exothermic.                                                                                                                                                           |
+| `photoCrossSection<N>`        | Photodecay cross section (cm²) of photo reaction number _N_ as a function of photon energy `ph_E` (eV). Replaces the database cross section (see [Custom cross sections](#custom-cross-sections-photocrosssectionn)).                               |
+| `spectralYield<N>`            | Radiation energy (erg) reaction _N_ adds to the field per event per unit photon energy `ph_E` (eV), integrated over solid angle (see [Spectral yield](#spectral-yield-spectralyieldn)).                                                             |
+| `globalEmissivity`            | **Volume** emissivity: radiation energy emitted per unit volume, time and photon energy `ph_E` (erg cm⁻³ s⁻¹ eV⁻¹) by processes not tied to a reaction, integrated over solid angle (see [Global emissivity](#global-emissivity-globalemissivity)). |
+| `globalAbsorptionCoefficient` | Absorption coefficient of the medium: fraction of the radiation absorbed per unit path length (cm⁻¹) as a function of photon energy `ph_E` (eV) (see [Global absorption coefficient](#global-absorption-coefficient-globalabsorptioncoefficient)).  |
+| `heatingCoolingRate`          | Net gas heating minus cooling rate from all non-chemical radiative processes (erg s⁻¹ cm⁻³).                                                                                                                                                        |
+| Any other name                | Helper function — substituted symbolically into the bodies that call it.                                                                                                                                                                            |
 
 <!-- prettier-ignore -->
 !!! warning "Custom function naming"
@@ -230,11 +261,7 @@ The GOW (Gong, Ostriker & Wolfire 2017) network ships with a detailed `.jfunc` f
 ### Global constants
 
 ```text
-@var kB         = 1.380649e-16
-@var c_light    = 2.99892458e10
-@var sigma_SB   = 5.670374419e-5
-@var a_R        = 4 * sigma_SB / c_light
-@var eV         = 1.602177e-12
+@var c_a        = c_light * a_rad      # built-in constants
 @var d2g_solar  = 0.01
 @var TCMB       = 2.73
 @var H2_OPR     = 3.0
@@ -309,14 +336,14 @@ where $R_i$ represents the rate of the $i^{th}$ reaction and $\Delta E_i$ repres
 ```text
 @function deltaE40()
     # Reaction 40: H2 + H -> H + H + H  (collisional dissociation)
-    @return -4.48 * eV
+    @return eV_to_erg(-4.48)
 
 @function deltaE13(tgas, n_H_nuc, n_H, n_H2, chi, av)
     # Reaction 13: H2 + photon -> H + H
     # Combined FUV-pumping + kinetic-energy heating (Visser+ 2018)
     k_photo = 5.7e-11 * chi * exp(-4.18 * av) * fshield_H2(ncol_H2)
     f = 1 / (1 + ncrH2(tgas, n_H_nuc, n_H, n_H2, k_photo) / n_H_nuc)
-    @return (0.4 + 8 * 2 * f) * eV
+    @return eV_to_erg(0.4 + 8 * 2 * f)
 ```
 
 ### Custom cross sections — `photoCrossSection<N>`
@@ -345,10 +372,10 @@ A `spectralYield<N>` function gives the radiation that reaction _N_ emits: the e
 
 With radiation transport enabled, JAFF integrates the yield over each radiation group and stores the result on `rxn.rad.group_yields`, in the units of the group density per event:
 
-| radiation `mode`      | Group yield                                  | Units  |
-| --------------------- | -------------------------------------------- | ------ |
-| `"u"`                 | $\int_\text{group} Y(E)\,dE$                  | erg    |
-| `"nph"` (default)     | $\int_\text{group} Y(E)\,/\,E\;dE$ (`E` in erg) | photons |
+| radiation `mode`  | Group yield                                     | Units   |
+| ----------------- | ----------------------------------------------- | ------- |
+| `"u"`             | $\int_\text{group} Y(E)\,dE$                    | erg     |
+| `"nph"` (default) | $\int_\text{group} Y(E)\,/\,E\;dE$ (`E` in erg) | photons |
 
 Each group yield times the reaction rate is added to that group's **density** equation only; isotropic emission carries no net flux, so the flux equations are unchanged. The yield may use other symbols (e.g. `tgas`); such a yield is integrated analytically, so those symbols stay in the generated equations, and it must have a closed-form integral over every group (else `ValueError`). The same holds for a `photoCrossSection<N>`. Energy emitted outside the group range is dropped. Without radiation the yield is stored on `rxn.rad.spectral_yield` but has no effect.
 
@@ -400,7 +427,7 @@ With radiation transport enabled, JAFF integrates it over each radiation group, 
 
 ### Global absorption coefficient — `globalAbsorptionCoefficient`
 
-The `globalAbsorptionCoefficient` function gives absorption by the medium itself, beyond the photo reactions (e.g. a grey dust opacity). Its body is the **absorption coefficient** $\alpha$: the fraction of the radiation absorbed per unit path length, in **cm⁻¹**, as a function of the photon-energy symbol `ph_E` (eV). Unlike the emissivity, $\alpha$ is a value *at* each photon energy, not a density per eV. There is one per network, with no `<N>`:
+The `globalAbsorptionCoefficient` function gives absorption by the medium itself, beyond the photo reactions (e.g. a grey dust opacity). Its body is the **absorption coefficient** $\alpha$: the fraction of the radiation absorbed per unit path length, in **cm⁻¹**, as a function of the photon-energy symbol `ph_E` (eV). Unlike the emissivity, $\alpha$ is a value _at_ each photon energy, not a density per eV. There is one per network, with no `<N>`:
 
 ```text
 @function globalAbsorptionCoefficient(n_H_nuc)
@@ -442,10 +469,10 @@ When a network is loaded with radiation transport enabled (a [`[network.radiatio
 
 Each radiation band carries one density unknown in the generated equations. Its symbolic name depends on how the field is tracked, set by the radiation `mode` (`"nph"` or `"u"`):
 
-| radiation `mode`      | Density variable | Quantity tracked         | Units    |
-| --------------------- | ---------------- | ------------------------ | -------- |
-| `"u"`                 | `radeden[i]`     | Radiation energy density | erg cm⁻³ |
-| `"nph"` (default)     | `photden[i]`     | Photon number density    | cm⁻³     |
+| radiation `mode`  | Density variable | Quantity tracked         | Units    |
+| ----------------- | ---------------- | ------------------------ | -------- |
+| `"u"`             | `radeden[i]`     | Radiation energy density | erg cm⁻³ |
+| `"nph"` (default) | `photden[i]`     | Photon number density    | cm⁻³     |
 
 Here `i` indexes the radiation band. The photo-reaction rate coefficient for band $i$ is $k_i = c \cdot den_i \cdot {\langle \sigma \rangle}_i$, where ${\langle \sigma \rangle}_i$ is the band-averaged photoionisation cross section and `c` is the speed of light.
 

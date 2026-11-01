@@ -45,14 +45,7 @@
 ################################################################
 
 # Note -- all quantities in CGS units
-@var kB = 1.380649e-16             # Boltzmann's constant
-@var c_light = 2.99892458e10       # Speed of light
-@var sigma_SB = 5.670374419e-5    # Stefan-Boltmzann constant
-@var a_R = 4 * sigma_SB / c_light  # Radiation constant
-@var c_a = c_light * a_R           # c * a_R
-@var amu = 1.66054e-24             # 1 amu in gram
-@var eV = 1.602177e-12             # 1 eV in erg
-@var kmps = 1.0e5                  # 1 km/s in cm/s
+@var c_a = c_light * a_rad         # c * a_rad
 @var TCMB = 2.73                   # CMB temperature at z = 0
 @var H2_OPR = 3.0                  # Ratio of ortho-H2 to para-H2
 @var f_oH2 = H2_OPR / (H2_OPR + 1) # Fraction of ortho-H2
@@ -639,7 +632,7 @@
     # abundance-weighted qcr (which would weight by x_H a second time).
 
     sec_per_prim = kcr_H_fac(n_H_nuc, n_H, n_H2)
-    @return qcr_H(n_H_nuc, n_e) * eV / sec_per_prim
+    @return eV_to_erg(qcr_H(n_H_nuc, n_e)) / sec_per_prim
 
 @function deltaE1(n_H_nuc, n_H, n_H2)
     # Reaction 1: H2 + CR -> H2+ + e-
@@ -655,7 +648,7 @@
     # event is the molecular qcr_H2, not the abundance-weighted qcr.
 
     sec_per_prim = kcr_H_fac(n_H_nuc, n_H, n_H2)
-    @return qcr_H2(n_H_nuc) * eV / sec_per_prim
+    @return eV_to_erg(qcr_H2(n_H_nuc)) / sec_per_prim
 
 @function deltaE2(n_H_nuc, n_H, n_H2)
     # Reaction 2: He + CR -> He+ + e-
@@ -669,7 +662,7 @@
     # those out to get the right energy deposition per primary.
 
     sec_per_prim = kcr_H_fac(n_H_nuc, n_H, n_H2)
-    @return qcr(n_H_nuc, n_e, n_H, n_H2) * eV / sec_per_prim
+    @return eV_to_erg(qcr(n_H_nuc, n_e, n_H, n_H2)) / sec_per_prim
 
 @function deltaE13(tgas, n_H_nuc, n_H, n_H2, chi, av)
     # Reaction 13: H2 + photon -> H + H
@@ -687,7 +680,7 @@
     k_photo = 5.7e-11 * chi * exp(-4.18 * av) * fshield_H2(ncol_H2)
     f = 1 / (1 + ncrH2(tgas, n_H_nuc, n_H, n_H2, k_photo) / n_H_nuc)
 
-    @return (0.4 + 8 * 2 * f) * eV
+    @return eV_to_erg(0.4 + 8 * 2 * f)
 
 @function deltaE14(tgas, n_H_nuc, n_H, n_H2, chi, av)
     # Reaction 14: H + H -> H2 (grain-assisted)
@@ -702,19 +695,19 @@
     k_photo = 5.7e-11 * chi * exp(-4.18 * av) * fshield_H2(ncol_H2)
     f = 1 / (1 + ncrH2(tgas, n_H_nuc, n_H, n_H2, k_photo) / n_H_nuc)
 
-    @return (0.2 + 4.2*f) * eV
+    @return eV_to_erg(0.2 + 4.2*f)
 
 @function deltaE40()
     # Reaction 41: H2 + H -> H + H + H
-    @return -4.48 * eV
+    @return eV_to_erg(-4.48)
 
 @function deltaE41()
     # Reaction 42: H2 + H2 -> H + H + H2
-    @return -4.48 * eV
+    @return eV_to_erg(-4.48)
 
 @function deltaE42()
     # Reaction 43: H + e- -> H+ + e- + e-
-    @return -13.6 * eV
+    @return eV_to_erg(-13.6)
 
 
 ################################################################
@@ -1120,14 +1113,13 @@
     #  - Local (ncol_H = 0): the
     #    Sobolev / velocity-gradient escape, \tilde{N} = n_CO / gradv_lim.
     #  - Depth sweep (ncol_H > 0): use the RAW line-of-sight CO column ncol_CO
-    #    with the size-linewidth velocity bCO_L = kmps*sqrt((N_H/n_H_nuc)/pc), where the
+    #    with the size-linewidth velocity bCO_L = km_to_cm(sqrt((N_H/n_H_nuc)/pc)), where the
     #    cloud depth L = N_H/n_H_nuc is built from the RAW H column ncol_H
 
-    pc = 3.086e18                                          # 1 parsec in cm
     L = ncol_H / n_H_nuc                                       # physical cloud depth, cm
-    bCO_L = kmps * sqrt(Max(L, 1e-30) / pc)                # cm/s (floored to avoid /0)
-    LVG_local = n_CO / gradv_lim * kmps
-    LVG_global = ncol_CO / bCO_L * kmps
+    bCO_L = km_to_cm(sqrt(Max(L, 1e-30) / pc))             # cm/s (floored to avoid /0)
+    LVG_local = km_to_cm(n_CO / gradv_lim)
+    LVG_global = km_to_cm(ncol_CO / bCO_L)
     LVG_param = Piecewise((LVG_local, ncol_H <= 0), (LVG_global, True))
 
     # Get effective number density

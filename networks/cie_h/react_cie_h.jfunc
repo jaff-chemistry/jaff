@@ -9,9 +9,7 @@
 ################################################################
 
 # Note -- all quantities in CGS units
-@var kB = 1.380649e-16             # Boltzmann's constant
-@var eV = 1.602177e-12             # 1 eV in erg
-@var E_ion_H = 13.6 * eV           # H ionization potential
+@var E_ion_H = eV_to_erg(13.6)     # H ionization potential
 
 ################################################################
 # Change in thermal energy per reaction

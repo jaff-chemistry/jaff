@@ -26,9 +26,10 @@ Cross-function dependencies are resolved with a DFS to support one function
 calling another, while detecting circular references.
 
 Calls to the unit conversions of :mod:`jaff.physics.units` (``nm_to_eV(x)``,
-``pc_to_cm(r)`` ...; any letter case) are replaced by their value once the file
-is parsed. A ``@var``, ``@function`` or local variable named like one of them
-is an error.
+``pc_to_cm(r)`` ...; any letter case) and the built-in CGS constants
+(:data:`CONSTANTS`: ``kB``, ``c_light``, ``amu`` ...; exact case) are replaced by
+their value once the file is parsed. A ``@var``, ``@function``, function
+argument or local variable named like one of them is an error.
 """
 
 from functools import cached_property
@@ -41,6 +42,7 @@ from sympy.core.function import AppliedUndef
 
 from ....common import float_piecewise_branches, resolve_symbolic_dependencies
 from ....errors import ParserError
+from ....physics import constants as _c
 from ....physics import units
 from .function_props import AuxiliaryFunctionProps
 
@@ -48,6 +50,33 @@ from .function_props import AuxiliaryFunctionProps
 #: ``.jfunc`` file may call them in any case.
 CONVERTERS: dict[str, Callable[[Any], Any]] = {
     name.lower(): getattr(units, name) for name in units.__all__
+}
+
+#: Built-in constants a ``.jfunc`` file may use by name (exact case), as CGS
+#: values from :mod:`jaff.physics.constants`.
+CONSTANTS: dict[str, float] = {
+    "c_light": float(_c.c.cgs.value),
+    "h_planck": float(_c.h.cgs.value),
+    "hbar": float(_c.hbar.cgs.value),
+    "kB": float(_c.k_B.cgs.value),
+    "G_grav": float(_c.G.cgs.value),
+    "e_charge": float(_c.e.esu.value),
+    "m_e": float(_c.m_e.cgs.value),
+    "m_p": float(_c.m_p.cgs.value),
+    "m_n": float(_c.m_n.cgs.value),
+    "amu": float(_c.u.cgs.value),
+    "N_A": float(_c.N_A.value),
+    "sigma_SB": float(_c.sigma_sb.cgs.value),
+    "a_rad": float(_c.a_rad.cgs.value),
+    "sigma_T": float(_c.sigma_T.cgs.value),
+    "a_bohr": float(_c.a0.cgs.value),
+    "alpha_fs": float(_c.alpha.value),
+    "Ry": float(_c.Ry.to("erg").value),
+    "pc": float(_c.pc.cgs.value),
+    "au": float(_c.au.cgs.value),
+    "M_sun": float(_c.M_sun.cgs.value),
+    "L_sun": float(_c.L_sun.cgs.value),
+    "R_sun": float(_c.R_sun.cgs.value),
 }
 
 
@@ -118,7 +147,7 @@ class AuxiliaryFunctionParser:
 
         self.__parse_file()
         self.__resolve_func_deps()
-        self.__apply_converters()
+        self.__apply_builtins()
 
     def __repr__(self):
         """Return canonical string representation of this parser instance.
@@ -150,28 +179,36 @@ class AuxiliaryFunctionParser:
         self.og_line = self.line = self.cline = ""
 
     def __check_name(self, name: str, kind: str) -> None:
-        """Raise if *name* is taken by a unit conversion (any letter case).
+        """Raise if *name* is a unit conversion (any case) or a built-in constant.
 
         Raises
         ------
         ParserError
-            If *name* matches a :mod:`jaff.physics.units` function.
+            If *name* matches a :mod:`jaff.physics.units` function or a key of
+            :data:`CONSTANTS`.
         """
-        if name.strip().lower() in CONVERTERS:
-            raise ParserError(
-                f"{kind} '{name.strip()}' has the name of a unit conversion of "
-                f"jaff.physics.units; choose another name",
-                self.og_line,
-                self.nline,
-                self.file,
-            )
+        name = name.strip()
+        if name.lower() in CONVERTERS:
+            taken = "a unit conversion of jaff.physics.units"
+        elif name in CONSTANTS:
+            taken = "a built-in constant"
+        else:
+            return
 
-    def __apply_converters(self) -> None:
-        """Replace calls to unit conversions by their value, innermost first.
+        raise ParserError(
+            f"{kind} '{name}' has the name of {taken}; choose another name",
+            self.og_line,
+            self.nline,
+            self.file,
+        )
+
+    def __apply_builtins(self) -> None:
+        """Replace unit-conversion calls and built-in constants by their values.
 
         Runs after the file's own functions are inlined, so the only undefined
         calls left are converters and functions the network supplies (such as
-        interpolators); the latter are left as they are.
+        interpolators); the latter are left as they are. Conversions are
+        replaced innermost first, then constants.
 
         Raises
         ------
@@ -193,7 +230,13 @@ class AuxiliaryFunctionParser:
             return sp.sympify(CONVERTERS[name](e.args[0]))
 
         for func in self.func_dict.values():
-            func.expr = func.expr.replace(is_converter, convert)
+            expr = func.expr.replace(is_converter, convert)
+            values = {
+                symbol: sp.Float(CONSTANTS[symbol.name])
+                for symbol in expr.free_symbols
+                if isinstance(symbol, sp.Symbol) and symbol.name in CONSTANTS
+            }
+            func.expr = expr.xreplace(values)
 
     def get_dict(self) -> dict[str, AuxiliaryFunctionProps]:
         """Return the parsed function dictionary.
@@ -367,11 +410,11 @@ class AuxiliaryFunctionParser:
             raise ParserError(
                 "Invalid function decleration", self.og_line, self.nline, self.file
             )
-        args = [
-            sp.parse_expr(arg.strip())
-            for arg in rest[0].split(",")
-            if len(arg.strip()) > 0
-        ]
+        names = [arg.strip() for arg in rest[0].split(",") if len(arg.strip()) > 0]
+        for arg in names:
+            self.__check_name(arg, "Argument")
+
+        args = [sp.parse_expr(arg) for arg in names]
 
         self.current_func = name
         self.func_dict[name] = AuxiliaryFunctionProps(expr=sp.Float(0.0), args=args)
