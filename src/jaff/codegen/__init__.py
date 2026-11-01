@@ -16,7 +16,7 @@ levels of entry point:
   engine behind the ``jaffgen`` command (template syntax is described in the
   user guide's *Template Syntax* page). The built-in templates
   (``python_solve_ivp``, ``fortran_dlsodes``, ``kokkos_ode``, ``microphysics``
-  ...) live in ``jaff/templates/generator/<name>/`` and are rendered with
+  ...) live in ``templates/<name>/`` at the repository root and are rendered with
   ``jaffgen --template <name>``.
 
 Examples

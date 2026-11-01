@@ -5,5 +5,4 @@ include README.md
 include LICENSE
 
 recursive-include src/jaff/data *.dat
-recursive-include src/jaff/templates *.hpp *.cpp *.txt
 recursive-include src/jaff/db *.db

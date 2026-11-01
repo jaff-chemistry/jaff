@@ -129,7 +129,6 @@ where = ["src"]
 [tool.setuptools.package-data]
 jaff = [
   "data/*.dat",
-  "templates/**/*",
   "db/jaff.db",
   "codegen/templating/*.lark",
   "config/schemas/*.json"

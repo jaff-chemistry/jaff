@@ -19,7 +19,7 @@ Configuration comes from three layers, lowest precedence first (see
 
 Template lookup
 ---------------
-A built-in template is the folder ``jaff/templates/generator/<name>/``: when
+A built-in template is the folder ``templates/<name>/`` at the repository root: when
 it is selected, every file in it is rendered (its bundled ``jaffgen.toml``
 aside), keeping its path relative to the folder.  Files without ``$$JAFF``
 directives, such as a solver's driver or Makefile, come out unchanged.
@@ -232,7 +232,7 @@ class JaffGen:
         """
         Collect the files of a named built-in template.
 
-        Every file under ``jaff/templates/generator/<template>/``, with its
+        Every file under ``templates/<template>/``, with its
         path relative to that folder.
 
         Parameters
@@ -259,7 +259,7 @@ class JaffGen:
                 f"{sorted(predefined_templates())}"
             )
 
-        folder = TEMPLATES_DIR / "generator" / template
+        folder = TEMPLATES_DIR / template
 
         return [
             ResolvedPath(f.resolve(), f.relative_to(folder))
@@ -552,7 +552,7 @@ def generate(
         None,
         "--template",
         metavar="NAME",
-        help="Name of predefined template collection in jaff/templates/generator/",
+        help="Name of a built-in template collection in templates/",
     ),
     echo: Optional[bool] = typer.Option(
         None,

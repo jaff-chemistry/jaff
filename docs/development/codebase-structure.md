@@ -142,12 +142,6 @@ src/jaff/
 │   └── jaffx/                  # jaffx — network inspection / export
 │       └── _engine.py          # JaffX handlers + nested Typer commands
 │
-├── templates/                  # Bundled templates
-│   └── generator/<name>/       # One folder per built-in template (jaffgen --template):
-│                               #   $$JAFF templates plus static solver files (drivers,
-│                               #   Makefiles); flash, fortran_dlsodes, kokkos_ode,
-│                               #   microphysics, python_solve_ivp, rosenbrock_cpp
-│
 ├── types/                      # Base data structures
 │   ├── _catalogue.py           # Catalogue[T] — O(1) list + dict lookup
 │   ├── _vector.py              # Typed numeric container
@@ -196,6 +190,16 @@ src/jaff/
     └── compress_hdf5.py                # Gzip local data files for the mirror + registry lines
 ```
 
+User-facing files live outside the package, at the repository root:
+
+```
+networks/<name>/                # Bundled reaction networks (Network("<name>"))
+templates/<name>/               # One folder per built-in template (jaffgen --template):
+                                #   $$JAFF templates plus static solver files (drivers,
+                                #   Makefiles); flash, fortran_dlsodes, kokkos_ode,
+                                #   microphysics, python_solve_ivp, rosenbrock_cpp
+```
+
 Downloaded data files are cached, compressed and hash-checked, under
 `src/jaff/data/.downloads/`. `drivers/pooch.py` then installs a copy at the path
 shown above (via `drivers/_install.py`): HDF5 files are rewritten uncompressed and contiguous so they load
@@ -232,7 +236,7 @@ flowchart TD
     subgraph codegen_sg ["Code Generation"]
         EQ["physics\nsfluxes · sodes · sradodes"]
         CG["Codegen\nSymPy → C · C++ · F90\nPy · Rust · Julia · R"]
-        TP["TemplateParser  —  jaffgen path\ntemplates/generator/\n$$JAFF directives"]
+        TP["TemplateParser  —  jaffgen path\ntemplates/\n$$JAFF directives"]
         OUT_G["Generated output files"]
     end
 
@@ -274,7 +278,7 @@ Each network format is a single `Parser` subclass (the only ABC, in `_formats/_p
 All rate expressions, fluxes, and ODEs live as SymPy objects inside `Network`. Code generation (`Codegen`) calls SymPy's language-specific printers (`ccode`, `cxxcode`, `fcode`, etc.), so adding a new target language is a single `Language` subclass in `jaff/codegen/_languages.py`.
 
 **Template-based code generation.**
-Each built-in solver is one folder, `templates/generator/<name>/`: `$$JAFF` templates that `TemplateParser` expands against the network, next to the static files the solver needs (driver, Makefile, bundled library sources). Solver-specific code lives in these files, not in the library.
+Each built-in solver is one folder, `templates/<name>/` at the repository root: `$$JAFF` templates that `TemplateParser` expands against the network, next to the static files the solver needs (driver, Makefile, bundled library sources). Solver-specific code lives in these files, not in the library.
 
 **`Catalogue[T]` for all domain collections.**
 `Species`, `Reactions`, and `Elements` all inherit from `Catalogue`, giving O(1) lookup by integer index, slice, string name, _and_ serialized canonical name. The serialized form (e.g. `"+/H/H/O"` for H₂O⁺) enables duplicate detection that is independent of input name formatting.

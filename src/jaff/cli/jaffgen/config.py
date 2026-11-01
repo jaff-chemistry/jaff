@@ -198,7 +198,7 @@ def bundled_config(template: str | None) -> Path | None:
     """The ``jaffgen.toml`` the built-in *template* bundles, if any.
 
     Looked for anywhere in the template's folder,
-    ``jaff/templates/generator/<template>/``.
+    ``templates/<template>/`` at the repository root.
 
     Raises
     ------
@@ -208,10 +208,7 @@ def bundled_config(template: str | None) -> Path | None:
     if template is None or template not in predefined_templates():
         return None
 
-    found = [
-        p.resolve()
-        for p in (TEMPLATES_DIR / "generator" / template).rglob("jaffgen.toml")
-    ]
+    found = [p.resolve() for p in (TEMPLATES_DIR / template).rglob("jaffgen.toml")]
 
     if len(found) > 1:
         raise ParserError("More than one jaffgen.toml file found in template directory")

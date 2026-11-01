@@ -37,7 +37,8 @@ def _(mo):
     ## Template collections
 
     `jaffgen --template NAME` selects a predefined collection shipped with JAFF.
-    A collection is one folder, `templates/generator/NAME/`, holding two kinds
+    A collection is one folder, `templates/NAME/` at the repository root,
+    holding two kinds
     of file:
 
     - files with JAFF directives are **rendered** for your network (rates,
@@ -53,7 +54,7 @@ def _(mo):
 @app.cell
 def _(TEMPLATES_DIR, mo):
     _rows = []
-    for _gen in sorted((TEMPLATES_DIR / "generator").iterdir()):
+    for _gen in sorted(TEMPLATES_DIR.iterdir()):
         if not _gen.is_dir():
             continue
         # jaffgen.toml is the collection's config, not an output file.
@@ -100,7 +101,7 @@ def _(mo):
 def _(TEMPLATES_DIR, mo):
     mo.md(
         "```python\n"
-        + (TEMPLATES_DIR / "generator" / "python_solve_ivp" / "rates.py").read_text()
+        + (TEMPLATES_DIR / "python_solve_ivp" / "rates.py").read_text()
         + "\n```"
     )
     return

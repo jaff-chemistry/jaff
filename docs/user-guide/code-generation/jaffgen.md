@@ -50,7 +50,7 @@ The three input flags are additive, not exclusive:
 | ------------ | ------------------------------------------------------------- |
 | `--indir`    | Every file in a directory (recursive), keeping its structure  |
 | `--files`    | Specific individual files                                     |
-| `--template` | A built-in collection from `jaff/templates/generator/<name>/` |
+| `--template` | A built-in collection from `templates/<name>/`                |
 
 For `--template`, every file in the template's folder is rendered, keeping its
 path relative to the folder; files without `$$JAFF` directives (a solver's
@@ -227,8 +227,8 @@ uses it and turns on photochemistry without any extra flags. See the
 
 ## Built-in templates
 
-Collections live under `src/jaff/templates/generator/`. List them with:
+Collections live under `templates/` at the repository root. List them with:
 
 ```bash
-ls src/jaff/templates/generator/
+ls templates/
 ```

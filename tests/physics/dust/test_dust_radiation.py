@@ -15,7 +15,7 @@ REPO = REPO_ROOT
 H_PHOTO = REPO / "networks" / "h_photoionization" / "h_photo.jet"
 
 # Mirrors the commented [network.radiation] / [network.dust] blocks shipped in
-# src/jaff/templates/generator/microphysics/jaffgen.toml.
+# templates/microphysics/jaffgen.toml.
 CONFIG_TOML = """\
 [network.radiation]
 bands = [6, 11.2, 13.6]

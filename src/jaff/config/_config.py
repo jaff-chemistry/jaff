@@ -10,10 +10,10 @@ CONFIG_DIR = Path(__file__).resolve().parent
 JAFF_DIR = CONFIG_DIR.parent
 SRC_DIR = JAFF_DIR.parent
 NETWORKS_DIR = SRC_DIR.parent / "networks"
+TEMPLATES_DIR = SRC_DIR.parent / "templates"
 DATA_DIR = JAFF_DIR / "data"
 XSECS_DATA_DIR = DATA_DIR / "xsecs"
 SHIELDING_DATA_DIR = DATA_DIR / "shielding"
-TEMPLATES_DIR = JAFF_DIR / "templates"
 DB_DIR = JAFF_DIR / "db"
 
 
@@ -28,8 +28,8 @@ def predefined_networks() -> set[str]:
 
 
 def predefined_templates() -> set[str]:
-    """Return the names of the built-in generator template collections."""
-    return list_subdirs(TEMPLATES_DIR / "generator")
+    """Return the names of the built-in templates (sub-dirs of ``TEMPLATES_DIR``)."""
+    return list_subdirs(TEMPLATES_DIR)
 
 
 def resolve_network_path(fname: str | Path) -> Path:
