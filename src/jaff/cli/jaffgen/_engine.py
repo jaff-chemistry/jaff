@@ -42,7 +42,8 @@ from typing import List, Optional
 import typer
 
 from ... import Network
-from ...codegen import TemplateParser
+from ...codegen import TemplateFunctions, TemplateParser
+from ...codegen.templating.functions import FUNCTIONS_FILE
 from ...common import print_motd
 from ...config import TEMPLATES_DIR, predefined_templates
 from ...config.json_schema import SCHEMA_DIR
@@ -154,8 +155,13 @@ class JaffGen:
         ``<network>_<template>_<YYYYmmdd-HHMMSS>`` in :attr:`output_root`, with
         ``-2``, ``-3``, ... appended when that folder already exists.
     output_files : list of ResolvedPath
-        Every file to render, from the template (minus its bundled
-        ``jaffgen.toml``), the input directory and the individual input files.
+        Every file to render, from the template, the input directory and the
+        individual input files; ``jaffgen.toml`` and
+        ``jaffgen_template_functions.py`` are never among them.
+    functions : TemplateFunctions or None
+        The ``$$JAFF CALL`` functions of the run's
+        ``jaffgen_template_functions.py``, found among all its input files;
+        ``None`` without one. The file runs on the first ``$$JAFF CALL``.
 
     Raises
     ------
@@ -168,7 +174,8 @@ class JaffGen:
     ParserError
         If the network's config is invalid.
     ValueError
-        If an unsupported template name is given.
+        If an unsupported template name is given, or the input files hold
+        more than one ``jaffgen_template_functions.py``.
     """
 
     def __init__(self, config: JaffgenRunConfig):
@@ -184,6 +191,7 @@ class JaffGen:
         self.output_root: Path = DEFAULT_OUTPUT
         self.output_dir: Path = DEFAULT_OUTPUT
         self.output_files: list[ResolvedPath] = []
+        self.functions: TemplateFunctions | None = None
 
         print_motd("jaffgen")
         # The network validates its settings: build it before touching files.
@@ -209,23 +217,49 @@ class JaffGen:
         """
         Collect every file to render and choose the run folder.
 
-        Files come from the template (minus its bundled ``jaffgen.toml``, which
-        is config), then the input directory, then the individual input files.
+        Files come from the template, then the input directory, then the
+        individual input files. A ``jaffgen.toml`` (config) and the
+        ``jaffgen_template_functions.py`` (see :attr:`functions`) are set aside:
+        neither is rendered nor written.
 
         Raises
         ------
         RuntimeError
             If no input file/folder/template resolved.
+        ValueError
+            If the input files hold more than one
+            ``jaffgen_template_functions.py``.
         """
-        template_files = self._template_files(self.config.jaffgen.template)
-        self.output_files = [
-            f for f in template_files if f.abspath.name != "jaffgen.toml"
-        ]
+        self.output_files = self._template_files(self.config.jaffgen.template)
         self.collect_input_files()
+        self.functions = self._take_functions_file()
+        self.output_files = [
+            f for f in self.output_files if f.abspath.name != "jaffgen.toml"
+        ]
         self.set_output_dir()
 
         if not self.output_files:
             raise RuntimeError("No valid input file/folder/template have been supplied")
+
+    def _take_functions_file(self) -> TemplateFunctions | None:
+        """Remove the functions file from :attr:`output_files`; its loader or ``None``.
+
+        Raises
+        ------
+        ValueError
+            If more than one file is named ``jaffgen_template_functions.py``.
+        """
+        found = [f for f in self.output_files if f.abspath.name == FUNCTIONS_FILE]
+        if len(found) > 1:
+            paths = ", ".join(str(f.abspath) for f in found)
+            raise ValueError(f"more than one {FUNCTIONS_FILE} in the input: {paths}")
+
+        if not found:
+            return None
+
+        self.output_files = [f for f in self.output_files if f not in found]
+
+        return TemplateFunctions(found[0].abspath)
 
     @staticmethod
     def _template_files(template: str | None) -> list[ResolvedPath]:
@@ -456,7 +490,10 @@ class JaffGen:
             self.output_files, description="Processing files"
         ):
             fparser = TemplateParser(
-                self.net, file.abspath, echo_directives=self.config.jaffgen.echo
+                self.net,
+                file.abspath,
+                echo_directives=self.config.jaffgen.echo,
+                functions=self.functions,
             )
             lines: str = fparser.parse_file()
 
