@@ -312,7 +312,9 @@ docs/           # Documentation
 - `physics/`: radiation and photo-reactions, dust, thermodynamics/EOS, constants
 - `plotting/network/`: `net.visualize` (`NetworkVisualizer`): graph and
   stoichiometry-matrix figures of a network's species and reactions
-- `codegen/`: `Codegen`, `Language`s, the `$$JAFF` template engine (`templating/`)
+- `codegen/`: `Codegen`, `Language`s, the `$$JAFF` template engine (`templating/`);
+  `$$JAFF CALL` inserts text from `@jaffgen_function` functions in a template's
+  `jaffgen_template_functions.py` (`templating/functions.py`)
 - `config/`: config base models, loader, JSON schemas, reference generator
 - `cli/`: `jaffgen` and `jaffx`
 - `drivers/`, `io/`: HDF5/SQLite/TOML/CSV access, data downloads, logging

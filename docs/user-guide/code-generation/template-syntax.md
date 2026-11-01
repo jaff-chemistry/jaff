@@ -101,13 +101,14 @@ lines always end in `\n`, also for templates written with `\r\n`.
 | `GET`     | Retrieve properties of a named entity                         |
 | `HAS`     | Test whether a species, reaction, or element exists           |
 | `REDUCE`  | Build a summed expression over collections                   |
+| `CALL`    | Insert the text a Python function of yours returns (no body)  |
 | `END`     | Close the current directive block                             |
 | `DEFINE`  | Name a set of options for reuse with the `USE` option (no body) |
 | `LANG`    | Set the target language of the file (no body)                 |
 | `COMMENT` | Set the comment token used to echo directives (no body)       |
 
-Every command with a body accepts the global `REPLACE` and `USE` options (see
-[Options](#options)).
+Every command with a body, and `CALL`, accepts the global `REPLACE` and `USE`
+options (see [Options](#options)).
 
 Each example below was rendered against a small test network with the species
 `H`, `e-`, `H+`, `He++`, `He+` (in that order) unless stated otherwise.
@@ -674,6 +675,80 @@ copied (with `REPLACE` applied).
 
 ---
 
+## CALL
+
+```text
+$$JAFF CALL name { options }
+```
+
+Insert text that no other command produces. `name` is a Python function in the
+template's `jaffgen_template_functions.py`, registered with the
+`@jaffgen_function` decorator; it takes the network and returns a string, and
+that string replaces the `CALL` line. `CALL` has no body and no `$$JAFF END`.
+
+```python
+# jaffgen_template_functions.py
+from jaff.codegen import jaffgen_function
+
+
+@jaffgen_function
+def species_names(net):
+    names = ", ".join(f'"{s.name}"' for s in net.species)
+    return f"const char* names[] = {{{names}}};"
+
+
+@jaffgen_function("reset")
+def _reset_abundances(net):
+    return "\n".join(f"y[{i}] = 0.0;  // {s.name}" for i, s in enumerate(net.species))
+```
+
+```cpp
+$$JAFF CALL species_names
+
+void reset(double* y) {
+    $$JAFF CALL reset { REPLACE { "0\.0" -> "1e-20" } }
+}
+```
+
+renders as
+
+```cpp
+// $$JAFF CALL species_names
+const char* names[] = {"H", "e-", "H+", "He++", "He+"};
+
+void reset(double* y) {
+    // $$JAFF CALL reset { REPLACE { "0\.0" -> "1e-20" } }
+    y[0] = 1e-20;  // H
+    y[1] = 1e-20;  // e-
+    y[2] = 1e-20;  // H+
+    y[3] = 1e-20;  // He++
+    y[4] = 1e-20;  // He+
+}
+```
+
+- A function is called by its own name, or by the name given to the decorator
+  (`@jaffgen_function("reset")`). Functions without the decorator are plain
+  helpers and cannot be called.
+- Every returned line gets the indentation of the `CALL` line (empty lines get
+  none), so functions can return unindented text. A final newline is added if
+  missing; an empty string renders nothing.
+- `REPLACE`, written on the `CALL` or pulled in with `USE`, runs on every
+  returned line. `CALL` takes no option groups.
+- The returned text is inserted as is: no placeholders, no language printing,
+  no CSE.
+- The file runs when the first `CALL` is checked, once per jaffgen run; a run
+  without `CALL` never runs it. How jaffgen finds the file is described in
+  [jaffgen](jaffgen.md#template-functions).
+
+From Python, pass the functions to `TemplateParser` yourself:
+`#!python TemplateParser(net, path, functions=TemplateFunctions(funcs_path))`.
+
+!!! warning "The functions file is code"
+    `jaffgen_template_functions.py` is ordinary Python that jaffgen runs. Only
+    render templates you trust.
+
+---
+
 ## Placeholders
 
 Body lines are substituted as follows:
@@ -980,11 +1055,14 @@ option value, an invalid regex or `\N` reference, a `USE` of an unknown or
 later `DEFINE`, a repeated `DEFINE` or `USE`, a `GET` entity that is not in the
 network, of the wrong kind, or a reaction name shared by several mechanisms
 (`HAS` only checks its kind; a missing entity simply gives `0`), options on `END`, a `$$JAFF` line inside a
-body, a misplaced or repeated `LANG`/`COMMENT`, an unknown language, and no
-language at all.
+body, a misplaced or repeated `LANG`/`COMMENT`, an unknown language, no
+language at all, and for `CALL`: no `jaffgen_template_functions.py`, a name it
+does not register, a file that fails to run, or two functions registered under
+one name.
 
 Errors in a multi-line header report the line they occur on; errors about a
 body line (the CSE line, the number of `$idx$` tokens) report that body line.
 Any other failure while a command renders (for example no radiation bands, or a
-division by zero in `$x/0$`) is also a `ParserError`, at the directive, with the
+division by zero in `$x/0$`, a `CALL` function that raises or returns something
+other than a string) is also a `ParserError`, at the directive, with the
 original exception as its cause.

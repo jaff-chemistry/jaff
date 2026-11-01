@@ -29,7 +29,9 @@ A `jaffgen` run is five phases:
 2. **Load the network** — exactly one `Network`: it merges the run's
    `[network]` settings over its own `jaff.toml` and validates them.
 3. **Gather template files** — from `--indir`, `--files`, and `--template`.
-   These **combine** — a single run can pull from all three.
+   These **combine** — a single run can pull from all three. A
+   `jaffgen.toml` and the [template functions](#template-functions) file are
+   set aside: neither is rendered nor written.
 4. **Generate** — run [`TemplateParser`](template-syntax.md) on every gathered
    file and write the result to a new [run folder](#run-folders) in
    `--outdir`, preserving each file's path relative to its source directory,
@@ -55,6 +57,37 @@ The three input flags are additive, not exclusive:
 For `--template`, every file in the template's folder is rendered, keeping its
 path relative to the folder; files without `$$JAFF` directives (a solver's
 driver, its Makefile, bundled library sources) come out unchanged.
+
+---
+
+## Template functions
+
+A template can produce text no built-in command does with
+[`$$JAFF CALL`](template-syntax.md#call): the named function comes from a file
+called exactly `jaffgen_template_functions.py`, next to the templates.
+
+- **Found among all input files.** jaffgen looks for the file in everything it
+  gathered: the `--template` folder, `--indir` (at any depth) and `--files`.
+  More than one is an error that lists them.
+- **Never written.** The file is not copied to the run folder.
+- **Run lazily, once.** Finding the file does not run it. The first
+  `$$JAFF CALL` checked runs it, and every template of the run shares the
+  result; a run without `CALL` never runs it.
+
+```text
+my_solver/
+├── jaffgen_template_functions.py   # @jaffgen_function functions
+├── init.cpp                        # uses $$JAFF CALL
+└── rates.cpp
+```
+
+```bash
+jaffgen --network networks/GOW/GOW.jet --indir my_solver/ --outdir output/
+```
+
+!!! warning "The functions file is code"
+    `jaffgen_template_functions.py` is ordinary Python that jaffgen runs when
+    a template uses `$$JAFF CALL`. Only render templates you trust.
 
 ---
 
