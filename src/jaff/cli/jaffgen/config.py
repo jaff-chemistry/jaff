@@ -197,8 +197,8 @@ def _resolve_table_source(table: Any, base_dir: Path) -> Any:
 def bundled_config(template: str | None) -> Path | None:
     """The ``jaffgen.toml`` the built-in *template* bundles, if any.
 
-    Looked for among the template's generator and preprocessor files; a
-    generator file wins over a preprocessor one at the same relative path.
+    Looked for anywhere in the template's folder,
+    ``jaff/templates/generator/<template>/``.
 
     Raises
     ------
@@ -208,16 +208,15 @@ def bundled_config(template: str | None) -> Path | None:
     if template is None or template not in predefined_templates():
         return None
 
-    found: Dict[Path, Path] = {}
-    for kind in ("preprocessor", "generator"):
-        root = TEMPLATES_DIR / kind / template
-        for path in root.rglob("jaffgen.toml"):
-            found[path.relative_to(root)] = path.resolve()
+    found = [
+        p.resolve()
+        for p in (TEMPLATES_DIR / "generator" / template).rglob("jaffgen.toml")
+    ]
 
     if len(found) > 1:
         raise ParserError("More than one jaffgen.toml file found in template directory")
 
-    return next(iter(found.values()), None)
+    return next(iter(found), None)
 
 
 def _custom_jaff_toml(run: JaffgenConfig) -> Path | None:

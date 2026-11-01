@@ -86,8 +86,6 @@ src/jaff/
 │   ├── codegen.py              # Codegen: SymPy → C/C++/Fortran/Python/Rust/Julia/R strings
 │   ├── _languages.py           # Language + one subclass per target (tokens, SymPy printers)
 │   ├── _typing/                # ExtrasDict, IndexedReturn (Codegen return types)
-│   ├── preprocessor.py         # Preprocessor — PREPROCESS_<KEY> marker substitution (plugins)
-│   ├── builder.py              # Builder — runs jaff.plugins.<name>.plugin main()
 │   └── templating/             # The $$JAFF template engine (TemplateParser)
 │       ├── __init__.py         # Package entry; jaff.codegen re-exports TemplateParser
 │       ├── parser.py           # TemplateParser: renders one file; language from LANG or extension
@@ -144,17 +142,11 @@ src/jaff/
 │   └── jaffx/                  # jaffx — network inspection / export
 │       └── _engine.py          # JaffX handlers + nested Typer commands
 │
-├── plugins/                    # Named solver plugins for Builder (each a plugin.py)
-│   ├── python_solve_ivp/       # SciPy solve_ivp wrapper
-│   ├── fortran_dlsodes/        # Fortran DLSODES solver
-│   ├── kokkos_ode/             # C++ VODE solver (header-only-integrators)
-│   └── microphysics/           # AMReX microphysics driver
-│
 ├── templates/                  # Bundled templates
-│   ├── generator/<name>/       # $$JAFF directive templates for jaffgen / TemplateParser
-│   │                           #   (flash, fortran_dlsodes, kokkos_ode, microphysics,
-│   │                           #   python_solve_ivp, rosenbrock_cpp)
-│   └── preprocessor/<name>/    # PREPROCESS_<KEY> marker templates used by the plugins
+│   └── generator/<name>/       # One folder per built-in template (jaffgen --template):
+│                               #   $$JAFF templates plus static solver files (drivers,
+│                               #   Makefiles); flash, fortran_dlsodes, kokkos_ode,
+│                               #   microphysics, python_solve_ivp, rosenbrock_cpp
 │
 ├── types/                      # Base data structures
 │   ├── _catalogue.py           # Catalogue[T] — O(1) list + dict lookup
@@ -242,9 +234,6 @@ flowchart TD
         CG["Codegen\nSymPy → C · C++ · F90\nPy · Rust · Julia · R"]
         TP["TemplateParser  —  jaffgen path\ntemplates/generator/\n$$JAFF directives"]
         OUT_G["Generated output files"]
-        BL["Builder  —  Python API path\nplugin dispatch"]
-        PP["Preprocessor\ntemplates/preprocessor/\n!! PREPROCESS_KEY marker substitution"]
-        OUT_B["Plugin output files"]
     end
 
     NF --> NE
@@ -257,15 +246,13 @@ flowchart TD
     NET --> EQ --> CG
 
     CG --> TP --> OUT_G
-    CG --> BL --> PP --> OUT_B
 ```
 
 ## Data Flow — End to End
 
 The table below traces a single `jaffgen` invocation from command line to output
 files (see `JaffGen` in `cli/jaffgen/_engine.py`). `jaffgen` renders templates with
-`TemplateParser` only; the `Preprocessor` / `Builder` path is a separate Python API
-used by the solver plugins.
+`TemplateParser`.
 
 | Step | Component                                    | What happens                                                                                       |
 | ---- | -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -286,8 +273,8 @@ Each network format is a single `Parser` subclass (the only ABC, in `_formats/_p
 **SymPy as the intermediate representation.**
 All rate expressions, fluxes, and ODEs live as SymPy objects inside `Network`. Code generation (`Codegen`) calls SymPy's language-specific printers (`ccode`, `cxxcode`, `fcode`, etc.), so adding a new target language is a single `Language` subclass in `jaff/codegen/_languages.py`.
 
-**Plugin-based code generation.**
-`Builder` discovers plugins at `jaff.plugins.<name>.plugin` and calls their `#!python main()`. Each plugin owns its template files and knows nothing about the parser. This keeps solver-specific logic out of the core library.
+**Template-based code generation.**
+Each built-in solver is one folder, `templates/generator/<name>/`: `$$JAFF` templates that `TemplateParser` expands against the network, next to the static files the solver needs (driver, Makefile, bundled library sources). Solver-specific code lives in these files, not in the library.
 
 **`Catalogue[T]` for all domain collections.**
 `Species`, `Reactions`, and `Elements` all inherit from `Catalogue`, giving O(1) lookup by integer index, slice, string name, _and_ serialized canonical name. The serialized form (e.g. `"+/H/H/O"` for H₂O⁺) enables duplicate detection that is independent of input name formatting.

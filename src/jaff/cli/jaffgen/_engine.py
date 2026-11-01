@@ -19,11 +19,10 @@ Configuration comes from three layers, lowest precedence first (see
 
 Template lookup
 ---------------
-Built-in templates live inside ``jaff/templates/generator/<name>/`` and
-``jaff/templates/preprocessor/<name>/``.  When a template is selected, all
-files from the *generator* subdirectory are collected first; any preprocessor
-file whose relative path does not clash with a generator file is appended
-afterwards, so the generator always wins on path collisions.
+A built-in template is the folder ``jaff/templates/generator/<name>/``: when
+it is selected, every file in it is rendered (its bundled ``jaffgen.toml``
+aside), keeping its path relative to the folder.  Files without ``$$JAFF``
+directives, such as a solver's driver or Makefile, come out unchanged.
 
 Usage
 -----
@@ -233,9 +232,8 @@ class JaffGen:
         """
         Collect the files of a named built-in template.
 
-        Generator files are collected first; any preprocessor file whose
-        relative path does not clash with a generator file is appended
-        afterwards, so the generator always wins on path collisions.
+        Every file under ``jaff/templates/generator/<template>/``, with its
+        path relative to that folder.
 
         Parameters
         ----------
@@ -261,23 +259,13 @@ class JaffGen:
                 f"{sorted(predefined_templates())}"
             )
 
-        gtemplate_dir = TEMPLATES_DIR / "generator" / template
-        ptemplate_dir = TEMPLATES_DIR / "preprocessor" / template
-        gfiles = [
-            ResolvedPath(f.resolve(), f.relative_to(gtemplate_dir))
-            for f in gtemplate_dir.rglob("*")
-            if not f.is_dir()
-        ]
-        pfiles = [
-            ResolvedPath(f.resolve(), f.relative_to(ptemplate_dir))
-            for f in ptemplate_dir.rglob("*")
-            if not f.is_dir()
-        ]
-        # Generator files win on path collisions; add only non-clashing
-        # preprocessor files.
-        extras = {f.relpath for f in pfiles} - {f.relpath for f in gfiles}
+        folder = TEMPLATES_DIR / "generator" / template
 
-        return [*gfiles, *(f for f in pfiles if f.relpath in extras)]
+        return [
+            ResolvedPath(f.resolve(), f.relative_to(folder))
+            for f in folder.rglob("*")
+            if not f.is_dir()
+        ]
 
     def collect_input_files(self) -> None:
         """

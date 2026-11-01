@@ -16,8 +16,8 @@ Typical workflow
 1. Parse the network with :class:`~jaff.core.network.Network`.
 2. Instantiate :class:`Codegen` for the desired language.
 3. Call the ``get_*_str()`` helpers to obtain formatted code strings.
-4. Insert those strings into template files via the
-   :class:`~jaff.codegen.preprocessor.Preprocessor`.
+4. Or render ``$$JAFF`` template files, whose directives call these helpers,
+   with :class:`~jaff.codegen.TemplateParser` (the ``jaffgen`` command).
 
 Per-language syntax conventions live on :class:`~jaff.codegen._languages.Language`;
 per-method bracket/token overrides are applied by the

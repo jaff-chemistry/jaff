@@ -37,13 +37,13 @@ def _(mo):
     ## Template collections
 
     `jaffgen --template NAME` selects a predefined collection shipped with JAFF.
-    A collection has two parts:
+    A collection is one folder, `templates/generator/NAME/`, holding two kinds
+    of file:
 
-    - files under `templates/generator/NAME/` contain JAFF directives and are
-      **rendered** for your network (rates, fluxes, ODEs, species indices);
-    - files under `templates/preprocessor/NAME/` that are not also in
-      `generator/` are **added as they are**: hand-written drivers, build files
-      and solver libraries that do not depend on the network.
+    - files with JAFF directives are **rendered** for your network (rates,
+      fluxes, ODEs, species indices);
+    - files without directives come out **as they are**: hand-written drivers,
+      build files and solver libraries that do not depend on the network.
 
     The table lists every collection and its files:
     """)
@@ -56,19 +56,17 @@ def _(TEMPLATES_DIR, mo):
     for _gen in sorted((TEMPLATES_DIR / "generator").iterdir()):
         if not _gen.is_dir():
             continue
-        _rendered = sorted(p.name for p in _gen.iterdir() if p.is_file())
-        _static_dir = TEMPLATES_DIR / "preprocessor" / _gen.name
-        _static = (
-            sorted(p.name for p in _static_dir.iterdir() if p.is_file())
-            if _static_dir.is_dir()
-            else []
+        # jaffgen.toml is the collection's config, not an output file.
+        _files = sorted(
+            p for p in _gen.iterdir() if p.is_file() and p.name != "jaffgen.toml"
         )
+        _rendered = [p.name for p in _files if "$$JAFF" in p.read_text(errors="ignore")]
         _rows.append(
             {
                 "collection": _gen.name,
-                "rendered (generator/)": ", ".join(_rendered),
-                "added as-is (preprocessor/)": ", ".join(
-                    f for f in _static if f not in _rendered
+                "rendered (JAFF directives)": ", ".join(_rendered),
+                "as-is (no directives)": ", ".join(
+                    p.name for p in _files if p.name not in _rendered
                 ),
             }
         )

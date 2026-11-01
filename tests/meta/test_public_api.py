@@ -12,7 +12,7 @@ import jaff
 def _packages():
     names = ["jaff"]
     for info in pkgutil.walk_packages(jaff.__path__, "jaff."):
-        if info.ispkg and ".templates" not in info.name and ".plugins." not in info.name:
+        if info.ispkg and ".templates" not in info.name:
             names.append(info.name)
 
     return names

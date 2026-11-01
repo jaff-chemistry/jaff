@@ -353,4 +353,4 @@ network file, the solver infrastructure stays in your repo, and a single
 - [Template Syntax](template-syntax.md) — every directive, property, and option.
 - [jaffgen CLI](jaffgen.md) — inputs, built-in templates, and options.
 - [`Codegen`](../../reference/codegen/codegen/index.md) — the low-level generator behind the `odes`/`rates`/`jacobian` collections.
-- [`Builder`](../../reference/codegen/builder/index.md) — ready-made solver templates when you don't want to write your own.
+- [Built-in templates](jaffgen.md) — ready-made solver projects (`jaffgen --template <name>`) when you don't want to write your own.

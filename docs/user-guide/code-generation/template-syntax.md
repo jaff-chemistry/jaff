@@ -21,8 +21,7 @@ comments (see [Echo](#echo)).
 
 Templates are processed by the [`jaffgen`](jaffgen.md) CLI, or from Python with
 `TemplateParser` (`#!python TemplateParser(net, Path("rates.cpp")).parse_file()`
-returns the rendered text). The [`Builder`](../advanced-code-generation/builder.md)
-does not use this syntax; its templates use `PREPROCESS_` markers instead.
+returns the rendered text).
 
 ---
 

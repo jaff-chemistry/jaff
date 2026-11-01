@@ -58,7 +58,6 @@ nav = [
     ] },
     { "Advanced Code Generation" = [
       "user-guide/advanced-code-generation/index.md",
-      "user-guide/advanced-code-generation/builder.md",
       "user-guide/advanced-code-generation/codegen.md"
     ] },
     { "Testing Networks" = [
@@ -315,10 +314,6 @@ nav = [
     ] },
     { "Code generation" = [
       "reference/codegen/index.md",
-      { "codegen.Builder" = [
-        "reference/codegen/builder/index.md",
-        "reference/codegen/builder/build.md",
-      ] },
       { "codegen.Codegen" = [
         "reference/codegen/codegen/index.md",
         "reference/codegen/codegen/get_commons.md",
@@ -349,11 +344,6 @@ nav = [
       ] },
       { "codegen.IndexedReturn" = [
         "reference/codegen/indexedreturn/index.md",
-      ] },
-      { "codegen.Preprocessor" = [
-        "reference/codegen/preprocessor/index.md",
-        "reference/codegen/preprocessor/preprocess.md",
-        "reference/codegen/preprocessor/preprocess_file.md",
       ] },
       { "codegen.TemplateParser" = [
         "reference/codegen/templateparser/index.md",

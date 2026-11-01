@@ -52,9 +52,9 @@ The three input flags are additive, not exclusive:
 | `--files`    | Specific individual files                                     |
 | `--template` | A built-in collection from `jaff/templates/generator/<name>/` |
 
-For `--template`, generator files are collected first; any **preprocessor** file
-(`jaff/templates/preprocessor/<name>/`) whose relative path does not clash is
-appended — so the generator always wins on a path collision.
+For `--template`, every file in the template's folder is rendered, keeping its
+path relative to the folder; files without `$$JAFF` directives (a solver's
+driver, its Makefile, bundled library sources) come out unchanged.
 
 ---
 
