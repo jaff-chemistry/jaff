@@ -377,6 +377,14 @@ def _module_page(name: str, module: Any) -> str:
     if attributes:
         rows = "\n".join(f"| `{a.name}` | {_cell(_doc_text(a))} |" for a in attributes)
         parts.append(f"## Attributes\n\n| Name | Description |\n| --- | --- |\n{rows}\n")
+    functions = [
+        member
+        for member_name, member in module.members.items()
+        if not member_name.startswith("_") and not member.is_alias and member.is_function
+    ]
+    if functions:
+        rows = "\n".join(f"| `{f.name}` | {_summary(_doc_text(f))} |" for f in functions)
+        parts.append(f"## Functions\n\n| Name | Description |\n| --- | --- |\n{rows}\n")
 
     return "\n".join(part for part in parts if part)
 

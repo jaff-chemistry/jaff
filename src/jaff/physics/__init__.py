@@ -22,6 +22,9 @@ Notes
 :class:`astropy.units.Quantity` objects.  There are no separate ``cgs`` /
 ``si`` / ``gaussian`` / ``natural`` tables: select the unit system per
 quantity at the call site with ``.cgs``, ``.si`` or ``.to(...)``.
+:mod:`jaff.physics.units` holds unit conversion functions (``eV_to_erg``,
+``nm_to_eV``, ``pc_to_cm`` ...) for numbers, NumPy arrays and SymPy
+expressions.
 
 Examples
 --------
@@ -38,7 +41,7 @@ Examples
 3.4516225e-16*tgas
 """
 
-from . import constants
+from . import constants, units
 from .dust import Dust
 from .photo_reactions._photo_band import PhotoBand
 from .photo_reactions._photochemistry import Photochemistry, XsecProps
@@ -49,6 +52,7 @@ from .thermodynamics.eos import EosFactory
 __all__ = [
     "XsecProps",
     "constants",
+    "units",
     "Photochemistry",
     "Radiation",
     "RadiationGroup",

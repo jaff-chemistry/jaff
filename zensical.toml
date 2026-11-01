@@ -311,6 +311,7 @@ nav = [
         "reference/physics/thermodynamics/temperature_derivatives.md",
       ] },
       "reference/physics/constants/index.md",
+      "reference/physics/units/index.md",
     ] },
     { "Code generation" = [
       "reference/codegen/index.md",

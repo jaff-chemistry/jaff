@@ -252,3 +252,17 @@ class Thing:
 def test_types_returned_by_public_methods_have_pages(pages):
     # Db.table returns a Table; without its page the methods are undocumented.
     assert "reference/drivers/table/index.md" in pages
+
+
+class TestModulePage:
+    def test_lists_the_module_functions(self, pages):
+        page = pages["reference/physics/units/index.md"]
+
+        assert "## Functions" in page
+        assert (
+            "| `nm_to_eV` | Convert a photon wavelength in nm to its energy in eV. |"
+            in page
+        )
+
+    def test_constants_page_has_no_functions_table(self, pages):
+        assert "## Functions" not in pages["reference/physics/constants/index.md"]
