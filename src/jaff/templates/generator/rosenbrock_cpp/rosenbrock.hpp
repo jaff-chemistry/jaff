@@ -171,26 +171,28 @@ inline void evaluate_jacobian(BurnT &state, rosenbrock_t<int_neqs> &rstate,
                               const double time) {
 
   vector_to_state<BurnT, int_neqs>(state, rstate.y);
-  rhs(state, rstate.ak1);
   rstate.n_rhs += 1;
 
   if (rstate.jacobian_type == 1) {
-    // jac() only writes the structurally non-zero entries, and decompose()
-    // overwrites rstate.jac in place with the LU factors. Zero the matrix
-    // first so stale factors from the previous step do not leak into the
-    // entries jac() leaves untouched.
+    // rhs_jac() only writes the structurally non-zero entries, and
+    // decompose() overwrites rstate.jac in place with the LU factors. Zero
+    // the matrix first so stale factors from the previous step do not leak
+    // into the entries rhs_jac() leaves untouched.
     for (int i = 0; i < int_neqs; ++i) {
       for (int j = 0; j < int_neqs; ++j) {
         rstate.jac[i][j] = 0.0;
       }
     }
 
-    jac(state, rstate.jac);
+    // one evaluation of the rates for both f(y) and J(y)
+    rhs_jac(state, rstate.ak1, rstate.jac);
 
     if (matrix_is_finite<decltype(rstate.jac), int_neqs>(rstate.jac)) {
       rstate.n_jac += 1;
       return;
     }
+  } else {
+    rhs(state, rstate.ak1);
   }
 
   constexpr double UROUND = std::numeric_limits<double>::epsilon();

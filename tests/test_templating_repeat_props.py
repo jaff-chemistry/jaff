@@ -33,8 +33,12 @@ def options(text: str, line: int = 1):
     return parse_header(f"$$JAFF REPEAT x IN p {{{text}}}", line, Path("t")).options
 
 
+# Properties added since the rewrite.
+NEW_PROPS = {"rhs_jacobian", "rhs_jacobian_entries"}
+
+
 def test_properties_match_the_old_engine():
-    assert set(PROPERTIES) == OLD_PROPS
+    assert set(PROPERTIES) == OLD_PROPS | NEW_PROPS
 
 
 @pytest.mark.parametrize("name", ["rates", "odes", "radodes", "rhses", "jacobian"])

@@ -1461,6 +1461,303 @@ class Codegen:
 
         return jac_code
 
+    def get_indexed_rhs_jacobian(
+        self,
+        part: str = "rhs",
+        thermal: str = "dedt",
+        use_cse: bool = True,
+        cse_var: str = "cse",
+        energy: str = "volumetric",
+        cse_suffix: str = "",
+    ) -> IndexedReturn:
+        """Return the RHS and the analytical Jacobian sharing one set of temporaries.
+
+        Integrators evaluate the Jacobian at the state where they also need the
+        right-hand side, so both can be emitted into one function. Every rate
+        coefficient that depends on temperature only becomes a single
+        temporary that the RHS, the species Jacobian and the temperature
+        column all reference, and the temperature column uses a closed form of
+        each rate's derivative instead of differentiating the inlined rate:
+
+        * ``dk/dT = k * d(ln k)/dT`` per Piecewise branch, whenever that is
+          cheaper than ``sp.diff(k, T)`` (Arrhenius forms, ``10**poly(log T)``
+          fits and products of powers reduce to a sum of simple terms);
+        * ``∂f/∂T = ∂f/∂T|_k + Σ_r (∂f/∂k_r) dk_r/dT`` for each row.
+
+        Rates that depend on number densities are inlined as in
+        :meth:`get_indexed_jacobian`. The temporaries are numbered from one
+        counter, rate-coefficient sub-expressions first, then the rate
+        coefficients, then the sub-expressions of the RHS and Jacobian.
+
+        Both parts are built in one pass and cached, so a template can emit the
+        RHS (with the temporaries) and then the Jacobian entries (without) in
+        the same scope.
+
+        Parameters
+        ----------
+        part : str, optional
+            ``"rhs"`` returns the temporaries and the RHS rows; ``"jacobian"``
+            returns no temporaries and the non-zero Jacobian entries, which
+            reference the ``"rhs"`` part's temporaries. Default ``"rhs"``.
+        thermal : str, optional
+            Thermal equation mode (``"none"``, ``"dedt"`` or ``"dtdt"``).
+            Default ``"dedt"``.
+        use_cse : bool, optional
+            Accepted for symmetry with the other getters; the shared
+            temporaries are the point of this method, so it must be ``True``.
+        cse_var : str, optional
+            Prefix for temporary names.  Default ``"cse"``.
+        energy : str, optional
+            Evolved internal-energy form.  Default ``"volumetric"``.
+        cse_suffix : str, optional
+            Text appended after the index of each temporary name.
+
+        Returns
+        -------
+        IndexedReturn
+            ``"extras"["cse"]`` and ``"expressions"`` as described for *part*.
+
+        Raises
+        ------
+        ValueError
+            If *part* is not ``"rhs"`` or ``"jacobian"`` or *use_cse* is false.
+        """
+        if part not in ("rhs", "jacobian"):
+            raise ValueError(f"Invalid part {part!r}; expected 'rhs' or 'jacobian'")
+        if not use_cse:
+            raise ValueError("get_indexed_rhs_jacobian always shares temporaries")
+
+        key = (
+            thermal,
+            cse_var,
+            energy,
+            cse_suffix,
+            self.lang.name,
+            self.lang.lb,
+            self.lang.rb,
+        )
+        cache = self.__dict__.setdefault("_rhs_jacobian_cache", {})
+        if key not in cache:
+            cache[key] = self.__build_rhs_jacobian(thermal, cse_var, energy, cse_suffix)
+
+        rhs_ir, jac_ir = cache[key]
+        return rhs_ir if part == "rhs" else jac_ir
+
+    @staticmethod
+    def _rate_derivative(k: sp.Expr, k_sym: sp.Symbol, tgas: sp.Symbol) -> sp.Expr:
+        """dk/dT for a temperature-only rate *k*, written with *k_sym* where cheaper.
+
+        Each Piecewise branch ``b`` contributes ``d(ln b)/dT``; the result is
+        ``k_sym * Piecewise((d ln b_1/dT, c_1), ...)``, which shares *k_sym*'s
+        exponentials and powers with the RHS. Falls back to ``sp.diff(k, T)``
+        when the logarithmic form is not cheaper.
+        """
+        plain = sp.diff(k, tgas)
+
+        def log_derivative(branch: sp.Expr) -> sp.Expr | None:
+            if branch == 0:
+                return sp.S.Zero
+            log_branch = sp.expand_log(sp.log(branch), force=True)
+            # A logarithm of a sum is left when the branch is not a product of
+            # powers and exponentials; its quotient form saves nothing.
+            if any(lg.args[0].is_Add for lg in log_branch.atoms(sp.log)):
+                return None
+            return sp.diff(log_branch, tgas)
+
+        if isinstance(k, sp.Piecewise):
+            pieces = []
+            for branch, cond in k.args:
+                dlog = log_derivative(branch)
+                if dlog is None:
+                    return plain
+                pieces.append((dlog, cond))
+            candidate = k_sym * sp.Piecewise(*pieces)
+        else:
+            dlog = log_derivative(k)
+            if dlog is None:
+                return plain
+            candidate = k_sym * dlog
+
+        return candidate if sp.count_ops(candidate) < sp.count_ops(plain) else plain
+
+    def __symbolic_rate_odes(
+        self, y_syms: List[sp.Symbol], nden_to_y: dict
+    ) -> Tuple[List[sp.Expr], dict, dict]:
+        """Species ODEs with each temperature-only rate coefficient as a symbol.
+
+        A reaction's flux ``rate`` is ``k * prod(nden)``; when ``rate / k`` is
+        free of temperature and ``k`` of number densities, the flux is rebuilt
+        as ``k_sym * (rate / k)``. Other reactions keep their inlined flux.
+
+        Returns
+        -------
+        tuple
+            The ODEs (in ``y_i`` symbols), ``{k_sym: k_expr}`` and
+            ``{reaction index: k_sym}``.
+        """
+        tgas = self.net.symbols.tgas
+        y_set = set(y_syms)
+        k_defs: dict = {}
+        k_syms: dict = {}
+        fluxes = []
+        for i, rea in enumerate(self.net.reactions):
+            flux = rea.rate.xreplace(nden_to_y)
+            k = rea.rate_coefficient.xreplace(nden_to_y)
+            monomial = flux / k if k != 0 else None
+            if (
+                monomial is not None
+                and not (k.free_symbols & y_set)
+                and tgas not in monomial.free_symbols
+                and monomial.free_symbols <= y_set
+            ):
+                k_sym = sp.Symbol(f"_jaff_rate_{i}")
+                k_defs[k_sym] = k
+                k_syms[i] = k_sym
+                flux = k_sym * monomial
+            fluxes.append(flux)
+
+        odes: List[sp.Expr] = [sp.S.Zero for _ in range(self.net.species.core.count)]
+
+        def slot(participant) -> int:
+            fidx = participant.fidx
+            if isinstance(fidx, str) and fidx.startswith("idx_"):
+                return participant.index
+            return int(fidx)
+
+        for i, rea in enumerate(self.net.reactions):
+            for rr in rea.reactants.core:
+                odes[slot(rr)] -= fluxes[i]
+            for pp in rea.products.core:
+                odes[slot(pp)] += fluxes[i]
+
+        return odes, k_defs, k_syms
+
+    def __build_rhs_jacobian(
+        self, thermal: str, cse_var: str, energy: str, cse_suffix: str
+    ) -> Tuple[IndexedReturn, IndexedReturn]:
+        """Build both parts of :meth:`get_indexed_rhs_jacobian`."""
+        with jaff_progress.indeterminate("Generating shared rhs/jacobian"):
+            n_species = self.net.species.count
+            tgas = self.net.symbols.tgas
+            nden_matrix = self.net.symbols.ndens
+            y_syms = [sp.symbols(f"y_{i}") for i in range(n_species)]
+            nden_to_y = {nden_matrix[i]: y_syms[i] for i in range(n_species)}
+
+            odes, k_defs, k_syms = self.__symbolic_rate_odes(y_syms, nden_to_y)
+            thermal_rows = [
+                row.xreplace(nden_to_y) for row in self._thermal_rows(thermal, energy)
+            ]
+            odes = [*odes, *thermal_rows]
+            n_eqns = len(odes)
+
+            jac = sp.zeros(n_eqns, n_species)
+            y_index = {sym: col for col, sym in enumerate(y_syms)}
+            for row, ode in enumerate(odes):
+                for sym in ode.free_symbols:
+                    col = y_index.get(sym)
+                    if col is not None:
+                        jac[row, col] = ode.diff(sym)
+
+            if thermal_rows:
+                dk = {
+                    k_sym: self._rate_derivative(k_expr, k_sym, tgas)
+                    for k_sym, k_expr in k_defs.items()
+                }
+                dxdot_dtgas = []
+                for ode in odes:
+                    d = sp.diff(ode, tgas)
+                    for k_sym in ode.free_symbols & dk.keys():
+                        d += sp.diff(ode, k_sym) * dk[k_sym]
+                    dxdot_dtgas.append(d)
+
+                if thermal == "dtdt":
+                    dde = sp.Matrix(dxdot_dtgas)
+                else:
+                    dde = self._energy_column(jac, dxdot_dtgas, nden_matrix, energy)
+                jac = jac.row_join(dde)
+            jac = jac.xreplace(nden_to_y)
+
+        with jaff_progress.indeterminate("Generating shared cse expressions"):
+            # One CSE over the rate coefficients, the RHS and the Jacobian, so
+            # sub-expressions of inlined rates (e.g. in the thermal row) are
+            # shared with the rate temporaries too.
+            k_list = list(k_defs)
+            outputs = [*(k_defs[s] for s in k_list), *odes, *list(jac)]
+            symbols = self._cse_symbols(cse_var, cse_suffix)
+            temps, reduced = sp.cse(outputs, symbols=symbols)
+
+            # Bind each rate symbol to a temporary of its own and order all
+            # definitions so each follows the ones it reads.
+            rename = {s: next(symbols) for s in k_list}
+            defs = [*temps, *((s, e) for s, e in zip(k_list, reduced[: len(k_list)]))]
+            defs = [(rename.get(s, s), e.xreplace(rename)) for s, e in defs]
+            reduced = [e.xreplace(rename) for e in reduced[len(k_list) :]]
+            defs = self.__prune_cse(self._topological_defs(defs), reduced)
+            replacements_dict = {str(k): v for k, v in defs}
+
+        dpattern = re.compile(r"\by_(\d+)\b")
+
+        def emit(expr: sp.Expr) -> str:
+            expr = self.__convert_unknown_derivatives(expr, replacements_dict)
+            text = self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
+            return dpattern.sub(
+                lambda m: f"nden{self.lang.lb}{int(m.group(1))}{self.lang.rb}", text
+            )
+
+        rhs_ir: IndexedReturn = {
+            "extras": {"cse": IndexedList()},
+            "expressions": IndexedList(),
+        }
+        jac_ir: IndexedReturn = {
+            "extras": {"cse": IndexedList()},
+            "expressions": IndexedList(),
+        }
+        for var, expr in defs:
+            idx = self._cse_index(var, cse_var, cse_suffix)
+            rhs_ir["extras"]["cse"].append(IndexedValue([idx], emit(expr)))
+
+        for i in range(n_eqns):
+            rhs_ir["expressions"].append(IndexedValue([i], emit(reduced[i])))
+
+        n_cols = jac.shape[1]
+        for i, j in product(range(n_eqns), range(n_cols)):
+            expr = reduced[n_eqns + i * n_cols + j]
+            if expr == 0:
+                continue
+            jac_ir["expressions"].append(IndexedValue([i, j], emit(expr)))
+
+        return rhs_ir, jac_ir
+
+    @staticmethod
+    def _topological_defs(
+        defs: List[Tuple[sp.Symbol, sp.Expr]],
+    ) -> List[Tuple[sp.Symbol, sp.Expr]]:
+        """Order definitions so each follows those it reads, otherwise stably."""
+        expr_of = dict(defs)
+        position = {sym: n for n, (sym, _) in enumerate(defs)}
+        names = set(expr_of)
+        done: set = set()
+        ordered: List[Tuple[sp.Symbol, sp.Expr]] = []
+
+        for root, _ in defs:
+            stack = [(root, False)]
+            while stack:
+                sym, expanded = stack.pop()
+                if sym in done:
+                    continue
+                if expanded:
+                    done.add(sym)
+                    ordered.append((sym, expr_of[sym]))
+                    continue
+                stack.append((sym, True))
+                deps = sorted(
+                    cast(Set[sp.Symbol], expr_of[sym].free_symbols & names) - done,
+                    key=lambda s: -position[s],
+                )
+                stack.extend((d, False) for d in deps)
+
+        return ordered
+
     @staticmethod
     def __convert_unknown_derivatives(
         expr: sp.Expr, cse_defs: dict | None = None
