@@ -13,6 +13,7 @@ from .blocks import Block, CommandBlock
 from .commands import Comment, Lang
 from .context import RenderContext
 from .engine import split_blocks
+from .functions import TemplateFunctions
 from .render import render_blocks
 
 if TYPE_CHECKING:
@@ -45,6 +46,9 @@ class TemplateParser:
         Template path.
     echo_directives : bool, optional
         Whether directives appear as comments in the output.  Default ``True``.
+    functions : TemplateFunctions, optional
+        Functions for ``$$JAFF CALL``; ``None`` (the default) when the template
+        has no ``jaffgen_template_functions.py``.
 
     Attributes
     ----------
@@ -54,6 +58,8 @@ class TemplateParser:
         Template path.
     echo_directives : bool
         Whether directives are echoed as comments in the output.
+    functions : TemplateFunctions or None
+        Functions for ``$$JAFF CALL``.
 
     Examples
     --------
@@ -78,7 +84,11 @@ class TemplateParser:
     """
 
     def __init__(
-        self, network: Network, file: Path, echo_directives: bool = True
+        self,
+        network: Network,
+        file: Path,
+        echo_directives: bool = True,
+        functions: Optional[TemplateFunctions] = None,
     ) -> None:
         """Remember what to render; nothing is read until :meth:`parse_file`.
 
@@ -91,10 +101,13 @@ class TemplateParser:
         echo_directives : bool, optional
             Whether directives appear as comments in the output.  Default
             ``True``.
+        functions : TemplateFunctions, optional
+            Functions for ``$$JAFF CALL``.  Default ``None``.
         """
         self.net = network
         self.file = Path(file)
         self.echo_directives = echo_directives
+        self.functions = functions
 
     def parse_file(self) -> str:
         """Render the template and return the generated code.
@@ -121,7 +134,14 @@ class TemplateParser:
 
         lang, comment = self._settings(blocks, text)
         cg = Codegen(network=self.net, lang=lang)
-        ctx = RenderContext(self.net, cg, self.file, self.echo_directives, comment)
+        ctx = RenderContext(
+            self.net,
+            cg,
+            self.file,
+            self.echo_directives,
+            comment,
+            functions=self.functions,
+        )
         output = render_blocks(blocks, ctx)
 
         if cg.lang.name == "fortran":

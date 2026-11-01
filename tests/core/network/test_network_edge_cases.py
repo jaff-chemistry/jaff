@@ -155,8 +155,22 @@ class TestNetworkEdgeCases:
         import itertools
 
         elements = [
-            "H", "He", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al",
-            "Si", "P", "S", "Cl", "Ar", "K",
+            "H",
+            "He",
+            "C",
+            "N",
+            "O",
+            "F",
+            "Ne",
+            "Na",
+            "Mg",
+            "Al",
+            "Si",
+            "P",
+            "S",
+            "Cl",
+            "Ar",
+            "K",
         ]
         pairs = list(itertools.combinations(elements, 2))[:50]
 

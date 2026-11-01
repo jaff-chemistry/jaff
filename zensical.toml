@@ -349,9 +349,15 @@ nav = [
         "reference/codegen/templateparser/index.md",
         "reference/codegen/templateparser/parse_file.md",
       ] },
+      { "codegen.TemplateFunctions" = [
+        "reference/codegen/templatefunctions/index.md",
+        "reference/codegen/templatefunctions/names.md",
+        "reference/codegen/templatefunctions/get.md",
+      ] },
       { "codegen.ExtrasDict" = [
         "reference/codegen/extrasdict/index.md",
       ] },
+      "reference/codegen/jaffgen_function.md",
     ] },
     { "Drivers" = [
       "reference/drivers/index.md",

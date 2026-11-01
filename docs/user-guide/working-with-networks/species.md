@@ -34,8 +34,8 @@ from jaff import Network
 
 net = Network("networks/h_photoionization/h_photo.jet")
 
-net.species.count        # 3
-net.species.names()      # ['H', 'H+', 'e-']
+net.species.count  # 3
+net.species.names()  # ['H', 'H+', 'e-']
 ```
 
 ---
@@ -92,14 +92,14 @@ those derived facts.
 ```python
 h = net.species["H"]
 
-h.name          # 'H'
-h.mass          # 1.673773e-24   ← grams, not amu
-h.charge        # 0
-h.index         # 0
-h.exploded      # ['H']
-h.serialized    # 'H'
-h.fidx          # 'idx_h'
-h.latex()       # '{\\rm H}'
+h.name  # 'H'
+h.mass  # 1.673773e-24   ← grams, not amu
+h.charge  # 0
+h.index  # 0
+h.exploded  # ['H']
+h.serialized  # 'H'
+h.fidx  # 'idx_h'
+h.latex()  # '{\\rm H}'
 ```
 
 !!! warning "Mass is in grams (CGS), not atomic mass units"
@@ -116,11 +116,11 @@ specie shows all of them at once:
 ```python
 hp = net.species["H+"]
 
-hp.charge       # 1          ← counted from trailing '+' signs
-hp.exploded     # ['+', 'H'] ← atoms (sorted), charge carried as a token
-hp.serialized   # '+/H'      ← canonical identity
-hp.fidx         # 'idx_hj'   ← '+' → 'j' so it's a legal identifier
-hp.latex()      # '{\\rm H^{+}}'
+hp.charge  # 1          ← counted from trailing '+' signs
+hp.exploded  # ['+', 'H'] ← atoms (sorted), charge carried as a token
+hp.serialized  # '+/H'      ← canonical identity
+hp.fidx  # 'idx_hj'   ← '+' → 'j' so it's a legal identifier
+hp.latex()  # '{\\rm H^{+}}'
 ```
 
 - **`exploded`** is the formula flattened into individual atoms and sorted, so
@@ -146,13 +146,13 @@ hashing all reduce to the name string:
 ```python
 H, Hp, e = net.species["H"], net.species["H+"], net.species["e-"]
 
-H == Hp            # False — different names
-H == net.species[0]   # True  — same specie, compared by name
+H == Hp  # False — different names
+H == net.species[0]  # True  — same specie, compared by name
 
-H < Hp             # True  — '<' / '>' compare names lexicographically
-Hp > H             # True
+H < Hp  # True  — '<' / '>' compare names lexicographically
+Hp > H  # True
 
-sorted([Hp, e, H])    # [SpecieObject('H'), SpecieObject('H+'), SpecieObject('e-')]
+sorted([Hp, e, H])  # [SpecieObject('H'), SpecieObject('H+'), SpecieObject('e-')]
 ```
 
 Because the name is also the hash key, species can be used directly in `set`s
@@ -164,15 +164,15 @@ lowercase (`'H'` < `'H+'` < `'e-'`).
     Comparing a `Specie` against a bare string raises `TypeError` — use the name
     explicitly instead:
     ```python
-    H == "H"          # TypeError: '==' not supported … 'Specie' and 'H'
-    H.name == "H"     # True
+    H == "H"  # TypeError: '==' not supported … 'Specie' and 'H'
+    H.name == "H"  # True
     ```
 
 Printing a specie gives back its chemical name; `repr` wraps it for debugging:
 
 ```python
-str(net.species["H+"])    # 'H+'             ← __str__ is just the name
-repr(net.species["H+"])   # "SpecieObject('H+')"
+str(net.species["H+"])  # 'H+'             ← __str__ is just the name
+repr(net.species["H+"])  # "SpecieObject('H+')"
 print(net.species["H+"])  # H+
 ```
 
@@ -198,11 +198,11 @@ electron stays whole:
 ```python
 e = net.species["e-"]
 
-e.charge        # -1
-e.mass          # 9.10938371e-28 ← the electron mass, in grams
-e.exploded      # ['e-']         ← not split, not an atom token
-e.serialized    # 'e-'
-e.fidx          # 'idx_e'        ← special-cased, not 'idx_ek'
+e.charge  # -1
+e.mass  # 9.10938371e-28 ← the electron mass, in grams
+e.exploded  # ['e-']         ← not split, not an atom token
+e.serialized  # 'e-'
+e.fidx  # 'idx_e'        ← special-cased, not 'idx_ek'
 ```
 
 **It is often handled separately by solvers**, so almost every catalogue
@@ -210,17 +210,17 @@ accessor takes an `ne` ("no electron") flag. Set `ne=True` and the electron
 drops out of the returned vector while every other specie keeps its place:
 
 ```python
-net.species.names()             # ['H', 'H+', 'e-']
-net.species.names(ne=True)      # ['H', 'H+']
+net.species.names()  # ['H', 'H+', 'e-']
+net.species.names(ne=True)  # ['H', 'H+']
 
-net.species.charges()           # [0, 1, -1]
-net.species.charges(ne=True)    # [0, 1]
+net.species.charges()  # [0, 1, -1]
+net.species.charges(ne=True)  # [0, 1]
 ```
 
 When you need the electron's slot directly, ask the catalogue:
 
 ```python
-net.species.e_idx()   # 2   (None if the network has no electron)
+net.species.e_idx()  # 2   (None if the network has no electron)
 ```
 
 ---
@@ -234,10 +234,10 @@ into bulk arrays. The ordering is fixed at load time and matches every
 ### Three ways to find a specie
 
 ```python
-net.species["H"]      # by name        → SpecieObject('H')
-net.species["+/H"]    # by serialized  → SpecieObject('H+')
-net.species[1]        # by index       → SpecieObject('H+')
-net.species[-1]       # negative index → SpecieObject('e-')
+net.species["H"]  # by name        → SpecieObject('H')
+net.species["+/H"]  # by serialized  → SpecieObject('H+')
+net.species[1]  # by index       → SpecieObject('H+')
+net.species[-1]  # negative index → SpecieObject('e-')
 ```
 
 Lookup by serialized form is what makes isomer-insensitive queries possible: any
@@ -251,8 +251,8 @@ attribute kept in step as species are added; `len()` is the Pythonic spelling.
 Use whichever reads better:
 
 ```python
-net.species.count     # 3
-len(net.species)      # 3   — identical
+net.species.count  # 3
+len(net.species)  # 3   — identical
 ```
 
 ### Iteration and membership
@@ -264,8 +264,8 @@ serialized string:
 for sp in net.species:
     print(f"{sp.index:>3}  {sp.name:<4}  {sp.mass:.3e} g  charge {sp.charge:+d}")
 
-"H"   in net.species    # True   (by name)
-"+/H" in net.species    # True   (by serialized form)
+"H" in net.species  # True   (by name)
+"+/H" in net.species  # True   (by serialized form)
 ```
 
 ### Bulk accessors
@@ -308,13 +308,13 @@ pass an attribute name — that attribute projected out of each match. `charged(
 also honours the `ne` flag.
 
 ```python
-net.species.neutral()              # [SpecieObject('H')]
-net.species.neutral("name")        # ['H']
+net.species.neutral()  # [SpecieObject('H')]
+net.species.neutral("name")  # ['H']
 
-net.species.charged()              # [SpecieObject('H+'), SpecieObject('e-')]
-net.species.charged("name")        # ['H+', 'e-']
-net.species.charged("index")       # [1, 2]
-net.species.charged("name", ne=True)   # ['H+']   (electron excluded)
+net.species.charged()  # [SpecieObject('H+'), SpecieObject('e-')]
+net.species.charged("name")  # ['H+', 'e-']
+net.species.charged("index")  # [1, 2]
+net.species.charged("name", ne=True)  # ['H+']   (electron excluded)
 ```
 
 The attribute name must be a real `Specie` attribute (`name`, `mass`, `charge`,
@@ -337,7 +337,7 @@ for sp in net.species:
 ### Find every ion
 
 ```python
-ions = net.species.charged("name", ne=True)   # exclude the electron
+ions = net.species.charged("name", ne=True)  # exclude the electron
 print(f"{len(ions)} ions: {list(ions)}")
 ```
 

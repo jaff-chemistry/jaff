@@ -28,8 +28,8 @@ from jaff import Network
 
 net = Network("networks/h_photoionization/h_photo.jet")
 
-net.reactions.count            # 2
-net.reactions.verbatim()       # ['H + _PHOTON -> H+ + e-', 'H+ + e- -> H']
+net.reactions.count  # 2
+net.reactions.verbatim()  # ['H + _PHOTON -> H+ + e-', 'H+ + e- -> H']
 ```
 
 <!-- prettier-ignore -->
@@ -77,9 +77,9 @@ The single most important thing about a `Reaction` is that its
 time but not yet evaluated.
 
 ```python
-rec = net.reactions[1]      # H+ + e- -> H  (recombination)
-rec.rate_coefficient        # 2.63e-13/(tgas/10000.0)**0.7
-rec.rate                    # 1.65941781598291e-10*nden[1]*nden[2]/tgas**0.7
+rec = net.reactions[1]  # H+ + e- -> H  (recombination)
+rec.rate_coefficient  # 2.63e-13/(tgas/10000.0)**0.7
+rec.rate  # 1.65941781598291e-10*nden[1]*nden[2]/tgas**0.7
 ```
 
 Because the rate is symbolic, a single reaction can be turned into many concrete
@@ -88,8 +88,8 @@ forms on demand — differentiated, compiled to six languages, or plotted:
 ```python
 import sympy
 
-rec.get_sympy()                          # 2.63e-13/(tgas/10000.0)**0.7
-sympy.diff(rec.get_sympy(), "tgas")      # analytic dk/dT, also symbolic
+rec.get_sympy()  # 2.63e-13/(tgas/10000.0)**0.7
+sympy.diff(rec.get_sympy(), "tgas")  # analytic dk/dT, also symbolic
 ```
 
 A photo-reaction's rate is instead an unevaluated `photorates(...)` call. The
@@ -142,11 +142,11 @@ as a 100-digit number (abbreviated above), while
 ```python
 rxn = net.reactions[0]
 
-rxn.verbatim                 # 'H + _PHOTON -> H+ + e-'
-rxn.reactants.names()        # ['H', '_PHOTON']
-rxn.products.names()         # ['H+', 'e-']
-rxn.tmin, rxn.tmax           # (None, None)
-rxn.index                    # 0
+rxn.verbatim  # 'H + _PHOTON -> H+ + e-'
+rxn.reactants.names()  # ['H', '_PHOTON']
+rxn.products.names()  # ['H+', 'e-']
+rxn.tmin, rxn.tmax  # (None, None)
+rxn.index  # 0
 ```
 
 ### Conservation is checked by the network
@@ -157,7 +157,7 @@ the load when the network is opened with `strict=True`. A `Reaction` built by ha
 is not checked; run the checks yourself:
 
 ```python
-rxn.check_mass()    # True  — mass balances within one electron mass
+rxn.check_mass()  # True  — mass balances within one electron mass
 rxn.check_charge()  # True  — net charge identical on both sides
 net.check_conservation(strict=False)  # ConservationReport(mass=(...), charge=(...))
 ```
@@ -173,8 +173,8 @@ Just as a [`Specie`](species.md) has a canonical `serialized` identity, so does
 a reaction — but a reaction has **two**, and the difference is the whole point.
 
 ```python
-rxn.serialized            # 'H._PHOTON__H+.e-'    ← name-level  (isomer-sensitive)
-rxn.serialized_exploded   # 'H._PHOTON__+/H.e-'   ← atom-level  (isomer-insensitive)
+rxn.serialized  # 'H._PHOTON__H+.e-'    ← name-level  (isomer-sensitive)
+rxn.serialized_exploded  # 'H._PHOTON__+/H.e-'   ← atom-level  (isomer-insensitive)
 ```
 
 Both sort the species on each side, join the species on a side with `.`, and
@@ -191,7 +191,7 @@ sort:
   names.
 
 ```python
-net.reactions[0].is_isomer_version(net.reactions[1])   # False
+net.reactions[0].is_isomer_version(net.reactions[1])  # False
 ```
 
 `is_isomer_version` returns `True` only when the atom-level forms match _and_ at
@@ -208,11 +208,11 @@ regardless of `index`, rate, or temperature bounds:
 ```python
 r0, r1 = net.reactions[0], net.reactions[1]
 
-r0 == r1               # False — different serialized forms
-r0 == net.reactions[0] # True  — same reaction
+r0 == r1  # False — different serialized forms
+r0 == net.reactions[0]  # True  — same reaction
 
-r0 < r1                # compares serialized strings, not index order
-sorted([r1, r0])       # [ReactionObject(H+ + e- -> H), ReactionObject(H + _PHOTON -> H+ + e-)]
+r0 < r1  # compares serialized strings, not index order
+sorted([r1, r0])  # [ReactionObject(H+ + e- -> H), ReactionObject(H + _PHOTON -> H+ + e-)]
 ```
 
 <!-- prettier-ignore -->
@@ -230,8 +230,8 @@ _and_ the temperature range (see
 Printing a reaction gives its human-readable equation; `repr` wraps it:
 
 ```python
-str(net.reactions[0])    # 'H + _PHOTON -> H+ + e-'            ← __str__ is the verbatim
-repr(net.reactions[0])   # 'ReactionObject(H + _PHOTON -> H+ + e-)'
+str(net.reactions[0])  # 'H + _PHOTON -> H+ + e-'            ← __str__ is the verbatim
+repr(net.reactions[0])  # 'ReactionObject(H + _PHOTON -> H+ + e-)'
 print(net.reactions[0])  # H + _PHOTON -> H+ + e-
 ```
 
@@ -291,9 +291,9 @@ Grain/ice surface-mechanism types (gas-grain networks):
 The set is open-ended: any string a parser supplies is stored verbatim.
 
 ```python
-net.reactions[0].type   # 'photo'
-net.reactions[1].type   # 'unknown'
-net.reactions.types()     # ['photo', 'unknown']
+net.reactions[0].type  # 'photo'
+net.reactions[1].type  # 'unknown'
+net.reactions.types()  # ['photo', 'unknown']
 ```
 
 ### Temperature ranges and piecewise rates
@@ -346,15 +346,15 @@ carries a cross-section table instead of an analytic rate:
 ```python
 rxn = net.reactions[0]
 
-rxn.rate_coefficient                    # photorates(1, 13.6, 1000…000.0)
-rxn.photo.xsec                          # XsecProps: units, process, database,
-                                        #   photon_energy, photo_absorption,
-                                        #   photodecay, photodecay_expr, total
-len(rxn.photo.xsec.photon_energy)       # number of grid points (energies in eV)
-rxn.photo.xsec.photodecay               # cross sections in cm^2 (or None)
-rxn.config.photo.pi_database            # the reaction's resolved PI database ("norad", ...)
-rxn.config.photo.override_custom_rate   # resolved override_custom_rate
-rxn.config.photo.shielding              # resolved shielding table, or None
+rxn.rate_coefficient  # photorates(1, 13.6, 1000…000.0)
+rxn.photo.xsec  # XsecProps: units, process, database,
+#   photon_energy, photo_absorption,
+#   photodecay, photodecay_expr, total
+len(rxn.photo.xsec.photon_energy)  # number of grid points (energies in eV)
+rxn.photo.xsec.photodecay  # cross sections in cm^2 (or None)
+rxn.config.photo.pi_database  # the reaction's resolved PI database ("norad", ...)
+rxn.config.photo.override_custom_rate  # resolved override_custom_rate
+rxn.config.photo.shielding  # resolved shielding table, or None
 ```
 
 `rxn.photo` holds what is computed for the reaction (cross sections, band
@@ -374,8 +374,8 @@ in `photodecay`. `photo.xsec.database` names the source (`"norad"`,
 The catalogue gives you dedicated ways to pick them out:
 
 ```python
-net.reactions.photo_reactions()         # Vector[Reaction] — just the photo ones
-net.reactions.photo_reaction_truths()   # [1, 0]  — 1 where photo
+net.reactions.photo_reactions()  # Vector[Reaction] — just the photo ones
+net.reactions.photo_reaction_truths()  # [1, 0]  — 1 where photo
 net.reactions.photo_reaction_indices()  # [0]     — their positions
 ```
 
@@ -384,7 +384,7 @@ where `n` is its 1-based position in `net.reactions.with_type("photo")` and `lo`
 are the band edges:
 
 ```python
-net.reactions[0].get_code(lang="cxx")   # 'photorates(1, 13.6, 1.0e+99)'
+net.reactions[0].get_code(lang="cxx")  # 'photorates(1, 13.6, 1.0e+99)'
 ```
 
 ---
@@ -400,10 +400,10 @@ catalogue can be looked up two ways.
 ### Ways to find a reaction
 
 ```python
-net.reactions[0]                       # by index        → Reaction
-net.reactions[-1]                      # negative index  → last reaction
+net.reactions[0]  # by index        → Reaction
+net.reactions[-1]  # negative index  → last reaction
 net.reactions["H + _PHOTON -> H+ + e-"]  # by verbatim string
-net.reactions["H._PHOTON__H+.e-"]        # by serialized form
+net.reactions["H._PHOTON__H+.e-"]  # by serialized form
 ```
 
 String lookup returns a **single** `Reaction` when the key is unique, and
@@ -414,18 +414,22 @@ vs cosmic-ray desorption); for such an ambiguous key the lookup returns a
 `(serialized, type)` tuple:
 
 ```python
-net.reactions["C_DUST__C", "desorption_thermal"]   # exact reaction
-net.reactions["C_DUST__C", "desorption_cr"]         # the other mechanism
+net.reactions["C_DUST__C", "desorption_thermal"]  # exact reaction
+net.reactions["C_DUST__C", "desorption_cr"]  # the other mechanism
 ```
 
 The typed helpers:
 
 ```python
-net.reactions.from_verbatim("H + _PHOTON -> H+ + e-")      # Reaction or None
-net.reactions.from_serialized("H._PHOTON__H+.e-")          # list[Reaction] (all types); KeyError if none
-net.reactions.all("H._PHOTON__H+.e-")                      # Vector[Reaction], [] if none
-net.reactions.get("H + _PHOTON -> H+ + e-", type="photo")  # Reaction or None; never raises
-net.reactions.by_source_index(0)                           # by file-side number (Reaction.index), or None
+net.reactions.from_verbatim("H + _PHOTON -> H+ + e-")  # Reaction or None
+net.reactions.from_serialized(
+    "H._PHOTON__H+.e-"
+)  # list[Reaction] (all types); KeyError if none
+net.reactions.all("H._PHOTON__H+.e-")  # Vector[Reaction], [] if none
+net.reactions.get(
+    "H + _PHOTON -> H+ + e-", type="photo"
+)  # Reaction or None; never raises
+net.reactions.by_source_index(0)  # by file-side number (Reaction.index), or None
 ```
 
 `from_serialized` always returns a **list** (every reaction with that serialized
@@ -447,8 +451,8 @@ equals `rxn.reactants.count`.)
 for rxn in net.reactions:
     print(f"{rxn.index:>3}  {rxn.verbatim:<16}  {rxn.type}")
 
-net.reactions.count   # 2
-len(net.reactions)    # 2   — identical
+net.reactions.count  # 2
+len(net.reactions)  # 2   — identical
 ```
 
 ### Bulk accessors
@@ -476,11 +480,11 @@ Each returns a `Vector` aligned to catalogue order.
 ### Filter by type
 
 ```python
-net.reactions.photo_reactions()              # the photo subset
-net.reactions.with_type("cosmic_ray")       # cosmic-ray reactions
-net.reactions.with_type("unknown")          # everything unclassified
-net.reactions.with_format("prizmo")         # reactions read by the PRIZMO parser
-net.reactions.radiation_emitters()          # reactions with a spectralYield<N>
+net.reactions.photo_reactions()  # the photo subset
+net.reactions.with_type("cosmic_ray")  # cosmic-ray reactions
+net.reactions.with_type("unknown")  # everything unclassified
+net.reactions.with_format("prizmo")  # reactions read by the PRIZMO parser
+net.reactions.radiation_emitters()  # reactions with a spectralYield<N>
 ```
 
 The type key is whatever string the parser stored — the gas-phase set
@@ -499,12 +503,12 @@ surface-mechanism type (see [Reaction types](#reaction-types)).
 `Specie`, or a list.
 
 ```python
-rec = net.reactions[1]            # H+ + e- -> H
+rec = net.reactions[1]  # H+ + e- -> H
 
-rec.has_reactant("H+")            # True
-rec.has_reactant(["H+", "e-"])    # True  — all present
-rec.has_product("H")              # True
-rec.has_any_species("e-")         # True  — on either side
+rec.has_reactant("H+")  # True
+rec.has_reactant(["H+", "e-"])  # True  — all present
+rec.has_product("H")  # True
+rec.has_any_species("e-")  # True  — on either side
 ```
 
 ### String representations
@@ -512,10 +516,10 @@ rec.has_any_species("e-")         # True  — on either side
 ```python
 rxn = net.reactions[0]
 
-rxn.verbatim                # 'H + _PHOTON -> H+ + e-'   (also rxn.get_verbatim())
-rxn.get_latex()             # '${\\rm H} + {\\rm \\gamma}\\,\\to\\,{\\rm H^{+}} + {\\rm e^{-}}$'
-rxn.serialized              # 'H._PHOTON__H+.e-'
-rxn.serialize_exploded()    # 'H._PHOTON__+/H.e-'
+rxn.verbatim  # 'H + _PHOTON -> H+ + e-'   (also rxn.get_verbatim())
+rxn.get_latex()  # '${\\rm H} + {\\rm \\gamma}\\,\\to\\,{\\rm H^{+}} + {\\rm e^{-}}$'
+rxn.serialized  # 'H._PHOTON__H+.e-'
+rxn.serialize_exploded()  # 'H._PHOTON__+/H.e-'
 ```
 
 ### Code generation
@@ -526,10 +530,12 @@ keys: `python`, `c`, `cxx`, `fortran`, `rust`, `julia`, `r`.
 ```python
 rec = net.reactions[1]
 
-rec.get_code(lang="python")    # '2.63e-13*(tgas/10000.0)**(-0.7)'
-rec.get_code(lang="cxx")       # '2.6299999999999999e-13*std::pow(tgas/10000.0, -0.69999999999999996)'
-rec.get_code(lang="fortran")   # '2.63d-13*(tgas/10000.0d0)**(-0.7d0)'
-rec.get_code(lang="julia")     # '2.63e-13 * (tgas / 10000.0) .^ (-0.7)'
+rec.get_code(lang="python")  # '2.63e-13*(tgas/10000.0)**(-0.7)'
+rec.get_code(
+    lang="cxx"
+)  # '2.6299999999999999e-13*std::pow(tgas/10000.0, -0.69999999999999996)'
+rec.get_code(lang="fortran")  # '2.63d-13*(tgas/10000.0d0)**(-0.7d0)'
+rec.get_code(lang="julia")  # '2.63e-13 * (tgas / 10000.0) .^ (-0.7)'
 ```
 
 `get_flux_expression` builds the reaction flux `k[i] * y[idx_R1] * y[idx_R2]…`
@@ -539,8 +545,7 @@ from each reactant's `fidx`, with configurable variable names and brackets:
 rec.get_flux_expression(idx=1)
 # 'k[1] * y[idx_hj] * y[idx_e]'
 
-rec.get_flux_expression(idx=1, rate_variable="k",
-                        species_variable="nden", brackets="()")
+rec.get_flux_expression(idx=1, rate_variable="k", species_variable="nden", brackets="()")
 # 'k(1) * nden(idx_hj) * nden(idx_e)'
 ```
 
@@ -554,14 +559,14 @@ saved / shown (`fig.savefig(...)` still works); pass `close=False` to keep it
 open.
 
 ```python
-rec.plot_rate_coefficient()         # κ vs temperature (log–log), one curve
+rec.plot_rate_coefficient()  # κ vs temperature (log–log), one curve
 
 photo = net.reactions.photo_reactions()[0].photo
-photo.plot_xsecs()                                     # all processes, eV vs Mb
-photo.plot_xsecs(processes="photodecay")               # one process only
-photo.plot_xsecs(energy_unit="nm", xsec_unit="cm^2")   # wavelength + cm² axes
-photo.plot_xsecs(bands=True)                           # band-averaged bars
-photo.plot_xsecs(save="h_xsec.pdf", show=False)        # write to disk
+photo.plot_xsecs()  # all processes, eV vs Mb
+photo.plot_xsecs(processes="photodecay")  # one process only
+photo.plot_xsecs(energy_unit="nm", xsec_unit="cm^2")  # wavelength + cm² axes
+photo.plot_xsecs(bands=True)  # band-averaged bars
+photo.plot_xsecs(save="h_xsec.pdf", show=False)  # write to disk
 ```
 
 `plot_rate_coefficient` spans `[tmin, tmax]`, defaulting to `2.73 K` and `1e6 K`
@@ -580,12 +585,12 @@ a panel and a nested list is overlaid on one panel:
 ```python
 from jaff.plotting import plot_rates, plot_xsecs
 
-big = Network("uclchem_small_gas")          # h_photo has only two reactions
+big = Network("uclchem_small_gas")  # h_photo has only two reactions
 r = list(big.reactions.with_type("unknown"))
-plot_rates(r[:5])                                # five curves, one axes
-plot_rates([r[0], [r[1], r[2]]], grid=(1, 2))    # two panels
-plot_rates(r[:12], grid=(3, 4))                  # one panel per reaction (12 cells)
-plot_rates(r[:30])                               # auto grid (1, 3): 12 + 12 + 6 curves
+plot_rates(r[:5])  # five curves, one axes
+plot_rates([r[0], [r[1], r[2]]], grid=(1, 2))  # two panels
+plot_rates(r[:12], grid=(3, 4))  # one panel per reaction (12 cells)
+plot_rates(r[:30])  # auto grid (1, 3): 12 + 12 + 6 curves
 
 photo = [p for p in big.reactions.photo_reactions() if p.photo.xsec]
 plot_xsecs(photo[:4], grid=(2, 2), bands=True)
@@ -602,7 +607,7 @@ every panel are drawn once for the whole figure. Rates that cannot be
 evaluated against temperature are skipped with one summary warning.
 
 ```python
-net.reactions.plot_rates(legend="axes", save="catalogue.pdf")   # whole catalogue
+net.reactions.plot_rates(legend="axes", save="catalogue.pdf")  # whole catalogue
 ```
 
 Curves are coloured first, then given new line styles once the colours run
@@ -629,13 +634,14 @@ else:
 
 ```python
 def pathways(net, species_name):
-    formed    = [r for r in net.reactions if r.has_product(species_name)]
+    formed = [r for r in net.reactions if r.has_product(species_name)]
     destroyed = [r for r in net.reactions if r.has_reactant(species_name)]
     print(f"{species_name}: {len(formed)} formation / {len(destroyed)} destruction")
     for r in formed:
         print(f"  +  {r.verbatim}")
     for r in destroyed:
         print(f"  -  {r.verbatim}")
+
 
 pathways(net, "H+")
 ```
@@ -645,7 +651,7 @@ pathways(net, "H+")
 ```python
 from collections import Counter
 
-Counter(net.reactions.types())     # Counter({'photo': 1, 'unknown': 1})
+Counter(net.reactions.types())  # Counter({'photo': 1, 'unknown': 1})
 ```
 
 ### Export to CSV
@@ -655,10 +661,17 @@ import csv
 
 with open("reactions.csv", "w", newline="") as f:
     w = csv.writer(f)
-    w.writerow(["index", "reaction", "type", "tmin", "tmax",
-                "n_reactants", "n_products"])
+    w.writerow(["index", "reaction", "type", "tmin", "tmax", "n_reactants", "n_products"])
     for rxn in net.reactions:
-        w.writerow([rxn.index, rxn.verbatim, rxn.type,
-                    rxn.tmin, rxn.tmax,
-                    len(rxn.reactants), len(rxn.products)])
+        w.writerow(
+            [
+                rxn.index,
+                rxn.verbatim,
+                rxn.type,
+                rxn.tmin,
+                rxn.tmax,
+                len(rxn.reactants),
+                len(rxn.products),
+            ]
+        )
 ```

@@ -76,8 +76,8 @@ def test_compound_keyed_as_reserved_stem_collides(tmp_path):
     src = tmp_path / "in.h5"
     comp = np.array([(1,)], dtype=[("v", "i4")])
     with h5py.File(src, "w") as f:
-        f["g/y"] = [1.0]           # linear -> g/_group.csv
-        f[f"g/{stem}"] = comp      # compound -> g/_group.csv  (collision)
+        f["g/y"] = [1.0]  # linear -> g/_group.csv
+        f[f"g/{stem}"] = comp  # compound -> g/_group.csv  (collision)
 
     out = tmp_path / "csv"
     with pytest.raises(ValueError):

@@ -154,7 +154,7 @@ from jaff.physics.photo_reactions.config import RadiationConfig
 net = Network(
     "GOW++",
     radiation=RadiationConfig(
-        bands=[6.0, 11.2, 13.6],   # band edges in eV
+        bands=[6.0, 11.2, 13.6],  # band edges in eV
         background_field="draine",  # reference field for chi_pe
     ),
     dust=DustConfig(u_reduction="extinction", f_reduction="extinction"),
@@ -177,9 +177,9 @@ net = Network(
 )
 
 # The dust container and its sub-objects
-net.dust                      # jaff.physics.dust.Dust (or None if disabled)
-net.dust.config.rv            # selected R_V grain model (the dust settings)
-net.dust.pe.chi               # symbolic chi_pe expression
+net.dust  # jaff.physics.dust.Dust (or None if disabled)
+net.dust.config.rv  # selected R_V grain model (the dust settings)
+net.dust.pe.chi  # symbolic chi_pe expression
 net.dust.tabular.photon_energy  # eV grid backing the cross sections
 
 # Band-averaged dust cross section per H (cm^2/H) over an energy window

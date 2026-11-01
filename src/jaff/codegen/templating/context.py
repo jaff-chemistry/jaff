@@ -1,5 +1,5 @@
 # ABOUTME: Render context shared by every command while one template is rendered
-# ABOUTME: Network, code generator, template path, echo settings and DEFINE registry
+# ABOUTME: Network, codegen, template path, echo settings, DEFINEs and CALL functions
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from .options import Options
 if TYPE_CHECKING:
     from ...core.network.network import Network
     from ..codegen import Codegen
+    from .functions import TemplateFunctions
 
 
 @dataclass
@@ -27,6 +28,8 @@ class RenderContext:
         comment: Comment token for the echo, from ``$$JAFF COMMENT``; ``None``
             means the language's own comment.
         defines: Option sets registered by ``DEFINE``, by name.
+        functions: Functions for ``$$JAFF CALL``, or ``None`` without a
+            ``jaffgen_template_functions.py``.
     """
 
     net: Network
@@ -35,3 +38,4 @@ class RenderContext:
     echo_directives: bool = True
     comment: Optional[str] = None
     defines: Dict[str, Options] = field(default_factory=dict)
+    functions: Optional[TemplateFunctions] = None

@@ -105,8 +105,8 @@ class MyModelParams(ShieldingParams):
 
 @register
 class MyModel(ShieldingFunction):
-    name = "my_model"          # the shielding type keyword (lower-case)
-    reaction = None            # None = global; a serialized reaction = local
+    name = "my_model"  # the shielding type keyword (lower-case)
+    reaction = None  # None = global; a serialized reaction = local
 
     @staticmethod
     def config_model() -> type[MyModelParams]:

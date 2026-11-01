@@ -20,8 +20,7 @@ def test_function_block_missing_return(tmp_path: Path) -> None:
     """A function block left open at EOF (no return) is rejected."""
     path = _write(
         tmp_path,
-        "@function foo(x)\n"
-        "y = 2*x\n",
+        "@function foo(x)\ny = 2*x\n",
     )
     with pytest.raises(ParserError, match="foo"):
         AuxiliaryFunctionParser(path)

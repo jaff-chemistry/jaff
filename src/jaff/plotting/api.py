@@ -732,9 +732,7 @@ def plot_xsecs(
     --------
     >>> from jaff import Network
     >>> from jaff.plotting import plot_xsecs
-    >>> net = Network(
-    ...     "h_photoionization", radiation={"bands": [1, 13.6, 100, "inf"]}
-    ... )
+    >>> net = Network("h_photoionization", radiation={"bands": [1, 13.6, 100, "inf"]})
     >>> photo = [p for p in net.reactions.photo_reactions() if p.photo.xsec]
     >>> fig, axes = plot_xsecs(photo[0], bands=True)
     >>> [t.get_text() for t in fig.legends[0].get_texts()]

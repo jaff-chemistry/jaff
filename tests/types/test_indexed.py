@@ -39,9 +39,7 @@ def test_flatten_no_duplicate_index_tuples():
 
 def test_flatten_preserves_explicit_child_index():
     """Explicit IndexedValue child indices survive flatten (not renumbered)."""
-    items = IndexedList(
-        [IndexedValue([3], IndexedList([IndexedValue([7], 42)]))]
-    )
+    items = IndexedList([IndexedValue([3], IndexedList([IndexedValue([7], 42)]))])
     flat = items.flatten()
     assert pairs_of(flat) == [([3, 7], 42)]
 

@@ -15,9 +15,7 @@ NON_PHOTO = "H + H -> H2  []  1e-17\n"
 @pytest.fixture
 def radiation_network(make_network):
     def _make(lines=PHOTO, name="rad.jet"):
-        return make_network(
-            lines, name=name, radiation=RadiationConfig(bands=BANDS)
-        )
+        return make_network(lines, name=name, radiation=RadiationConfig(bands=BANDS))
 
     return _make
 
@@ -141,7 +139,9 @@ def test_rejects_unknown_order(radiation_network):
 def test_flux_equations_use_the_radiation_flux_symbol(radiation_network):
     net = radiation_network()
     odes = net.sradodes()
-    fluxes = {s for e in odes for s in e.atoms(sp.Indexed) if s.base == net.radiation.flux}
+    fluxes = {
+        s for e in odes for s in e.atoms(sp.Indexed) if s.base == net.radiation.flux
+    }
 
     assert fluxes
 

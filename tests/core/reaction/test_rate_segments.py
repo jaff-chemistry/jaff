@@ -33,7 +33,7 @@ def test_two_constant_adjacent_clip():
     segs = [RateSegment(Integer(1), 10, 100), RateSegment(Integer(2), 100, 200)]
     assert _eval(segs, "clip", 50) == 1
     assert _eval(segs, "clip", 150) == 2  # bug: returned 1
-    assert _eval(segs, "clip", 5) == 1    # clipped low
+    assert _eval(segs, "clip", 5) == 1  # clipped low
     assert _eval(segs, "clip", 300) == 2  # clipped high
 
 
@@ -67,7 +67,7 @@ def test_constant_then_tempdep_adjacent_clip():
     segs = [RateSegment(Integer(1), 10, 100), RateSegment(TGAS, 100, 200)]
     assert _eval(segs, "clip", 50) == 1
     assert _eval(segs, "clip", 150) == 150
-    assert _eval(segs, "clip", 5) == 1     # clipped low -> constant
+    assert _eval(segs, "clip", 5) == 1  # clipped low -> constant
     assert _eval(segs, "clip", 300) == 200  # clipped high -> tmax value
 
 
@@ -93,9 +93,9 @@ def test_two_tempdep_separated_interp_uses_boundary_rates():
     (The old code blended both fits extrapolated into the gap -> 225.)
     """
     segs = [RateSegment(TGAS, 10, 100), RateSegment(2 * TGAS, 200, 300)]
-    assert _eval(segs, "clip", 100) == 100   # left boundary rate
-    assert _eval(segs, "clip", 200) == 400   # right boundary rate
-    assert _eval(segs, "clip", 150) == 250   # midpoint of straight gap
+    assert _eval(segs, "clip", 100) == 100  # left boundary rate
+    assert _eval(segs, "clip", 200) == 400  # right boundary rate
+    assert _eval(segs, "clip", 150) == 250  # midpoint of straight gap
     # interior fraction: 100 + (400-100)*(125-100)/(200-100) = 175
     assert _eval(segs, "clip", 125) == 175
 
@@ -107,10 +107,10 @@ def test_two_touching_tempdep_clip():
     """Two touching temperature-dependent ranges assemble each body (issue 045)."""
     segs = [RateSegment(TGAS, 10, 100), RateSegment(2 * TGAS, 100, 200)]
     assert _eval(segs, "clip", 50) == 50
-    assert _eval(segs, "clip", 150) == 300   # bug returned 400 (upper clip)
-    assert _eval(segs, "clip", 100) == 200   # shared boundary -> upper range
-    assert _eval(segs, "clip", 5) == 10      # clipped low -> first tmin value
-    assert _eval(segs, "clip", 300) == 400   # clipped high -> last tmax value
+    assert _eval(segs, "clip", 150) == 300  # bug returned 400 (upper clip)
+    assert _eval(segs, "clip", 100) == 200  # shared boundary -> upper range
+    assert _eval(segs, "clip", 5) == 10  # clipped low -> first tmin value
+    assert _eval(segs, "clip", 300) == 400  # clipped high -> last tmax value
 
 
 def test_two_touching_tempdep_extrapolate():
@@ -118,7 +118,7 @@ def test_two_touching_tempdep_extrapolate():
     assert _eval(segs, "extrapolate", 50) == 50
     assert _eval(segs, "extrapolate", 150) == 300
     assert _eval(segs, "extrapolate", 100) == 200
-    assert _eval(segs, "extrapolate", 5) == 5      # first body extends down
+    assert _eval(segs, "extrapolate", 5) == 5  # first body extends down
     assert _eval(segs, "extrapolate", 300) == 600  # last body extends up
 
 
@@ -151,7 +151,7 @@ def test_three_touching_tempdep_extrapolate():
     assert _eval(segs, "extrapolate", 250) == 750
     assert _eval(segs, "extrapolate", 100) == 200
     assert _eval(segs, "extrapolate", 200) == 600
-    assert _eval(segs, "extrapolate", 5) == 5       # first extends down
+    assert _eval(segs, "extrapolate", 5) == 5  # first extends down
     assert _eval(segs, "extrapolate", 350) == 1050  # last extends up
 
 
@@ -169,9 +169,7 @@ def test_network_two_touching_tempdep_ranges(tmp_path):
 def test_network_two_constant_ranges(tmp_path):
     dat = tmp_path / "constant.dat"
     dat.write_text(
-        "@format:idx,R,R,P,tmin,tmax,rate\n"
-        "1,H,H,H2,10,100,1\n"
-        "2,H,H,H2,100,200,2\n"
+        "@format:idx,R,R,P,tmin,tmax,rate\n1,H,H,H2,10,100,1\n2,H,H,H2,100,200,2\n"
     )
     net = Network(str(dat), funcfile=False)
     rate = net.reactions[0].rate_coefficient
@@ -213,9 +211,7 @@ def test_sort_allows_lone_fully_open_segment():
 def test_network_open_ended_ranges(tmp_path):
     dat = tmp_path / "open.dat"
     dat.write_text(
-        "@format:idx,R,R,P,tmin,tmax,rate\n"
-        "1,H,H,H2,100,NONE,2\n"
-        "2,H,H,H2,NONE,100,1\n"
+        "@format:idx,R,R,P,tmin,tmax,rate\n1,H,H,H2,100,NONE,2\n2,H,H,H2,NONE,100,1\n"
     )
     net = Network(str(dat), funcfile=False)
     rate = net.reactions[0].rate_coefficient
@@ -232,7 +228,8 @@ def test_segment_is_immutable():
 
 def test_map_rates_replaces_every_rate():
     segs = RateSegments(
-        _owner("clip"), [RateSegment(Integer(1), 10, 100), RateSegment(Integer(2), 100, 200)]
+        _owner("clip"),
+        [RateSegment(Integer(1), 10, 100), RateSegment(Integer(2), 100, 200)],
     )
     segs.map_rates(lambda rate: 3 * rate)
 

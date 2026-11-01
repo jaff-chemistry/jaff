@@ -18,14 +18,18 @@ legacy `typing` aliases.
 # Good - built-in generics and PEP 604 unions
 from __future__ import annotations
 
+
 def process(items: list[str]) -> dict[str, int]:
     pass
+
 
 def lookup(key: str) -> int | None:
     pass
 
+
 # Avoid - legacy typing aliases
 from typing import List, Dict, Optional
+
 
 def process(items: List[str]) -> Optional[Dict[str, int]]:
     pass
@@ -91,11 +95,16 @@ Use `snake_case`:
 ```python
 # Good
 user_name = "Alice"
+
+
 def calculate_rate(temperature):
     pass
 
+
 # Avoid
 userName = "Alice"
+
+
 def CalculateRate(temperature):
     pass
 ```
@@ -109,8 +118,10 @@ Use `PascalCase`:
 class Network:
     pass
 
+
 class CodeGenerator:
     pass
+
 
 # Avoid
 class network:
@@ -138,12 +149,12 @@ Prefix with underscore:
 class Network:
     def __init__(self):
         self._internal_data = []  # Private
-        self.public_data = []     # Public
+        self.public_data = []  # Public
 
     def _helper_method(self):  # Private
         pass
 
-    def public_method(self):   # Public
+    def public_method(self):  # Public
         pass
 ```
 
@@ -159,6 +170,7 @@ Untyped signatures hide intent and disable static checking. Always declare types
 # Good
 def compute_rate(temperature: float, alpha: float) -> float:
     return alpha * temperature
+
 
 # Avoid
 def compute_rate(temperature, alpha):
@@ -179,6 +191,7 @@ from typing import Any
 
 import numpy as np
 
+
 def process_species(
     names: list[str],
     masses: np.ndarray,
@@ -197,6 +210,7 @@ from __future__ import annotations
 # Type aliases for clarity
 SpeciesDict = dict[str, int]
 RateExpression = str | float
+
 
 def load_network(
     filename: str,
@@ -342,11 +356,15 @@ Define a domain exception hierarchy and raise it from a meaningful base.
 ```python
 class NetworkError(Exception):
     """Base exception for network errors."""
+
     pass
+
 
 class ParseError(NetworkError):
     """Error parsing network file."""
+
     pass
+
 
 def load_network(filename: str) -> Network:
     try:
@@ -376,14 +394,16 @@ raise ValueError("Bad temperature")
 def calculate_rate(temperature: float, alpha: float, beta: float) -> float:
     return alpha * (temperature / 300) ** beta
 
+
 def write_to_file(content: str, filename: str) -> None:
-    with open(filename, 'w') as f:
+    with open(filename, "w") as f:
         f.write(content)
+
 
 # Avoid - multiple responsibilities
 def calculate_and_save_rate(temperature, alpha, beta, filename):
     rate = alpha * (temperature / 300) ** beta
-    with open(filename, 'w') as f:
+    with open(filename, "w") as f:
         f.write(str(rate))
 ```
 
@@ -399,6 +419,7 @@ def process_network(filename: str) -> Network:
     validate_network(net)
     return net
 
+
 # If too long, split into smaller functions
 ```
 
@@ -407,11 +428,10 @@ def process_network(filename: str) -> Network:
 ```python
 # Good - clear parameters
 def compute_ode(
-    species: list[str],
-    reactions: list[Reaction],
-    use_cse: bool = True
+    species: list[str], reactions: list[Reaction], use_cse: bool = True
 ) -> str:
     pass
+
 
 # Avoid - too many positional arguments
 def compute_ode(species, reactions, cse, optimize, cache, debug):
@@ -433,9 +453,11 @@ class Network:
     def validate(self) -> bool:
         pass
 
+
 # Avoid - doing too much
 class NetworkManager:
     """Does everything."""
+
     pass
 ```
 
@@ -468,8 +490,10 @@ Name tests after the behaviour they verify, not `test1`/`test2`.
 def test_network_loads_krome_format():
     pass
 
+
 def test_codegen_raises_error_for_invalid_language():
     pass
+
 
 # Avoid
 def test1():
@@ -547,11 +571,11 @@ Manage resources with `with` so they always close, even on error.
 
 ```python
 # Good
-with open(filename, 'w') as f:
+with open(filename, "w") as f:
     f.write(content)
 
 # Avoid
-f = open(filename, 'w')
+f = open(filename, "w")
 f.write(content)
 f.close()
 ```
@@ -570,6 +594,7 @@ if path.exists():
 
 # Avoid
 import os
+
 path = os.path.join("networks", "react.dat")
 if os.path.exists(path):
     with open(path) as f:
@@ -590,6 +615,7 @@ def process(value: int | None) -> int:
         return -1
 
     return value * 2
+
 
 # Avoid - nested if
 def process(value):

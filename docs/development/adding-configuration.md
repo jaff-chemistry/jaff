@@ -82,7 +82,7 @@ Add the model as a field of the model of the enclosing table, e.g. in
 `NetworkConfig`:
 
 ```python
-cosmic_rays: CosmicRaysConfig | None = None   # the table enables the module
+cosmic_rays: CosmicRaysConfig | None = None  # the table enables the module
 ```
 
 Use `| None = None` when the table's presence switches the module on (like

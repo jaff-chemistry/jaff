@@ -115,13 +115,13 @@ Python is resolved against the working directory.
 ```python
 from jaff import Network
 
-net = Network("GOW")                                    # its jaff.toml, if any
-net = Network("GOW", config="tuned.toml")               # tuned.toml merged over it
+net = Network("GOW")  # its jaff.toml, if any
+net = Network("GOW", config="tuned.toml")  # tuned.toml merged over it
 net = Network("GOW", config={"reactions": {"t_cutoff": "clip"}})
 net = Network("GOW", config=other_net.config, label="run-2")
-net = Network("GOW", strict=True)                       # keyword arguments win
+net = Network("GOW", strict=True)  # keyword arguments win
 
-net.config                                              # the validated config
+net.config  # the validated config
 ```
 
 `config=` is one source merged over the network's `jaff.toml`: a TOML file (its

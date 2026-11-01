@@ -54,12 +54,14 @@ const int n = 37;
 from ._languages import Language
 from ._typing import ExtrasDict, IndexedReturn
 from .codegen import Codegen
-from .templating import TemplateParser
+from .templating import TemplateFunctions, TemplateParser, jaffgen_function
 
 __all__ = [
     "Codegen",
     "Language",
     "IndexedReturn",
     "TemplateParser",
+    "TemplateFunctions",
+    "jaffgen_function",
     "ExtrasDict",
 ]

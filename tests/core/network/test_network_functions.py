@@ -27,7 +27,9 @@ def _std(net, name):
 
 class TestValue:
     def test_parameters_are_network_inputs(self, func_network):
-        net = func_network("@function chemRateCoeff0(tgas, n_e)\n@return 1e-10*n_e*tgas\n")
+        net = func_network(
+            "@function chemRateCoeff0(tgas, n_e)\n@return 1e-10*n_e*tgas\n"
+        )
         value = net.functions.value("chemRateCoeff0")
 
         assert value == 1e-10 * _std(net, "n_e") * sp.Symbol("tgas")
@@ -35,12 +37,16 @@ class TestValue:
     def test_name_is_case_insensitive(self, func_network):
         net = func_network("@function chemRateCoeff0(n_e)\n@return 2*n_e\n")
 
-        assert net.functions.value("CHEMRATECOEFF0") == net.functions.value("chemratecoeff0")
+        assert net.functions.value("CHEMRATECOEFF0") == net.functions.value(
+            "chemratecoeff0"
+        )
 
     def test_is_cached(self, func_network):
         net = func_network("@function chemRateCoeff0(n_e)\n@return 2*n_e\n")
 
-        assert net.functions.value("chemratecoeff0") is net.functions.value("chemratecoeff0")
+        assert net.functions.value("chemratecoeff0") is net.functions.value(
+            "chemratecoeff0"
+        )
 
     def test_nested_call_is_standardized(self, func_network):
         jfunc = (

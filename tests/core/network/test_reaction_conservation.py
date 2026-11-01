@@ -97,7 +97,9 @@ class TestWarningNamesReaction:
         finally:
             logging.disable(logging.CRITICAL)
 
-        mass_msgs = [r.message for r in caplog.records if "Mass not conserved" in r.message]
+        mass_msgs = [
+            r.message for r in caplog.records if "Mass not conserved" in r.message
+        ]
         assert mass_msgs, "expected a mass-conservation warning"
         # Reaction index (0-based) must appear so the offending reaction is
         # identifiable in a large network.

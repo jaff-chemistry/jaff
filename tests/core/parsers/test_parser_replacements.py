@@ -88,19 +88,16 @@ def test_n_idx_h2_is_H2_density(make_network):
 
 
 def test_n_global_idx_h2_is_H2_density(make_network):
-    net, rate = _rate(
-        make_network, "n_global(idx_H2)", reactants="H2,C", product="CH2"
-    )
+    net, rate = _rate(make_network, "n_global(idx_H2)", reactants="H2,C", product="CH2")
     assert rate == net.symbols.ndens[net.species["H2"].index]
 
 
 def test_get_hnuclei_is_H_nucleus_sum(make_network):
     # get_hnuclei(n) -> n_H_nuc -> total H-nuclei sum (H once, H2 twice).
-    net, rate = _rate(
-        make_network, "get_hnuclei(n)", reactants="H,H", product="H2"
-    )
+    net, rate = _rate(make_network, "get_hnuclei(n)", reactants="H,H", product="H2")
     nden = net.symbols.ndens
-    expected = nden[sympy.Idx(net.species["H"].index)] + 2 * nden[
-        sympy.Idx(net.species["H2"].index)
-    ]
+    expected = (
+        nden[sympy.Idx(net.species["H"].index)]
+        + 2 * nden[sympy.Idx(net.species["H2"].index)]
+    )
     assert sympy.simplify(rate - expected) == 0

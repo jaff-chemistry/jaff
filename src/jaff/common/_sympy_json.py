@@ -531,7 +531,9 @@ class _EncoderCompact:
             # Convert shape to list of ints (may contain sympy Integers)
             shape = None
             if expr.shape:
-                shape = [int(s) if isinstance(s, sympy.Integer) else s for s in expr.shape]
+                shape = [
+                    int(s) if isinstance(s, sympy.Integer) else s for s in expr.shape
+                ]
             return ["IB", name, shape]
 
         if isinstance(expr, sympy.Indexed):

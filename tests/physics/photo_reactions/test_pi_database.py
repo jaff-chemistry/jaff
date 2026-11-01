@@ -99,7 +99,9 @@ class TestResolution:
 
     def test_per_reaction_override_beats_global(self, pc_and_warn):
         make, _ = pc_and_warn
-        x = (pc := make(_net("verner", own={"C._PHOTON__C+.e-": "leiden"}))).get_xsec(_rxn("C._PHOTON__C+.e-", pc.config))
+        x = (pc := make(_net("verner", own={"C._PHOTON__C+.e-": "leiden"}))).get_xsec(
+            _rxn("C._PHOTON__C+.e-", pc.config)
+        )
         assert x.database == "leiden"
 
     def test_leiden_missing_falls_back_to_norad(self, pc_and_warn):
@@ -133,12 +135,16 @@ class TestResolution:
 
     def test_missing_everywhere_returns_none_when_not_required(self, pc_and_warn):
         make, _ = pc_and_warn
-        assert (pc := make(_net())).get_xsec(_rxn("C9H9._PHOTON__C9H9+.e-", pc.config)) is None
+        assert (pc := make(_net())).get_xsec(
+            _rxn("C9H9._PHOTON__C9H9+.e-", pc.config)
+        ) is None
 
     def test_missing_everywhere_raises_when_required(self, pc_and_warn):
         make, _ = pc_and_warn
         with pytest.raises(ParserError, match="C9H9"):
-            (pc := make(_net())).get_xsec(_rxn("C9H9._PHOTON__C9H9+.e-", pc.config), required=True)
+            (pc := make(_net())).get_xsec(
+                _rxn("C9H9._PHOTON__C9H9+.e-", pc.config), required=True
+            )
 
     def test_dissociation_ignores_pi_database(self, pc_and_warn):
         make, warn = pc_and_warn
@@ -150,7 +156,9 @@ class TestResolution:
     def test_override_on_dissociation_raises(self, pc_and_warn):
         make, _ = pc_and_warn
         with pytest.raises(ParserError, match="photoionization"):
-            (pc := make(_net(own={"CO._PHOTON__C.O": "verner"}))).get_xsec(_rxn("CO._PHOTON__C.O", pc.config))
+            (pc := make(_net(own={"CO._PHOTON__C.O": "verner"}))).get_xsec(
+                _rxn("CO._PHOTON__C.O", pc.config)
+            )
 
 
 class _FakeReaction:
@@ -322,9 +330,7 @@ class TestFallbackSummary:
             patch.object(logger, "warning") as warn,
         ):
             jl.return_value.get_logger.return_value = logger
-            make_network(
-                lines, name="t.jet", radiation=RadiationConfig(bands=BANDS)
-            )
+            make_network(lines, name="t.jet", radiation=RadiationConfig(bands=BANDS))
         warn.assert_called_once()
         msg = warn.call_args.args[0]
         assert "CO._PHOTON__CO+.e-" in msg and "Ca+++++._PHOTON__Ca++++++.e-" in msg

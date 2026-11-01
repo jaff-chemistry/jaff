@@ -7,6 +7,7 @@ from ...errors import ParserError
 from .blocks import Block, CommandBlock, TextBlock
 from .commands import COMMANDS, Define
 from .context import RenderContext
+from .placeholders import split_line
 from .errors import TemplateError
 from .resolve import Resolved, check_groups, compile_replacements, layer
 
@@ -42,10 +43,11 @@ def _prepare(block: CommandBlock, ctx: RenderContext) -> Resolved:
         options = layer(block.options, ctx.defines)
         accepted = _all_groups() if isinstance(command, Define) else command.groups
         check_groups(command.keyword, options, accepted)
-        resolved = Resolved(options, compile_replacements(options))
+        indent, _ = split_line(block.header_lines[0])
+        resolved = Resolved(options, compile_replacements(options), indent)
         command.validate(block.body_lines, resolved, ctx)
     except TemplateError as e:
-        raise _error(block, e, ctx) from None
+        raise _error(block, e, ctx) from e.__cause__
 
     if isinstance(command, Define):
         if command.name in ctx.defines:
@@ -101,7 +103,7 @@ def render_blocks(blocks: List[Block], ctx: RenderContext) -> str:
         try:
             out.append(block.command.render(block.body_lines, resolved, ctx))
         except TemplateError as e:
-            raise _error(block, e, ctx) from None
+            raise _error(block, e, ctx) from e.__cause__
         except Exception as e:
             # Network or codegen failures (e.g. no radiation bands): report them at
             # the directive, keeping the original exception as the cause.

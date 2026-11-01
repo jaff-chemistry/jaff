@@ -53,10 +53,7 @@ def test_too_few_arguments(tmp_path: Path) -> None:
     """A call with fewer actuals than formals is rejected, not silently bound."""
     path = _write(
         tmp_path,
-        "@function subtract(x,y)\n"
-        "@return x-y\n"
-        "@function bad(t)\n"
-        "@return subtract(t)\n",
+        "@function subtract(x,y)\n@return x-y\n@function bad(t)\n@return subtract(t)\n",
     )
     with pytest.raises(ParserError, match="subtract"):
         AuxiliaryFunctionParser(path)
@@ -79,10 +76,7 @@ def test_zero_arg_func_called_with_arg(tmp_path: Path) -> None:
     """A zero-arg function called with an argument is rejected."""
     path = _write(
         tmp_path,
-        "@function nullary()\n"
-        "@return 42\n"
-        "@function bad(t)\n"
-        "@return nullary(t)\n",
+        "@function nullary()\n@return 42\n@function bad(t)\n@return nullary(t)\n",
     )
     with pytest.raises(ParserError, match="nullary"):
         AuxiliaryFunctionParser(path)

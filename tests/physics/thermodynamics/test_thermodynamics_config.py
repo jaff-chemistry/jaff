@@ -50,7 +50,10 @@ class TestThermodynamicsConfig:
 
         message = str(info.value)
         assert "unknown EOS type 'polytrope'" in message
-        assert "ideal, multi_gamma, fermi_degenerate, relativistic_fermi_degenerate" in message
+        assert (
+            "ideal, multi_gamma, fermi_degenerate, relativistic_fermi_degenerate"
+            in message
+        )
         assert "_eos_type" not in message
 
     def test_rejects_unknown_type(self):

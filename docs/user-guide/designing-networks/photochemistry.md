@@ -393,10 +393,10 @@ from jaff.physics.photo_reactions.config import RadiationConfig
 net = Network(
     "networks/GOW/GOW.jet",
     radiation=RadiationConfig(
-        bands=[6.0, 11.2, 13.6, "inf"],   # band edges in eV
-        background_field="draine",         # reference field for the scaling
+        bands=[6.0, 11.2, 13.6, "inf"],  # band edges in eV
+        background_field="draine",  # reference field for the scaling
     ),
-    dust=DustConfig(),               # enables the dust module
+    dust=DustConfig(),  # enables the dust module
 )
 ```
 
@@ -425,7 +425,7 @@ from jaff.physics.photo_reactions.config import RadiationConfig
 net = Network(
     "networks/h_photoionization/h_photo.jet",
     radiation=RadiationConfig(
-        bands=[13.6, "inf"],   # band edges in eV
+        bands=[13.6, "inf"],  # band edges in eV
         profile_index=0,
         mode="nph",
     ),
@@ -436,7 +436,7 @@ net_pb = Network(
     "networks/h_photoionization/h_photo.jet",
     radiation=RadiationConfig(bands=[13.6, 20.0, 100.0], profile_index=[0, 1]),
 )
-[grp.profile_idx for grp in net_pb.radiation.groups]   # [0, 1]
+[grp.profile_idx for grp in net_pb.radiation.groups]  # [0, 1]
 
 # Inspect photochemical reactions
 photo = net.reactions.photo_reactions()
@@ -445,12 +445,12 @@ for rxn in photo:
 
 # Cross sections are attached at load time
 rxn = photo[0]
-rxn.photo.xsec.photon_energy       # eV grid
-rxn.photo.xsec.photodecay          # cm² array (or None)
-rxn.photo.xsec_total               # spectrum-averaged σ (cm²); None without radiation
-rxn.photo.band_xsecs               # per-band <σ> and fractions (DataFrame)
-rxn.rate_coefficient               # Σ_i k_i, with the radiation density symbols
-rxn.photo.plot_xsecs()             # visualise σ(E)
+rxn.photo.xsec.photon_energy  # eV grid
+rxn.photo.xsec.photodecay  # cm² array (or None)
+rxn.photo.xsec_total  # spectrum-averaged σ (cm²); None without radiation
+rxn.photo.band_xsecs  # per-band <σ> and fractions (DataFrame)
+rxn.rate_coefficient  # Σ_i k_i, with the radiation density symbols
+rxn.photo.plot_xsecs()  # visualise σ(E)
 
 # Symbolic radiation ODEs
 print(net.sradodes())

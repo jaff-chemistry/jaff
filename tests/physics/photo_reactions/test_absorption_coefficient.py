@@ -48,9 +48,7 @@ def test_without_radiation_ignored(absorbing_network):
 
 
 def test_without_function_is_none(absorbing_network):
-    rad = absorbing_network(
-        jfunc="", radiation=RadiationConfig(bands=BANDS)
-    ).radiation
+    rad = absorbing_network(jfunc="", radiation=RadiationConfig(bands=BANDS)).radiation
 
     assert rad.absorption_coefficient is None
     assert all(g.absorption_coefficient is None for g in rad.groups)

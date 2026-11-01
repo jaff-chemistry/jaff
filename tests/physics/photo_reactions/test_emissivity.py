@@ -36,9 +36,7 @@ def test_without_radiation_ignored(emissive_network):
 
 
 def test_without_function_is_none(emissive_network):
-    rad = emissive_network(
-        jfunc="", radiation=RadiationConfig(bands=BANDS)
-    ).radiation
+    rad = emissive_network(jfunc="", radiation=RadiationConfig(bands=BANDS)).radiation
 
     assert rad.emissivity is None
     assert all(g.emissivity is None for g in rad.groups)
@@ -47,9 +45,7 @@ def test_without_function_is_none(emissive_network):
 
 def test_plain_emissivity_name_is_not_reserved(emissive_network):
     jfunc = "@function emissivity()\n@return 1e-20\n"
-    rad = emissive_network(
-        jfunc=jfunc, radiation=RadiationConfig(bands=BANDS)
-    ).radiation
+    rad = emissive_network(jfunc=jfunc, radiation=RadiationConfig(bands=BANDS)).radiation
 
     assert rad.emissivity is None
 
@@ -61,9 +57,7 @@ def test_spectral_expression_stored(emissive_network):
 
 
 def test_energy_mode_group_integrals(emissive_network):
-    rad = emissive_network(
-        radiation=RadiationConfig(bands=BANDS, **U_MODE)
-    ).radiation
+    rad = emissive_network(radiation=RadiationConfig(bands=BANDS, **U_MODE)).radiation
 
     expected = [1e-20 * (13.6 - 6.0), 1e-20 * (100.0 - 13.6)]
     assert _floats(g.emissivity for g in rad.groups) == pytest.approx(

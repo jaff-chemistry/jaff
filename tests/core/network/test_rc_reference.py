@@ -38,6 +38,6 @@ def test_catalogue_source_index_vs_positional_differ_after_dedup(tmp_path):
     # source-index lookup keys by the file-side number (Reaction.index)
     assert rxns.by_source_index(2) is rxns[1]  # file #2 sits at catalogue slot 1
     assert rxns.by_source_index(0) is rxns[0]  # merged entry keeps file #0
-    assert rxns.by_source_index(1) is None     # #1 merged away -> absent
+    assert rxns.by_source_index(1) is None  # #1 merged away -> absent
     # positional access is unchanged and distinct from source-index lookup
     assert rxns[1].index == 2

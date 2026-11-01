@@ -77,9 +77,9 @@ from jaff import Network
 
 net = Network("networks/h_photoionization/h_photo.jet")
 
-len(net.species)      # 3   — number of species
-len(net.reactions)    # 2   — number of reactions
-net.label             # 'h_photo'   — network identifier
+len(net.species)  # 3   — number of species
+len(net.reactions)  # 2   — number of reactions
+net.label  # 'h_photo'   — network identifier
 ```
 
 A loaded `Network` carries:
@@ -114,11 +114,11 @@ identifiers code generation needs.
 ```python
 H = net.species["H"]
 
-H.name          # 'H'
-H.mass          # 1.673773e-24   ← grams, not amu
-H.charge        # 0
-H.index         # 0
-H.latex()       # '{\\rm H}'      ← latex() is a method, not an attribute
+H.name  # 'H'
+H.mass  # 1.673773e-24   ← grams, not amu
+H.charge  # 0
+H.index  # 0
+H.latex()  # '{\\rm H}'      ← latex() is a method, not an attribute
 ```
 
 The attributes worth knowing up front:
@@ -152,12 +152,12 @@ an energy budget.
 ```python
 rxn = net.reactions[0]
 
-rxn.verbatim      # 'H + _PHOTON -> H+ + e-'   ← verbatim is an attribute
-rxn.type          # 'photo'                     ← type is an attribute
+rxn.verbatim  # 'H + _PHOTON -> H+ + e-'   ← verbatim is an attribute
+rxn.type  # 'photo'                     ← type is an attribute
 rxn.rate_coefficient  # a SymPy expression for the rate coefficient
-rxn.rate              # the coefficient times the reactant densities
-rxn.reactants     # species consumed
-rxn.products      # species created
+rxn.rate  # the coefficient times the reactant densities
+rxn.reactants  # species consumed
+rxn.products  # species created
 ```
 
 - `reactants` / `products` — the species on each side, as `Species` catalogues;

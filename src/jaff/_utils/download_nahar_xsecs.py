@@ -151,9 +151,7 @@ def serialized_name(symbol: str, charge: int) -> str:
     """
     ion = symbol + "+" * charge
     product = symbol + "+" * (charge + 1)
-    return (
-        f"{'.'.join(sorted([ion, '_PHOTON']))}__{'.'.join(sorted([product, 'e-']))}"
-    )
+    return f"{'.'.join(sorted([ion, '_PHOTON']))}__{'.'.join(sorted([product, 'e-']))}"
 
 
 def fetch(url: str) -> str | None:

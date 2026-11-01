@@ -39,7 +39,9 @@ def test_cp_direct_ionization_reference() -> None:
     seg = _segment("821")
     assert seg["type"] == "cosmic_ray"
     # alpha = 2.30e-17
-    assert _evaluate(seg["rate"], crate=ZETA0) == pytest.approx(2.30e-17, rel=1e-3, abs=1e-25)
+    assert _evaluate(seg["rate"], crate=ZETA0) == pytest.approx(
+        2.30e-17, rel=1e-3, abs=1e-25
+    )
 
 
 def test_cp_vanishes_at_zero_crate() -> None:
@@ -54,7 +56,9 @@ def test_cr_induced_photo_reference() -> None:
     assert seg["type"] == "cosmic_ray"
     expected = 1.30e-17 * 250.0 / (1.0 - OMEGA)  # zeta/zeta0 = 1
     assert expected == pytest.approx(6.5e-15, rel=1e-6)
-    assert _evaluate(seg["rate"], crate=ZETA0) == pytest.approx(6.5e-15, rel=1e-3, abs=1e-25)
+    assert _evaluate(seg["rate"], crate=ZETA0) == pytest.approx(
+        6.5e-15, rel=1e-3, abs=1e-25
+    )
 
 
 def test_cr_vanishes_at_zero_crate() -> None:

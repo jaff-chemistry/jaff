@@ -81,9 +81,7 @@ class TestNetworkDust:
         )
 
         with patch(TABULAR):
-            net = make_network(
-                NET, name="n.dat", funcfile=False, dust=DustConfig(rv=4.0)
-            )
+            net = make_network(NET, name="n.dat", funcfile=False, dust=DustConfig(rv=4.0))
 
         assert net.dust is not None
         assert net.dust.config.rv == pytest.approx(4.0)

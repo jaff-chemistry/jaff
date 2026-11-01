@@ -25,8 +25,8 @@ from jaff import Network
 
 net = Network("networks/h_photoionization/h_photo.jet")
 
-net.elements.count        # 1
-net.elements.symbols()    # ['H']
+net.elements.count  # 1
+net.elements.symbols()  # ['H']
 ```
 
 <!-- prettier-ignore -->
@@ -52,7 +52,7 @@ rebuilt. Constructing the same element, or an element set over the same species,
 hands back the very same object:
 
 ```python
-net.elements["H"] is net.elements["H"]   # True — same cached Element
+net.elements["H"] is net.elements["H"]  # True — same cached Element
 ```
 
 This keeps element objects unique across the whole program, so identity
@@ -70,9 +70,9 @@ shared by every network. It is reference data, not part of a network:
 from jaff.chemistry import periodic_table
 from jaff.core import Element
 
-periodic_table()          # the whole table: a read-only {symbol: Element} mapping
-periodic_table("C")       # one element → Element('C')
-Element("C")              # the same object
+periodic_table()  # the whole table: a read-only {symbol: Element} mapping
+periodic_table("C")  # one element → Element('C')
+Element("C")  # the same object
 periodic_table("C").mass  # 1.994473e-23 (grams)
 ```
 
@@ -98,13 +98,13 @@ weight.
 ```python
 h = net.elements["H"]
 
-h.symbol        # 'H'
-h.name          # 'Hydrogen'      ← capitalised
-h.mass          # 1.673773e-24    ← grams (CGS)
-h.atomic_mass   # 1.008           ← amu
-h.protons       # 1
-h.neutrons      # 0
-h.electrons     # 1
+h.symbol  # 'H'
+h.name  # 'Hydrogen'      ← capitalised
+h.mass  # 1.673773e-24    ← grams (CGS)
+h.atomic_mass  # 1.008           ← amu
+h.protons  # 1
+h.neutrons  # 0
+h.electrons  # 1
 ```
 
 <!-- prettier-ignore -->
@@ -122,12 +122,14 @@ and hashing all reduce to that string:
 net1 = Network("networks/uclchem_small_gas/uclchem_small_gas_network.jet")
 C, H, O = net1.elements["C"], net1.elements["H"], net1.elements["O"]
 
-C == H               # False — different symbols
-C == net1.elements["C"]   # True
+C == H  # False — different symbols
+C == net1.elements["C"]  # True
 
-C < H                # True — '<' / '>' compare symbols lexicographically
-H > C                # True
-sorted([O, H, C])    # [ElementObject(symbol='C'), ElementObject(symbol='H'), ElementObject(symbol='O')]
+C < H  # True — '<' / '>' compare symbols lexicographically
+H > C  # True
+sorted(
+    [O, H, C]
+)  # [ElementObject(symbol='C'), ElementObject(symbol='H'), ElementObject(symbol='O')]
 ```
 
 Because the symbol is the hash key (and instances are flyweights), elements work
@@ -137,15 +139,15 @@ cleanly in `set`s and as `dict` keys.
 !!! warning "Comparisons only work element-to-element"
     Comparing an `Element` against a bare string raises `TypeError`:
     ```python
-    C == "C"          # TypeError: '==' not supported … 'Element' and 'C'
-    C.symbol == "C"   # True
+    C == "C"  # TypeError: '==' not supported … 'Element' and 'C'
+    C.symbol == "C"  # True
     ```
 
 Printing an element gives its symbol; `repr` wraps it for debugging:
 
 ```python
-str(net.elements["H"])    # 'H'                        ← __str__ is the symbol
-repr(net.elements["H"])   # "ElementObject(symbol='H')"
+str(net.elements["H"])  # 'H'                        ← __str__ is the symbol
+repr(net.elements["H"])  # "ElementObject(symbol='H')"
 ```
 
 ---
@@ -160,7 +162,7 @@ A single species also has its own element set, reachable via
 [`Specie.elements`](species.md):
 
 ```python
-net1.species["H2O"].elements        # Catalogue(['H', 'O'])
+net1.species["H2O"].elements  # Catalogue(['H', 'O'])
 ```
 
 ### How many elements
@@ -170,19 +172,19 @@ sized, so `len(net.elements)` returns the same value — `count` is the cached
 attribute, `len()` the Pythonic spelling:
 
 ```python
-net.elements.count    # 1
-len(net.elements)     # 1   — identical
+net.elements.count  # 1
+len(net.elements)  # 1   — identical
 ```
 
 ### Finding an element
 
 ```python
-net1.elements["O"]              # by symbol            → Element
-net1.elements[0]                # by index into the set → Element('C')
+net1.elements["O"]  # by symbol            → Element
+net1.elements[0]  # by index into the set → Element('C')
 net1.elements.from_symbol("O")  # same as ["O"]
-net1.elements.from_name("Oxygen")   # by full name (capitalised)
+net1.elements.from_name("Oxygen")  # by full name (capitalised)
 
-"C" in net1.elements            # True — membership is by symbol
+"C" in net1.elements  # True — membership is by symbol
 ```
 
 Lookup is by **symbol** (or full name via `from_name`); there is no `ne`
@@ -196,13 +198,13 @@ these. Each returns a `Vector` aligned to the sorted symbol order.
 ```python
 net1 = Network("networks/uclchem_small_gas/uclchem_small_gas_network.jet")
 
-net1.elements.symbols()         # ['C', 'H', 'He', 'Mg', 'O']
-net1.elements.names()           # ['Carbon', 'Hydrogen', 'Helium', 'Magnesium', 'Oxygen']
-net1.elements.atomic_masses()   # [12.011, 1.008, 4.003, 24.305, 15.999]
-net1.elements.protons()         # [6, 1, 2, 12, 8]
-net1.elements.masses()          # standard atomic weights in grams (CGS)
-net1.elements.neutrons()        # neutron counts
-net1.elements.electrons()       # electron counts
+net1.elements.symbols()  # ['C', 'H', 'He', 'Mg', 'O']
+net1.elements.names()  # ['Carbon', 'Hydrogen', 'Helium', 'Magnesium', 'Oxygen']
+net1.elements.atomic_masses()  # [12.011, 1.008, 4.003, 24.305, 15.999]
+net1.elements.protons()  # [6, 1, 2, 12, 8]
+net1.elements.masses()  # standard atomic weights in grams (CGS)
+net1.elements.neutrons()  # neutron counts
+net1.elements.electrons()  # electron counts
 ```
 
 ---
@@ -230,13 +232,13 @@ _j_ — the stoichiometric composition.
 net1 = Network("networks/uclchem_small_gas/uclchem_small_gas_network.jet")
 density = net1.elements.density_matrix()
 
-syms   = list(net1.elements.symbols())   # ['C', 'H', 'He', 'Mg', 'O']
-h_row  = syms.index("H")                 # 1
-o_row  = syms.index("O")                 # 4
-h2o    = net1.species["H2O"].index       # column for H2O
+syms = list(net1.elements.symbols())  # ['C', 'H', 'He', 'Mg', 'O']
+h_row = syms.index("H")  # 1
+o_row = syms.index("O")  # 4
+h2o = net1.species["H2O"].index  # column for H2O
 
-density[h_row][h2o]    # 2   — two H atoms in H2O
-density[o_row][h2o]    # 1   — one O atom
+density[h_row][h2o]  # 2   — two H atoms in H2O
+density[o_row][h2o]  # 1   — one O atom
 ```
 
 ### Truth matrix
@@ -247,8 +249,8 @@ indexing as the density matrix.
 
 ```python
 truth = net1.elements.truth_matrix()
-syms  = list(net1.elements.symbols())
-truth[syms.index("H")][net1.species["H2O"].index]   # 1  — H2O contains H
+syms = list(net1.elements.symbols())
+truth[syms.index("H")][net1.species["H2O"].index]  # 1  — H2O contains H
 ```
 
 ---
@@ -258,9 +260,9 @@ truth[syms.index("H")][net1.species["H2O"].index]   # 1  — H2O contains H
 ### Print the elemental composition of each species
 
 ```python
-net1    = Network("networks/uclchem_small_gas/uclchem_small_gas_network.jet")
+net1 = Network("networks/uclchem_small_gas/uclchem_small_gas_network.jet")
 density = net1.elements.density_matrix()
-syms    = list(net1.elements.symbols())
+syms = list(net1.elements.symbols())
 
 print(f"{'Species':<10}", "  ".join(f"{s:>3}" for s in syms))
 print("-" * (10 + 5 * len(syms)))
@@ -275,8 +277,9 @@ for sp in net1.species:
 ```python
 def species_with_element(net, symbol):
     density = net.elements.density_matrix()
-    row     = list(net.elements.symbols()).index(symbol)
+    row = list(net.elements.symbols()).index(symbol)
     return [s for s in net.species if density[row][s.index] > 0]
+
 
 carbon_species = species_with_element(net1, "C")
 print([s.name for s in carbon_species])

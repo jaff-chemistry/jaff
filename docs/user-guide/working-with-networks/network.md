@@ -152,10 +152,10 @@ net = Network(
 ```python
 net = Network("networks/h_photoionization/h_photo.jet")
 
-net.label                   # 'h_photo'
-net.species.count           # 3
-net.reactions.count         # 2
-net.reactant_matrix.shape   # (2, 3)   — 2 reactions × 3 species
+net.label  # 'h_photo'
+net.species.count  # 3
+net.reactions.count  # 2
+net.reactant_matrix.shape  # (2, 3)   — 2 reactions × 3 species
 ```
 
 The three catalogues are the same typed collections
@@ -163,11 +163,11 @@ documented on [Species](species.md), [Reactions](reactions.md) and
 [Elements](elements.md) — anything there works straight off the network:
 
 ```python
-net.species.names()                 # ['H', 'H+', 'e-']
-net.species.charged("name")         # ['H+', 'e-']
-net.reactions.verbatim()            # ['H + _PHOTON -> H+ + e-', 'H+ + e- -> H']
-net.reactions.photo_reactions()     # [ReactionObject(H + _PHOTON -> H+ + e-)]
-net.elements.symbols()              # ['H']
+net.species.names()  # ['H', 'H+', 'e-']
+net.species.charged("name")  # ['H+', 'e-']
+net.reactions.verbatim()  # ['H + _PHOTON -> H+ + e-', 'H+ + e- -> H']
+net.reactions.photo_reactions()  # [ReactionObject(H + _PHOTON -> H+ + e-)]
+net.elements.symbols()  # ['H']
 ```
 
 ### Stoichiometry matrices
@@ -260,8 +260,8 @@ code writes it as `1.0e+99`.
 ### Fluxes and radiation moments
 
 ```python
-net.sfluxes()       # list[Expr] — per-reaction flux  k_i * nden[r1] * nden[r2] ...
-net.sradodes(0)     # list[Expr] — radiation moment ODEs (order 0), if radiation configured
+net.sfluxes()  # list[Expr] — per-reaction flux  k_i * nden[r1] * nden[r2] ...
+net.sradodes(0)  # list[Expr] — radiation moment ODEs (order 0), if radiation configured
 ```
 
 A flux is just the reaction rate times its reactant densities; the species ODEs
@@ -289,7 +289,7 @@ for var in system.state:
 # radiation_density photden[0] 0
 # radiation_flux rflux[0] 0
 
-system.rhs.shape    # (6, 1): one row per state entry, in the same order
+system.rhs.shape  # (6, 1): one row per state entry, in the same order
 ```
 
 The species rows come from the reactions, the thermal row from
@@ -328,10 +328,12 @@ findings and returns a report (`ConservationReport`, `SinkSourceReport`,
 `RecombinationReport`, `IsomerReport`) whose `.ok` is `True` when nothing was found:
 
 ```python
-net.check_conservation(strict=False).mass      # reactions not conserving mass
-net.check_sink_sources(strict=False).sinks     # species never produced
-net.check_recombinations(strict=False).missing  # cations lacking an electron recombination
-net.check_isomers(strict=False).groups          # species sharing one atomic composition
+net.check_conservation(strict=False).mass  # reactions not conserving mass
+net.check_sink_sources(strict=False).sinks  # species never produced
+net.check_recombinations(
+    strict=False
+).missing  # cations lacking an electron recombination
+net.check_isomers(strict=False).groups  # species sharing one atomic composition
 ```
 
 Duplicate reactions (same species, mechanism/`type`, and temperature range) are
@@ -342,10 +344,12 @@ check.
 On `h_photo` all three come back clean:
 
 ```python
-net.check_conservation(strict=False)    # ConservationReport(mass=(), charge=())
-net.check_sink_sources(strict=False)    # SinkSourceReport(sinks=frozenset(), sources=frozenset())
+net.check_conservation(strict=False)  # ConservationReport(mass=(), charge=())
+net.check_sink_sources(
+    strict=False
+)  # SinkSourceReport(sinks=frozenset(), sources=frozenset())
 net.check_recombinations(strict=False)  # RecombinationReport(missing=frozenset())
-net.check_isomers(strict=False)         # IsomerReport(groups=())
+net.check_isomers(strict=False)  # IsomerReport(groups=())
 ```
 
 `check_conservation` lists the reactions that break mass or charge
@@ -362,7 +366,7 @@ full sets:
 ```python
 net2 = Network("networks/GOW/GOW.jet")
 
-net.compare_reactions(net2)             # reactions in one but not the other
+net.compare_reactions(net2)  # reactions in one but not the other
 net.compare_species(net2, verbosity=0)  # counts only, no per-item listing
 ```
 
@@ -381,7 +385,9 @@ for use by external solvers:
 ```python
 net.to_hdf5("rates.hdf5", T_min=10, T_max=1e4, nT=200, err_tol=1e-3)
 net.to_txt("rates.txt", T_min=10, T_max=1e4, nT=200)
-net.write_table("rates.hdf5", format="auto")  # general form; format from extension (.hdf5/.hdf/.txt)
+net.write_table(
+    "rates.hdf5", format="auto"
+)  # general form; format from extension (.hdf5/.hdf/.txt)
 ```
 
 `err_tol` drives adaptive temperature sampling (set it to `None` for a fixed
@@ -395,7 +401,7 @@ grid). See [`to_hdf5`](../../reference/core/network/to_hdf5.md) and
 
 ```python
 net = Network("uclchem_small_gas")
-net.to_jaff("uclchem.jaff")        # save
+net.to_jaff("uclchem.jaff")  # save
 ```
 
 <!-- prettier-ignore -->

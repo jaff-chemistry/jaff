@@ -25,8 +25,8 @@ from jaff.codegen import Codegen
 net = Network("networks/GOW/GOW.jet")
 cg = Codegen(net, lang="python")
 
-print(cg.get_rates_str())     # k[0] = ... , k[1] = ... , ...
-print(cg.get_ode_str())       # f[0] = ... , f[1] = ... , ...
+print(cg.get_rates_str())  # k[0] = ... , k[1] = ... , ...
+print(cg.get_ode_str())  # f[0] = ... , f[1] = ... , ...
 ```
 
 `Codegen` is exported from the top level as well, so
@@ -218,9 +218,9 @@ print(py.get_ode_expressions_str())
 ```
 
 ```python
-dy[idx_h] =  - flux[0] + flux[1]
-dy[idx_e] =  - flux[0] + flux[0] + flux[0] - flux[1]
-dy[idx_hj] =  + flux[0] - flux[1]
+dy[idx_h] = -flux[0] + flux[1]
+dy[idx_e] = -flux[0] + flux[0] + flux[0] - flux[1]
+dy[idx_hj] = +flux[0] - flux[1]
 ```
 
 Each reactant and product occurrence contributes its own term, so the electron
@@ -262,10 +262,10 @@ fixed order:
 
 ```python
 cg.get_rhs_str(
-    thermal="dedt",        # or "dtdt", "none"
-    energy="volumetric",   # dedt only: or "specific", "per_particle", "molar"
-    radiation=True,        # append the radiation moment ODEs
-    rad_order=0,           # layout of the radiation equations (0–3)
+    thermal="dedt",  # or "dtdt", "none"
+    energy="volumetric",  # dedt only: or "specific", "per_particle", "molar"
+    radiation=True,  # append the radiation moment ODEs
+    rad_order=0,  # layout of the radiation equations (0–3)
 )
 ```
 
@@ -289,8 +289,8 @@ Just the energy time-derivative `dE/dt`, as a single expression with no
 assignment or line terminator — handy when you splice it into your own line.
 
 ```python
-cg.get_dedt(energy="specific")   # erg/g/s, normalised by mass density
-cg.get_dtdt()                    # dT/dt in K/s, see get_dtdt
+cg.get_dedt(energy="specific")  # erg/g/s, normalised by mass density
+cg.get_dtdt()  # dT/dt in K/s, see get_dtdt
 ```
 
 ### Radiation ODEs — `#!python get_radode_str()`
@@ -372,7 +372,7 @@ over the expressions, lifts each repeated piece into a temporary (`cse0`, `cse1`
 pruned, so nothing dead reaches the output.
 
 ```python
-cg.get_rates_str(use_cse=False)               # every rate fully expanded inline
+cg.get_rates_str(use_cse=False)  # every rate fully expanded inline
 cg.get_rates_str(use_cse=True, cse_var="tmp")  # shared pieces lifted to tmp0, tmp1, …
 ```
 
@@ -426,11 +426,11 @@ file.
 from jaff.codegen import Language
 
 py = Language("python")
-py.comment                       # '#'
-Language("fortran").idx_offset   # 1
+py.comment  # '#'
+Language("fortran").idx_offset  # 1
 
-Language.registered()            # every registered language singleton
-Language.comments()              # {'#', '//', '!'}
+Language.registered()  # every registered language singleton
+Language.comments()  # {'#', '//', '!'}
 ```
 
 A `Language` subclass declares `name`, `aliases`, `extensions`, `brac`,

@@ -189,12 +189,15 @@ Run the same test body over many inputs with `@pytest.mark.parametrize`.
 from jaff import Codegen
 
 
-@pytest.mark.parametrize("lang,expected_bracket", [
-    ("c++", "["),
-    ("c", "["),
-    ("fortran", "("),
-    ("python", "["),
-])
+@pytest.mark.parametrize(
+    "lang,expected_bracket",
+    [
+        ("c++", "["),
+        ("c", "["),
+        ("fortran", "("),
+        ("python", "["),
+    ],
+)
 def test_codegen_brackets(sample_network, lang, expected_bracket):
     """Test bracket style for each language."""
     cg = Codegen(network=sample_network, lang=lang)
@@ -206,10 +209,13 @@ def test_codegen_brackets(sample_network, lang, expected_bracket):
 Parametrize over several arguments at once to cover a matrix of cases.
 
 ```python
-@pytest.mark.parametrize("filename,expected_species,expected_reactions", [
-    ("sample_krome.dat", 9, 6),
-    ("sample_kida.dat", 6, 7),
-])
+@pytest.mark.parametrize(
+    "filename,expected_species,expected_reactions",
+    [
+        ("sample_krome.dat", 9, 6),
+        ("sample_kida.dat", 6, 7),
+    ],
+)
 def test_network_sizes(filename, expected_species, expected_reactions):
     """Test networks load with the expected sizes."""
     net = Network(str(FIXTURES_DIR / filename))
@@ -290,6 +296,7 @@ def expensive_network():
     """Module-scoped fixture for expensive setup (loaded once per module)."""
     return Network(str(FIXTURES_DIR / "sample_kida.dat"))
 
+
 @pytest.fixture(scope="function")
 def temp_directory(tmp_path):
     """Function-scoped temporary directory (new for each test)."""
@@ -344,6 +351,7 @@ Patch I/O and other externals so tests don't touch the real filesystem.
 ```python
 from unittest.mock import Mock, patch
 
+
 def test_with_mock():
     """Test with a mocked open()."""
     with patch("builtins.open") as mock_open:
@@ -366,6 +374,7 @@ def mock_network():
     net.reactions = [Mock()]
     return net
 
+
 def test_with_mock_network(mock_network):
     """Test using the mocked network."""
     assert len(mock_network.species) == 2
@@ -385,9 +394,11 @@ def test_network_loads_successfully(sample_network):
     """Test network loads without error."""
     assert sample_network is not None
 
+
 def test_network_has_species(sample_network):
     """Test network has species."""
     assert len(sample_network.species) > 0
+
 
 # Avoid
 def test_everything():
@@ -408,6 +419,7 @@ def test_codegen_raises_error_for_unsupported_language():
     """Test that an unsupported language raises ValueError."""
     pass
 
+
 # Avoid
 def test_lang():
     pass
@@ -422,9 +434,11 @@ def test_empty_network():
     """Test handling of an empty network."""
     pass
 
+
 def test_network_with_one_species():
     """Test a network with a single species."""
     pass
+
 
 def test_network_with_duplicate_species():
     """Test handling of duplicate species."""
@@ -441,9 +455,11 @@ def test_file_not_found():
     with pytest.raises(FileNotFoundError):
         Network("nonexistent.dat")
 
+
 def test_invalid_format():
     """Test ParserError for an invalid format."""
     from jaff.errors import ParserError
+
     with pytest.raises(ParserError):
         Network(str(FIXTURES_DIR / "malformed_network.dat"))
 ```

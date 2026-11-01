@@ -279,8 +279,11 @@ def test_attrs_list_mixed(source_h5, tmp_path):
             "target": {
                 "path": "out.hdf5",
                 # /co is a group heading holding only attrs; axes stay in-tree.
-                "/co/data": {"h5path": ["/co/A", "/co/B"], "type": "ndarray",
-                             "regrid": {"x": ["/co/x0", "/co/x1"]}},
+                "/co/data": {
+                    "h5path": ["/co/A", "/co/B"],
+                    "type": "ndarray",
+                    "regrid": {"x": ["/co/x0", "/co/x1"]},
+                },
                 "/co": {
                     "attrs": {
                         "Ndim": 2,
@@ -363,7 +366,7 @@ def test_relative_source_path_resolves_against_config_dir(
 
 
 def test_default_source_with_dotted_network_name(source_h5, tmp_path):
-    """"default" keeps every dot of the network basename: net.v2.jet -> net.v2.hdf5."""
+    """ "default" keeps every dot of the network basename: net.v2.jet -> net.v2.hdf5."""
     net_dir = tmp_path / "nets"
     net_dir.mkdir()
     default_h5 = net_dir / "net.v2.hdf5"

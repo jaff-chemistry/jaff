@@ -12,7 +12,11 @@ class TestUseProxyPhotoreaction:
         assert rxn.photo.xsec.database == "leiden"
 
     def test_disabled_skips_proxy_lookup(self, make_network):
-        net = make_network(OHX_PHOTO, name="noproxy.jet", reactions={"photo": {"use_proxy_photoreaction": False}})
+        net = make_network(
+            OHX_PHOTO,
+            name="noproxy.jet",
+            reactions={"photo": {"use_proxy_photoreaction": False}},
+        )
         rxn = next(iter(net.reactions))
         assert rxn.photo.xsec is None
 

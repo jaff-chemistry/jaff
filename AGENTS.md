@@ -76,6 +76,7 @@ from typing import Any
 
 import numpy as np
 
+
 def process_species(
     names: list[str],
     masses: np.ndarray,
