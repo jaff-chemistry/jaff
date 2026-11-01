@@ -24,6 +24,11 @@ fully-substituted SymPy expressions.
 
 Cross-function dependencies are resolved with a DFS to support one function
 calling another, while detecting circular references.
+
+Calls to the unit conversions of :mod:`jaff.physics.units` (``nm_to_eV(x)``,
+``pc_to_cm(r)`` ...; any letter case) are replaced by their value once the file
+is parsed. A ``@var``, ``@function`` or local variable named like one of them
+is an error.
 """
 
 from functools import cached_property
@@ -36,7 +41,14 @@ from sympy.core.function import AppliedUndef
 
 from ....common import float_piecewise_branches, resolve_symbolic_dependencies
 from ....errors import ParserError
+from ....physics import units
 from .function_props import AuxiliaryFunctionProps
+
+#: The unit conversions of :mod:`jaff.physics.units`, by lower-cased name: a
+#: ``.jfunc`` file may call them in any case.
+CONVERTERS: dict[str, Callable[[Any], Any]] = {
+    name.lower(): getattr(units, name) for name in units.__all__
+}
 
 
 class AuxiliaryFunctionParser:
@@ -106,6 +118,7 @@ class AuxiliaryFunctionParser:
 
         self.__parse_file()
         self.__resolve_func_deps()
+        self.__apply_converters()
 
     def __repr__(self):
         """Return canonical string representation of this parser instance.
@@ -135,6 +148,52 @@ class AuxiliaryFunctionParser:
         self.globals.clear()
         self.__dict__.clear()
         self.og_line = self.line = self.cline = ""
+
+    def __check_name(self, name: str, kind: str) -> None:
+        """Raise if *name* is taken by a unit conversion (any letter case).
+
+        Raises
+        ------
+        ParserError
+            If *name* matches a :mod:`jaff.physics.units` function.
+        """
+        if name.strip().lower() in CONVERTERS:
+            raise ParserError(
+                f"{kind} '{name.strip()}' has the name of a unit conversion of "
+                f"jaff.physics.units; choose another name",
+                self.og_line,
+                self.nline,
+                self.file,
+            )
+
+    def __apply_converters(self) -> None:
+        """Replace calls to unit conversions by their value, innermost first.
+
+        Runs after the file's own functions are inlined, so the only undefined
+        calls left are converters and functions the network supplies (such as
+        interpolators); the latter are left as they are.
+
+        Raises
+        ------
+        ParserError
+            If a conversion is called with other than one argument.
+        """
+
+        def is_converter(e: sp.Basic) -> bool:
+            return isinstance(e, AppliedUndef) and e.func.__name__.lower() in CONVERTERS
+
+        def convert(e: Any) -> sp.Basic:
+            name = e.func.__name__.lower()
+            if len(e.args) != 1:
+                raise ParserError(
+                    f"Unit conversion '{name}' takes one argument, got {len(e.args)}",
+                    fname=self.file,
+                )
+
+            return sp.sympify(CONVERTERS[name](e.args[0]))
+
+        for func in self.func_dict.values():
+            func.expr = func.expr.replace(is_converter, convert)
 
     def get_dict(self) -> dict[str, AuxiliaryFunctionProps]:
         """Return the parsed function dictionary.
@@ -258,6 +317,7 @@ class AuxiliaryFunctionParser:
                 "Invalid variable encountered", self.og_line, self.nline, self.file
             )
         var, expr = tokens[0].strip(), tokens[1].strip()
+        self.__check_name(var, "Variable")
 
         try:
             self.globals[str(var)] = sp.parse_expr(expr)
@@ -300,6 +360,7 @@ class AuxiliaryFunctionParser:
                 "Invalid function decleration", self.og_line, self.nline, self.file
             )
         name, rest = parts[0].lower(), parts[1]
+        self.__check_name(parts[0].strip(), "Function")
         rest = rest.split(")", maxsplit=1)
 
         if len(rest) != 2:
@@ -346,6 +407,7 @@ class AuxiliaryFunctionParser:
             )
 
         var, expr = splitline[0].strip(), splitline[1].strip()
+        self.__check_name(var, "Variable")
         try:
             self.func_dict[self.current_func]._locals[str(var)] = sp.parse_expr(expr)
         except (SyntaxError, TokenError, TypeError, sp.SympifyError) as e:

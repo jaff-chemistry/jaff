@@ -166,6 +166,28 @@ rate (`ParserError`).
 If no reaction carries number `N`, or `rc_` is not followed by a number (e.g.
 `rc_x`), loading raises a `ParserError`.
 
+### Unit conversions
+
+Every function of [`jaff.physics.units`](../../reference/physics/units/index.md)
+can be called in a `@var`, a local variable or a `@return`, in any letter case:
+`nm_to_eV`, `eV_to_K`, `pc_to_cm`, `Myr_to_s` and so on. JAFF replaces each
+call by its value once the file is parsed, so the generated code contains only
+the number:
+
+```text
+@var E_Lya = nm_to_eV(121.567)    # Lyman-alpha photon energy in eV
+
+@function chemRateCoeff3(tgas)
+    T_eV = K_to_eV(tgas)
+    @return 1e-10 * exp(-E_Lya / T_eV)
+```
+
+Most conversions multiply by a factor; a photon's wavelength is inversely
+related to its energy and frequency (`E = h c / λ`), so `nm_to_eV`, `eV_to_nm`
+and the other photon conversions divide. Each takes one argument. A `@var`,
+`@function` or local variable may not share a conversion's name (in any letter
+case): loading raises a `ParserError`.
+
 ---
 
 ## Reserved Function Names
