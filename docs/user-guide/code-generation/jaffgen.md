@@ -196,3 +196,34 @@ Collections live under `src/jaff/templates/generator/`. List them with:
 ```bash
 ls src/jaff/templates/generator/
 ```
+
+### `honghu`: a network for Honghu.jl
+
+The `honghu` collection writes one Julia file, `network.jl`, that
+[Honghu.jl](https://github.com/chongchonghe/Honghu.jl), a radiation-hydrodynamics code
+for prototyping Quokka's algorithms, includes as a chemical network. The file is a
+module named `JAFF_<label>` holding one type, `<label> <: Honghu.AbstractNetwork`, so
+the network's label must be a valid Julia name. The type gets the species, their
+masses, the reactions and the band edges, and `rhses` and `jacobian` with the thermal
+row in volumetric `dE/dt` and the radiation terms on. Honghu supplies the temperature,
+`tgas = E / (3/2 k_B sum_s n_s)`, which is the ideal gas JAFF writes the Jacobian with.
+
+The template needs radiation bands, `mode = "nph"` and `rsl = "c_hat"`: Honghu stores
+each band's photon density divided by `c_hat / c`, so the photo rates read `c_hat`, as
+in Quokka. The shipped `jaffgen.toml` sets them; a `--config` of your own replaces it,
+so repeat them there:
+
+```toml
+[network]
+label = "HydrogenIliev2"
+
+[network.radiation]
+bands = [13.6, "inf"]
+profile_index = 0
+mode = "nph"
+rsl = "c_hat"
+```
+
+```bash
+jaffgen --config jaffgen.toml --network hydrogen_iliev2.jet --template honghu --outdir out/
+```
