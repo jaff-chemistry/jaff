@@ -16,7 +16,8 @@
 // Network symbols mapped onto the burn state, shared by the RHS and the
 // Jacobian. jaff's energy row is the volumetric dE/dt; Quokka integrates the
 // specific internal energy e = E / rho, so the functions below divide that row
-// by state.rho.
+// by state.rho. jaff emits a density and a flux moment per band, interleaved in
+// state.rn, so the problem must integrate the photon flux.
 $$JAFF DEFINE quokka {
     REPLACE {
         "radeden\[\s*(\d+)\s*\]" -> "state.rn[2*\1]"
@@ -36,6 +37,8 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_rhs(
     amrex::GpuArray<amrex::Real,
                     quokka::microphysics::IntegratorLayout<
                         typename BurnT::problem_type, BurnT>::neqs> &ydot) {
+  static_assert(BurnT::traits::integrate_rad_flux,
+                "a jaff network needs Microphysics_Traits::integrate_rad_flux");
   $$JAFF REPEAT idx, rhs, cse IN rhses { USE quokka }
   const amrex::Real cse$idx$ = $cse$;
   ydot[$idx$] = $rhs$;
@@ -50,6 +53,8 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(const BurnT &state,
                                                    MatrixType &jac) {
   using Layout = quokka::microphysics::IntegratorLayout<
       typename BurnT::problem_type, BurnT>;
+  static_assert(BurnT::traits::integrate_rad_flux,
+                "a jaff network needs Microphysics_Traits::integrate_rad_flux");
 
   $$JAFF REPEAT idx, expr, cse IN jacobian { USE quokka }
   const amrex::Real cse$idx$ = $cse$;
