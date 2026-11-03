@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, Mapping, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional, Set, Tuple
+
+import sympy as sp
 
 from ...errors import TemplateError
 from ...resolve import check_groups
@@ -89,6 +91,19 @@ def _expressions(
     )
 
 
+def _band_edges(c: RenderContext) -> List[Any]:
+    """The radiation band edges; an open top edge (``"inf"`` in the config, parsed to
+    ``sympy.oo``, or ``float("inf")``) is written in the target language, e.g.
+    ``INFINITY`` in C++."""
+    if not c.net.radiation:
+        return []
+
+    return [
+        c.cg.lang.code_gen(sp.oo, strict=False) if sp.sympify(edge) is sp.oo else edge
+        for edge in c.net.radiation.bands
+    ]
+
+
 PROPERTIES: Dict[str, RepeatProp] = {
     "rates": _expressions("rate", "get_indexed_rates"),
     "flux_expressions": _items(
@@ -158,10 +173,7 @@ PROPERTIES: Dict[str, RepeatProp] = {
     "charged_specie_masses": _items(
         "charged_specie_mass", lambda c: c.net.species.charged("mass")
     ),
-    "radiation_boundaries": _items(
-        "radiation_boundary",
-        lambda c: c.net.radiation.bands if c.net.radiation else [],
-    ),
+    "radiation_boundaries": _items("radiation_boundary", _band_edges),
     "profile_indices": _items(
         "profile_index",
         lambda c: (

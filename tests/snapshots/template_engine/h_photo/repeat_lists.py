@@ -104,7 +104,7 @@ photo[1] = 0
 # $$JAFF END
 
 # $$JAFF REPEAT radiation_boundary IN radiation_boundaries
-bands = [13.6, inf]
+bands = [13.6, math.inf]
 # $$JAFF END
 
 # $$JAFF REPEAT idx, specie_with_normalized_sign IN species_with_normalized_sign {

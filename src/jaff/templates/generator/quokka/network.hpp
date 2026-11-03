@@ -4,6 +4,8 @@
 /// \brief The constants and runtime parameters of a jaff-generated network. A
 /// Quokka problem names the network type with Microphysics_Traits::Network.
 
+#include <cmath> // INFINITY, for an open top band edge
+
 #include "AMReX_Array.H"
 #include "AMReX_Extension.H"
 #include "AMReX_GpuQualifiers.H"
