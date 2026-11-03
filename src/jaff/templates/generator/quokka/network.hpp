@@ -27,7 +27,7 @@ struct JaffNetwork {
   static constexpr int NumSpec = $nspec$;
   $$JAFF END
   /// indices of the species in xn
-  enum Species : int {
+  enum Species : int { // NOLINT(cppcoreguidelines-use-enum-class)
     $$JAFF REPEAT idx, specie_with_normalized_sign IN species_with_normalized_sign
     $specie_with_normalized_sign$ = $idx$,
     $$JAFF END
