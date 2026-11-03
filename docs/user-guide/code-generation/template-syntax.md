@@ -125,19 +125,18 @@ $$JAFF END
 
 **Available tokens:**
 
-| Token           | Type    | Description                                                                         |
-| --------------- | ------- | ----------------------------------------------------------------------------------- |
-| `nspec`         | `int`   | Number of species                                                                   |
-| `nreact`        | `int`   | Number of reactions                                                                 |
-| `nelem`         | `int`   | Number of elements                                                                  |
-| `nbands`        | `int`   | Number of radiation bands (`0` if none)                                             |
-| `profile_index` | `float` | Spectral index α of the photon-number spectrum; needs radiation, one α in all bands |
-| `label`         | `str`   | Network label                                                                       |
-| `filename`      | `str`   | Template file name                                                                  |
-| `filepath`      | `Path`  | Full template file path                                                             |
-| `e_idx`         | `int`   | Index of the electron species                                                       |
-| `dedt`          | `str`   | Language-specific total `dE/dt` expression                                          |
-| `dtdt`          | `str`   | Language-specific total `dT/dt` expression                                          |
+| Token      | Type   | Description                                |
+| ---------- | ------ | ------------------------------------------ |
+| `nspec`    | `int`  | Number of species                          |
+| `nreact`   | `int`  | Number of reactions                        |
+| `nelem`    | `int`  | Number of elements                         |
+| `nbands`   | `int`  | Number of radiation bands (`0` if none)    |
+| `label`    | `str`  | Network label                              |
+| `filename` | `str`  | Template file name                         |
+| `filepath` | `Path` | Full template file path                    |
+| `e_idx`    | `int`  | Index of the electron species              |
+| `dedt`     | `str`  | Language-specific total `dE/dt` expression |
+| `dtdt`     | `str`  | Language-specific total `dT/dt` expression |
 
 Integer tokens accept inline arithmetic with `+`, `-`, `*`, `/` (see
 [Placeholders](#placeholders)):
@@ -382,6 +381,7 @@ under shorter variable names.
 | `element_density_matrix` | `idx, element`                 | Element content of each species (2D)               | —             |
 | `element_truth_matrix`   | `idx, element`                 | Whether each species contains each element (2D)    | —             |
 | `radiation_boundaries`   | `idx, radiation_boundary`      | Band edges, length `nbands + 1`; empty without radiation | —       |
+| `profile_indices`        | `idx, profile_index`           | Spectral index α of each band's photon-number spectrum `n(E) ∝ E^(α-2)`; empty without radiation | — |
 
 ### REPEAT option groups
 
@@ -484,13 +484,14 @@ content with $property1$, $property2$ tokens
 $$JAFF END
 ```
 
-Retrieve properties of a named entity (species, reaction, element, or
-auxiliary function). Each property is substituted as `$property$` in the body.
+Retrieve properties of a named entity (species, reaction, element, radiation
+band, or auxiliary function). Each property is substituted as `$property$` in the body.
 The entity must exist in the network and be of the kind the property needs;
 this is checked before anything renders. A reaction is named by its verbatim
 text, which contains spaces, so it must be a quoted string, e.g.
 `GET reaction_idx IN "H+ + e- -> H"`. A reaction name shared by several
-mechanisms is rejected by `GET`.
+mechanisms is rejected by `GET`. A radiation band is named by its index, from
+`0` to `nbands - 1`, e.g. `GET profile_index IN 0`.
 
 **Available properties:**
 
@@ -505,6 +506,7 @@ mechanisms is rejected by `GET`.
 | `reaction_tmin`     | verbatim reaction  | `float` — minimum temperature       |
 | `reaction_tmax`     | verbatim reaction  | `float` — maximum temperature       |
 | `reaction_verbatim` | verbatim reaction  | `str` — verbatim string             |
+| `profile_index`     | band index         | `float` — spectral index α of the band's photon-number spectrum `n(E) ∝ E^(α-2)` |
 | `aux_func`          | auxiliary function | `str` — the function definition as target-language code |
 
 ```cpp
@@ -573,7 +575,7 @@ Substitute `1` if an entity exists in the network, `0` otherwise. The
 placeholder is the kind itself. A missing entity is not an error (that is the
 point): it gives `0`. Reactions are named by quoted verbatim text, as for `GET`.
 
-**Kinds:** `specie`, `reaction`, `element`.
+**Kinds:** `specie`, `reaction`, `element`, `band` (a radiation band index).
 
 ```cpp
 $$JAFF HAS specie e-

@@ -15,7 +15,6 @@ TOKENS: Dict[str, Getter] = {
     "nelem": lambda c: c.net.elements.count,
     "nreact": lambda c: c.net.reactions.count,
     "nbands": lambda c: c.net.radiation.nbands if c.net.radiation else 0,
-    "profile_index": lambda c: c.net.radiation.profile_index,
     "label": lambda c: c.net.label,
     "filename": lambda c: c.file.name,
     "filepath": lambda c: c.file,

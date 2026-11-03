@@ -24,7 +24,7 @@ OLD_PROPS = {
     "specie_masses_ne", "specie_charges_ne", "charge_truths_ne",
     "neutral_specie_indices", "charged_specie_indices", "charged_specie_indices_ne",
     "charged_specie_masses_ne", "neutral_specie_masses", "charged_specie_masses",
-    "radiation_boundaries",
+    "radiation_boundaries", "profile_indices",
 }  # fmt: skip
 
 

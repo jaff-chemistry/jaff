@@ -68,7 +68,7 @@ field is therefore an energy density in erg/cm³.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING, Any, List, Tuple
 
 import numpy as np
 import sympy as sp
@@ -847,24 +847,27 @@ class Radiation:
             for grp in self.groups
         ]
 
-    @property
-    def profile_index(self) -> int | float:
-        """Spectral index *α* shared by every band (``grp.profile_idx``).
+    def group_property(self, name: str) -> List[Any]:
+        """Value of the :class:`RadiationGroup` attribute *name* for every group.
+
+        Parameters
+        ----------
+        name : str
+            Attribute of :class:`RadiationGroup`, e.g. ``"profile_idx"``,
+            ``"lower"`` or ``"upper"``.
+
+        Returns
+        -------
+        list
+            One value per group, in ``self.groups`` order.  The ``upper`` of the
+            last group is ``sympy.oo`` when the last band edge is ``"inf"``.
 
         Raises
         ------
-        ValueError
-            If the bands have different indices (a per-band list in
-            ``props.profile_index``).
+        AttributeError
+            If :class:`RadiationGroup` has no attribute *name*.
         """
-        indices = [grp.profile_idx for grp in self.groups]
-        if any(index != indices[0] for index in indices):
-            raise ValueError(
-                f"profile_index needs one spectral index for all bands; "
-                f"the bands have {indices}"
-            )
-
-        return indices[0]
+        return [getattr(grp, name) for grp in self.groups]
 
     @property
     def total_emissivity(self) -> sp.Expr | None:

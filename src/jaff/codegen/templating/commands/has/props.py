@@ -14,4 +14,8 @@ KINDS: Dict[str, Getter] = {
     "specie": lambda c: c.net.species,
     "reaction": lambda c: c.net.reactions,
     "element": lambda c: c.net.elements,
+    # A radiation band is named by its index, e.g. `GET profile_index IN 0`
+    "band": lambda c: [
+        str(i) for i in range(c.net.radiation.nbands if c.net.radiation else 0)
+    ],
 }

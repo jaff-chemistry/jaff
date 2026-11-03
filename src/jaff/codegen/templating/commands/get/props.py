@@ -20,6 +20,10 @@ PROPERTIES: Dict[str, Tuple[str, _Getter]] = {
     "reaction_tmin": ("reaction", lambda c, r: c.net.reactions[r].tmin),
     "reaction_tmax": ("reaction", lambda c, r: c.net.reactions[r].tmax),
     "reaction_verbatim": ("reaction", lambda c, r: c.net.reactions[r].verbatim),
+    "profile_index": (
+        "band",
+        lambda c, b: c.net.radiation.group_property("profile_idx")[int(b)],
+    ),
     "aux_func": (
         "aux",
         lambda c, f: c.cg.lang.code_gen(

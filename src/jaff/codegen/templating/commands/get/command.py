@@ -21,6 +21,7 @@ _KIND_NAMES = {
     "specie": "a species",
     "reaction": "a reaction",
     "aux": "an auxiliary function",
+    "band": "a radiation band index",
 }
 
 

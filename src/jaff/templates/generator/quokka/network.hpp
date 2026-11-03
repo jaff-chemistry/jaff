@@ -44,9 +44,12 @@ struct JaffNetwork {
     $$JAFF END
   }
   /// index alpha of the photon-number spectrum n(E) ~ E^(alpha-2) within a
-  /// chemical band
-  $$JAFF SUB profile_index
+  /// chemical band; Quokka takes one alpha for all bands
+  $$JAFF GET profile_index IN 0
   static constexpr double ChemBandsPowerLawIndex = $profile_index$;
+  $$JAFF END
+  $$JAFF REPEAT idx, profile_index IN profile_indices
+  static_assert($profile_index$ == ChemBandsPowerLawIndex, "band $idx$: Quokka takes one profile index for all chemical bands");
   $$JAFF END
 
   static constexpr int NumThermalBands = 0;

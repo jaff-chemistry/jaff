@@ -162,6 +162,12 @@ PROPERTIES: Dict[str, RepeatProp] = {
         "radiation_boundary",
         lambda c: c.net.radiation.bands if c.net.radiation else [],
     ),
+    "profile_indices": _items(
+        "profile_index",
+        lambda c: (
+            c.net.radiation.group_property("profile_idx") if c.net.radiation else []
+        ),
+    ),
 }
 
 
