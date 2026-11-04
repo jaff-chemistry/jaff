@@ -15,6 +15,8 @@ TOKENS: Dict[str, Getter] = {
     "nelem": lambda c: c.net.elements.count,
     "nreact": lambda c: c.net.reactions.count,
     "nbands": lambda c: c.net.radiation.nbands if c.net.radiation else 0,
+    # spectral index alpha of the photon-number spectrum n(E) ~ E^(alpha-2) of the first band (0 without radiation)
+    "profile_index": lambda c: c.net.radiation.groups[0].profile_idx if c.net.radiation else 0,
     "label": lambda c: c.net.label,
     "filename": lambda c: c.file.name,
     "filepath": lambda c: c.file,
