@@ -73,11 +73,16 @@ def legend_columns(widths: Sequence[float], available: float) -> int:
     return 1
 
 
-def _legend(widths: Sequence[float], width: float) -> tuple[int, int]:
-    """Columns and rows of a legend under a drawing *width* inches wide."""
+def _legend(
+    widths: Sequence[float], width: float, key_row: bool = False
+) -> tuple[int, int]:
+    """Columns and rows of a legend under a drawing *width* inches wide.
+
+    *key_row* adds a row for the rate-width key below the legend.
+    """
     columns = legend_columns(widths, width - 2 * MARGIN)
 
-    return columns, max(math.ceil(len(widths) / columns), 1)
+    return columns, max(math.ceil(len(widths) / columns), 1) + key_row
 
 
 def drawing_bottom(layout: GraphLayout | MatrixLayout | SpeciesLayout) -> float:
@@ -301,7 +306,10 @@ def _lanes(
 
 
 def graph_layout(
-    net: Network, measure: Measure, legend: Sequence[float] = ()
+    net: Network,
+    measure: Measure,
+    legend: Sequence[float] = (),
+    key_row: bool = False,
 ) -> GraphLayout:
     """Lay out *net* as a layered species-reaction graph.
 
@@ -319,6 +327,8 @@ def graph_layout(
     legend : sequence of float, optional
         Width in inches of each legend entry; a legend wider than the drawing
         wraps onto more rows (the figure grows taller, not wider).
+    key_row : bool, optional
+        Leave a row below the legend for the rate-width key.
 
     Returns
     -------
@@ -330,7 +340,7 @@ def graph_layout(
     labels = {i: equation_label(r) for i, r in enumerate(reactions)}
     if not core:
         width = 2 * MARGIN + EMPTY_WIDTH
-        columns, legend_rows = _legend(legend, width)
+        columns, legend_rows = _legend(legend, width, key_row)
         size = (width, 2 * MARGIN + HEADER + LEGEND + (legend_rows - 1) * LEGEND_ROW)
         return GraphLayout(size, (), {}, {}, {}, {}, {}, labels, (), columns, legend_rows)
 
@@ -398,7 +408,7 @@ def graph_layout(
             edges.append(Edge(s, i, role, tuple(points)))
 
     bottom = max(y for _, y in [*species_xy.values(), *reaction_xy.values()])
-    columns, legend_rows = _legend(legend, x + MARGIN)
+    columns, legend_rows = _legend(legend, x + MARGIN, key_row)
     size = (
         x + MARGIN,
         bottom + ROW_PITCH / 2 + LEGEND + (legend_rows - 1) * LEGEND_ROW + MARGIN,
@@ -564,7 +574,11 @@ def _stack(
 
 
 def species_layout(
-    net: Network, specie: Specie, measure: Measure, legend: Sequence[float] = ()
+    net: Network,
+    specie: Specie,
+    measure: Measure,
+    legend: Sequence[float] = (),
+    key_row: bool = False,
 ) -> SpeciesLayout:
     """Lay out the reactions forming and destroying *specie*.
 
@@ -584,6 +598,8 @@ def species_layout(
     legend : sequence of float, optional
         Width in inches of each legend entry; a legend wider than the drawing
         wraps onto more rows (the figure grows taller, not wider).
+    key_row : bool, optional
+        Leave a row below the legend for the rate-width key.
 
     Returns
     -------
@@ -682,7 +698,7 @@ def species_layout(
             *product_xy.values(),
         ]
     )
-    columns, legend_rows = _legend(legend, x + MARGIN)
+    columns, legend_rows = _legend(legend, x + MARGIN, key_row)
     size = (
         x + MARGIN,
         bottom + ROW_PITCH / 2 + LEGEND + (legend_rows - 1) * LEGEND_ROW + MARGIN,

@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 import matplotlib.pyplot as plt
 from matplotlib.artist import Artist
@@ -12,11 +12,19 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.patches import FancyBboxPatch, Patch
 
-from ._common import FONT_RC, text_width
-from ._graph import LEGEND_ENTRY, ROLES, _edges, _reactions, pill, role_handles
+from ._common import FONT_RC
+from ._graph import (
+    ROLES,
+    _edges,
+    _reactions,
+    draw_legends,
+    entry_widths,
+    label_halo,
+    pill,
+    role_handles,
+)
 from ._layout import (
     drawing_bottom,
-    EQUATION_FONT,
     HEADER,
     HEADER_FONT,
     MARGIN,
@@ -29,12 +37,12 @@ if TYPE_CHECKING:
     from ...core.species.specie import Specie
 
 
-def _shown(net: Network, specie: Specie) -> list[str]:
-    """Types of the reactions that form or destroy *specie*, in index order."""
+def involved(net: Network, specie: Specie) -> list[int]:
+    """Indices of the reactions that form or destroy *specie* (a net change)."""
     j = specie.index
     change = net.product_matrix[:, j] - net.reactant_matrix[:, j]
 
-    return [r.type for i, r in enumerate(net.reactions) if change[i] != 0]
+    return [i for i in range(len(net.reactions)) if change[i] != 0]
 
 
 def species_legend_widths(
@@ -42,15 +50,24 @@ def species_legend_widths(
 ) -> list[float]:
     """Width in inches of each entry of the legend of the species view of *specie*."""
     colours = type_colours(theme, [r.type for r in net.reactions])
-    labels = [t for t, _ in legend_entries(theme, colours, _shown(net, specie))]
+    shown = [net.reactions[i].type for i in involved(net, specie)]
+    labels = [t for t, _ in legend_entries(theme, colours, shown)]
 
-    return [text_width(t, EQUATION_FONT) + LEGEND_ENTRY for t in [*labels, *ROLES]]
+    return entry_widths([*labels, *ROLES])
 
 
 def draw_species(
-    net: Network, layout: SpeciesLayout, theme: NetworkTheme
+    net: Network,
+    layout: SpeciesLayout,
+    theme: NetworkTheme,
+    widths: dict[int, float] | None = None,
+    key: Sequence[tuple[float, float]] = (),
 ) -> tuple[Figure, Axes]:
-    """Draw *layout* of *net* in *theme*; the axes are in inches, y down."""
+    """Draw *layout* of *net* in *theme*; the axes are in inches, y down.
+
+    *widths* and *key* scale the edges by rate, as in
+    :func:`~jaff.plotting.network._graph.draw_graph`.
+    """
     types = [r.type for r in net.reactions]
     colours = type_colours(theme, types)
     width, height = layout.size
@@ -61,11 +78,11 @@ def draw_species(
         ax.set_ylim(height, 0)
         ax.set_axis_off()
         _lanes(ax, layout, theme)
-        _edges(ax, layout, theme, colours, types)
-        _reactions(ax, layout, theme, colours, types)
+        _edges(ax, layout, theme, colours, types, widths)
+        _reactions(ax, layout, theme, colours, types, label_halo(widths))
         _pills(ax, net, layout, theme)
         shown = [types[i] for i in sorted(layout.formation + layout.destruction)]
-        _legend(ax, layout, theme, colours, shown)
+        _legend(ax, layout, theme, colours, shown, key)
 
     return fig, ax
 
@@ -120,23 +137,10 @@ def _legend(
     theme: NetworkTheme,
     colours: dict[str, str],
     shown: list[str],
+    key: Sequence[tuple[float, float]] = (),
 ) -> None:
     handles: list[Artist] = [
         Patch(facecolor=c, edgecolor="none", label=t)
         for t, c in legend_entries(theme, colours, shown)
     ]
-    handles += role_handles(theme)
-    width, height = layout.size
-    ax.legend(
-        handles=handles,
-        loc="lower center",
-        # Anchored in inches, so cropping (tight) leaves it in place.
-        bbox_to_anchor=(width / 2, height - MARGIN),
-        bbox_transform=ax.transData,
-        ncol=layout.legend_columns,
-        frameon=False,
-        fontsize=EQUATION_FONT,
-        labelcolor=theme.text,
-        handlelength=1.4,
-        columnspacing=1.2,
-    )
+    draw_legends(ax, layout, theme, [*handles, *role_handles(theme)], key)

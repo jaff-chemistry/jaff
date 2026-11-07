@@ -108,6 +108,33 @@ as a 100-digit number (abbreviated above), while
 !!! note "Photo-reactions during code generation"
     Photo reaction rate during code generation are not kept as photorates if radiation is enabled. Actual photorates are calculated as a function of photo number/energy density for each radiation band
 
+### Evaluating a rate coefficient
+
+`evaluate_rate_coefficient(values, functions=None)` gives a reaction's rate
+coefficient as a number, and `net.reactions.evaluate_rate_coefficients(...)`
+all of them as an array in catalogue order:
+
+```python
+net = Network("networks/demos/water_co.jet")
+net.reactions[2].evaluate_rate_coefficient({"tgas": 100.0})  # 4.382088543149259e-07
+
+values = {"tgas": 100.0, "crate": 1.3e-17, "av": 1.0, "chi": 1.0}
+net.reactions.evaluate_rate_coefficients(values)[[0, 2, 16]]
+# array([1.26100000e-17, 4.38208854e-07, 8.14930913e-12])
+```
+
+- `values` gives a number per symbol name; densities `nden[i]` take one array
+  under `"nden"`. Values a reaction does not use are ignored.
+- `functions` gives each unknown function (one the `.jfunc` file calls but does
+  not define, such as an interpolated table) a constant, or a callable that
+  receives the function's numeric arguments.
+- A piecewise (multi-range) rate picks its branch from `tgas`.
+- Missing names raise one `ValueError` naming all of them:
+  `Cannot evaluate the rate coefficients: no value for av, chi, crate`.
+
+[`net.visualize`](visualization.md#rate-scaled-arrows) uses the same values to
+scale its arrows.
+
 ### Attributes
 
 | Attribute             | Type                         | Description                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -464,6 +491,7 @@ Each returns a `Vector` aligned to catalogue order.
 | `verbatim()`            | `Vector[str]`           | `['H + _PHOTON -> H+ + e-', 'H+ + e- -> H']` |
 | `types()`               | `Vector[str]`           | `['photo', 'unknown']`                       |
 | `rate_coefficients()`   | `Vector[Basic]`         | the two symbolic rate coefficients           |
+| `evaluate_rate_coefficients(values)` | `numpy.ndarray` | the coefficients as numbers ([evaluating](#evaluating-a-rate-coefficient)) |
 | `rates()`               | `Vector[Basic]`         | the two rates (coefficient × densities)      |
 | `reactants()`           | `Vector[Species]`       | one `Species` catalogue per reaction         |
 | `products()`            | `Vector[Species]`       | one `Species` catalogue per reaction         |

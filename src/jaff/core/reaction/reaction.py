@@ -66,6 +66,7 @@ from ...errors import ParserError
 from ...io import JaffLogger
 from ..elements import Elements
 from ..species import Specie, Species
+from ._evaluate import FunctionValue, evaluate_expression
 from .config import PhotoConfig, ReactionConfig
 from .photo_reaction import PhotoReaction
 from .reaction_radiation import ReactionRadiation
@@ -486,6 +487,47 @@ class Reaction:
             return self.photo.band_rate
 
         return self.rate_segments.equivalent_rate
+
+    def evaluate_rate_coefficient(
+        self,
+        values: Mapping[str, Any],
+        functions: Mapping[str, FunctionValue] | None = None,
+    ) -> float:
+        """Evaluate the rate coefficient numerically for the given values.
+
+        Every symbol in :attr:`rate_coefficient` needs a value, and every
+        unknown function (one the ``.jfunc`` file uses but does not define, such
+        as an interpolated shielding table) needs a callable or a constant.
+        Values not used by this reaction are ignored.
+
+        Parameters
+        ----------
+        values : mapping
+            A number per symbol name, e.g. ``{"tgas": 100.0, "av": 1.0}``.
+            Densities ``nden[i]`` take one array under ``"nden"``.
+        functions : mapping, optional
+            Per unknown function name, a callable taking the function's numeric
+            arguments, or a constant.
+
+        Returns
+        -------
+        float
+            The rate coefficient, in units set by the reaction order (e.g.
+            cm³ s⁻¹ for a two-body reaction).
+
+        Raises
+        ------
+        ValueError
+            Naming every symbol and function without a value.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> net = Network("networks/demos/water_co.jet")
+        >>> net.reactions[2].evaluate_rate_coefficient({"tgas": 100.0})
+        4.382088543149259e-07
+        """
+        return evaluate_expression(self.rate_coefficient, values, functions)
 
     @property
     def tmin(self) -> float | None:

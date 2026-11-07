@@ -11,8 +11,9 @@ Reactions can be looked up by verbatim string
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Sequence, SupportsIndex, cast, overload
+from typing import TYPE_CHECKING, Any, Mapping, Sequence, SupportsIndex, cast, overload
 
+import numpy as np
 from sympy import Basic, Expr, Float
 
 from ...config.base import dotted
@@ -20,6 +21,7 @@ from ...errors import ParserError
 from ...io import JaffLogger
 from ...types import Catalogue, Vector
 from ..species import Species
+from ._evaluate import FunctionValue, check_missing
 from .config import ReactionsConfig
 from .reaction import Reaction
 from .types import RateSegment
@@ -690,6 +692,56 @@ class Reactions(Catalogue[Reaction]):
         Vector[Basic]
         """
         return Vector([r.rate_coefficient for r in self])
+
+    def evaluate_rate_coefficients(
+        self,
+        values: Mapping[str, Any],
+        functions: Mapping[str, FunctionValue] | None = None,
+    ) -> np.ndarray:
+        """Evaluate every rate coefficient numerically, in catalogue order.
+
+        See :meth:`Reaction.evaluate_rate_coefficient
+        <jaff.core.reaction.Reaction.evaluate_rate_coefficient>`; the names
+        missing from *values* and *functions* are reported together, for all
+        reactions at once.
+
+        Parameters
+        ----------
+        values : mapping
+            A number per symbol name, e.g. ``{"tgas": 100.0, "av": 1.0}``.
+            Densities ``nden[i]`` take one array under ``"nden"``.
+        functions : mapping, optional
+            Per unknown function name, a callable taking the function's numeric
+            arguments, or a constant.
+
+        Returns
+        -------
+        numpy.ndarray
+            One value per reaction.
+
+        Raises
+        ------
+        ValueError
+            Naming every symbol and function without a value.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> net = Network("networks/demos/water_co.jet")
+        >>> values = {"tgas": 100.0, "crate": 1.3e-17, "av": 1.0, "chi": 1.0}
+        >>> net.reactions.evaluate_rate_coefficients(values)[[0, 2, 16]]
+        array([1.26100000e-17, 4.38208854e-07, 8.14930913e-12])
+        >>> net.reactions.evaluate_rate_coefficients({"tgas": 100.0})
+        Traceback (most recent call last):
+        ...
+        ValueError: Cannot evaluate the rate coefficients: no value for av, chi, crate
+        """
+        functions = functions or {}
+        check_missing((r.rate_coefficient for r in self), values, functions)
+
+        return np.array(
+            [r.evaluate_rate_coefficient(values, functions) for r in self], dtype=float
+        )
 
     def rates(self) -> Vector[Basic]:
         """Return a ``Vector`` of reaction rates, ``rate_coefficient · Π nden``.

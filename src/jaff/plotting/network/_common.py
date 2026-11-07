@@ -12,6 +12,7 @@ from matplotlib.artist import Artist
 from matplotlib.axes import Axes
 from matplotlib.colors import to_rgb
 from matplotlib.figure import Figure
+from matplotlib.legend import Legend
 from matplotlib.font_manager import FontProperties
 from matplotlib.path import Path as MplPath
 from matplotlib.textpath import TextPath
@@ -74,12 +75,11 @@ def crop(fig: Figure, ax: Axes, pad: float = TIGHT_PAD) -> None:
 
     The axes span the figure in inches (y down), so cropping sets their limits
     and the figure size to the content's bounding box; artists anchored in data
-    coordinates, the legend included, keep their place.
+    coordinates, the legends included, keep their place.
     """
-    artists: list[Artist] = [*ax.patches, *ax.texts]
-    legend = ax.get_legend()
-    if legend is not None:
-        artists.append(legend)
+    # Every legend: the type legend and, with rate scaling, the width key.
+    legends = [a for a in ax.get_children() if isinstance(a, Legend)]
+    artists: list[Artist] = [*ax.patches, *ax.texts, *legends]
     to_data = ax.transData.inverted()
     corners = [to_data.transform(a.get_window_extent().corners()) for a in artists]
     xs = [x for c in corners for x, _ in c]
