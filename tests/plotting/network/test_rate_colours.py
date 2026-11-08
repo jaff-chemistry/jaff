@@ -231,9 +231,9 @@ def test_colour_bar_title_follows_the_quantity(net):
     _, k_ax = NetworkVisualizer(net).graph(show=False, colour_by=K)
     _, r_ax = NetworkVisualizer(net).graph(show=False, colour_by="rate")
 
-    assert "rate coefficient $k$" in [t.get_text() for t in k_ax.texts]
+    assert "RATE COEFFICIENT $k$" in [t.get_text() for t in k_ax.texts]
     assert any(
-        t.get_text().startswith(r"reaction rate $\mathcal{R}$") for t in r_ax.texts
+        t.get_text().startswith(r"REACTION RATE $\mathcal{R}$") for t in r_ax.texts
     )
 
 
@@ -253,20 +253,20 @@ def test_colour_bar_is_a_rounded_gradient_with_decade_labels(net):
     (image,) = ax.images
     assert image.get_clip_path() is not None
     texts = [t.get_text() for t in ax.texts]
-    assert "rate coefficient $k$" in texts
+    assert "RATE COEFFICIENT $k$" in texts
     ticks = [t for t in texts if t.startswith("$10^{")]
     assert 1 <= len(ticks) <= 6
 
 
-def test_colour_bar_lies_below_the_legend_inside_the_figure(net):
+def test_colour_bar_lies_above_the_legend_inside_the_figure(net):
     fig, ax = NetworkVisualizer(net).graph(show=False, close=False, colour_by=K)
     fig.canvas.draw()
     bar = ax.images[0].get_window_extent()
     legend = ax.get_legend().get_window_extent()
     plt.close(fig)
 
-    assert bar.y1 < legend.y0  # display y points up
-    assert bar.y0 > 0
+    assert bar.y0 > legend.y1  # display y points up
+    assert 0 < bar.x0 and bar.x1 < fig.bbox.width
 
 
 def test_tight_crop_keeps_the_colour_bar(net):

@@ -1,5 +1,5 @@
 # ABOUTME: Rate colouring for net.visualize: log positions of rate coefficients on
-# ABOUTME: a colormap (12-decade floor), decade ticks and the rounded colour bar
+# ABOUTME: a colormap (12-decade floor), decade ticks and the colour bar row
 """Colour reactions by rate coefficient in the graph and species views."""
 
 from __future__ import annotations
@@ -13,20 +13,20 @@ from matplotlib.axes import Axes
 from matplotlib.colors import Colormap, LinearSegmentedColormap
 from matplotlib.patches import FancyBboxPatch
 
-from ._layout import COLOUR_BAR_ROWS, EQUATION_FONT, LEGEND_ROW, MARGIN, ValueGroup
+from ._common import heading
+from ._layout import BAR_LENGTH, EQUATION_FONT, MARGIN, PANEL_HEAD, ValueGroup
 from ._themes import NetworkTheme
 
 #: Rates more than this many decades below the largest get the lowest colour.
 DECADES = 12
 #: Most tick labels on the colour bar.
 MAX_TICKS = 6
-#: Colour bar title of each quantity.
-TITLES = {
-    "rate_coefficient": "rate coefficient $k$",
-    "rate": r"reaction rate $\mathcal{R}$ (cm$^{-3}$ s$^{-1}$)",
+#: Heading of the colour bar for each quantity.
+HEADINGS = {
+    "rate_coefficient": "RATE COEFFICIENT $k$",
+    "rate": r"REACTION RATE $\mathcal{R}$ (cm$^{-3}$ s$^{-1}$)",
 }
-#: Colour bar: longest bar, bar thickness, inches.
-BAR_LENGTH = 4.0
+#: Colour bar thickness, inches.
 BAR_HEIGHT = 0.1
 
 
@@ -108,24 +108,23 @@ def rate_colormap(theme: NetworkTheme, cmap: str | Colormap | None = None) -> Co
 
 def draw_colour_bar(
     ax: Axes,
-    size: tuple[float, float],
+    width: float,
+    top: float,
     theme: NetworkTheme,
     cmap: Colormap,
     span: tuple[float, float],
     quantity: str = "rate_coefficient",
-    bottom: float | None = None,
 ) -> None:
-    """A rounded horizontal colour bar of log10 k, centred at the figure's bottom.
+    """The rate row of the legend panel: heading, rounded colour bar, decade ticks.
 
-    It fills the ``COLOUR_BAR_ROWS`` legend rows above *bottom* (by default the
-    bottom margin): the title, the bar, then a power-of-ten label under each tick.
+    The bar is :data:`BAR_LENGTH` long (shorter only on a narrower figure) and
+    centred on the figure *width*; its heading starts at its left end, *top*
+    inches down.
     """
-    width, height = size
     length = min(BAR_LENGTH, width - 2 * MARGIN)
     x0 = (width - length) / 2
-    if bottom is None:
-        bottom = height - MARGIN
-    y0 = bottom - COLOUR_BAR_ROWS * LEGEND_ROW + 0.16
+    heading(ax, x0, top, HEADINGS[quantity], theme)
+    y0 = top + PANEL_HEAD + 0.05
     image = ax.imshow(
         np.linspace(0.0, 1.0, 256)[None, :],
         cmap=cmap,
@@ -145,18 +144,13 @@ def draw_colour_bar(
     )
     ax.add_patch(clip)
     image.set_clip_path(clip)
-    ax.text(
-        x0 + length / 2,
-        y0 - 0.04,
-        TITLES[quantity],
-        ha="center",
-        va="bottom",
-        fontsize=EQUATION_FONT,
-        color=theme.text,
-    )
-    low, top = span
-    for decade in decade_ticks(low, top):
-        x = x0 + (decade - low) / (top - low) * length if top > low else x0 + length
+    low, top_value = span
+    for decade in decade_ticks(low, top_value):
+        x = (
+            x0 + (decade - low) / (top_value - low) * length
+            if top_value > low
+            else x0 + length
+        )
         ax.plot(
             [x, x], [y0 + BAR_HEIGHT, y0 + BAR_HEIGHT + 0.035], color=theme.muted, lw=0.6
         )

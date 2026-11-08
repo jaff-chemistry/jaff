@@ -1,6 +1,6 @@
-# ABOUTME: Values legend of rate-coloured network figures: number formatting, label
-# ABOUTME: templates, groups from net.analysis and the boxed legend under the bar
-"""The boxed legend of the analysis values a rate-coloured figure used."""
+# ABOUTME: Analysis values in the legend panel of rate-coloured figures: number
+# ABOUTME: formatting, label templates, groups from net.analysis and their rows
+"""The analysis values a rate-coloured figure used, listed in its legend panel."""
 
 from __future__ import annotations
 
@@ -8,20 +8,17 @@ import math
 from typing import TYPE_CHECKING, Any
 
 from matplotlib.axes import Axes
-from matplotlib.patches import FancyBboxPatch
 from sympy import Expr, Float, Symbol, latex
 
 from ...core.analysis._evaluate import _function
+from ._common import heading
 from ._layout import (
     EQUATION_FONT,
-    HEADER_FONT,
-    MARGIN,
-    VALUE_GAP,
-    VALUE_PAD,
+    PANEL_GAP,
+    PANEL_HEAD,
+    VALUE_BLOCK_GAP,
     VALUE_ROW,
-    VALUE_SPACE,
-    VALUE_TITLE,
-    ValueBox,
+    LegendPanel,
     ValueGroup,
 )
 from ._themes import NetworkTheme
@@ -115,56 +112,34 @@ def value_groups(analysis: Analysis) -> tuple[ValueGroup, ...]:
     return tuple(groups)
 
 
-def draw_value_box(
+def draw_values(
     ax: Axes,
-    size: tuple[float, float],
+    panel: LegendPanel,
     theme: NetworkTheme,
-    box: ValueBox,
     groups: tuple[ValueGroup, ...],
-    bottom: float,
+    top: float,
 ) -> None:
-    """The boxed values legend, centred, its lower edge at *bottom* (y down)."""
-    width = size[0]
-    x0 = max(MARGIN, (width - box.width) / 2)
-    top = bottom - box.height + VALUE_SPACE
-    ax.add_patch(
-        FancyBboxPatch(
-            (x0, top),
-            box.width,
-            bottom - top,
-            boxstyle="round,pad=0,rounding_size=0.08",
-            facecolor=theme.surface,
-            edgecolor=theme.edge,
-            lw=0.8,
-            zorder=2,
-            gid="values-box",
-        )
-    )
-    y = top + VALUE_PAD
-    left = x0 + VALUE_PAD
-    for group in groups:
-        ax.text(
-            left,
-            y + VALUE_TITLE / 2,
-            group.title,
-            ha="left",
-            va="center",
-            fontsize=HEADER_FONT,
-            fontweight="bold",
-            color=theme.muted,
-            zorder=3,
-        )
-        y += VALUE_TITLE
-        for k, entry in enumerate(group.entries):
-            row, column = divmod(k, box.columns)
-            ax.text(
-                left + column * box.column_width,
-                y + (row + 0.5) * VALUE_ROW,
-                entry,
-                ha="left",
-                va="center",
-                fontsize=EQUATION_FONT,
-                color=theme.text,
-                zorder=3,
-            )
-        y += math.ceil(len(group.entries) / box.columns) * VALUE_ROW + VALUE_GAP
+    """The value rows of the legend *panel*, from *top* down (y down, inches).
+
+    Each group is a heading over its entries, in its block's columns; blocks of
+    one line sit side by side from the panel's left edge.
+    """
+    for line in panel.lines:
+        x = panel.x0
+        for block in line:
+            group = groups[block.group]
+            heading(ax, x, top, group.title, theme)
+            for k, entry in enumerate(group.entries):
+                row, column = divmod(k, block.columns)
+                ax.text(
+                    x + column * block.column_width,
+                    top + PANEL_HEAD + (row + 0.5) * VALUE_ROW,
+                    entry,
+                    ha="left",
+                    va="center",
+                    fontsize=EQUATION_FONT,
+                    color=theme.text,
+                    zorder=3,
+                )
+            x += block.width + VALUE_BLOCK_GAP
+        top += PANEL_HEAD + max(b.rows for b in line) * VALUE_ROW + PANEL_GAP

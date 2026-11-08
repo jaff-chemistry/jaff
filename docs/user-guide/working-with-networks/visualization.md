@@ -116,16 +116,21 @@ net.visualize.species("CO", colour_by="rate_coefficient", save="gow_co.pdf")
   the largest (darkest; brightest in `dark`). Values more than 12 decades below
   the largest get the lightest colour, so one negligible rate (above, the
   shielded CO photodissociation) does not squash the scale. The grey reactant
-  lines are unchanged. A rounded colour bar below the legend shows the scale,
-  with up to six powers of ten, titled by the quantity.
+  lines are unchanged.
+- **Legend panel.** Under the drawing, top to bottom: the scale (a rounded
+  colour bar, 4 in, centred, with up to six powers of ten, headed by the
+  quantity), the REACTION TYPE legend, then the input values. Without
+  `colour_by` only the REACTION TYPE row is drawn. The panel never makes the
+  figure wider: the type legend and the value groups wrap instead.
 - **Types.** The colour now shows the rate, so the reaction type is read from
   the marker shape alone; the legend draws the shapes empty.
-- **Values legend.** Every analysis entry with a label is listed in a box under
-  the colour bar, grouped as parameters, number densities and functions. A `{}`
+- **Values.** Every analysis entry with a label is listed at the bottom of the
+  panel, in headed groups side by side: parameters, number densities and
+  functions. A `{}`
   in the label takes the value (3 significant figures, `m × 10ⁿ` outside
   0.01–1000); a label without it reads `label = value`; `label=True` gives a
   default such as `n(H₂) = 100`. Entries without a label are used but not
-  listed, and with no labelled entry there is no box. A function shows its
+  listed, and a group without labelled entries is left out. A function shows its
   value for the parameters.
 - **Colormap.** Each theme has its own (see [Themes](#themes)); pass
   `rate_cmap="magma"` (any matplotlib colormap or its name) to use another, as

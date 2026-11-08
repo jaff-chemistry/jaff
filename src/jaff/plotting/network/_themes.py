@@ -8,6 +8,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
+from matplotlib.colors import to_hex, to_rgb
+
 OKABE_ITO = ("#0072b2", "#d55e00", "#009e73", "#cc79a7", "#e69f00", "#56b4e9", "#f0e442")
 SLATE = ("#cbd2d9", "#46525e")
 #: Most reaction types with their own colour and shape; one marker shape each.
@@ -201,6 +204,21 @@ NETWORK_THEMES: dict[str, NetworkTheme] = {
     ),
 }
 """Registered themes by name; ``"vivid"`` is the default."""
+
+
+#: Share of the text colour in :func:`heading_colour` (the rest is muted).
+HEADING_MIX = 0.35
+
+
+def heading_colour(theme: NetworkTheme) -> str:
+    """Colour of the lane and column headers: the muted colour, a little darker.
+
+    A mix of the theme's ``muted`` and ``text`` colours, :data:`HEADING_MIX`
+    of the text colour.
+    """
+    muted, text = np.array(to_rgb(theme.muted)), np.array(to_rgb(theme.text))
+
+    return to_hex((1 - HEADING_MIX) * muted + HEADING_MIX * text)
 
 
 def resolve_theme(theme: str | NetworkTheme) -> NetworkTheme:

@@ -103,12 +103,14 @@ def test_arrowheads_are_readable(drawn):
     assert all(p.get_mutation_scale() >= 11 for p in heads)
 
 
-def test_legend_is_centred(drawn):
+def test_legend_hangs_under_its_heading(drawn):
     _, _, ax = drawn
     legend = ax.get_legend()
+    (heading,) = [t for t in ax.texts if t.get_text() == "REACTION TYPE"]
+    x0 = ax.transData.transform(heading.get_position())[0]
 
-    assert legend._loc == 8  # "lower center"
-    assert legend.get_bbox_to_anchor().bounds[0] == pytest.approx(ax.bbox.width / 2)
+    assert legend._loc == 2  # "upper left"
+    assert legend.get_bbox_to_anchor().bounds[0] == pytest.approx(x0)
 
 
 def test_raster_saves_at_print_resolution(make_network, tmp_path):

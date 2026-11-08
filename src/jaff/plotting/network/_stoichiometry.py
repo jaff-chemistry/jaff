@@ -26,7 +26,7 @@ from ._layout import (
     SPECIES_FONT,
     MatrixLayout,
 )
-from ._themes import NetworkTheme, legend_types, type_colours
+from ._themes import NetworkTheme, heading_colour, legend_types, type_colours
 
 if TYPE_CHECKING:
     from ...core.network.network import Network
@@ -88,7 +88,7 @@ def _groups(ax, layout, theme) -> None:
             ha="center",
             va="center",
             fontsize=HEADER_FONT,
-            color=theme.muted,
+            color=heading_colour(theme),
         )
 
 

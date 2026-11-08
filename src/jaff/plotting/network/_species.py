@@ -31,7 +31,7 @@ from ._layout import (
 )
 from ._markers import label_shapes
 from ._rates import RateColours
-from ._themes import NetworkTheme, legend_entries, type_colours
+from ._themes import NetworkTheme, heading_colour, legend_entries, type_colours
 
 if TYPE_CHECKING:
     from ...core.network.network import Network
@@ -111,7 +111,7 @@ def _lanes(ax: Axes, layout: SpeciesLayout, theme: NetworkTheme) -> None:
                 ha="center",
                 va="center",
                 fontsize=HEADER_FONT,
-                color=theme.muted,
+                color=heading_colour(theme),
             )
 
 

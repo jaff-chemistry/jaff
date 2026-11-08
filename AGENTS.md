@@ -316,7 +316,7 @@ docs/           # Documentation
 - `plotting/network/`: `net.visualize` (`NetworkVisualizer`): graph and
   stoichiometry-matrix figures of a network's species and reactions; `graph()` /
   `species()` colour by `colour_by="rate_coefficient" | "rate"` from `net.analysis`
-  and list its labelled entries in a values box
+  and list its labelled entries in the legend panel under the drawing
 - `codegen/`: `Codegen`, `Language`s, the `$$JAFF` template engine (`templating/`);
   `$$JAFF CALL` inserts text from `@jaffgen_function` functions in a template's
   `jaffgen_template_functions.py` (`templating/functions.py`)

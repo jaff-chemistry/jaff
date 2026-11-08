@@ -1,5 +1,5 @@
 # ABOUTME: Draws the graph view of net.visualize: species pills in atom-count
-# ABOUTME: columns, reaction markers in gutters, Bézier edges, legend, colour bar
+# ABOUTME: columns, reaction markers in gutters, Bézier edges and the legend panel
 """Matplotlib renderer of a :class:`GraphLayout`."""
 
 from __future__ import annotations
@@ -14,10 +14,13 @@ from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, PathPatch
 
-from ._common import FONT_RC, bezier_path, text_width
+from ._common import FONT_RC, bezier_path, heading, text_width
 from ._layout import (
-    COLOUR_BAR_ROWS,
-    LEGEND_ROW,
+    PANEL_GAP,
+    PANEL_HEAD,
+    PANEL_SPACE,
+    RATE_BODY,
+    TYPE_ROW,
     drawing_bottom,
     EQUATION_FONT,
     HEADER,
@@ -30,8 +33,8 @@ from ._layout import (
 )
 from ._markers import draw_marker, label_shapes, marker_handle, type_shapes
 from ._rates import RateColours, draw_colour_bar
-from ._values import draw_value_box
-from ._themes import NetworkTheme, legend_types, type_colours
+from ._values import draw_values
+from ._themes import NetworkTheme, heading_colour, legend_types, type_colours
 
 if TYPE_CHECKING:
     from ...core.network.network import Network
@@ -110,7 +113,7 @@ def _columns(ax: Axes, layout: GraphLayout, theme: NetworkTheme) -> None:
             ha="center",
             va="center",
             fontsize=HEADER_FONT,
-            color=theme.muted,
+            color=heading_colour(theme),
         )
 
 
@@ -260,29 +263,34 @@ def draw_legends(
     handles: list[Artist],
     rated: RateColours | None,
 ) -> None:
-    """The type legend, the rate colour bar and values box below it when *rated*.
+    """The legend panel under the drawing (see :func:`legend_panel`).
 
-    Both are anchored in inches, so cropping (tight) leaves them in place.
+    Top to bottom: the rate colour bar when *rated*, the REACTION TYPE legend of
+    *handles*, then the analysis values *rated* lists. Everything is placed in
+    inches, so cropping (tight) leaves it in place.
     """
-    width, height = layout.size
-    bottom = height - MARGIN
-    if rated is not None and rated.values:
-        draw_value_box(ax, layout.size, theme, layout.value_box, rated.values, bottom)
-        bottom -= layout.value_box.height
+    panel = layout.panel
+    top = drawing_bottom(layout) + PANEL_SPACE
     if rated is not None:
         draw_colour_bar(
-            ax, layout.size, theme, rated.cmap, rated.span, rated.quantity, bottom
+            ax, layout.size[0], top, theme, rated.cmap, rated.span, rated.quantity
         )
-        bottom -= COLOUR_BAR_ROWS * LEGEND_ROW
+        top += PANEL_HEAD + RATE_BODY + PANEL_GAP
+    heading(ax, panel.x0, top, "REACTION TYPE", theme)
     ax.legend(
         handles=handles,
-        loc="lower center",
-        bbox_to_anchor=(width / 2, bottom),
+        loc="upper left",
+        bbox_to_anchor=(panel.x0, top + PANEL_HEAD),
         bbox_transform=ax.transData,
         ncol=layout.legend_columns,
         frameon=False,
+        borderpad=0.0,
+        borderaxespad=0.0,
         fontsize=EQUATION_FONT,
         labelcolor=theme.text,
         handlelength=1.4,
         columnspacing=1.2,
     )
+    top += PANEL_HEAD + layout.legend_rows * TYPE_ROW
+    if rated is not None and rated.values:
+        draw_values(ax, panel, theme, rated.values, top + PANEL_GAP)

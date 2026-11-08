@@ -51,68 +51,154 @@ GROUP_GAP = 0.06
 EMPTY_WIDTH = 1.0
 #: Height of each legend row after the first, inches.
 LEGEND_ROW = 0.22
-#: Legend rows the rate colour bar takes below the legend.
-COLOUR_BAR_ROWS = 2
-#: Values box: most columns, entry row pitch, group title height, inner padding,
-#: gap between groups, gap between columns and space above the box, inches.
-VALUE_COLUMNS = 3
-VALUE_ROW = 0.19
-VALUE_TITLE = 0.24
-VALUE_PAD = 0.14
-VALUE_GAP = 0.08
-VALUE_COLUMN_GAP = 0.35
-VALUE_SPACE = 0.12
+#: Legend panel under the graph and species views, inches: space above it, gap
+#: between its rows, heading height, colour bar body (bar and tick labels) and
+#: its longest length, value row pitch, gap between value columns and blocks.
+PANEL_SPACE = 0.25
+PANEL_GAP = 0.14
+PANEL_HEAD = 0.22
+RATE_BODY = 0.36
+#: Row pitch of the reaction-type legend in the panel (9 pt, 0.5 label spacing).
+TYPE_ROW = 0.19
+BAR_LENGTH = 4.0
+VALUE_ROW = 0.18
+VALUE_COLUMNS = 2
+VALUE_COLUMN_GAP = 0.25
+VALUE_BLOCK_GAP = 0.6
 
 
 class ValueGroup(NamedTuple):
-    """One titled group of the values box: its title and entry texts."""
+    """One headed group of analysis values: its heading and entry texts."""
 
     title: str
     entries: tuple[str, ...]
 
 
 @dataclass(frozen=True)
-class ValueBox:
-    """Size of the values box under the colour bar; zero height without one.
+class ValueBlock:
+    """Place of one value group in the legend panel.
 
     Attributes
     ----------
+    group : int
+        Index of the group.
     columns : int
         Entry columns.
     column_width : float
         Width of one column (widest entry and the gap), inches.
     width : float
-        Width of the box, inches.
+        Width of the block (columns or heading, the wider), inches.
+    rows : int
+        Entry rows.
+    """
+
+    group: int
+    columns: int
+    column_width: float
+    width: float
+    rows: int
+
+
+@dataclass(frozen=True)
+class LegendPanel:
+    """Geometry of the legend panel under a graph or species view.
+
+    Attributes
+    ----------
+    x0 : float
+        Left edge of the type legend and value rows, inches.
+    rate : bool
+        Whether the rate colour bar row is drawn.
+    lines : tuple of tuple of ValueBlock
+        Value blocks, line by line.
     height : float
-        Height the box takes, the space above it included, inches.
+        Height of the panel, the space above it included, inches.
     """
 
-    columns: int = 0
-    column_width: float = 0.0
-    width: float = 0.0
-    height: float = 0.0
+    x0: float = MARGIN
+    rate: bool = False
+    lines: tuple[tuple[ValueBlock, ...], ...] = ()
+    height: float = PANEL_SPACE + PANEL_HEAD + TYPE_ROW
 
 
-def value_box(groups: Sequence[ValueGroup], width: float, measure: Measure) -> ValueBox:
-    """The values box for *groups* under a drawing *width* inches wide.
+def _value_block(
+    index: int, group: ValueGroup, measure: Measure, columns: int
+) -> ValueBlock:
+    column = max(measure(e, EQUATION_FONT) for e in group.entries) + VALUE_COLUMN_GAP
+    columns = max(1, min(columns, len(group.entries)))
+    width = max(columns * column - VALUE_COLUMN_GAP, measure(group.title, HEADER_FONT))
 
-    Up to :data:`VALUE_COLUMNS` columns of equal width, fewer when they do not
-    fit; each group takes a title row and its entries row by row.
-    """
-    if not groups:
-        return ValueBox()
-    entries = [e for g in groups for e in g.entries]
-    column = max(measure(e, EQUATION_FONT) for e in entries) + VALUE_COLUMN_GAP
-    room = width - 2 * MARGIN - 2 * VALUE_PAD + VALUE_COLUMN_GAP
-    columns = max(1, min(VALUE_COLUMNS, int(room // column), len(entries)))
-    titles = max(measure(g.title, HEADER_FONT) for g in groups)
-    inner = max(columns * column - VALUE_COLUMN_GAP, titles)
-    height = sum(
-        VALUE_TITLE + math.ceil(len(g.entries) / columns) * VALUE_ROW for g in groups
+    return ValueBlock(
+        index, columns, column, width, math.ceil(len(group.entries) / columns)
     )
-    height += 2 * VALUE_PAD + VALUE_GAP * (len(groups) - 1) + VALUE_SPACE
 
-    return ValueBox(columns, column, inner + 2 * VALUE_PAD, height)
+
+def _value_lines(
+    groups: Sequence[ValueGroup], available: float, measure: Measure
+) -> tuple[tuple[ValueBlock, ...], ...]:
+    """Value blocks packed into lines no wider than *available* inches."""
+    lines: list[list[ValueBlock]] = []
+    used = 0.0
+    for i, group in enumerate(groups):
+        block = _value_block(i, group, measure, VALUE_COLUMNS)
+        if block.width > available:
+            block = _value_block(i, group, measure, 1)
+        if lines and used + VALUE_BLOCK_GAP + block.width <= available:
+            lines[-1].append(block)
+            used += VALUE_BLOCK_GAP + block.width
+        else:
+            lines.append([block])
+            used = block.width
+
+    return tuple(tuple(line) for line in lines)
+
+
+def line_width(line: Sequence[ValueBlock]) -> float:
+    """Width of one line of value blocks, inches."""
+    return sum(b.width for b in line) + VALUE_BLOCK_GAP * (len(line) - 1)
+
+
+def _table_width(widths: Sequence[float], columns: int) -> float:
+    """Width of a legend of *widths* in *columns* (filled column by column)."""
+    if not widths:
+        return 0.0
+    per, large = divmod(len(widths), columns)
+    sizes = [per + 1] * large + [per] * (columns - large)
+    starts = [sum(sizes[:c]) for c in range(columns)]
+
+    return sum(max(widths[a : a + n]) for a, n in zip(starts, sizes) if n)
+
+
+def legend_panel(
+    widths: Sequence[float],
+    width: float,
+    measure: Measure,
+    colour_bar: bool = False,
+    values: Sequence[ValueGroup] = (),
+) -> tuple[int, int, LegendPanel]:
+    """Type-legend columns and rows, and the panel under a drawing *width* wide.
+
+    Rows top to bottom: the rate colour bar (with *colour_bar*), the reaction
+    types (entries *widths* inches wide, as many columns as fit) and the value
+    groups, side by side and wrapping. The type and value rows share a left
+    edge, the widest of them centred; the panel never needs more than *width*.
+    """
+    available = width - 2 * MARGIN
+    columns = legend_columns(widths, available)
+    rows = max(math.ceil(len(widths) / columns), 1)
+    lines = _value_lines(values, available, measure)
+    content = max([_table_width(widths, columns), *(line_width(ln) for ln in lines)])
+    height = PANEL_SPACE + PANEL_HEAD + rows * TYPE_ROW
+    if colour_bar:
+        height += PANEL_HEAD + RATE_BODY + PANEL_GAP
+    for line in lines:
+        height += PANEL_GAP + PANEL_HEAD + max(b.rows for b in line) * VALUE_ROW
+
+    return (
+        columns,
+        rows,
+        LegendPanel(max(MARGIN, (width - content) / 2), colour_bar, lines, height),
+    )
 
 
 def legend_columns(widths: Sequence[float], available: float) -> int:
@@ -135,31 +221,19 @@ def legend_columns(widths: Sequence[float], available: float) -> int:
     return 1
 
 
-def _legend(
-    widths: Sequence[float], width: float, colour_bar: bool = False
-) -> tuple[int, int]:
-    """Columns and rows of a legend under a drawing *width* inches wide.
-
-    *colour_bar* adds the rows of the rate colour bar below the legend.
-    """
+def _legend(widths: Sequence[float], width: float) -> tuple[int, int]:
+    """Columns and rows of a legend under a drawing *width* inches wide."""
     columns = legend_columns(widths, width - 2 * MARGIN)
 
-    return columns, max(math.ceil(len(widths) / columns), 1) + (
-        COLOUR_BAR_ROWS if colour_bar else 0
-    )
+    return columns, max(math.ceil(len(widths) / columns), 1)
 
 
 def drawing_bottom(layout: GraphLayout | MatrixLayout | SpeciesLayout) -> float:
     """Lowest height (inches, y down) the drawing may reach: the legend's top."""
-    box = getattr(layout, "value_box", ValueBox())
+    if isinstance(layout, MatrixLayout):
+        return layout.size[1] - MARGIN - LEGEND - (layout.legend_rows - 1) * LEGEND_ROW
 
-    return (
-        layout.size[1]
-        - MARGIN
-        - LEGEND
-        - (layout.legend_rows - 1) * LEGEND_ROW
-        - box.height
-    )
+    return layout.size[1] - MARGIN - layout.panel.height
 
 
 def atom_count(specie: Specie) -> int:
@@ -270,7 +344,7 @@ class GraphLayout:
     edges: tuple[Edge, ...]
     legend_columns: int = 1
     legend_rows: int = 1
-    value_box: ValueBox = ValueBox()
+    panel: LegendPanel = LegendPanel()
 
 
 def _row_y(row: float) -> float:
@@ -402,9 +476,9 @@ def graph_layout(
         Width in inches of each legend entry; a legend wider than the drawing
         wraps onto more rows (the figure grows taller, not wider).
     colour_bar : bool, optional
-        Leave room below the legend for the rate colour bar.
+        Leave room in the legend panel for the rate colour bar.
     values : sequence of ValueGroup, optional
-        Groups of the values box, which sits below the colour bar.
+        Groups of analysis values listed at the bottom of the legend panel.
 
     Returns
     -------
@@ -416,15 +490,12 @@ def graph_layout(
     labels = {i: equation_label(r) for i, r in enumerate(reactions)}
     if not core:
         width = 2 * MARGIN + EMPTY_WIDTH
-        columns, legend_rows = _legend(legend, width, colour_bar)
-        box = value_box(values, width, measure)
-        width = max(width, box.width + 2 * MARGIN)
-        size = (
-            width,
-            2 * MARGIN + HEADER + LEGEND + (legend_rows - 1) * LEGEND_ROW + box.height,
+        columns, legend_rows, panel = legend_panel(
+            legend, width, measure, colour_bar, values
         )
+        size = (width, 2 * MARGIN + HEADER + panel.height)
         return GraphLayout(
-            size, (), {}, {}, {}, {}, {}, labels, (), columns, legend_rows, box
+            size, (), {}, {}, {}, {}, {}, labels, (), columns, legend_rows, panel
         )
 
     links = [_links(r) for r in reactions]
@@ -491,17 +562,10 @@ def graph_layout(
             edges.append(Edge(s, i, role, tuple(points)))
 
     bottom = max(y for _, y in [*species_xy.values(), *reaction_xy.values()])
-    columns, legend_rows = _legend(legend, x + MARGIN, colour_bar)
-    box = value_box(values, x + MARGIN, measure)
-    size = (
-        x + MARGIN,
-        bottom
-        + ROW_PITCH / 2
-        + LEGEND
-        + (legend_rows - 1) * LEGEND_ROW
-        + box.height
-        + MARGIN,
+    columns, legend_rows, panel = legend_panel(
+        legend, x + MARGIN, measure, colour_bar, values
     )
+    size = (x + MARGIN, bottom + ROW_PITCH / 2 + panel.height + MARGIN)
 
     return GraphLayout(
         size,
@@ -515,7 +579,7 @@ def graph_layout(
         tuple(edges),
         columns,
         legend_rows,
-        box,
+        panel,
     )
 
 
@@ -643,7 +707,7 @@ class SpeciesLayout:
     edges: tuple[Edge, ...]
     legend_columns: int = 1
     legend_rows: int = 1
-    value_box: ValueBox = ValueBox()
+    panel: LegendPanel = LegendPanel()
 
 
 #: Space each side of a pill in the species view's outer lanes, inches.
@@ -691,9 +755,9 @@ def species_layout(
         Width in inches of each legend entry; a legend wider than the drawing
         wraps onto more rows (the figure grows taller, not wider).
     colour_bar : bool, optional
-        Leave room below the legend for the rate colour bar.
+        Leave room in the legend panel for the rate colour bar.
     values : sequence of ValueGroup, optional
-        Groups of the values box, which sits below the colour bar.
+        Groups of analysis values listed at the bottom of the legend panel.
 
     Returns
     -------
@@ -801,17 +865,10 @@ def species_layout(
             *product_xy.values(),
         ]
     )
-    columns, legend_rows = _legend(legend, x + MARGIN, colour_bar)
-    box = value_box(values, x + MARGIN, measure)
-    size = (
-        x + MARGIN,
-        bottom
-        + ROW_PITCH / 2
-        + LEGEND
-        + (legend_rows - 1) * LEGEND_ROW
-        + box.height
-        + MARGIN,
+    columns, legend_rows, panel = legend_panel(
+        legend, x + MARGIN, measure, colour_bar, values
     )
+    size = (x + MARGIN, bottom + ROW_PITCH / 2 + panel.height + MARGIN)
 
     return SpeciesLayout(
         size,
@@ -828,5 +885,5 @@ def species_layout(
         tuple(edges),
         columns,
         legend_rows,
-        box,
+        panel,
     )

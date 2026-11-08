@@ -1,5 +1,5 @@
-# ABOUTME: Tests for the values legend of rate-coloured figures: value formatting,
-# ABOUTME: label templates, groups from net.analysis and the boxed legend's place
+# ABOUTME: Tests for the analysis values of rate-coloured figures: value formatting,
+# ABOUTME: label templates, groups from net.analysis and their rows in the legend
 
 import matplotlib.pyplot as plt
 import pytest
@@ -113,32 +113,27 @@ def test_disabled_analysis_has_no_groups(net):
 # --------------------------------------------------------------------------- #
 
 
-def _box(ax):
-    return [p for p in ax.patches if p.get_gid() == "values-box"]
-
-
 def _texts(ax):
     return [t.get_text() for t in ax.texts]
 
 
 @pytest.mark.parametrize("view", ["graph", "species"])
-def test_coloured_figure_shows_the_values_box(net, view):
+def test_coloured_figure_lists_the_values(net, view):
     args = ("H3+",) if view == "species" else ()
     _, ax = getattr(NetworkVisualizer(net), view)(*args, show=False, colour_by=K)
 
-    assert len(_box(ax)) == 1
     assert "PARAMETERS" in _texts(ax)
     assert r"$T_\mathrm{gas} = 300$ K" in _texts(ax)
+    assert "FUNCTIONS" in _texts(ax)
 
 
-def test_no_box_without_colour_by(net):
+def test_no_values_without_colour_by(net):
     _, ax = NetworkVisualizer(net).graph(show=False)
 
-    assert _box(ax) == []
     assert "PARAMETERS" not in _texts(ax)
 
 
-def test_no_box_without_labels(net):
+def test_no_values_without_labels(net):
     for table in (
         net.analysis.parameters,
         net.analysis.densities,
@@ -150,53 +145,42 @@ def test_no_box_without_labels(net):
                 table.set(name, entry.value, label=False)
     _, ax = NetworkVisualizer(net).graph(show=False, colour_by=K)
 
-    assert _box(ax) == []
+    assert not {"PARAMETERS", "FUNCTIONS"} & set(_texts(ax))
 
 
-def test_the_box_makes_the_figure_taller(net):
-    with_box, _ = NetworkVisualizer(net).graph(show=False, colour_by=K)
+def test_values_make_the_figure_taller(net):
+    with_values, _ = NetworkVisualizer(net).graph(show=False, colour_by=K)
     net.analysis.parameters.set("tgas", 300.0, label=False)
     net.analysis.densities.set("H2", 100.0, label=False)
     net.analysis.functions.set("fshield", 0.5, label=False)
     without, _ = NetworkVisualizer(net).graph(show=False, colour_by=K)
 
-    assert with_box.get_size_inches()[1] > without.get_size_inches()[1]
+    assert with_values.get_size_inches()[1] > without.get_size_inches()[1]
 
 
-def test_the_box_lies_below_the_colour_bar_inside_the_figure(net):
+def test_values_sit_inside_the_figure_below_the_type_legend(net):
     fig, ax = NetworkVisualizer(net).graph(show=False, close=False, colour_by=K)
     fig.canvas.draw()
-    box = _box(ax)[0].get_window_extent()
-    bar = ax.images[0].get_window_extent()
-    ticks = [t for t in ax.texts if t.get_text().startswith("$10^{")]
-    lowest_tick = min(t.get_window_extent().y0 for t in ticks)
-    plt.close(fig)
-
-    assert box.y1 < lowest_tick < bar.y0  # display y points up
-    assert box.y0 > 0
-    assert 0 < box.x0 and box.x1 < fig.bbox.width
-
-
-def test_entries_sit_inside_the_box(net):
-    fig, ax = NetworkVisualizer(net).graph(show=False, close=False, colour_by=K)
-    fig.canvas.draw()
-    box = _box(ax)[0].get_window_extent()
+    legend = ax.get_legend().get_window_extent()
     entries = [
-        t for t in ax.texts if t.get_text() in ("PARAMETERS", r"$T_\mathrm{gas} = 300$ K")
+        t.get_window_extent()
+        for t in ax.texts
+        if t.get_text() in ("PARAMETERS", r"$T_\mathrm{gas} = 300$ K")
     ]
-    extents = [t.get_window_extent() for t in entries]
     plt.close(fig)
 
-    for e in extents:
-        assert box.x0 < e.x0 and e.x1 < box.x1 and box.y0 < e.y0 and e.y1 < box.y1
+    for e in entries:
+        assert e.y1 < legend.y0 and e.y0 > 0
+        assert 0 < e.x0 and e.x1 < fig.bbox.width
 
 
-def test_tight_crop_keeps_the_box(net):
+def test_tight_crop_keeps_the_values(net):
     fig, ax = NetworkVisualizer(net).graph(
         show=False, close=False, tight=True, colour_by=K
     )
     fig.canvas.draw()
-    box = _box(ax)[0].get_window_extent()
+    (entry,) = [t for t in ax.texts if t.get_text() == r"$T_\mathrm{gas} = 300$ K"]
+    box = entry.get_window_extent()
     plt.close(fig)
 
     assert box.y0 >= -1 and box.x0 >= -1 and box.x1 <= fig.bbox.width + 1

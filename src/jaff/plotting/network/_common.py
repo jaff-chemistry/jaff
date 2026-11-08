@@ -19,6 +19,7 @@ from matplotlib.textpath import TextPath
 
 from ..api import _NON_INTERACTIVE, _VECTOR
 from ..themes import _BASE_RC
+from ._layout import HEADER_FONT, PANEL_HEAD
 from ._themes import NetworkTheme
 
 #: rcParams the network figures are drawn and saved with (font, maths font).
@@ -51,6 +52,20 @@ def _contrast(a: str, b: str) -> float:
     high, low = sorted((_luminance(a), _luminance(b)), reverse=True)
 
     return (high + 0.05) / (low + 0.05)
+
+
+def heading(ax: Axes, x: float, top: float, text: str, theme: NetworkTheme) -> None:
+    """A legend-panel heading: bold, in the text colour, its row *top* inches down."""
+    ax.text(
+        x,
+        top + PANEL_HEAD / 2,
+        text,
+        ha="left",
+        va="center",
+        fontsize=HEADER_FONT,
+        fontweight="bold",
+        color=theme.text,
+    )
 
 
 def text_on(fill: str, theme: NetworkTheme) -> str:

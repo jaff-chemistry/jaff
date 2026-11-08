@@ -135,8 +135,9 @@ class NetworkVisualizer:
             logarithmically from the smallest value drawn to the largest along
             the theme's colormap; values more than 12 decades below the largest
             get the lowest colour. The reaction type is then shown by the marker
-            shape alone, and a colour bar sits below the legend. By default
-            reactions are coloured by type.
+            shape alone; the colour bar heads the legend panel, and the
+            labelled analysis values close it. By default reactions are
+            coloured by type.
         rate_cmap : str or Colormap, optional
             With *colour_by*: a matplotlib colormap (or its name) to use, as
             given, instead of the theme's ``rates`` colormap.
@@ -265,8 +266,9 @@ class NetworkVisualizer:
             logarithmically from the smallest value drawn to the largest along
             the theme's colormap; values more than 12 decades below the largest
             get the lowest colour. The reaction type is then shown by the marker
-            shape alone, and a colour bar sits below the legend. By default
-            reactions are coloured by type.
+            shape alone; the colour bar heads the legend panel, and the
+            labelled analysis values close it. By default reactions are
+            coloured by type.
         rate_cmap : str or Colormap, optional
             With *colour_by*: a matplotlib colormap (or its name) to use, as
             given, instead of the theme's ``rates`` colormap.
