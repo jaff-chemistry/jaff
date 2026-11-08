@@ -5,28 +5,27 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping, Sequence
-
-import numpy as np
+from typing import TYPE_CHECKING, Sequence
 
 from matplotlib.axes import Axes
+from matplotlib.colors import Colormap, to_hex
 from matplotlib.figure import Figure
 
-from ...core.reaction._evaluate import check_missing
+from ...core.analysis._evaluate import evaluate
 from ._common import finish, text_width
 from ._graph import draw_graph, legend_widths
 from ._layout import graph_layout, matrix_layout, species_layout
 from ._species import draw_species, involved, species_legend_widths
 from ._stoichiometry import draw_stoichiometry, stoichiometry_legend_widths
 from ._themes import NetworkTheme, resolve_theme
-from ._widths import edge_widths, width_key
+from ._rates import RateColours, rate_colormap, rate_positions
+from ._values import value_groups
 
 if TYPE_CHECKING:
     from ...core.network.network import Network
-    from ...core.reaction._evaluate import FunctionValue
 
-#: Default ``(min, max)`` width of rate-scaled edges, points.
-ARROW_WIDTH = (0.4, 3.5)
+#: What ``colour_by`` may name.
+COLOUR_BY = ("rate_coefficient", "rate")
 
 
 class NetworkVisualizer:
@@ -57,36 +56,42 @@ class NetworkVisualizer:
         """
         self.network = network
 
-    def _rate_widths(
+    def _rate_colours(
         self,
         reactions: Sequence[int],
-        rate_values: Mapping[str, Any] | None,
-        rate_functions: Mapping[str, FunctionValue] | None,
-        arrow_width: tuple[float, float],
-    ) -> tuple[dict[int, float] | None, list[tuple[float, float]]]:
-        """Edge width per reaction and the legend key; ``(None, [])`` unscaled."""
-        if rate_values is None:
-            if rate_functions is not None:
-                raise ValueError("rate_functions needs rate_values")
-
-            return None, []
-
-        lo, hi = arrow_width
-        if not 0 < lo <= hi:
+        theme: NetworkTheme,
+        colour_by: str | None,
+        rate_cmap: str | Colormap | None,
+    ) -> RateColours | None:
+        """Rate colour of each drawn reaction, or ``None`` without *colour_by*."""
+        if colour_by is None:
+            if rate_cmap is not None:
+                raise ValueError("rate_cmap needs colour_by")
+            return None
+        if colour_by not in COLOUR_BY:
             raise ValueError(
-                f"arrow_width must be (min, max) with 0 < min <= max; got {arrow_width}"
+                f"colour_by must be one of {', '.join(COLOUR_BY)}, got {colour_by!r}"
+            )
+        if not self.network.analysis.enabled:
+            raise ValueError(
+                f"colour_by={colour_by!r} reads the values from analysis mode: "
+                "call net.analysis.enable(...) first"
             )
 
         drawn = [self.network.reactions[i] for i in reactions]
-        check_missing(
-            [r.rate_coefficient for r in drawn], rate_values, rate_functions or {}
-        )
-        k = np.array(
-            [r.evaluate_rate_coefficient(rate_values, rate_functions) for r in drawn]
-        )
-        widths = edge_widths(k, lo, hi)
+        exprs = [r.rate if colour_by == "rate" else r.rate_coefficient for r in drawn]
+        values = evaluate(self.network, exprs)
+        positions, span = rate_positions(values)
+        cmap = rate_colormap(theme, rate_cmap)
+        colours = {i: to_hex(cmap(p)) for i, p in zip(reactions, positions)}
 
-        return dict(zip(reactions, widths.tolist())), width_key(k, lo, hi)
+        return RateColours(
+            colours,
+            cmap,
+            span if span is not None else (0.0, 0.0),
+            colour_by,
+            value_groups(self.network.analysis),
+        )
 
     def graph(
         self,
@@ -96,9 +101,8 @@ class NetworkVisualizer:
         show: bool = True,
         close: bool = True,
         tight: bool = False,
-        rate_values: Mapping[str, Any] | None = None,
-        rate_functions: Mapping[str, FunctionValue] | None = None,
-        arrow_width: tuple[float, float] = ARROW_WIDTH,
+        colour_by: str | None = None,
+        rate_cmap: str | Colormap | None = None,
     ) -> tuple[Figure, Axes]:
         """Draw the species and reactions as a layered graph.
 
@@ -123,21 +127,19 @@ class NetworkVisualizer:
         tight : bool, optional
             Crop the figure to its drawn content, with no padding around it, by
             default ``False``.
-        rate_values : mapping, optional
-            Scale each reaction's lines by its rate coefficient, evaluated for
-            these values (``{"tgas": 100.0, "av": 1.0, ...}``; densities as one
-            array under ``"nden"``), see
-            :meth:`~jaff.core.reaction.Reaction.evaluate_rate_coefficient`.
-            Widths go logarithmically from the smallest rate drawn to the
-            largest; rates more than 12 decades below the largest get the
-            minimum width. The legend shows up to three reference widths. By
-            default the lines have fixed widths.
-        rate_functions : mapping, optional
-            With *rate_values*: a callable or constant per unknown function
-            the rate coefficients use (e.g. a shielding-table lookup).
-        arrow_width : tuple of float, optional
-            ``(min, max)`` line width in points of rate-scaled lines, by
-            default ``(0.4, 3.5)``.
+        colour_by : {"rate_coefficient", "rate"}, optional
+            Colour each reaction's marker and product arrows by its rate
+            coefficient *k* or its rate 𝓡 (*k* times the reactant densities),
+            evaluated with the values of ``net.analysis``, which must be
+            enabled (see :class:`~jaff.core.analysis.Analysis`). Colours go
+            logarithmically from the smallest value drawn to the largest along
+            the theme's colormap; values more than 12 decades below the largest
+            get the lowest colour. The reaction type is then shown by the marker
+            shape alone, and a colour bar sits below the legend. By default
+            reactions are coloured by type.
+        rate_cmap : str or Colormap, optional
+            With *colour_by*: a matplotlib colormap (or its name) to use, as
+            given, instead of the theme's ``rates`` colormap.
 
         Returns
         -------
@@ -147,17 +149,22 @@ class NetworkVisualizer:
         Raises
         ------
         ValueError
-            If *theme* names no registered theme, a rate value is missing, or
-            *arrow_width* is not ``(min, max)`` with ``0 < min <= max``.
+            If *theme* names no registered theme, *colour_by* is unknown or
+            given with analysis mode off, a value is missing, or *rate_cmap* is
+            given without *colour_by*.
         """
         th = resolve_theme(theme)
         everything = range(len(self.network.reactions))
-        widths, key = self._rate_widths(
-            everything, rate_values, rate_functions, arrow_width
-        )
+        rated = self._rate_colours(everything, th, colour_by, rate_cmap)
         legend = legend_widths(self.network, th)
-        layout = graph_layout(self.network, text_width, legend, key_row=bool(key))
-        fig, ax = draw_graph(self.network, layout, th, widths, key)
+        layout = graph_layout(
+            self.network,
+            text_width,
+            legend,
+            colour_bar=rated is not None,
+            values=rated.values if rated is not None else (),
+        )
+        fig, ax = draw_graph(self.network, layout, th, rated)
 
         return finish(fig, ax, theme=th, save=save, show=show, close=close, tight=tight)
 
@@ -220,9 +227,8 @@ class NetworkVisualizer:
         show: bool = True,
         close: bool = True,
         tight: bool = False,
-        rate_values: Mapping[str, Any] | None = None,
-        rate_functions: Mapping[str, FunctionValue] | None = None,
-        arrow_width: tuple[float, float] = ARROW_WIDTH,
+        colour_by: str | None = None,
+        rate_cmap: str | Colormap | None = None,
     ) -> tuple[Figure, Axes]:
         """Draw the reactions that form and destroy one species.
 
@@ -251,21 +257,19 @@ class NetworkVisualizer:
         tight : bool, optional
             Crop the figure to its drawn content, with no padding around it, by
             default ``False``.
-        rate_values : mapping, optional
-            Scale each reaction's lines by its rate coefficient, evaluated for
-            these values (``{"tgas": 100.0, "av": 1.0, ...}``; densities as one
-            array under ``"nden"``), see
-            :meth:`~jaff.core.reaction.Reaction.evaluate_rate_coefficient`.
-            Widths go logarithmically from the smallest rate drawn to the
-            largest; rates more than 12 decades below the largest get the
-            minimum width. The legend shows up to three reference widths. By
-            default the lines have fixed widths.
-        rate_functions : mapping, optional
-            With *rate_values*: a callable or constant per unknown function
-            the rate coefficients use (e.g. a shielding-table lookup).
-        arrow_width : tuple of float, optional
-            ``(min, max)`` line width in points of rate-scaled lines, by
-            default ``(0.4, 3.5)``.
+        colour_by : {"rate_coefficient", "rate"}, optional
+            Colour each reaction's marker and product arrows by its rate
+            coefficient *k* or its rate 𝓡 (*k* times the reactant densities),
+            evaluated with the values of ``net.analysis``, which must be
+            enabled (see :class:`~jaff.core.analysis.Analysis`). Colours go
+            logarithmically from the smallest value drawn to the largest along
+            the theme's colormap; values more than 12 decades below the largest
+            get the lowest colour. The reaction type is then shown by the marker
+            shape alone, and a colour bar sits below the legend. By default
+            reactions are coloured by type.
+        rate_cmap : str or Colormap, optional
+            With *colour_by*: a matplotlib colormap (or its name) to use, as
+            given, instead of the theme's ``rates`` colormap.
 
         Returns
         -------
@@ -277,18 +281,24 @@ class NetworkVisualizer:
         KeyError
             If the network has no species *name*.
         ValueError
-            If *theme* names no registered theme, a rate value is missing, or
-            *arrow_width* is not ``(min, max)`` with ``0 < min <= max``.
+            If *theme* names no registered theme, *colour_by* is unknown or
+            given with analysis mode off, a value is missing, or *rate_cmap* is
+            given without *colour_by*.
         """
         th = resolve_theme(theme)
         specie = self.network.species[name]
-        widths, key = self._rate_widths(
-            involved(self.network, specie), rate_values, rate_functions, arrow_width
+        rated = self._rate_colours(
+            involved(self.network, specie), th, colour_by, rate_cmap
         )
         legend = species_legend_widths(self.network, specie, th)
         layout = species_layout(
-            self.network, specie, text_width, legend, key_row=bool(key)
+            self.network,
+            specie,
+            text_width,
+            legend,
+            colour_bar=rated is not None,
+            values=rated.values if rated is not None else (),
         )
-        fig, ax = draw_species(self.network, layout, th, widths, key)
+        fig, ax = draw_species(self.network, layout, th, rated)
 
         return finish(fig, ax, theme=th, save=save, show=show, close=close, tight=tight)

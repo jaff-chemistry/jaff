@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from ._themes import NETWORK_THEMES, NetworkTheme
+from ._themes import NETWORK_THEMES, NetworkTheme, RateColormap
 from .visualizer import NetworkVisualizer
 
-__all__ = ["NetworkVisualizer", "NetworkTheme", "NETWORK_THEMES"]
+__all__ = ["NetworkVisualizer", "NetworkTheme", "RateColormap", "NETWORK_THEMES"]

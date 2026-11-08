@@ -62,6 +62,22 @@ print(f"Elements:  {net.elements.count}")
 
     [:octicons-arrow-right-24: Reactions](reactions.md)
 
+- :phosphor-function:{ .sm .middle } **Analysis mode**
+
+    ***
+
+    Numeric values for a network's parameters, species densities and unknown functions (`net.analysis`), used to evaluate rate coefficients and rates and to colour the figures.
+
+    [:octicons-arrow-right-24: Analysis mode](analysis.md)
+
+- :phosphor-graph:{ .sm .middle } **Visualization**
+
+    ***
+
+    Graph, species and stoichiometry figures of a network (`net.visualize`), optionally coloured by rate coefficient or rate.
+
+    [:octicons-arrow-right-24: Visualization](visualization.md)
+
 - :phosphor-terminal-window:{ .sm .middle } **jaffx CLI**
 
     ***

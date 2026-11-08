@@ -1,10 +1,9 @@
 # ABOUTME: Draws the graph view of net.visualize: species pills in atom-count
-# ABOUTME: columns, reaction squares in gutters, Bézier edges, headers, legend
+# ABOUTME: columns, reaction markers in gutters, Bézier edges, legend, colour bar
 """Matplotlib renderer of a :class:`GraphLayout`."""
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING, Sequence
 
 import matplotlib.pyplot as plt
@@ -13,31 +12,37 @@ from matplotlib.artist import Artist
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
-from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Patch, PathPatch
+from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, PathPatch
 
-from ._common import FONT_RC, bezier_path, text_on, text_width
+from ._common import FONT_RC, bezier_path, text_width
 from ._layout import (
+    COLOUR_BAR_ROWS,
     LEGEND_ROW,
     drawing_bottom,
     EQUATION_FONT,
     HEADER,
     HEADER_FONT,
-    INDEX_FONT,
     MARGIN,
     MARKER,
     PILL_HEIGHT,
     SPECIES_FONT,
     GraphLayout,
 )
+from ._markers import draw_marker, label_shapes, marker_handle, type_shapes
+from ._rates import RateColours, draw_colour_bar
+from ._values import draw_value_box
 from ._themes import NetworkTheme, legend_types, type_colours
 
 if TYPE_CHECKING:
     from ...core.network.network import Network
 
 ARROW = 0.08
-#: Fixed edge widths without rate scaling, points.
+#: Edge widths, points: reactant lines, product arrows, rate-coloured arrows.
 REACTANT_WIDTH = 0.8
 PRODUCT_WIDTH = 1.1
+RATED_WIDTH = 1.7
+#: Halo behind equations, points, so lines passing under stay clear of them.
+HALO = 3.0
 #: Legend space per entry besides its text: handle and column spacing, inches.
 LEGEND_ENTRY = 0.4
 ROLES = ("reactant", "product")
@@ -47,14 +52,12 @@ def draw_graph(
     net: Network,
     layout: GraphLayout,
     theme: NetworkTheme,
-    widths: dict[int, float] | None = None,
-    key: Sequence[tuple[float, float]] = (),
+    rated: RateColours | None = None,
 ) -> tuple[Figure, Axes]:
     """Draw *layout* of *net* in *theme*; the axes are in inches, y down.
 
-    *widths* gives each reaction's edge width (rate scaling, see
-    :func:`~jaff.plotting.network._widths.edge_widths`) and *key* the legend's
-    ``(rate, width)`` reference entries; without them the edges have fixed widths.
+    With *rated*, markers and product arrows take each reaction's rate colour
+    and a colour bar sits below the legend; otherwise they take the type colours.
     """
     types = [r.type for r in net.reactions]
     colours = type_colours(theme, types)
@@ -66,10 +69,10 @@ def draw_graph(
         ax.set_ylim(height, 0)
         ax.set_axis_off()
         _columns(ax, layout, theme)
-        _edges(ax, layout, theme, colours, types, widths)
-        _reactions(ax, layout, theme, colours, types, label_halo(widths))
+        _edges(ax, layout, theme, colours, types, rated)
+        _reactions(ax, layout, theme, colours, types, rated)
         _species(ax, net, layout, theme)
-        _legend(ax, layout, theme, types, key)
+        _legend(ax, layout, theme, types, rated)
 
     return fig, ax
 
@@ -84,21 +87,6 @@ def legend_widths(net: Network, theme: NetworkTheme) -> list[float]:
 def entry_widths(labels: Sequence[str]) -> list[float]:
     """Legend entry widths in inches."""
     return [text_width(t, EQUATION_FONT) + LEGEND_ENTRY for t in labels]
-
-
-def label_halo(widths: dict[int, float] | None) -> float:
-    """Halo width behind equation labels: wider when thick arrows may cross them."""
-    return 3.0 if widths is None else 3.0 + max(widths.values(), default=0.0)
-
-
-def key_label(value: float) -> str:
-    """Mathtext label of a width-key rate: ``10^-9``, or ``2.3×10^-9`` off a decade."""
-    exponent = math.floor(math.log10(value))
-    mantissa = value / 10.0**exponent
-    if round(mantissa, 1) == 1.0:
-        return rf"$k = 10^{{{exponent}}}$"
-
-    return rf"$k = {mantissa:.1f}\times10^{{{exponent}}}$"
 
 
 def _columns(ax: Axes, layout: GraphLayout, theme: NetworkTheme) -> None:
@@ -126,8 +114,8 @@ def _columns(ax: Axes, layout: GraphLayout, theme: NetworkTheme) -> None:
         )
 
 
-def _edges(ax, layout, theme, colours, types, widths=None) -> None:
-    """Reactant lines and product arrows; *widths* (by reaction) scales the arrows."""
+def _edges(ax, layout, theme, colours, types, rated=None) -> None:
+    """Reactant lines and product arrows; *rated* colours the arrows by rate."""
     for edge in layout.edges:
         path = bezier_path(edge.points)
         typed = colours[types[edge.reaction]]
@@ -144,9 +132,13 @@ def _edges(ax, layout, theme, colours, types, widths=None) -> None:
                 )
             )
             continue
-        lw = PRODUCT_WIDTH if widths is None else widths[edge.reaction]
-        line = typed if theme.typed_edges else theme.edge
-        head = typed if theme.typed_arrows else line
+        if rated is None:
+            lw = PRODUCT_WIDTH
+            line = typed if theme.typed_edges else theme.edge
+            head = typed if theme.typed_arrows else line
+        else:
+            lw = RATED_WIDTH
+            line = head = rated.colours[edge.reaction]
         ax.add_patch(
             PathPatch(path, facecolor="none", edgecolor=line, lw=lw, zorder=1, gid=gid)
         )
@@ -157,8 +149,8 @@ def _edges(ax, layout, theme, colours, types, widths=None) -> None:
                 (xb - step, yb),
                 (xb, yb),
                 arrowstyle="-|>",
-                # Heads grow with thick lines so they stay visible past the line.
-                mutation_scale=max(11.0, 11.0 + 3.0 * (lw - PRODUCT_WIDTH)),
+                # Heads grow with the line so they stay visible past it.
+                mutation_scale=11.0 if rated is None else 12.0,
                 color=head,
                 lw=0,
                 shrinkA=0,
@@ -168,34 +160,19 @@ def _edges(ax, layout, theme, colours, types, widths=None) -> None:
         )
 
 
-def _reactions(ax, layout, theme, colours, types, halo_width: float = 3.0) -> None:
-    """Reaction squares with their index; equations above, on a *halo_width* halo."""
-    halo = [patheffects.withStroke(linewidth=halo_width, foreground=theme.halo)]
+def _reactions(ax, layout, theme, colours, types, rated=None) -> None:
+    """Reaction markers with their index, equations above on a halo.
+
+    The shape follows the type; the fill is the type colour, or with *rated*
+    the rate colour inside an ink outline.
+    """
+    halo = [patheffects.withStroke(linewidth=HALO, foreground=theme.halo)]
+    shapes = type_shapes(types, len(theme.types))
     for i, (x, y) in layout.reaction_xy.items():
-        colour = colours[types[i]]
-        ax.add_patch(
-            FancyBboxPatch(
-                (x - MARKER / 2, y - MARKER / 2),
-                MARKER,
-                MARKER,
-                boxstyle="round,pad=0,rounding_size=0.025",
-                facecolor=colour,
-                edgecolor="none",
-                zorder=3,
-                gid=f"reaction:{i}",
-            )
-        )
-        ax.text(
-            x,
-            y,
-            str(i),
-            ha="center",
-            va="center",
-            fontsize=INDEX_FONT,
-            fontweight="bold",
-            color=text_on(colour, theme),
-            zorder=4,
-        )
+        t = types[i]
+        fill = colours[t] if rated is None else rated.colours[i]
+        edge = "none" if rated is None else theme.ink
+        draw_marker(ax, x, y, shapes[t], fill, theme, i, gid=f"reaction:{i}", edge=edge)
         ax.text(
             x,
             y - MARKER / 2 - 0.04,
@@ -258,12 +235,22 @@ def role_handles(theme) -> list[Artist]:
     ]
 
 
-def _legend(ax, layout, theme, types, key=()) -> None:
-    handles: list[Artist] = [
-        Patch(facecolor=c, edgecolor="none", label=t)
-        for t, c in legend_types(theme, types)
-    ]
-    draw_legends(ax, layout, theme, [*handles, *role_handles(theme)], key)
+def type_handles(theme, entries, shapes, rated) -> list[Artist]:
+    """Legend handles of the reaction types: their shape, filled with their colour.
+
+    With rate colouring the colour shows the rate, so the shapes are drawn
+    empty (surface fill, ink outline).
+    """
+    if rated is None:
+        return [marker_handle(t, shapes[t], c) for t, c in entries]
+
+    return [marker_handle(t, shapes[t], theme.surface, theme.ink) for t, _ in entries]
+
+
+def _legend(ax, layout, theme, types, rated=None) -> None:
+    entries = legend_types(theme, types)
+    handles = type_handles(theme, entries, label_shapes(theme, types), rated)
+    draw_legends(ax, layout, theme, [*handles, *role_handles(theme)], rated)
 
 
 def draw_legends(
@@ -271,43 +258,31 @@ def draw_legends(
     layout,
     theme: NetworkTheme,
     handles: list[Artist],
-    key: Sequence[tuple[float, float]],
+    rated: RateColours | None,
 ) -> None:
-    """The type legend, with the width key on its own row below it.
+    """The type legend, the rate colour bar and values box below it when *rated*.
 
     Both are anchored in inches, so cropping (tight) leaves them in place.
     """
     width, height = layout.size
-    style = {
-        "loc": "lower center",
-        "bbox_transform": ax.transData,
-        "frameon": False,
-        "fontsize": EQUATION_FONT,
-        "labelcolor": theme.text,
-        "columnspacing": 1.2,
-    }
     bottom = height - MARGIN
-    if key:
-        lines: list[Artist] = [
-            Line2D([], [], color=theme.ink, lw=w, label=key_label(value))
-            for value, w in key
-        ]
-        ax.add_artist(
-            ax.legend(
-                handles=lines,
-                bbox_to_anchor=(width / 2, bottom),
-                ncol=len(lines),
-                handlelength=2.2,
-                # Tight padding: the key's row is one LEGEND_ROW tall.
-                borderpad=0.1,
-                **style,
-            )
+    if rated is not None and rated.values:
+        draw_value_box(ax, layout.size, theme, layout.value_box, rated.values, bottom)
+        bottom -= layout.value_box.height
+    if rated is not None:
+        draw_colour_bar(
+            ax, layout.size, theme, rated.cmap, rated.span, rated.quantity, bottom
         )
-        bottom -= LEGEND_ROW
+        bottom -= COLOUR_BAR_ROWS * LEGEND_ROW
     ax.legend(
         handles=handles,
+        loc="lower center",
         bbox_to_anchor=(width / 2, bottom),
+        bbox_transform=ax.transData,
         ncol=layout.legend_columns,
+        frameon=False,
+        fontsize=EQUATION_FONT,
+        labelcolor=theme.text,
         handlelength=1.4,
-        **style,
+        columnspacing=1.2,
     )

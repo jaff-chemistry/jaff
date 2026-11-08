@@ -142,7 +142,12 @@ from .spec import AxesSpec, FigureSpec, SeriesSpec
 from .themes import PALETTES, STYLES, register_palette, register_style
 
 # Last: network._common imports .api and .themes.
-from .network import NETWORK_THEMES, NetworkTheme, NetworkVisualizer  # noqa: E402
+from .network import (  # noqa: E402
+    NETWORK_THEMES,
+    NetworkTheme,
+    NetworkVisualizer,
+    RateColormap,
+)
 
 __all__ = [
     "plot",
@@ -158,5 +163,6 @@ __all__ = [
     "register_palette",
     "NetworkVisualizer",
     "NetworkTheme",
+    "RateColormap",
     "NETWORK_THEMES",
 ]

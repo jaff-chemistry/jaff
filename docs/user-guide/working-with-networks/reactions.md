@@ -108,32 +108,48 @@ as a 100-digit number (abbreviated above), while
 !!! note "Photo-reactions during code generation"
     Photo reaction rate during code generation are not kept as photorates if radiation is enabled. Actual photorates are calculated as a function of photo number/energy density for each radiation band
 
-### Evaluating a rate coefficient
+### Evaluating rate coefficients and rates
 
-`evaluate_rate_coefficient(values, functions=None)` gives a reaction's rate
-coefficient as a number, and `net.reactions.evaluate_rate_coefficients(...)`
-all of them as an array in catalogue order:
+`evaluate_rate_coefficient()` gives a reaction's rate coefficient as a number and
+`evaluate_rate()` its rate 𝓡 (the coefficient times each core reactant's density,
+cm⁻³ s⁻¹); `net.reactions.evaluate_rate_coefficients()` and
+`net.reactions.evaluate_rates()` give them all as arrays in catalogue order. All
+four take the same three optional arguments:
 
 ```python
 net = Network("networks/demos/water_co.jet")
 net.reactions[2].evaluate_rate_coefficient({"tgas": 100.0})  # 4.382088543149259e-07
 
-values = {"tgas": 100.0, "crate": 1.3e-17, "av": 1.0, "chi": 1.0}
-net.reactions.evaluate_rate_coefficients(values)[[0, 2, 16]]
+parameters = {"tgas": 100.0, "crate": 1.3e-17, "av": 1.0, "chi": 1.0}
+net.reactions.evaluate_rate_coefficients(parameters)[[0, 2, 16]]
 # array([1.26100000e-17, 4.38208854e-07, 8.14930913e-12])
+net.reactions.evaluate_rates(parameters, densities={"H": 1e4, "e-": 1.0, ...})
 ```
 
-- `values` gives a number per symbol name; densities `nden[i]` take one array
-  under `"nden"`. Values a reaction does not use are ignored.
+- `parameters` gives a number per symbol name. Values a reaction does not use
+  are ignored.
+- `densities` gives the number density (cm⁻³) of each species, by name or as an
+  array in species order; `nden[i]` in an expression reads species *i*.
 - `functions` gives each unknown function (one the `.jfunc` file calls but does
-  not define, such as an interpolated table) a constant, or a callable that
-  receives the function's numeric arguments.
+  not define, such as an interpolated table) a number, an expression of the
+  parameters, or a callable without arguments returning either. The function's
+  arguments in the network are not used: one value per function.
+- With [analysis mode](analysis.md) on, each argument is merged over the
+  matching table of `net.analysis`, so `evaluate_rate_coefficient()` needs no
+  argument and `evaluate_rate_coefficient({"tgas": 50.0})` changes only `tgas`.
 - A piecewise (multi-range) rate picks its branch from `tgas`.
-- Missing names raise one `ValueError` naming all of them:
-  `Cannot evaluate the rate coefficients: no value for av, chi, crate`.
+- Missing values raise one `ValueError` naming all of them:
+  `Cannot evaluate: no value for parameter av, chi; no density for CO; no value
+  for function fshield`.
 
-[`net.visualize`](visualization.md#rate-scaled-arrows) uses the same values to
-scale its arrows.
+[`net.visualize`](visualization.md#rate-colouring) uses the same values to
+colour its reactions.
+
+### Analysis mode
+
+`net.analysis` holds the values of a network's parameters, species densities
+and unknown functions in one place, for these methods and the network figures;
+see [Analysis mode](analysis.md).
 
 ### Attributes
 
@@ -491,7 +507,8 @@ Each returns a `Vector` aligned to catalogue order.
 | `verbatim()`            | `Vector[str]`           | `['H + _PHOTON -> H+ + e-', 'H+ + e- -> H']` |
 | `types()`               | `Vector[str]`           | `['photo', 'unknown']`                       |
 | `rate_coefficients()`   | `Vector[Basic]`         | the two symbolic rate coefficients           |
-| `evaluate_rate_coefficients(values)` | `numpy.ndarray` | the coefficients as numbers ([evaluating](#evaluating-a-rate-coefficient)) |
+| `evaluate_rate_coefficients(...)` | `numpy.ndarray` | the coefficients as numbers ([evaluating](#evaluating-rate-coefficients-and-rates)) |
+| `evaluate_rates(...)` | `numpy.ndarray` | the rates 𝓡 as numbers ([evaluating](#evaluating-rate-coefficients-and-rates)) |
 | `rates()`               | `Vector[Basic]`         | the two rates (coefficient × densities)      |
 | `reactants()`           | `Vector[Species]`       | one `Species` catalogue per reaction         |
 | `products()`            | `Vector[Species]`       | one `Species` catalogue per reaction         |

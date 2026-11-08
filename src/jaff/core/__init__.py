@@ -39,7 +39,16 @@ Elements can also be built directly from a list of species names:
 [[1, 0], [0, 2], [1, 1]]
 """
 
-from . import elements, network, reaction, species
+from . import analysis, elements, network, reaction, species
+from .analysis import (
+    Analysis,
+    AnalysisSpec,
+    AnalysisTable,
+    Densities,
+    Entry,
+    Functions,
+    Parameters,
+)
 from .elements import Element, Elements
 from .network import Network, NetworkSymbols, OdeSystem, StateVariable
 from .reaction import (
@@ -51,6 +60,7 @@ from .reaction import (
 from .species import Specie, Species
 
 __all__ = [
+    "analysis",
     "elements",
     "network",
     "reaction",
@@ -67,4 +77,11 @@ __all__ = [
     "StateVariable",
     "PhotoReaction",
     "ReactionRadiation",
+    "Analysis",
+    "AnalysisSpec",
+    "AnalysisTable",
+    "Entry",
+    "Parameters",
+    "Densities",
+    "Functions",
 ]

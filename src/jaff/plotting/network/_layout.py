@@ -8,7 +8,7 @@ import math
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
 
@@ -51,6 +51,68 @@ GROUP_GAP = 0.06
 EMPTY_WIDTH = 1.0
 #: Height of each legend row after the first, inches.
 LEGEND_ROW = 0.22
+#: Legend rows the rate colour bar takes below the legend.
+COLOUR_BAR_ROWS = 2
+#: Values box: most columns, entry row pitch, group title height, inner padding,
+#: gap between groups, gap between columns and space above the box, inches.
+VALUE_COLUMNS = 3
+VALUE_ROW = 0.19
+VALUE_TITLE = 0.24
+VALUE_PAD = 0.14
+VALUE_GAP = 0.08
+VALUE_COLUMN_GAP = 0.35
+VALUE_SPACE = 0.12
+
+
+class ValueGroup(NamedTuple):
+    """One titled group of the values box: its title and entry texts."""
+
+    title: str
+    entries: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ValueBox:
+    """Size of the values box under the colour bar; zero height without one.
+
+    Attributes
+    ----------
+    columns : int
+        Entry columns.
+    column_width : float
+        Width of one column (widest entry and the gap), inches.
+    width : float
+        Width of the box, inches.
+    height : float
+        Height the box takes, the space above it included, inches.
+    """
+
+    columns: int = 0
+    column_width: float = 0.0
+    width: float = 0.0
+    height: float = 0.0
+
+
+def value_box(groups: Sequence[ValueGroup], width: float, measure: Measure) -> ValueBox:
+    """The values box for *groups* under a drawing *width* inches wide.
+
+    Up to :data:`VALUE_COLUMNS` columns of equal width, fewer when they do not
+    fit; each group takes a title row and its entries row by row.
+    """
+    if not groups:
+        return ValueBox()
+    entries = [e for g in groups for e in g.entries]
+    column = max(measure(e, EQUATION_FONT) for e in entries) + VALUE_COLUMN_GAP
+    room = width - 2 * MARGIN - 2 * VALUE_PAD + VALUE_COLUMN_GAP
+    columns = max(1, min(VALUE_COLUMNS, int(room // column), len(entries)))
+    titles = max(measure(g.title, HEADER_FONT) for g in groups)
+    inner = max(columns * column - VALUE_COLUMN_GAP, titles)
+    height = sum(
+        VALUE_TITLE + math.ceil(len(g.entries) / columns) * VALUE_ROW for g in groups
+    )
+    height += 2 * VALUE_PAD + VALUE_GAP * (len(groups) - 1) + VALUE_SPACE
+
+    return ValueBox(columns, column, inner + 2 * VALUE_PAD, height)
 
 
 def legend_columns(widths: Sequence[float], available: float) -> int:
@@ -74,20 +136,30 @@ def legend_columns(widths: Sequence[float], available: float) -> int:
 
 
 def _legend(
-    widths: Sequence[float], width: float, key_row: bool = False
+    widths: Sequence[float], width: float, colour_bar: bool = False
 ) -> tuple[int, int]:
     """Columns and rows of a legend under a drawing *width* inches wide.
 
-    *key_row* adds a row for the rate-width key below the legend.
+    *colour_bar* adds the rows of the rate colour bar below the legend.
     """
     columns = legend_columns(widths, width - 2 * MARGIN)
 
-    return columns, max(math.ceil(len(widths) / columns), 1) + key_row
+    return columns, max(math.ceil(len(widths) / columns), 1) + (
+        COLOUR_BAR_ROWS if colour_bar else 0
+    )
 
 
 def drawing_bottom(layout: GraphLayout | MatrixLayout | SpeciesLayout) -> float:
     """Lowest height (inches, y down) the drawing may reach: the legend's top."""
-    return layout.size[1] - MARGIN - LEGEND - (layout.legend_rows - 1) * LEGEND_ROW
+    box = getattr(layout, "value_box", ValueBox())
+
+    return (
+        layout.size[1]
+        - MARGIN
+        - LEGEND
+        - (layout.legend_rows - 1) * LEGEND_ROW
+        - box.height
+    )
 
 
 def atom_count(specie: Specie) -> int:
@@ -198,6 +270,7 @@ class GraphLayout:
     edges: tuple[Edge, ...]
     legend_columns: int = 1
     legend_rows: int = 1
+    value_box: ValueBox = ValueBox()
 
 
 def _row_y(row: float) -> float:
@@ -309,7 +382,8 @@ def graph_layout(
     net: Network,
     measure: Measure,
     legend: Sequence[float] = (),
-    key_row: bool = False,
+    colour_bar: bool = False,
+    values: Sequence[ValueGroup] = (),
 ) -> GraphLayout:
     """Lay out *net* as a layered species-reaction graph.
 
@@ -327,8 +401,10 @@ def graph_layout(
     legend : sequence of float, optional
         Width in inches of each legend entry; a legend wider than the drawing
         wraps onto more rows (the figure grows taller, not wider).
-    key_row : bool, optional
-        Leave a row below the legend for the rate-width key.
+    colour_bar : bool, optional
+        Leave room below the legend for the rate colour bar.
+    values : sequence of ValueGroup, optional
+        Groups of the values box, which sits below the colour bar.
 
     Returns
     -------
@@ -340,9 +416,16 @@ def graph_layout(
     labels = {i: equation_label(r) for i, r in enumerate(reactions)}
     if not core:
         width = 2 * MARGIN + EMPTY_WIDTH
-        columns, legend_rows = _legend(legend, width, key_row)
-        size = (width, 2 * MARGIN + HEADER + LEGEND + (legend_rows - 1) * LEGEND_ROW)
-        return GraphLayout(size, (), {}, {}, {}, {}, {}, labels, (), columns, legend_rows)
+        columns, legend_rows = _legend(legend, width, colour_bar)
+        box = value_box(values, width, measure)
+        width = max(width, box.width + 2 * MARGIN)
+        size = (
+            width,
+            2 * MARGIN + HEADER + LEGEND + (legend_rows - 1) * LEGEND_ROW + box.height,
+        )
+        return GraphLayout(
+            size, (), {}, {}, {}, {}, {}, labels, (), columns, legend_rows, box
+        )
 
     links = [_links(r) for r in reactions]
     members, lane_headers = _lanes(core, column, headers, links)
@@ -408,10 +491,16 @@ def graph_layout(
             edges.append(Edge(s, i, role, tuple(points)))
 
     bottom = max(y for _, y in [*species_xy.values(), *reaction_xy.values()])
-    columns, legend_rows = _legend(legend, x + MARGIN, key_row)
+    columns, legend_rows = _legend(legend, x + MARGIN, colour_bar)
+    box = value_box(values, x + MARGIN, measure)
     size = (
         x + MARGIN,
-        bottom + ROW_PITCH / 2 + LEGEND + (legend_rows - 1) * LEGEND_ROW + MARGIN,
+        bottom
+        + ROW_PITCH / 2
+        + LEGEND
+        + (legend_rows - 1) * LEGEND_ROW
+        + box.height
+        + MARGIN,
     )
 
     return GraphLayout(
@@ -426,6 +515,7 @@ def graph_layout(
         tuple(edges),
         columns,
         legend_rows,
+        box,
     )
 
 
@@ -553,6 +643,7 @@ class SpeciesLayout:
     edges: tuple[Edge, ...]
     legend_columns: int = 1
     legend_rows: int = 1
+    value_box: ValueBox = ValueBox()
 
 
 #: Space each side of a pill in the species view's outer lanes, inches.
@@ -578,7 +669,8 @@ def species_layout(
     specie: Specie,
     measure: Measure,
     legend: Sequence[float] = (),
-    key_row: bool = False,
+    colour_bar: bool = False,
+    values: Sequence[ValueGroup] = (),
 ) -> SpeciesLayout:
     """Lay out the reactions forming and destroying *specie*.
 
@@ -598,8 +690,10 @@ def species_layout(
     legend : sequence of float, optional
         Width in inches of each legend entry; a legend wider than the drawing
         wraps onto more rows (the figure grows taller, not wider).
-    key_row : bool, optional
-        Leave a row below the legend for the rate-width key.
+    colour_bar : bool, optional
+        Leave room below the legend for the rate colour bar.
+    values : sequence of ValueGroup, optional
+        Groups of the values box, which sits below the colour bar.
 
     Returns
     -------
@@ -648,10 +742,19 @@ def species_layout(
         equations(destruction),
         max([pill[s] for s in products], default=PILL_HEIGHT) + 2 * SIDE_PAD,
     ]
-    headers = ["REACTANTS", "FORMS", None, "DESTROYS", "PRODUCTS"]
+    headers = [
+        "REACTANTS",
+        "FORMATION CHANNEL",
+        None,
+        "DESTRUCTION CHANNEL",
+        "PRODUCTS",
+    ]
     lanes: list[Lane] = []
     x = MARGIN
     for width, header in zip(widths, headers):
+        # A lane is never narrower than its header, so headers never overlap.
+        if header is not None:
+            width = max(width, measure(header, HEADER_FONT) + 2 * LABEL_GAP)
         lanes.append(Lane(x, x + width, header))
         x += width
 
@@ -698,10 +801,16 @@ def species_layout(
             *product_xy.values(),
         ]
     )
-    columns, legend_rows = _legend(legend, x + MARGIN, key_row)
+    columns, legend_rows = _legend(legend, x + MARGIN, colour_bar)
+    box = value_box(values, x + MARGIN, measure)
     size = (
         x + MARGIN,
-        bottom + ROW_PITCH / 2 + LEGEND + (legend_rows - 1) * LEGEND_ROW + MARGIN,
+        bottom
+        + ROW_PITCH / 2
+        + LEGEND
+        + (legend_rows - 1) * LEGEND_ROW
+        + box.height
+        + MARGIN,
     )
 
     return SpeciesLayout(
@@ -719,4 +828,5 @@ def species_layout(
         tuple(edges),
         columns,
         legend_rows,
+        box,
     )

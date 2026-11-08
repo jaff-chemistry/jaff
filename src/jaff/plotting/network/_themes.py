@@ -6,9 +6,31 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 OKABE_ITO = ("#0072b2", "#d55e00", "#009e73", "#cc79a7", "#e69f00", "#56b4e9", "#f0e442")
 SLATE = ("#cbd2d9", "#46525e")
+#: Most reaction types with their own colour and shape; one marker shape each.
+TYPE_LIMIT = 7
+
+
+@dataclass(frozen=True)
+class RateColormap:
+    """A matplotlib colormap for rate coefficients, trimmed to part of its range.
+
+    Attributes
+    ----------
+    name : str
+        Name of a registered matplotlib colormap, e.g. ``"YlGnBu"``.
+    low : float
+        Position in the colormap of the smallest rate drawn, 0 to 1.
+    high : float
+        Position in the colormap of the largest rate drawn, 0 to 1.
+    """
+
+    name: str
+    low: float = 0.0
+    high: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -47,6 +69,9 @@ class NetworkTheme:
         Draw produced cells as an outline (in ``outline``) instead of a fill.
     outline : str
         Outline colour of produced cells when ``produced_outline`` is on.
+    rates : RateColormap
+        Colormap of reactions coloured by rate (``colour_by``),
+        slow to fast; by default ``YlGnBu`` from 0.3.
     """
 
     surface: str
@@ -64,9 +89,11 @@ class NetworkTheme:
     produced: tuple[str, str]
     produced_outline: bool
     outline: str
+    rates: RateColormap = RateColormap("YlGnBu", 0.3, 1.0)
 
 
-_LIGHT = dict(
+#: Colours shared by the light themes (keyword arguments of NetworkTheme).
+_LIGHT: dict[str, Any] = dict(
     surface="#ffffff",
     band="#f5f6f8",
     ink="#1d2025",
@@ -107,6 +134,7 @@ NETWORK_THEMES: dict[str, NetworkTheme] = {
         consumed=("#f4a582", "#d6604d"),
         produced=("#92c5de", "#4393c3"),
         produced_outline=False,
+        rates=RateColormap("cividis_r", 0.05, 1.0),
     ),
     "neutral": NetworkTheme(
         **_LIGHT,
@@ -133,6 +161,7 @@ NETWORK_THEMES: dict[str, NetworkTheme] = {
         consumed=("#c3b5d9", "#7a5ca6"),
         produced=("#f6c27a", "#e08a1e"),
         produced_outline=False,
+        rates=RateColormap("PuBu", 0.3, 1.0),
     ),
     "print": NetworkTheme(
         **_LIGHT,
@@ -142,6 +171,7 @@ NETWORK_THEMES: dict[str, NetworkTheme] = {
         consumed=SLATE,
         produced=("#ffffff", "#ffffff"),
         produced_outline=True,
+        rates=RateColormap("Greys", 0.3, 1.0),
     ),
     "dark": NetworkTheme(
         surface="#1e2228",
@@ -167,6 +197,7 @@ NETWORK_THEMES: dict[str, NetworkTheme] = {
         produced=("#1e2228", "#1e2228"),
         produced_outline=True,
         outline="#c9d1d9",
+        rates=RateColormap("viridis", 0.25, 1.0),
     ),
 }
 """Registered themes by name; ``"vivid"`` is the default."""
@@ -197,8 +228,9 @@ def _ordered(types: Sequence[str]) -> list[str]:
 
 def type_colours(theme: NetworkTheme, types: Sequence[str]) -> dict[str, str]:
     """Colour of each reaction type in *types* (one entry per distinct type)."""
+    count = min(len(theme.types), TYPE_LIMIT)
     colours = {
-        t: theme.types[k] if k < len(theme.types) else theme.other
+        t: theme.types[k] if k < count else theme.other
         for k, t in enumerate(_ordered(types))
     }
     if "unknown" in types:
@@ -210,7 +242,7 @@ def type_colours(theme: NetworkTheme, types: Sequence[str]) -> dict[str, str]:
 def legend_types(theme: NetworkTheme, types: Sequence[str]) -> list[tuple[str, str]]:
     """Legend entries ``(label, colour)``: one per coloured type, then ``other``."""
     ordered = _ordered(types)
-    named = ordered[: len(theme.types)]
+    named = ordered[: min(len(theme.types), TYPE_LIMIT)]
     entries = [(t.replace("_", " "), theme.types[k]) for k, t in enumerate(named)]
     if "unknown" in types or len(ordered) > len(named):
         entries.append(("other", theme.other))

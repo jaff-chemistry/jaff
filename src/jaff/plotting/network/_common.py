@@ -77,9 +77,9 @@ def crop(fig: Figure, ax: Axes, pad: float = TIGHT_PAD) -> None:
     and the figure size to the content's bounding box; artists anchored in data
     coordinates, the legends included, keep their place.
     """
-    # Every legend: the type legend and, with rate scaling, the width key.
+    # Every legend, and images such as the rate colour bar.
     legends = [a for a in ax.get_children() if isinstance(a, Legend)]
-    artists: list[Artist] = [*ax.patches, *ax.texts, *legends]
+    artists: list[Artist] = [*ax.patches, *ax.texts, *ax.images, *legends]
     to_data = ax.transData.inverted()
     corners = [to_data.transform(a.get_window_extent().corners()) for a in artists]
     xs = [x for c in corners for x, _ in c]

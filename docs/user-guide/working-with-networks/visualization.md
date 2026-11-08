@@ -8,9 +8,8 @@ tags:
 
 `net.visualize` draws a network's species and reactions as static matplotlib
 figures. It shows structure: which species each reaction consumes and
-produces. The graph and species views can also scale their arrows by rate
-coefficient (see [Rate-scaled arrows](#rate-scaled-arrows)). There are three
-views:
+produces. The graph and species views can also colour reactions by rate
+coefficient (see [Rate colouring](#rate-colouring)). There are three views:
 
 ```python
 from jaff import Network
@@ -34,9 +33,11 @@ the full reference.
 - **Species** stand in columns by number of atoms, lightest on the left
   ("0–1 ATOMS", "2 ATOMS", ...): reading left to right follows molecules being
   built up. Electrons and other atom-free species share the first column.
-- **Reactions** are small squares labelled with their position in
-  `net.reactions` and coloured by reaction type, with the equation written
-  above. A reaction between species of one column sits beside that column; one
+- **Reactions** are small markers labelled with their position in
+  `net.reactions`, with the equation written above. The reaction type sets both
+  the marker's colour and its shape (square, circle, diamond, triangle,
+  hexagon, pentagon, inverted triangle, in order of first appearance), so the
+  type stays readable in print and for colour-blind readers. A reaction between species of one column sits beside that column; one
   linking columns sits between them. Crowded gutters split into several
   sub-columns, reactions reaching further right placed further right.
 - **Edges**: thin grey lines lead from each reactant into its reaction; coloured
@@ -61,8 +62,9 @@ that appears on both sides with no net change gets no cell.
 stays readable in networks of any size:
 
 - the species sits in the middle, outlined in bold;
-- on its left, the reactions **forming** it (numbered squares coloured by type,
-  equation above), each linked to its other reactants further left;
+- on its left, the reactions **forming** it (numbered markers, shaped and
+  coloured by type, equation above), each linked to its other reactants
+  further left;
 - on its right, the reactions **destroying** it, each linked to its other
   products further right.
 
@@ -74,55 +76,66 @@ the reaction types shown, in the colours of the whole network.
 
 ---
 
-## Rate-scaled arrows
+## Rate colouring
 
-`graph()` and `species(name)` can draw each reaction's product arrows with a
-width set by its rate coefficient, so the fast channels stand out. Pass the
-values the rate coefficients need as `rate_values`:
+`graph()` and `species(name)` can colour each reaction by its rate coefficient
+*k* or its rate 𝓡 (*k* times the reactant densities), so the fast channels stand
+out. The values come from [analysis mode](analysis.md): enable it,
+then pass `colour_by="rate_coefficient"` or `colour_by="rate"`:
 
 ```python
-import numpy as np
-
 net = Network("GOW")
-nden = np.zeros(len(net.species))
-nden[net.species["H"].index] = 1.0
-nden[net.species["H2"].index] = 100.0
-
-net.visualize.species(
-    "CO",
-    rate_values={
-        "tgas": 20.0, "av": 10.0, "chi": 1.0, "crate": 2e-16,
-        "ncol_CO": 1e18, "ncol_H2": 1e22, "nden": nden,
+net.analysis.enable(
+    parameters={
+        "tgas": {"value": 20.0, "label": r"$T_\mathrm{gas} = {}$ K"},
+        "av": {"value": 10.0, "label": r"$A_V$"},
+        "chi": 1.0,
+        "crate": {"value": 2e-16, "label": r"$\zeta_\mathrm{CR} = {}\ \mathrm{s^{-1}}$"},
+        "ncol_CO": 1e18,
+        "ncol_H2": 1e22,
     },
-    rate_functions={"fshield_co_interp2d": 7.3e-5},
-    save="gow_co.pdf",
+    densities={"H": {"value": 1.0, "label": True}, "H2": {"value": 100.0, "label": True}, ...},
+    functions={"fshield_co_interp2d": 7.3e-5},
 )
+net.visualize.species("CO", colour_by="rate_coefficient", save="gow_co.pdf")
 ```
 
-![CO in GOW: the reactions forming and destroying CO, product arrows scaled by rate coefficient](../../assets/figures/working-with-networks/gow_co_rates_light.png#only-light)
-![CO in GOW: the reactions forming and destroying CO, product arrows scaled by rate coefficient](../../assets/figures/working-with-networks/gow_co_rates_dark.png#only-dark)
+![CO in GOW: the reactions forming and destroying CO, coloured by rate coefficient](../../assets/figures/working-with-networks/gow_co_rates_light.png#only-light)
+![CO in GOW: the reactions forming and destroying CO, coloured by rate coefficient](../../assets/figures/working-with-networks/gow_co_rates_dark.png#only-dark)
 
-- **Values.** Every symbol in the rate coefficients drawn needs a value:
-  `tgas`, `av`, `crate`, column densities, ... Densities `nden[i]` take one
-  array under `"nden"`, in species order. An unknown function (one the `.jfunc`
-  file calls but does not define, such as GOW's CO shielding table
-  `fshield_co_interp2d`) needs an entry in `rate_functions`: a constant, or a
-  callable taking the function's numeric arguments. A missing name raises a
-  `ValueError` listing every missing one. The species view evaluates only the
-  reactions it draws, so it needs only their values.
-- **Widths.** Arrow widths go logarithmically from the smallest rate drawn
-  (thinnest) to the largest (thickest), between the two widths of `arrow_width`
-  (`(0.4, 3.5)` points by default). Rates more than 12 decades below the largest
-  get the thinnest width, so one negligible rate (above, the shielded CO
-  photodissociation) does not squash the scale. The grey reactant lines keep
-  their fixed width.
-- **Key.** A row below the legend shows up to three reference widths, at powers
-  of ten within the range drawn.
+- **Values.** Every symbol in the expressions drawn needs a value in
+  `net.analysis`: parameters (`tgas`, `av`, `crate`, column densities, ...),
+  the densities they use (all reactant densities for 𝓡), and a value for each
+  unknown function (one the `.jfunc` file calls but does not define, such as
+  GOW's CO shielding table `fshield_co_interp2d`). A missing value raises a
+  `ValueError` listing every missing one; `colour_by` with analysis mode off
+  raises too. The species view evaluates only the reactions it draws, so it
+  needs only their values.
+- **Colours.** Each reaction's marker and product arrows take a colour from the
+  theme's colormap, logarithmically from the smallest value drawn (lightest) to
+  the largest (darkest; brightest in `dark`). Values more than 12 decades below
+  the largest get the lightest colour, so one negligible rate (above, the
+  shielded CO photodissociation) does not squash the scale. The grey reactant
+  lines are unchanged. A rounded colour bar below the legend shows the scale,
+  with up to six powers of ten, titled by the quantity.
+- **Types.** The colour now shows the rate, so the reaction type is read from
+  the marker shape alone; the legend draws the shapes empty.
+- **Values legend.** Every analysis entry with a label is listed in a box under
+  the colour bar, grouped as parameters, number densities and functions. A `{}`
+  in the label takes the value (3 significant figures, `m × 10ⁿ` outside
+  0.01–1000); a label without it reads `label = value`; `label=True` gives a
+  default such as `n(H₂) = 100`. Entries without a label are used but not
+  listed, and with no labelled entry there is no box. A function shows its
+  value for the parameters.
+- **Colormap.** Each theme has its own (see [Themes](#themes)); pass
+  `rate_cmap="magma"` (any matplotlib colormap or its name) to use another, as
+  given.
 
 Rate coefficients have units that depend on the reaction order (s⁻¹ for one
-reactant, cm³ s⁻¹ for two, ...), so widths compare reactions of the same order
-best. The same values evaluate the coefficients directly, see
-[Evaluating a rate coefficient](reactions.md#evaluating-a-rate-coefficient).
+reactant, cm³ s⁻¹ for two, ...), so *k* colours compare reactions of the same
+order best; rates 𝓡 (cm⁻³ s⁻¹) compare every reaction. The same values evaluate
+the coefficients and rates directly, see
+[Evaluating rate coefficients and rates](reactions.md#evaluating-rate-coefficients-and-rates).
 
 ---
 
@@ -138,23 +151,28 @@ All three take the same keywords (`species` takes the species name first):
 | `close` | `True`    | close the figure in pyplot afterwards; the returned figure still works      |
 | `tight` | `False`   | crop the figure to its drawn content, with no padding around it             |
 
-`graph` and `species` also take `rate_values`, `rate_functions` and
-`arrow_width` (see [Rate-scaled arrows](#rate-scaled-arrows)).
+`graph` and `species` also take `colour_by` and `rate_cmap` (see
+[Rate colouring](#rate-colouring)).
 
 ### Themes
 
-| theme     | reaction types                         | matrix cells                         |
-| --------- | -------------------------------------- | ------------------------------------ |
-| `vivid`   | saturated colours (default)            | consumed filled / produced outlined  |
-| `okabe`   | Okabe–Ito (colour-blind safe)          | red / blue                           |
-| `neutral` | Okabe–Ito on squares and arrowheads    | consumed filled / produced outlined  |
-| `muted`   | soft, desaturated colours              | purple / orange                      |
-| `print`   | greys only                             | consumed filled / produced outlined  |
-| `dark`    | bright colours on a dark background    | light filled / outlined              |
+| theme     | reaction types                         | matrix cells                         | rate colormap       |
+| --------- | -------------------------------------- | ------------------------------------ | ------------------- |
+| `vivid`   | saturated colours (default)            | consumed filled / produced outlined  | `YlGnBu`            |
+| `okabe`   | Okabe–Ito (colour-blind safe)          | red / blue                           | `cividis` (reversed) |
+| `neutral` | Okabe–Ito on markers and arrowheads    | consumed filled / produced outlined  | `YlGnBu`            |
+| `muted`   | soft, desaturated colours              | purple / orange                      | `PuBu`              |
+| `print`   | greys only                             | consumed filled / produced outlined  | `Greys`             |
+| `dark`    | bright colours on a dark background    | light filled / outlined              | `viridis`           |
 
-Reaction types get colours in order of first appearance. Reactions of type
-`unknown`, and any types beyond a theme's palette (`vivid` has ten colours),
-share a grey "other" colour.
+A theme's `rates` field (a `RateColormap`: a matplotlib colormap name and the
+part of it used, e.g. `RateColormap("YlGnBu", 0.3, 1.0)`) sets its rate
+colormap; the light end is trimmed so slow reactions stay visible.
+
+Reaction types get colours and marker shapes in order of first appearance. At
+most seven types get their own: reactions of type `unknown`, and any types
+beyond the seventh or beyond a theme's palette, share a grey "other" colour and
+an octagon.
 
 ```python
 net.visualize.graph(theme="print", save="water_co_graph.pdf", show=False)

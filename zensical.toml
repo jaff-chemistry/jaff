@@ -40,6 +40,7 @@ nav = [
       "user-guide/working-with-networks/species.md",
       "user-guide/working-with-networks/reactions.md",
       "user-guide/working-with-networks/elements.md",
+      "user-guide/working-with-networks/analysis.md",
       "user-guide/working-with-networks/visualization.md",
       "user-guide/working-with-networks/jaffx.md"
     ] },
@@ -104,6 +105,7 @@ nav = [
         "reference/core/network/check_isomers.md",
         "reference/core/network/reactant_matrix.md",
         "reference/core/network/product_matrix.md",
+        "reference/core/network/analysis.md",
         "reference/core/network/visualize.md",
         "reference/core/network/sfluxes.md",
         "reference/core/network/ode_system.md",
@@ -120,6 +122,7 @@ nav = [
         "reference/core/reaction/substitute.md",
         "reference/core/reaction/rate_coefficient.md",
         "reference/core/reaction/evaluate_rate_coefficient.md",
+        "reference/core/reaction/evaluate_rate.md",
         "reference/core/reaction/tmin.md",
         "reference/core/reaction/tmax.md",
         "reference/core/reaction/rate.md",
@@ -164,6 +167,7 @@ nav = [
         "reference/core/reactions/products.md",
         "reference/core/reactions/rate_coefficients.md",
         "reference/core/reactions/evaluate_rate_coefficients.md",
+        "reference/core/reactions/evaluate_rates.md",
         "reference/core/reactions/rates.md",
         "reference/core/reactions/odes.md",
         "reference/core/reactions/tmins.md",
@@ -250,6 +254,45 @@ nav = [
         "reference/core/reactionradiation/compute.md",
         "reference/core/reactionradiation/expressions.md",
         "reference/core/reactionradiation/substitute.md",
+      ] },
+      { "core.Analysis" = [
+        "reference/core/analysis/index.md",
+        "reference/core/analysis/enabled.md",
+        "reference/core/analysis/enable.md",
+        "reference/core/analysis/disable.md",
+        "reference/core/analysis/pop.md",
+        "reference/core/analysis/get_spec.md",
+        "reference/core/analysis/tables.md",
+      ] },
+      { "core.AnalysisSpec" = [
+        "reference/core/analysisspec/index.md",
+      ] },
+      { "core.AnalysisTable" = [
+        "reference/core/analysistable/index.md",
+        "reference/core/analysistable/names.md",
+        "reference/core/analysistable/set.md",
+        "reference/core/analysistable/update.md",
+        "reference/core/analysistable/get.md",
+        "reference/core/analysistable/pop.md",
+        "reference/core/analysistable/values.md",
+        "reference/core/analysistable/missing.md",
+        "reference/core/analysistable/default_label.md",
+      ] },
+      { "core.Entry" = [
+        "reference/core/entry/index.md",
+      ] },
+      { "core.Parameters" = [
+        "reference/core/parameters/index.md",
+        "reference/core/parameters/default_label.md",
+      ] },
+      { "core.Densities" = [
+        "reference/core/densities/index.md",
+        "reference/core/densities/update.md",
+        "reference/core/densities/default_label.md",
+      ] },
+      { "core.Functions" = [
+        "reference/core/functions/index.md",
+        "reference/core/functions/check_expression.md",
       ] },
     ] },
     { "Chemistry" = [
@@ -419,6 +462,9 @@ nav = [
       ] },
       { "plotting.NetworkTheme" = [
         "reference/plotting/networktheme/index.md",
+      ] },
+      { "plotting.RateColormap" = [
+        "reference/plotting/ratecolormap/index.md",
       ] },
       "reference/plotting/plot.md",
       "reference/plotting/plot_rates.md",

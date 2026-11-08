@@ -21,7 +21,8 @@ from ...errors import ParserError
 from ...io import JaffLogger
 from ...types import Catalogue, Vector
 from ..species import Species
-from ._evaluate import FunctionValue, check_missing
+from ..analysis._evaluate import evaluate
+from ..analysis.tables import FunctionValue
 from .config import ReactionsConfig
 from .reaction import Reaction
 from .types import RateSegment
@@ -695,24 +696,25 @@ class Reactions(Catalogue[Reaction]):
 
     def evaluate_rate_coefficients(
         self,
-        values: Mapping[str, Any],
+        parameters: Mapping[str, Any] | None = None,
+        densities: Mapping[str, Any] | Sequence[float] | np.ndarray | None = None,
         functions: Mapping[str, FunctionValue] | None = None,
     ) -> np.ndarray:
         """Evaluate every rate coefficient numerically, in catalogue order.
 
         See :meth:`Reaction.evaluate_rate_coefficient
-        <jaff.core.reaction.Reaction.evaluate_rate_coefficient>`; the names
-        missing from *values* and *functions* are reported together, for all
-        reactions at once.
+        <jaff.core.reaction.Reaction.evaluate_rate_coefficient>`; the values
+        missing for any reaction are reported together.
 
         Parameters
         ----------
-        values : mapping
-            A number per symbol name, e.g. ``{"tgas": 100.0, "av": 1.0}``.
-            Densities ``nden[i]`` take one array under ``"nden"``.
+        parameters : mapping, optional
+            A number per parameter symbol, e.g. ``{"tgas": 100.0, "av": 1.0}``.
+        densities : mapping or array, optional
+            Number density (cm⁻³) per species name, or an array in species order.
         functions : mapping, optional
-            Per unknown function name, a callable taking the function's numeric
-            arguments, or a constant.
+            Per unknown function name, a number, an expression of the parameters
+            or a callable without arguments returning either.
 
         Returns
         -------
@@ -722,26 +724,62 @@ class Reactions(Catalogue[Reaction]):
         Raises
         ------
         ValueError
-            Naming every symbol and function without a value.
+            Naming every parameter, density and function without a value.
 
         Examples
         --------
         >>> from jaff import Network
         >>> net = Network("networks/demos/water_co.jet")
-        >>> values = {"tgas": 100.0, "crate": 1.3e-17, "av": 1.0, "chi": 1.0}
-        >>> net.reactions.evaluate_rate_coefficients(values)[[0, 2, 16]]
+        >>> parameters = {"tgas": 100.0, "crate": 1.3e-17, "av": 1.0, "chi": 1.0}
+        >>> net.reactions.evaluate_rate_coefficients(parameters)[[0, 2, 16]]
         array([1.26100000e-17, 4.38208854e-07, 8.14930913e-12])
         >>> net.reactions.evaluate_rate_coefficients({"tgas": 100.0})
         Traceback (most recent call last):
         ...
-        ValueError: Cannot evaluate the rate coefficients: no value for av, chi, crate
+        ValueError: Cannot evaluate: no value for parameter av, chi, crate
         """
-        functions = functions or {}
-        check_missing((r.rate_coefficient for r in self), values, functions)
-
-        return np.array(
-            [r.evaluate_rate_coefficient(values, functions) for r in self], dtype=float
+        return self._evaluate(
+            [r.rate_coefficient for r in self], parameters, densities, functions
         )
+
+    def evaluate_rates(
+        self,
+        parameters: Mapping[str, Any] | None = None,
+        densities: Mapping[str, Any] | Sequence[float] | np.ndarray | None = None,
+        functions: Mapping[str, FunctionValue] | None = None,
+    ) -> np.ndarray:
+        """Evaluate every reaction rate numerically, in catalogue order.
+
+        See :meth:`Reaction.evaluate_rate <jaff.core.reaction.Reaction.evaluate_rate>`;
+        the values missing for any reaction are reported together.
+
+        Parameters
+        ----------
+        parameters : mapping, optional
+            A number per parameter symbol, e.g. ``{"tgas": 100.0, "av": 1.0}``.
+        densities : mapping or array, optional
+            Number density (cm⁻³) per species name, or an array in species order.
+        functions : mapping, optional
+            Per unknown function name, a number, an expression of the parameters
+            or a callable without arguments returning either.
+
+        Returns
+        -------
+        numpy.ndarray
+            One rate (cm⁻³ s⁻¹) per reaction.
+
+        Raises
+        ------
+        ValueError
+            Naming every parameter, density and function without a value.
+        """
+        return self._evaluate([r.rate for r in self], parameters, densities, functions)
+
+    def _evaluate(self, exprs, parameters, densities, functions) -> np.ndarray:
+        if not exprs:
+            return np.zeros(0)
+
+        return evaluate(next(iter(self)).net, exprs, parameters, densities, functions)
 
     def rates(self) -> Vector[Basic]:
         """Return a ``Vector`` of reaction rates, ``rate_coefficient · Π nden``.

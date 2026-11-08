@@ -4,13 +4,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
-from matplotlib.artist import Artist
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-from matplotlib.patches import FancyBboxPatch, Patch
+from matplotlib.patches import FancyBboxPatch
 
 from ._common import FONT_RC
 from ._graph import (
@@ -19,9 +18,9 @@ from ._graph import (
     _reactions,
     draw_legends,
     entry_widths,
-    label_halo,
     pill,
     role_handles,
+    type_handles,
 )
 from ._layout import (
     drawing_bottom,
@@ -30,6 +29,8 @@ from ._layout import (
     MARGIN,
     SpeciesLayout,
 )
+from ._markers import label_shapes
+from ._rates import RateColours
 from ._themes import NetworkTheme, legend_entries, type_colours
 
 if TYPE_CHECKING:
@@ -60,12 +61,11 @@ def draw_species(
     net: Network,
     layout: SpeciesLayout,
     theme: NetworkTheme,
-    widths: dict[int, float] | None = None,
-    key: Sequence[tuple[float, float]] = (),
+    rated: RateColours | None = None,
 ) -> tuple[Figure, Axes]:
     """Draw *layout* of *net* in *theme*; the axes are in inches, y down.
 
-    *widths* and *key* scale the edges by rate, as in
+    *rated* colours the reactions by rate, as in
     :func:`~jaff.plotting.network._graph.draw_graph`.
     """
     types = [r.type for r in net.reactions]
@@ -78,11 +78,11 @@ def draw_species(
         ax.set_ylim(height, 0)
         ax.set_axis_off()
         _lanes(ax, layout, theme)
-        _edges(ax, layout, theme, colours, types, widths)
-        _reactions(ax, layout, theme, colours, types, label_halo(widths))
+        _edges(ax, layout, theme, colours, types, rated)
+        _reactions(ax, layout, theme, colours, types, rated)
         _pills(ax, net, layout, theme)
         shown = [types[i] for i in sorted(layout.formation + layout.destruction)]
-        _legend(ax, layout, theme, colours, shown, key)
+        _legend(ax, layout, theme, colours, shown, rated)
 
     return fig, ax
 
@@ -137,10 +137,8 @@ def _legend(
     theme: NetworkTheme,
     colours: dict[str, str],
     shown: list[str],
-    key: Sequence[tuple[float, float]] = (),
+    rated: RateColours | None = None,
 ) -> None:
-    handles: list[Artist] = [
-        Patch(facecolor=c, edgecolor="none", label=t)
-        for t, c in legend_entries(theme, colours, shown)
-    ]
-    draw_legends(ax, layout, theme, [*handles, *role_handles(theme)], key)
+    entries = legend_entries(theme, colours, shown)
+    handles = type_handles(theme, entries, label_shapes(theme, list(colours)), rated)
+    draw_legends(ax, layout, theme, [*handles, *role_handles(theme)], rated)

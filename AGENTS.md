@@ -309,9 +309,14 @@ docs/           # Documentation
   rhs a solver integrates; `Codegen` prints it rather than assembling equations
 - `core/reaction/`, `core/species/`, `core/elements/`: reactions, species, elements
 - `core/parsers/`: network file formats and `.jfunc` auxiliary functions
+- `core/analysis/`: `net.analysis` (analysis mode): values and legend labels for a
+  network's parameters, species densities and unknown functions (`enable()`,
+  `disable()`, `pop()`, `get_spec()`; tables `parameters` / `densities` / `functions`)
 - `physics/`: radiation and photo-reactions, dust, thermodynamics/EOS, constants
 - `plotting/network/`: `net.visualize` (`NetworkVisualizer`): graph and
-  stoichiometry-matrix figures of a network's species and reactions
+  stoichiometry-matrix figures of a network's species and reactions; `graph()` /
+  `species()` colour by `colour_by="rate_coefficient" | "rate"` from `net.analysis`
+  and list its labelled entries in a values box
 - `codegen/`: `Codegen`, `Language`s, the `$$JAFF` template engine (`templating/`);
   `$$JAFF CALL` inserts text from `@jaffgen_function` functions in a template's
   `jaffgen_template_functions.py` (`templating/functions.py`)

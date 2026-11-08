@@ -50,14 +50,26 @@ class TestSpeciesLayout:
         assert _names(net, layout.reactant_xy) == {"H2", "H2+"}
         assert _names(net, layout.product_xy) == {"H", "H2", "OH+", "HCO+"}
 
+    def test_lanes_are_at_least_as_wide_as_their_headers(self, make_network):
+        from jaff.plotting.network._common import text_width
+        from jaff.plotting.network._layout import HEADER_FONT
+
+        # Short equations: the headers are the widest text in their lanes.
+        net = make_network(["H + H -> H2 [10,1000] 1e-10", "H2 -> H + H [] 1e-11"])
+        layout = species_layout(net, net.species["H2"], text_width)
+
+        for lane in layout.lanes:
+            if lane.header:
+                assert lane.x1 - lane.x0 >= text_width(lane.header, HEADER_FONT)
+
     def test_lanes(self, net):
         layout = species_layout(net, net.species["H3+"], fake_measure)
 
         assert [lane.header for lane in layout.lanes] == [
             "REACTANTS",
-            "FORMS",
+            "FORMATION CHANNEL",
             None,
-            "DESTROYS",
+            "DESTRUCTION CHANNEL",
             "PRODUCTS",
         ]
         assert layout.reaction_xy[0][0] == pytest.approx(layout.lanes[1].centre)
@@ -153,7 +165,7 @@ class TestSpeciesView:
         _, ax = NetworkVisualizer(net).species("H", show=False, close=False)
         labels = [t.get_text() for t in ax.get_legend().get_texts()]
         handles = ax.get_legend().legend_handles
-        colour = {t: to_hex(h.get_facecolor()) for t, h in zip(labels[:2], handles)}
+        colour = {t: to_hex(h.get_markerfacecolor()) for t, h in zip(labels[:2], handles)}
 
         assert labels[:2] == ["photo", "other"]
         assert colour["photo"] == NETWORK_THEMES["vivid"].types[0]

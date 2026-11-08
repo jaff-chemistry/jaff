@@ -51,6 +51,7 @@ from ...physics import (
 from ...physics.dust.config import DustConfig
 from ...physics.photo_reactions.config import RadiationConfig
 from ...physics.thermodynamics.config import ThermodynamicsConfig
+from ..analysis import Analysis
 from ..elements import Elements
 from ..parsers import NetworkParser
 from ..parsers.network._formats import ParsedRecord
@@ -984,6 +985,19 @@ class Network:
             Integer matrix.
         """
         return self._stoichiometry(lambda reaction: reaction.products.core)
+
+    @cached_property
+    def analysis(self) -> Analysis:
+        """Numeric values for the network's unknowns (analysis mode), built on first use.
+
+        Off until ``net.analysis.enable(...)``; see :class:`~jaff.core.analysis.Analysis`.
+
+        Returns
+        -------
+        Analysis
+            The network's analysis tables.
+        """
+        return Analysis(self)
 
     @cached_property
     def visualize(self) -> NetworkVisualizer:
