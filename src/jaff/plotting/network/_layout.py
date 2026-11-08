@@ -34,6 +34,10 @@ SPECIES_FONT = 9.0
 EQUATION_FONT = 9.0
 HEADER_FONT = 8.5
 INDEX_FONT = 7.0
+#: Legend panel text (graph and species views): entries and values, then headings
+#: and colour-bar ticks, points.
+LEGEND_FONT = 10.0
+LEGEND_HEAD_FONT = 9.5
 ROW_PITCH = 0.6
 LANE_BELOW = 0.2
 PILL_HEIGHT = 0.22
@@ -56,12 +60,12 @@ LEGEND_ROW = 0.22
 #: its longest length, value row pitch, gap between value columns and blocks.
 PANEL_SPACE = 0.25
 PANEL_GAP = 0.14
-PANEL_HEAD = 0.22
-RATE_BODY = 0.36
-#: Row pitch of the reaction-type legend in the panel (9 pt, 0.5 label spacing).
-TYPE_ROW = 0.19
+PANEL_HEAD = 0.24
+RATE_BODY = 0.38
+#: Row pitch of the reaction-type legend in the panel (10 pt, 0.5 label spacing).
+TYPE_ROW = 0.21
 BAR_LENGTH = 4.0
-VALUE_ROW = 0.18
+VALUE_ROW = 0.2
 VALUE_COLUMNS = 2
 VALUE_COLUMN_GAP = 0.25
 VALUE_BLOCK_GAP = 0.6
@@ -124,9 +128,11 @@ class LegendPanel:
 def _value_block(
     index: int, group: ValueGroup, measure: Measure, columns: int
 ) -> ValueBlock:
-    column = max(measure(e, EQUATION_FONT) for e in group.entries) + VALUE_COLUMN_GAP
+    column = max(measure(e, LEGEND_FONT) for e in group.entries) + VALUE_COLUMN_GAP
     columns = max(1, min(columns, len(group.entries)))
-    width = max(columns * column - VALUE_COLUMN_GAP, measure(group.title, HEADER_FONT))
+    width = max(
+        columns * column - VALUE_COLUMN_GAP, measure(group.title, LEGEND_HEAD_FONT)
+    )
 
     return ValueBlock(
         index, columns, column, width, math.ceil(len(group.entries) / columns)

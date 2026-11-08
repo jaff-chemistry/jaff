@@ -13,7 +13,7 @@ from sympy import Expr, Float, Symbol, latex
 from ...core.analysis._evaluate import _function
 from ._common import heading
 from ._layout import (
-    EQUATION_FONT,
+    LEGEND_FONT,
     PANEL_GAP,
     PANEL_HEAD,
     VALUE_BLOCK_GAP,
@@ -137,7 +137,7 @@ def draw_values(
                     entry,
                     ha="left",
                     va="center",
-                    fontsize=EQUATION_FONT,
+                    fontsize=LEGEND_FONT,
                     color=theme.text,
                     zorder=3,
                 )

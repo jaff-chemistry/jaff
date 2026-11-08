@@ -25,6 +25,7 @@ from ._layout import (
     EQUATION_FONT,
     HEADER,
     HEADER_FONT,
+    LEGEND_FONT,
     MARGIN,
     MARKER,
     PILL_HEIGHT,
@@ -48,6 +49,8 @@ RATED_WIDTH = 1.7
 HALO = 3.0
 #: Legend space per entry besides its text: handle and column spacing, inches.
 LEGEND_ENTRY = 0.4
+#: The same in the legend panel, whose text is LEGEND_FONT.
+PANEL_ENTRY = LEGEND_ENTRY * LEGEND_FONT / EQUATION_FONT
 ROLES = ("reactant", "product")
 
 
@@ -88,8 +91,8 @@ def legend_widths(net: Network, theme: NetworkTheme) -> list[float]:
 
 
 def entry_widths(labels: Sequence[str]) -> list[float]:
-    """Legend entry widths in inches."""
-    return [text_width(t, EQUATION_FONT) + LEGEND_ENTRY for t in labels]
+    """Widths in inches of the legend panel's reaction-type entries."""
+    return [text_width(t, LEGEND_FONT) + PANEL_ENTRY for t in labels]
 
 
 def _columns(ax: Axes, layout: GraphLayout, theme: NetworkTheme) -> None:
@@ -286,7 +289,7 @@ def draw_legends(
         frameon=False,
         borderpad=0.0,
         borderaxespad=0.0,
-        fontsize=EQUATION_FONT,
+        fontsize=LEGEND_FONT,
         labelcolor=theme.text,
         handlelength=1.4,
         columnspacing=1.2,

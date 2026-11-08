@@ -8,6 +8,10 @@ from matplotlib.colors import to_hex
 from jaff.plotting.network import NETWORK_THEMES, NetworkVisualizer
 from jaff.plotting.network._layout import (
     BAR_LENGTH,
+    EQUATION_FONT,
+    HEADER_FONT,
+    LEGEND_FONT,
+    LEGEND_HEAD_FONT,
     PANEL_HEAD,
     ValueGroup,
     legend_panel,
@@ -151,6 +155,33 @@ def test_headings_are_bold_in_the_text_colour(net):
     for t in headings:
         assert to_hex(t.get_color()) == to_hex(theme.text)
         assert t.get_fontweight() == "bold"
+
+
+@pytest.mark.parametrize("view", ["graph", "species"])
+def test_legend_text_is_one_point_larger(net, view):
+    fig, ax = _drawn(net, view, colour_by=K)
+    headings = [t for t in ax.texts if t.get_text() in HEADINGS]
+    values = [t for t in ax.texts if t.get_text().startswith(("$n(", "$T_"))]
+    ticks = [t for t in ax.texts if t.get_text().startswith("$10^")]
+    entries = ax.get_legend().get_texts()
+    plt.close(fig)
+
+    assert LEGEND_FONT == pytest.approx(EQUATION_FONT + 1)
+    assert LEGEND_HEAD_FONT == pytest.approx(HEADER_FONT + 1)
+    assert values and ticks and entries
+    for t in [*values, *entries]:
+        assert t.get_fontsize() == pytest.approx(LEGEND_FONT)
+    for t in [*headings, *ticks]:
+        assert t.get_fontsize() == pytest.approx(LEGEND_HEAD_FONT)
+
+
+def test_lane_headers_keep_their_size(net):
+    fig, ax = _drawn(net, "species", colour_by=K)
+    headers = [t for t in ax.texts if t.get_text() == "REACTANTS"]
+    plt.close(fig)
+
+    assert headers
+    assert headers[0].get_fontsize() == pytest.approx(HEADER_FONT)
 
 
 def test_panel_never_widens_the_figure(net):

@@ -14,7 +14,7 @@ from matplotlib.colors import Colormap, LinearSegmentedColormap
 from matplotlib.patches import FancyBboxPatch
 
 from ._common import heading
-from ._layout import BAR_LENGTH, EQUATION_FONT, MARGIN, PANEL_HEAD, ValueGroup
+from ._layout import BAR_LENGTH, LEGEND_HEAD_FONT, MARGIN, PANEL_HEAD, ValueGroup
 from ._themes import NetworkTheme
 
 #: Rates more than this many decades below the largest get the lowest colour.
@@ -160,6 +160,6 @@ def draw_colour_bar(
             rf"$10^{{{decade}}}$",
             ha="center",
             va="top",
-            fontsize=EQUATION_FONT - 0.5,
+            fontsize=LEGEND_HEAD_FONT,
             color=theme.text,
         )

@@ -19,7 +19,7 @@ from matplotlib.textpath import TextPath
 
 from ..api import _NON_INTERACTIVE, _VECTOR
 from ..themes import _BASE_RC
-from ._layout import HEADER_FONT, PANEL_HEAD
+from ._layout import LEGEND_HEAD_FONT, PANEL_HEAD
 from ._themes import NetworkTheme
 
 #: rcParams the network figures are drawn and saved with (font, maths font).
@@ -62,7 +62,7 @@ def heading(ax: Axes, x: float, top: float, text: str, theme: NetworkTheme) -> N
         text,
         ha="left",
         va="center",
-        fontsize=HEADER_FONT,
+        fontsize=LEGEND_HEAD_FONT,
         fontweight="bold",
         color=theme.text,
     )
