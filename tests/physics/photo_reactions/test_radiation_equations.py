@@ -1,4 +1,4 @@
-# ABOUTME: Regression tests for Radiation.odes (net.sradodes): how per-band photo-reaction data is
+# ABOUTME: Regression tests for Radiation.odes: how per-band photo-reaction data is
 # ABOUTME: assembled into the radiation density/flux moment equations and laid out
 
 import pytest
@@ -54,7 +54,7 @@ def _same(a, b):
 def test_density_equation_removes_photo_reaction_flux(radiation_network):
     net = radiation_network()
     density, _ = _expected(net)
-    odes = net.sradodes(order=2)
+    odes = net.radiation.odes(order=2)
     nb = net.radiation.nbands
 
     assert len(odes) == 2 * nb
@@ -66,7 +66,7 @@ def test_density_equation_removes_photo_reaction_flux(radiation_network):
 def test_flux_equation_is_density_loss_with_rflux(radiation_network):
     net = radiation_network()
     _, fluxes = _expected(net)
-    odes = net.sradodes(order=2)
+    odes = net.radiation.odes(order=2)
     nb = net.radiation.nbands
 
     for i in range(nb):
@@ -100,7 +100,7 @@ def test_non_photo_reactions_do_not_contribute(radiation_network):
     nden = net.symbols.ndens
     non_photo = [nden[net.species[s].index] for s in ("H", "H2")]
 
-    for ode in net.sradodes(order=2):
+    for ode in net.radiation.odes(order=2):
         assert not any(ode.has(n) for n in non_photo)
 
 
@@ -108,7 +108,7 @@ def test_non_photo_reactions_do_not_contribute(radiation_network):
 def test_layout_places_each_band_by_ordered_index(radiation_network, order):
     net = radiation_network()
     density, fluxes = _expected(net)
-    odes = net.sradodes(order=order)
+    odes = net.radiation.odes(order=order)
 
     for i in range(net.radiation.nbands):
         ei, fi = net.radiation.ordered_index(i, order)
@@ -122,37 +122,19 @@ def test_photo_reaction_without_band_data_raises(radiation_network):
     rxn.photo.bands = None
 
     with pytest.raises(RuntimeError, match="no per-band radiation data"):
-        net.sradodes()
-
-
-def test_requires_radiation(make_network):
-    net = make_network(PHOTO, name="norad.jet")
-    with pytest.raises(RuntimeError, match="No radiation bands"):
-        net.sradodes()
+        net.radiation.odes()
 
 
 def test_rejects_unknown_order(radiation_network):
     with pytest.raises(ValueError, match="Invalid order"):
-        radiation_network().sradodes(order=4)
+        radiation_network().radiation.odes(order=4)
 
 
 def test_flux_equations_use_the_radiation_flux_symbol(radiation_network):
     net = radiation_network()
-    odes = net.sradodes()
+    odes = net.radiation.odes()
     fluxes = {
         s for e in odes for s in e.atoms(sp.Indexed) if s.base == net.radiation.flux
     }
 
     assert fluxes
-
-
-@pytest.mark.parametrize("order", [0, 1, 2, 3])
-def test_radiation_odes_are_the_network_ones(radiation_network, order):
-    net = radiation_network()
-
-    assert net.radiation.odes(order) == net.sradodes(order)
-
-
-def test_radiation_odes_reject_an_unknown_order(radiation_network):
-    with pytest.raises(ValueError, match="order"):
-        radiation_network().radiation.odes(4)

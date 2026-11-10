@@ -150,13 +150,13 @@ class OdeSystem:
     def rhs(self) -> ImmutableMatrix:
         """Time derivative of the state, one row per :attr:`state` entry (n × 1).
 
-        Species rows are :meth:`~jaff.core.Reactions.odes`; the thermal row is
+        Species rows are :meth:`~jaff.core.Kinetics.odes`; the thermal row is
         :meth:`~jaff.physics.Thermodynamics.dTdt_tot` or ``dEdt_tot`` in the
         *energy* form; the radiation rows are :meth:`~jaff.physics.Radiation.odes`
         in *rad_order*.
         """
         net = self.network
-        rows: list[Basic] = list(net.reactions.odes(net.species))
+        rows: list[Basic] = net.kinetics.odes()
         thermo = net.thermodynamics
         if self.thermal == "dedt":
             rows.append(thermo.dEdt_tot().normaliser(self.energy))

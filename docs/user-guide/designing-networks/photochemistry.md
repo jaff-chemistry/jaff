@@ -135,7 +135,7 @@ $$
 \frac{dn_i}{dt} \supset -\prod_i {n_i}^{\alpha} \sum_i k_i \cdot \rho_i
 $$
 
-The generated code uses the radiation density array as the runtime variable for $\rho_i$: `photden[i]` in photon-density mode (`mode = "nph"`) and `radeden[i]` in energy-density mode (`mode = "u"`). The ODEs for the radiation field itself can be obtained from `#!python Network.sradodes()`; they evolve both the band densities and the band fluxes `rflux[i]`, which lose radiation to the same reactions.
+The generated code uses the radiation density array as the runtime variable for $\rho_i$: `photden[i]` in photon-density mode (`mode = "nph"`) and `radeden[i]` in energy-density mode (`mode = "u"`). The ODEs for the radiation field itself can be obtained from `#!python net.radiation.odes()`; they evolve both the band densities and the band fluxes `rflux[i]`, which lose radiation to the same reactions.
 
 ---
 
@@ -453,7 +453,7 @@ rxn.rate_coefficient  # Σ_i k_i, with the radiation density symbols
 rxn.photo.plot_xsecs()  # visualise σ(E)
 
 # Symbolic radiation ODEs
-print(net.sradodes())
+print(net.radiation.odes())
 ```
 
 Cross-section lookup is also exposed directly via the

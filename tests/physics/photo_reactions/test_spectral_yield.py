@@ -118,7 +118,7 @@ def test_symbolic_yield_without_closed_form_raises(yield_network):
 def test_yield_enters_density_equations_only(yield_network):
     net = yield_network(radiation=RadiationConfig(bands=BANDS))
     rxn = net.reactions[0]
-    odes = net.sradodes(order=2)
+    odes = net.radiation.odes(order=2)
     nb = net.radiation.nbands
 
     for i in range(nb):

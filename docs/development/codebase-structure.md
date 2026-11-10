@@ -17,6 +17,7 @@ src/jaff/
 │   │   ├── _functions.py       # NetworkFunctions — the .jfunc file and its functions (net.functions)
 │   │   ├── _symbols.py         # NetworkSymbols — fixed physics symbols, densities (net.symbols)
 │   │   ├── config.py           # NetworkConfig ([network]), JaffTomlConfig, load_network_config
+│   │   ├── kinetics.py         # Kinetics — species ODEs and weighted density rates (net.kinetics)
 │   │   └── ode_system.py       # OdeSystem, StateVariable — state vector + rhs (net.ode_system())
 │   ├── reaction/               # reaction.py (Reaction) · reactions.py (Reactions)
 │   │   ├── photo_reaction.py   # PhotoReaction — a photo reaction's component (rxn.photo)
@@ -234,7 +235,7 @@ flowchart TD
     end
 
     subgraph codegen_sg ["Code Generation"]
-        EQ["physics\nsfluxes · sodes · sradodes"]
+        EQ["equations\nkinetics · thermodynamics · radiation.odes"]
         CG["Codegen\nSymPy → C · C++ · F90\nPy · Rust · Julia · R"]
         TP["TemplateParser  —  jaffgen path\ntemplates/\n$$JAFF directives"]
         OUT_G["Generated output files"]
@@ -266,7 +267,7 @@ files (see `JaffGen` in `cli/jaffgen/_engine.py`). `jaffgen` renders templates w
 | 4    | `core/network/network.py`                    | Build `Species`, `Reactions`, `Elements` catalogues; validate duplicates, sinks, isomers           |
 | 5    | `cli/jaffgen/_config_table.py`, `Network`    | Write any `[[jaffgen.table]]` data tables and the network's shielding tables to the output directory |
 | 6    | `codegen/templating/`                        | `TemplateParser` renders each template file, expanding its `$$JAFF` directives                     |
-| 7    | `codegen/codegen.py`                         | Directives call `Codegen`, which takes the symbolic fluxes/ODEs (`sfluxes`, `sodes`, `sradodes`; built by `Reactions.rates` / `Reactions.odes` / `Radiation.odes`) and the ODE system (`net.ode_system(...)`: state + rhs) from the network and prints them for the file's language |
+| 7    | `codegen/codegen.py`                         | Directives call `Codegen`, which takes the symbolic rates and ODEs (`Reactions.rates`, `Kinetics.odes`, `Radiation.odes`) and the ODE system (`net.ode_system(...)`: state + rhs) from the network and prints them for the file's language |
 | 8    | `cli/jaffgen/_engine.py`                     | Write each rendered file, then the merged config as `config.toml`, to the output directory          |
 
 ## Key Design Decisions

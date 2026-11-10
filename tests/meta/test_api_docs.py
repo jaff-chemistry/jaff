@@ -116,10 +116,10 @@ class TestMethodPage:
         assert "**fname** : _str | Path_\n: " in page
 
     def test_returns(self, pages):
-        page = pages["reference/core/network/sfluxes.md"]
+        page = pages["reference/core/kinetics/odes.md"]
 
         assert "**Returns**" in page
-        assert "_list[Expr]_\n: " in page
+        assert "_list of sympy.Basic_\n: " in page
 
     def test_property_page(self, pages):
         page = pages["reference/core/network/label.md"]

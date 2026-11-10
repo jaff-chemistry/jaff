@@ -65,6 +65,7 @@ from ..reaction.config import ReactionsConfig
 from ..species import Specie, Species
 from ._functions import NetworkFunctions
 from ._symbols import NetworkSymbols
+from .kinetics import Kinetics
 from .config import NetworkConfig, NetworkConfigSource, load_network_config
 from .ode_system import OdeSystem
 
@@ -215,6 +216,10 @@ class Network:
         Canonical symbols, density expressions (``ndens``, ``ntot``, ``rho``,
         ``n_hnuc``), introspection sets and symbol standardization for this
         network.
+    kinetics : Kinetics
+        The chemistry's rates of change: the species ODEs (``odes()``) and the
+        rate of any weighted density sum (``weighted_rate()``, ``dntot_dt()``,
+        ``drho_dt()``), each in the ``form`` of the reaction rates.
     radiation : Radiation or None
         Radiation field object; ``None`` when no ``[network.radiation]`` table
         (in the config or the ``radiation`` argument) is given.
@@ -374,6 +379,7 @@ class Network:
         self.species: Species = Species()
         self.reactions: Reactions = Reactions(self.config.reactions)
         self.symbols: NetworkSymbols = NetworkSymbols(self)
+        self.kinetics: Kinetics = Kinetics(self)
         self.functions: NetworkFunctions = NetworkFunctions(self, self.config.funcfile)
         self.radiation: Radiation | None = (
             Radiation(self, self.config.radiation)
@@ -1029,41 +1035,6 @@ class Network:
 
         return matrix
 
-    def sfluxes(self, form: str = "expanded") -> list[Expr]:
-        """Return symbolic flux expressions for all reactions.
-
-        The flux of reaction *i* is ``rate_i * nden[r1] * nden[r2] * ...``,
-        where the product runs over all reactant species.  A reactant that
-        appears several times enters with its stoichiometric power:
-
-        ```
-        F_i = k_i * prod_j nden[R_j] ** alpha_j
-        ```
-
-        with ``k_i`` the rate coefficient, ``R_j`` the core reactants and
-        ``alpha_j`` their stoichiometric coefficients.
-
-        Parameters
-        ----------
-        form : {"expanded", "reduced"}, optional
-            ``"expanded"`` (default) writes each ``k_i`` out, ``"reduced"`` uses
-            its symbol ``krate[i]`` (see :class:`~jaff.core.reaction.Rate`).
-
-        Returns
-        -------
-        list[Expr]
-            One SymPy expression per reaction, in reaction-index order.
-
-        Examples
-        --------
-        >>> net = Network("COthin")
-        >>> str(net.reactions[0])
-        'H + e- -> H+ + e- + e-'
-        >>> net.sfluxes()[0].has(net.symbols.ndens[0] * net.symbols.ndens[1])
-        True
-        """
-        return list(self.reactions.rates(form))
-
     def ode_system(
         self,
         thermal: str = "none",
@@ -1103,84 +1074,6 @@ class Network:
         (4, 1)
         """
         return OdeSystem(self, thermal, energy, radiation, rad_order)
-
-    def sodes(self, form: str = "expanded") -> list[Basic]:
-        """Return symbolic ODE right-hand sides for all species.
-
-        Each entry is the net rate of change of a species number density
-        (cm⁻³ s⁻¹), formed by summing flux contributions over all reactions
-        in which the species participates as a reactant or product:
-
-        ```
-        dn_s/dt = sum_{i: s in products(i)} F_i - sum_{i: s in reactants(i)} F_i
-        ```
-
-        where ``F_i`` are the fluxes from :meth:`sfluxes`; see
-        :meth:`Reactions.odes`.  A species appearing
-        several times on one side contributes the flux once per occurrence.
-
-        Parameters
-        ----------
-        form : {"expanded", "reduced"}, optional
-            Form of the fluxes (see :meth:`sfluxes`), by default ``"expanded"``.
-
-        Returns
-        -------
-        list[Basic]
-            One SymPy expression per species, in species-index order.
-        """
-        return self.reactions.odes(self.species, form)
-
-    def sradodes(self, order: int = 0) -> list[Expr]:
-        """Return symbolic radiation moment ODE right-hand sides.
-
-        Each radiation band has two moments: the energy or photon density
-        ``rd_i`` (depending on ``radiation.config.mode``) and the flux ``f_i``.  Each
-        density equation removes what photo reactions absorb and adds what
-        reactions with a ``spectralYield<N>`` auxiliary function emit, plus the
-        network ``globalEmissivity``, and removes what the network
-        ``globalAbsorptionCoefficient`` absorbs.  The flux equations carry the
-        photo-reaction absorption and, unless
-        ``network.radiation.absorption_attenuates_flux`` is off, the
-        ``globalAbsorptionCoefficient`` absorption too.  With dust enabled the
-        dust reductions are applied to both.
-
-        Parameters
-        ----------
-        order : int, optional
-            Layout of the returned list, one of ``0`` (default), ``1``, ``2``
-            or ``3``:
-
-            - ``0``: ``[rd_0, f_0, rd_1, f_1, ...]``
-            - ``1``: ``[f_0, rd_0, f_1, rd_1, ...]``
-            - ``2``: ``[rd_0, rd_1, ..., f_0, f_1, ...]``
-            - ``3``: ``[f_0, f_1, ..., rd_0, rd_1, ...]``
-
-        Returns
-        -------
-        list[Expr]
-            Two SymPy expressions (density and flux) per radiation band, so
-            ``2 * radiation.nbands`` in total, laid out as *order* says.
-
-        Raises
-        ------
-        RuntimeError
-            If the network has no radiation field.
-        ValueError
-            If *order* is not one of ``0``, ``1``, ``2``, ``3``.
-
-        Examples
-        --------
-        >>> net = Network("h_photoionization", radiation={"bands": [13.6, 20.0]})
-        >>> len(net.sradodes(order=2))
-        2
-        """
-        if self.radiation is None:
-            raise RuntimeError(
-                "No radiation bands found. Radiation odes cannot be generated"
-            )
-
-        return self.radiation.odes(order)
 
     def to_hdf5(
         self,

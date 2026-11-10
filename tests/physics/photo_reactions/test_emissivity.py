@@ -100,7 +100,7 @@ def test_symbols_reported_in_network_variables(emissive_network):
 
 def test_enters_density_equations_only(emissive_network):
     net = emissive_network(radiation=RadiationConfig(bands=BANDS))
-    odes = net.sradodes(order=2)
+    odes = net.radiation.odes(order=2)
     nb = net.radiation.nbands
 
     for i, group in enumerate(net.radiation.groups):

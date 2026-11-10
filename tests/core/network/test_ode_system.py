@@ -77,7 +77,7 @@ class TestRhs:
     def test_rows_come_from_the_components(self, rad_network) -> None:
         system = rad_network.ode_system(thermal="dtdt", radiation=True, rad_order=1)
         expected = [
-            *rad_network.reactions.odes(rad_network.species),
+            *rad_network.kinetics.odes(),
             rad_network.thermodynamics.dTdt_tot(),
             *rad_network.radiation.odes(1),
         ]
@@ -92,7 +92,7 @@ class TestRhs:
 
     def test_none_has_species_rows_only(self, dedt_network) -> None:
         system = dedt_network.ode_system()
-        assert list(system.rhs) == dedt_network.reactions.odes(dedt_network.species)
+        assert list(system.rhs) == dedt_network.kinetics.odes()
 
     def test_is_cached(self, dedt_network) -> None:
         system = dedt_network.ode_system(thermal="dedt")

@@ -72,7 +72,7 @@ def test_photo_without_radiation_uses_its_segments(make_network):
 def test_fluxes_use_rate(make_network):
     net = make_network(NETWORK, name="r.jet")
 
-    assert net.sfluxes() == [rxn.rate.expanded for rxn in net.reactions]
+    assert list(net.reactions.rates()) == [rxn.rate.expanded for rxn in net.reactions]
 
 
 def test_catalogue_rates_are_reaction_rates(make_network):

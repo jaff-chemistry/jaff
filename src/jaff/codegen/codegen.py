@@ -859,7 +859,7 @@ class Codegen:
         [2] cse1
         """
         with jaff_progress.indeterminate("Generating odes"):
-            odes = self.net.sodes()
+            odes = self.net.kinetics.odes()
 
         return self._print_indexed(
             odes, use_cse, cse_var, cse_suffix, description="Generating ode code"
@@ -1160,7 +1160,7 @@ class Codegen:
         """Return radiation moment ODE expressions as an :class:`~jaff.codegen.IndexedReturn`.
 
         Retrieves the symbolic radiation moment equations from
-        :meth:`~jaff.core.network.Network.sradodes` for the specified closure
+        :meth:`~jaff.physics.Radiation.odes` for the specified closure
         order and optionally applies CSE.
 
         Each radiation band contributes two equations, one for its density
@@ -1171,7 +1171,7 @@ class Codegen:
         ----------
         order : int, optional
             Layout of the radiation equations, passed directly to
-            :meth:`~jaff.core.network.Network.sradodes`.  Default ``0``.
+            :meth:`~jaff.physics.Radiation.odes`.  Default ``0``.
 
             | Order | Layout |
             | --- | --- |
@@ -1197,6 +1197,11 @@ class Codegen:
             * ``"expressions"`` — radiation ODE expressions indexed
               sequentially from 0.
 
+        Raises
+        ------
+        RuntimeError
+            If the network has no radiation field.
+
         Examples
         --------
         >>> from jaff import Network
@@ -1216,8 +1221,11 @@ class Codegen:
         Band 0 (1–13.6 eV) lies below the H ionisation threshold, so its
         equations vanish.
         """
+        if self.net.radiation is None:
+            raise RuntimeError("The network has no radiation field: no radiation odes")
+
         return self._print_indexed(
-            self.net.sradodes(order),
+            self.net.radiation.odes(order),
             use_cse,
             cse_var,
             cse_suffix,

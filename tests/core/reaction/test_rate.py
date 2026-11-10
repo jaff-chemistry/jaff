@@ -1,5 +1,5 @@
 # ABOUTME: Tests for Rate (reaction.rate): the expanded and reduced forms of a reaction
-# ABOUTME: rate, the krate symbols, and the form argument of every equation builder
+# ABOUTME: rate, the krate symbols, and the form argument of the rate and heating builders
 
 import random
 
@@ -121,24 +121,6 @@ def test_expanded_is_cached(net):
 def test_catalogue_rates_take_the_form(net):
     assert list(net.reactions.rates()) == [r.rate.expanded for r in net.reactions]
     assert list(net.reactions.rates("reduced")) == [r.rate.reduced for r in net.reactions]
-    assert net.sfluxes("reduced") == list(net.reactions.rates("reduced"))
-
-
-def test_reduced_odes_give_the_expanded_ones(net):
-    defs = _definitions(net)
-    reduced = net.reactions.odes(net.species, "reduced")
-
-    assert all(row.has(net.symbols.krates) for row in reduced if row != 0)
-    for row, expected in zip(reduced, net.reactions.odes(net.species), strict=True):
-        assert _same(row.xreplace(defs), expected)
-    assert net.sodes("reduced") == reduced
-
-
-def test_reduced_weighted_rate_gives_the_expanded_one(net):
-    weights = [1] * net.species.count
-    reduced = net.symbols.weighted_rate(weights, form="reduced")
-
-    assert _same(reduced.xreplace(_definitions(net)), net.symbols.weighted_rate(weights))
 
 
 @pytest.mark.parametrize("name", ["dEdt_chemical", "dEdt_tot"])

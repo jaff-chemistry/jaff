@@ -13,9 +13,9 @@ package's initialisation (``io``, ``core.reaction``, ``physics``) must therefore
 from __future__ import annotations
 
 from functools import cached_property, reduce
-from typing import TYPE_CHECKING, ClassVar, Collection, Sequence
+from typing import TYPE_CHECKING, ClassVar, Collection
 
-from sympy import Basic, Expr, Float, Function, IndexedBase, S, Symbol
+from sympy import Basic, Expr, Float, Function, IndexedBase, Symbol
 from sympy.core.function import AppliedUndef, UndefinedFunction
 
 from ...chemistry import periodic_table
@@ -99,7 +99,6 @@ class NetworkSymbols:
         """
         self._net: Network = net
         self._element_sums: dict[str, Expr | None] = {}
-        self._by_form: dict[tuple[str, str], Expr] = {}
 
     @staticmethod
     def ncol(name: str) -> Symbol:
@@ -238,109 +237,6 @@ class NetworkSymbols:
             self._element_sums[element] = sum(terms) if terms else None
 
         return self._element_sums[element]
-
-    def weighted_rate(
-        self, weights: Sequence[Basic | float], rtol: float = 0.0, form: str = "expanded"
-    ) -> Expr:
-        """Rate of ``Σ_i w_i n_i``: ``Σ_r (Σ_i w_i ν_ri) F_r``.
-
-        ``ν = product_matrix − reactant_matrix`` (core species) and ``F_r`` are the
-        reaction fluxes (:meth:`Network.sfluxes`).  Flux expressions are substituted,
-        so the result can be differentiated and shares CSE with the species rows.
-        Reactions whose coefficient is exactly zero are skipped.
-
-        Parameters
-        ----------
-        weights : Sequence[Basic | float]
-            One weight per species, in species-index order.
-        rtol : float, optional
-            Numeric weights only: a reaction coefficient ``c_r = Σ_i w_i ν_ri`` is
-            treated as zero when ``|c_r| <= rtol · Σ_i |w_i ν_ri|``, i.e. when it is a
-            floating-point rounding residue of terms that cancel exactly in
-            principle.  Default ``0.0`` keeps every non-zero coefficient.
-        form : {"expanded", "reduced"}, optional
-            Form of the fluxes (see :class:`~jaff.core.reaction.Rate`), by default
-            ``"expanded"``.
-
-        Returns
-        -------
-        Expr
-            The weighted rate [weight units · cm⁻³ s⁻¹].
-
-        Raises
-        ------
-        ValueError
-            If the number of weights differs from the number of species, or
-            *form* is unknown.
-        """
-        weights = list(weights)
-        if len(weights) != self._net.species.count:
-            raise ValueError(
-                f"weighted_rate needs one weight per species "
-                f"({self._net.species.count}), got {len(weights)}"
-            )
-
-        net = self._net
-        nu = net.product_matrix - net.reactant_matrix
-        total = S.Zero
-        for row, flux in zip(nu, net.sfluxes(form)):
-            terms = [w * int(n) for w, n in zip(weights, row) if n]
-            coeff = sum(terms)
-            if rtol and abs(coeff) <= rtol * sum(abs(t) for t in terms):
-                continue
-
-            if coeff != 0:
-                total += coeff * flux
-
-        return total
-
-    def dntot_dt(self, form: str = "expanded") -> Expr:
-        """Chemical rate of total number density, ``Σ_r Δn_r F_r`` [cm⁻³ s⁻¹].
-
-        Parameters
-        ----------
-        form : {"expanded", "reduced"}, optional
-            Form of the fluxes (see :meth:`weighted_rate`), by default
-            ``"expanded"``.  Cached per form.
-
-        Returns
-        -------
-        Expr
-        """
-        key = ("dntot_dt", form)
-        if key not in self._by_form:
-            self._by_form[key] = self.weighted_rate(
-                [1] * self._net.species.count, form=form
-            )
-
-        return self._by_form[key]
-
-    def drho_dt(self, form: str = "expanded") -> Expr:
-        """Chemical rate of mass density, ``Σ_r Δm_r F_r`` [g cm⁻³ s⁻¹].
-
-        Never forced to zero: every reaction contributes its actual mass change,
-        so the per-cell rate is kept even for reactions that pass
-        :meth:`Reaction.check_mass`.  Only floating-point rounding residues
-        (``|Δm_r| <= 1e-12 · Σ_i |m_i ν_ri|``, far below one electron mass) are
-        dropped, so the expression -- and the Jacobian sparsity -- does not depend
-        on the last bits of the species masses.  Unset masses count as ``0``.
-
-        Parameters
-        ----------
-        form : {"expanded", "reduced"}, optional
-            Form of the fluxes (see :meth:`weighted_rate`), by default
-            ``"expanded"``.  Cached per form.
-
-        Returns
-        -------
-        Expr
-        """
-        key = ("drho_dt", form)
-        if key not in self._by_form:
-            masses = [s.mass or 0.0 for s in self._net.species]
-            self._by_form[key] = self.weighted_rate(masses, rtol=1e-12, form=form)
-
-        return self._by_form[key]
 
     # The introspection caches below are filled on first access (Network.__init__,
     # after loading).  Mutating rates or thermodynamics afterwards leaves them stale.

@@ -62,7 +62,7 @@ def test_under_radiation_has_no_band_data(custom_network):
 def test_under_radiation_removes_no_photons(custom_network):
     net = custom_network(radiation=RadiationConfig(bands=BANDS))
 
-    assert all(ode.is_zero for ode in net.sradodes(order=2))
+    assert all(ode.is_zero for ode in net.radiation.odes(order=2))
 
 
 def test_under_radiation_warns_naming_the_reaction(custom_network, warnings):

@@ -118,7 +118,7 @@ def _absorption_losses(net):
 def test_absorbs_from_density_and_flux_by_default(absorbing_network):
     net = absorbing_network(radiation=RadiationConfig(bands=BANDS))
     assert net.radiation.config.absorption_attenuates_flux is True
-    odes = net.sradodes(order=2)
+    odes = net.radiation.odes(order=2)
     nb = net.radiation.nbands
     density, flux = _absorption_losses(net)
 
@@ -130,7 +130,7 @@ def test_absorbs_from_density_and_flux_by_default(absorbing_network):
 def test_flag_off_leaves_flux_unchanged(absorbing_network):
     props = RadiationConfig(bands=BANDS, absorption_attenuates_flux=False)
     net = absorbing_network(radiation=props)
-    odes = net.sradodes(order=2)
+    odes = net.radiation.odes(order=2)
     nb = net.radiation.nbands
     density, _ = _absorption_losses(net)
 

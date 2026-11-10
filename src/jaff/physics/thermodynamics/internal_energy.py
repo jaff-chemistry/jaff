@@ -154,7 +154,7 @@ class DEDt(InternalEnergy):
 
     The normalised forms are time derivatives of the normalised energies, so they use
     the quotient rule with the network's per-cell density rates
-    (:meth:`NetworkSymbols.drho_dt`, :meth:`NetworkSymbols.dntot_dt`, in this rate's
+    (:meth:`Kinetics.drho_dt`, :meth:`Kinetics.dntot_dt`, in this rate's
     :attr:`form`): neither ρ nor n_tot is constant in a cell.  ``E`` is read from
     ``net.thermodynamics.eos`` only when a normalised form is first requested, so the
     volumetric form never builds the EOS.
@@ -213,14 +213,14 @@ class DEDt(InternalEnergy):
 
         return (
             self._vol_expr / rho
-            - self._energy * self._net.symbols.drho_dt(self.form) / rho**2
+            - self._energy * self._net.kinetics.drho_dt(self.form) / rho**2
         )
 
     @cached_property
     def per_particle(self) -> Expr:
         """``d(E/n)/dt = Ė/n − E·ṅ/n²`` [erg s⁻¹]."""
         ntot = self._net.symbols.ntot
-        dntot = self._net.symbols.dntot_dt(self.form)
+        dntot = self._net.kinetics.dntot_dt(self.form)
 
         return self._vol_expr / ntot - self._energy * dntot / ntot**2
 

@@ -85,7 +85,7 @@ rec.rate.reduced  # krate[1]*nden[1]*nden[2]
 
 `rec.rate` holds the rate per unit volume in two forms: `expanded` writes the
 coefficient out, `reduced` keeps it as the symbol `krate[r]` (`r` is the reaction's
-position in `net.reactions`). The equation builders (`net.reactions.odes`,
+position in `net.reactions`). The equation builders (`net.kinetics.odes`,
 `net.thermodynamics.dEdt_tot()`, `net.radiation.odes`, ...) take a `form` argument,
 `"expanded"` by default; the reduced form lets generated code compute each
 coefficient once and reuse it.

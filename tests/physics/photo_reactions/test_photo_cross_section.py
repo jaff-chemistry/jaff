@@ -103,7 +103,7 @@ class TestCustomCrossSection:
         raw = sp.Symbol("n_C")
         nden = net.symbols.ndens[net.species["C"].index]
 
-        exprs = [rxn.photo.xsec_total, *net.sradodes(order=2)]
+        exprs = [rxn.photo.xsec_total, *net.radiation.odes(order=2)]
         for band in rxn.photo.bands:
             exprs += [band.k, band.xsec]
         assert not any(sp.sympify(e).has(raw) for e in exprs)

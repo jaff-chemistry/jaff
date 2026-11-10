@@ -232,11 +232,13 @@ driver supplies those densities directly.
 
 ## Symbolic expressions
 
-Once loaded, the network exposes its dynamics as SymPy expressions.
+Once loaded, the network exposes its dynamics as SymPy expressions. Each reaction's
+rate is `reaction.rate` ([reactions](reactions.md)); `net.kinetics` combines them
+through the stoichiometry into the chemistry's rates of change.
 
 ### Species ODEs
 
-`Network.sodes()` returns one expression per species — the net rate of change of
+`net.kinetics.odes()` returns one expression per species — the net rate of change of
 its number density (cm⁻³ s⁻¹), summed over every reaction it takes part in:
 
 <!-- prettier-ignore -->
@@ -245,7 +247,7 @@ $$ \frac{dn}{dt} = \sum_{i} (-1)^a f_i \quad \begin{cases} a = 0 & n \text{ is a
 where $f_i$ is the flux of the $i^{\text{th}}$ reaction.
 
 ```python
-for specie, expr in zip(net.species, net.sodes()):
+for specie, expr in zip(net.species, net.kinetics.odes()):
     print(f"d[{specie}]/dt = {expr}")
 
 # d[H]/dt = 1.65941781598291e-10*nden[1]*nden[2]/tgas**0.7 - photorates(1, 13.6, 1000…000.0)*nden[0]
@@ -257,16 +259,20 @@ The open upper band edge is stored as the float `1e99`, which SymPy's `str`
 prints in full as a 100-digit number (abbreviated `1000…000.0` above); generated
 code writes it as `1.0e+99`.
 
-### Fluxes and radiation moments
+### Fluxes, density rates and radiation moments
 
 ```python
-net.sfluxes()  # list[Expr] — per-reaction flux  k_i * nden[r1] * nden[r2] ...
-net.sradodes(0)  # list[Expr] — radiation moment ODEs (order 0), if radiation configured
+net.reactions.rates()  # Vector — per-reaction flux  k_i * nden[r1] * nden[r2] ...
+net.kinetics.weighted_rate(w)  # d(Σ w_i n_i)/dt, one weight per species
+net.kinetics.dntot_dt()  # d n_tot / dt
+net.kinetics.drho_dt()  # d ρ / dt
+net.radiation.odes(0)  # radiation moment ODEs (order 0), if radiation configured
 ```
 
-A flux is just the reaction rate times its reactant densities; the species ODEs
-are signed sums of these. See [`sfluxes`](../../reference/core/network/sfluxes.md) and
-[`sradodes`](../../reference/core/network/sradodes.md) for details.
+A flux is the reaction rate coefficient times its reactant densities; the species
+ODEs and the density rates are weighted sums of these. See
+[`Kinetics`](../../reference/core/kinetics/index.md) and
+[`Radiation.odes`](../../reference/physics/radiation/odes.md) for details.
 
 ### The ODE system
 

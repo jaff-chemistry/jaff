@@ -202,7 +202,7 @@ class Thermodynamics:
         return self._cached(
             "composition",
             form,
-            lambda: self.net.symbols.weighted_rate(self._de_dn, form=form),
+            lambda: self.net.kinetics.weighted_rate(self._de_dn, form=form),
         )
 
     def dTdt_chemical(self, form: str = "expanded") -> Expr:
