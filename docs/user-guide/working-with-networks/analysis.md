@@ -119,16 +119,17 @@ net.analysis.densities.get("H2")  # Entry(value=100.0, label='$n({\\rm H_{2}}) =
 
 ## Evaluation
 
-The evaluate methods (`evaluate_rate_coefficient()`, `evaluate_rate()` and the
-bulk `net.reactions.evaluate_rate_coefficients()` / `evaluate_rates()`) take
-`parameters`, `densities` and `functions` too. With analysis mode on, each
-argument is merged over the matching table, so a call needs only what differs;
-with it off, only the given values are used. Missing values raise one
-`ValueError` naming all of them:
+`net.analysis.evaluate(exprs, parameters, densities, functions)` gives the value of
+any of the network's expressions. With analysis mode on, each argument is merged
+over the matching table, so a call needs only what differs; with it off, only the
+given values are used. Missing values raise one `ValueError` naming all of them:
 
 ```python
 rxn = net.reactions[24]  # CO + H3+ -> H2 + HCO+
-rxn.evaluate_rate_coefficient()  # 1.7e-09
-rxn.evaluate_rate()
+net.analysis.evaluate(rxn.rate_coefficient)  # 1.7e-09
+net.analysis.evaluate(rxn.rate.expanded)
 # ValueError: Cannot evaluate: no density for CO, H3+
 ```
+
+See [evaluating expressions](reactions.md#evaluating-rate-coefficients-and-rates)
+for the arguments and what it accepts.

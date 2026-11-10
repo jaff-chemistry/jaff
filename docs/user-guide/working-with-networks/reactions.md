@@ -118,23 +118,24 @@ as a 100-digit number (abbreviated above), while
 
 ### Evaluating rate coefficients and rates
 
-`evaluate_rate_coefficient()` gives a reaction's rate coefficient as a number and
-`evaluate_rate()` its rate 𝓡 (the coefficient times each core reactant's density,
-cm⁻³ s⁻¹); `net.reactions.evaluate_rate_coefficients()` and
-`net.reactions.evaluate_rates()` give them all as arrays in catalogue order. All
-four take the same three optional arguments:
+`net.analysis.evaluate(exprs, parameters, densities, functions)` turns any of the
+network's expressions into numbers: one expression gives a `float` (a rate
+coefficient, a rate 𝓡 in cm⁻³ s⁻¹), a sequence a 1-D array (e.g.
+`net.reactions.rates()`, in catalogue order), and a matrix an array of its shape
+(e.g. an [ODE system](network.md#the-ode-system)'s `rhs` or `jacobian`):
 
 ```python
 net = Network("networks/demos/water_co.jet")
-net.reactions[2].evaluate_rate_coefficient({"tgas": 100.0})  # 4.382088543149259e-07
+net.analysis.evaluate(net.reactions[2].rate_coefficient, {"tgas": 100.0})
+# 4.382088543149259e-07
 
 parameters = {"tgas": 100.0, "crate": 1.3e-17, "av": 1.0, "chi": 1.0}
-net.reactions.evaluate_rate_coefficients(parameters)[[0, 2, 16]]
+net.analysis.evaluate(net.reactions.rate_coefficients(), parameters)[[0, 2, 16]]
 # array([1.26100000e-17, 4.38208854e-07, 8.14930913e-12])
-net.reactions.evaluate_rates(parameters, densities={"H": 1e4, "e-": 1.0, ...})
+net.analysis.evaluate(net.reactions.rates(), parameters, densities={"H": 1e4, ...})
 ```
 
-- `parameters` gives a number per symbol name. Values a reaction does not use
+- `parameters` gives a number per symbol name. Values the expressions do not use
   are ignored.
 - `densities` gives the number density (cm⁻³) of each species, by name or as an
   array in species order; `nden[i]` in an expression reads species *i*.
@@ -143,9 +144,11 @@ net.reactions.evaluate_rates(parameters, densities={"H": 1e4, "e-": 1.0, ...})
   parameters, or a callable without arguments returning either. The function's
   arguments in the network are not used: one value per function.
 - With [analysis mode](analysis.md) on, each argument is merged over the
-  matching table of `net.analysis`, so `evaluate_rate_coefficient()` needs no
-  argument and `evaluate_rate_coefficient({"tgas": 50.0})` changes only `tgas`.
+  matching table of `net.analysis`, so `net.analysis.evaluate(k)` needs no other
+  argument and `net.analysis.evaluate(k, {"tgas": 50.0})` changes only `tgas`.
 - A piecewise (multi-range) rate picks its branch from `tgas`.
+- Rates and equations must be expanded (`rate.expanded`, `form="expanded"`): a
+  `krate[r]` symbol has no value.
 - Missing values raise one `ValueError` naming all of them:
   `Cannot evaluate: no value for parameter av, chi; no density for CO; no value
   for function fshield`.
@@ -156,7 +159,7 @@ colour its reactions.
 ### Analysis mode
 
 `net.analysis` holds the values of a network's parameters, species densities
-and unknown functions in one place, for these methods and the network figures;
+and unknown functions in one place, for `evaluate` and the network figures;
 see [Analysis mode](analysis.md).
 
 ### Attributes
@@ -515,8 +518,6 @@ Each returns a `Vector` aligned to catalogue order.
 | `verbatim()`            | `Vector[str]`           | `['H + _PHOTON -> H+ + e-', 'H+ + e- -> H']` |
 | `types()`               | `Vector[str]`           | `['photo', 'unknown']`                       |
 | `rate_coefficients()`   | `Vector[Basic]`         | the two symbolic rate coefficients           |
-| `evaluate_rate_coefficients(...)` | `numpy.ndarray` | the coefficients as numbers ([evaluating](#evaluating-rate-coefficients-and-rates)) |
-| `evaluate_rates(...)` | `numpy.ndarray` | the rates 𝓡 as numbers ([evaluating](#evaluating-rate-coefficients-and-rates)) |
 | `rates()`               | `Vector[Basic]`         | the two rates (coefficient × densities)      |
 | `reactants()`           | `Vector[Species]`       | one `Species` catalogue per reaction         |
 | `products()`            | `Vector[Species]`       | one `Species` catalogue per reaction         |

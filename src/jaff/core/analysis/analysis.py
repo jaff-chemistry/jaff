@@ -1,5 +1,5 @@
 # ABOUTME: net.analysis: numeric values for a network's unknowns (parameters,
-# ABOUTME: species densities, unknown functions); enable/disable, pop, get_spec
+# ABOUTME: species densities, unknown functions); enable/disable, evaluate, get_spec
 """Analysis mode: one place for the numeric values of a network's unknowns."""
 
 from __future__ import annotations
@@ -7,13 +7,14 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, overload
 
 import numpy as np
-from sympy import Indexed, Symbol
+from sympy import Basic, Indexed, MatrixBase, Symbol, sympify
 from sympy.core.function import AppliedUndef
 
-from .tables import Densities, Entry, Functions, Parameters
+from ._evaluate import evaluate
+from .tables import Densities, Entry, Functions, FunctionValue, Parameters
 
 if TYPE_CHECKING:
     from ..network import Network
@@ -48,6 +49,10 @@ class Analysis:
     (by species name) and :attr:`functions` (the unknown functions). Each entry
     holds a value and an optional legend label.
 
+    :meth:`evaluate` gives the value of any of the network's expressions (a rate
+    coefficient, the rates, an ODE system's rhs or Jacobian, ...), with values given
+    to it merged over the tables'.
+
     Parameters
     ----------
     network : Network
@@ -60,6 +65,8 @@ class Analysis:
     >>> net.analysis.enable(parameters={"tgas": 100.0, "av": 1.0})
     >>> net.analysis.parameters.values()
     {'av': 1.0, 'tgas': 100.0}
+    >>> net.analysis.evaluate(net.reactions[2].rate_coefficient)
+    4.382088543149259e-07
     """
 
     def __init__(self, network: Network):
@@ -111,6 +118,100 @@ class Analysis:
         if densities is not None:
             self.densities.update(densities)
         self.functions.update(functions or {})
+
+    @overload
+    def evaluate(
+        self,
+        exprs: Basic | float,
+        parameters: Mapping[str, Any] | None = None,
+        densities: Mapping[str, Any] | Sequence[float] | np.ndarray | None = None,
+        functions: Mapping[str, FunctionValue] | None = None,
+    ) -> float: ...
+
+    @overload
+    def evaluate(
+        self,
+        exprs: Sequence[Basic | float] | MatrixBase,
+        parameters: Mapping[str, Any] | None = None,
+        densities: Mapping[str, Any] | Sequence[float] | np.ndarray | None = None,
+        functions: Mapping[str, FunctionValue] | None = None,
+    ) -> np.ndarray: ...
+
+    def evaluate(
+        self,
+        exprs: Any,
+        parameters: Mapping[str, Any] | None = None,
+        densities: Mapping[str, Any] | Sequence[float] | np.ndarray | None = None,
+        functions: Mapping[str, FunctionValue] | None = None,
+    ) -> float | np.ndarray:
+        """Evaluate *exprs* numerically, with the given values over the tables'.
+
+        Every symbol needs a value, a density ``nden[i]`` the density of species *i*,
+        and every unknown function (one the ``.jfunc`` file uses but does not define,
+        such as an interpolated shielding table) a value.  Each argument is merged
+        over the matching table when analysis mode is on; without it only the given
+        values are used.  Values the expressions do not use are ignored.
+
+        Parameters
+        ----------
+        exprs : Expr, sequence of Expr, or Matrix
+            What to evaluate: one expression (e.g. ``reaction.rate_coefficient``),
+            a sequence of them (e.g. ``net.reactions.rates()``) or a matrix (e.g.
+            an :class:`~jaff.core.OdeSystem`'s ``rhs`` or ``jacobian``).  Rates
+            and equations must be in the expanded form: a ``krate[r]`` symbol has
+            no value.
+        parameters : mapping, optional
+            A number per parameter symbol, e.g. ``{"tgas": 100.0, "av": 1.0}``.
+        densities : mapping or array, optional
+            Number density (cm⁻³) per species name, or an array in species order.
+        functions : mapping, optional
+            Per unknown function name, a number, an expression of the parameters
+            or a callable without arguments returning either; the function's
+            arguments in the network are not used.
+
+        Returns
+        -------
+        float or numpy.ndarray
+            A float for one expression, a 1-D array for a sequence, an array of
+            the matrix's shape for a matrix (zeros where a sparse matrix stores
+            nothing).
+
+        Raises
+        ------
+        ValueError
+            Naming every parameter, density and function without a value, all
+            expressions together; or if an expression holds ``krate`` symbols.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> net = Network("networks/demos/water_co.jet")
+        >>> net.analysis.evaluate(net.reactions[2].rate_coefficient, {"tgas": 100.0})
+        4.382088543149259e-07
+        >>> parameters = {"tgas": 100.0, "crate": 1.3e-17, "av": 1.0, "chi": 1.0}
+        >>> net.analysis.evaluate(net.reactions.rate_coefficients(), parameters)[
+        ...     [0, 2, 16]
+        ... ]
+        array([1.26100000e-17, 4.38208854e-07, 8.14930913e-12])
+        >>> net.analysis.evaluate(net.reactions.rate_coefficients(), {"tgas": 100.0})
+        Traceback (most recent call last):
+        ...
+        ValueError: Cannot evaluate: no value for parameter av, chi, crate
+        """
+        values = (parameters, densities, functions)
+        if isinstance(exprs, MatrixBase):
+            entries = exprs.todok()
+            result = np.zeros(exprs.shape)
+            numbers = evaluate(self.network, list(entries.values()), *values)
+            for (i, j), number in zip(entries, numbers):
+                result[i, j] = number
+
+            return result
+
+        if isinstance(exprs, (Basic, int, float)):
+            return float(evaluate(self.network, [sympify(exprs)], *values)[0])
+
+        return evaluate(self.network, [sympify(e) for e in exprs], *values)
 
     def disable(self) -> None:
         """Turn analysis mode off, dropping the tables and their values."""

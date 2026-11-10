@@ -11,7 +11,6 @@ from matplotlib.axes import Axes
 from matplotlib.colors import Colormap, to_hex
 from matplotlib.figure import Figure
 
-from ...core.analysis._evaluate import evaluate
 from ._common import finish, text_width
 from ._graph import draw_graph, legend_widths
 from ._layout import graph_layout, matrix_layout, species_layout
@@ -82,7 +81,7 @@ class NetworkVisualizer:
         exprs = [
             r.rate.expanded if colour_by == "rate" else r.rate_coefficient for r in drawn
         ]
-        values = evaluate(self.network, exprs)
+        values = self.network.analysis.evaluate(exprs)
         positions, span = rate_positions(values)
         cmap = rate_colormap(theme, rate_cmap)
         colours = {i: to_hex(cmap(p)) for i, p in zip(reactions, positions)}

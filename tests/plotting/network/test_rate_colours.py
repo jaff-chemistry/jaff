@@ -130,8 +130,11 @@ def _patches(ax, prefix):
 
 
 def _expected_colours(net, indices, cmap, rates=False):
-    evaluate = "evaluate_rate" if rates else "evaluate_rate_coefficient"
-    k = np.array([getattr(net.reactions[i], evaluate)() for i in indices])
+    exprs = [
+        net.reactions[i].rate.expanded if rates else net.reactions[i].rate_coefficient
+        for i in indices
+    ]
+    k = net.analysis.evaluate(exprs)
     pos, _ = rate_positions(k)
 
     return {i: to_hex(cmap(p)) for i, p in zip(indices, pos)}

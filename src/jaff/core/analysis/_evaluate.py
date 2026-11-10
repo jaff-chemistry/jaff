@@ -20,6 +20,9 @@ if TYPE_CHECKING:
 #: The indexed symbol of the species number densities.
 NDEN = "nden"
 
+#: The indexed symbol of the rate coefficients of the reduced form.
+KRATE = "krate"
+
 
 @dataclass(frozen=True)
 class Inputs:
@@ -204,8 +207,16 @@ def evaluate(
     Raises
     ------
     ValueError
-        Naming every parameter, species density and function without a value.
+        Naming every parameter, species density and function without a value, or
+        if an expression holds ``krate`` symbols.
     """
+    if not exprs:
+        return np.zeros(0)
+    if any(str(a.base.label) == KRATE for e in exprs for a in sympify(e).atoms(Indexed)):
+        raise ValueError(
+            "Cannot evaluate krate symbols: evaluate the expanded form (rate.expanded, "
+            "or substitute an OdeSystem's rate_coefficients)"
+        )
     inputs = resolve(net, parameters, densities, functions)
     ready = check(exprs, inputs)
 

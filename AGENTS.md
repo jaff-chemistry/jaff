@@ -320,7 +320,10 @@ docs/           # Documentation
 - `core/parsers/`: network file formats and `.jfunc` auxiliary functions
 - `core/analysis/`: `net.analysis` (analysis mode): values and legend labels for a
   network's parameters, species densities and unknown functions (`enable()`,
-  `disable()`, `pop()`, `get_spec()`; tables `parameters` / `densities` / `functions`)
+  `disable()`, `pop()`, `get_spec()`; tables `parameters` / `densities` / `functions`).
+  `net.analysis.evaluate(exprs, parameters, densities, functions)` is the one numeric
+  evaluator (an Expr gives a float, a sequence a 1-D array, a matrix its shape); there
+  are no per-quantity `evaluate_*` methods
 - `physics/`: radiation and photo-reactions, dust, thermodynamics/EOS, constants
 - `plotting/network/`: `net.visualize` (`NetworkVisualizer`): graph and
   stoichiometry-matrix figures of a network's species and reactions; `graph()` /

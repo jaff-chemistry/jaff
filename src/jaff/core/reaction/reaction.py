@@ -52,7 +52,7 @@ from __future__ import annotations
 
 import sys
 from functools import cache, cached_property
-from typing import TYPE_CHECKING, Any, Mapping, Sequence, cast
+from typing import TYPE_CHECKING, Any, Mapping, cast
 
 import numpy as np
 from sympy import (
@@ -66,8 +66,6 @@ from ...errors import ParserError
 from ...io import JaffLogger
 from ..elements import Elements
 from ..species import Specie, Species
-from ..analysis._evaluate import evaluate
-from ..analysis.tables import FunctionValue
 from .config import PhotoConfig, ReactionConfig
 from .photo_reaction import PhotoReaction
 from .rate import Rate
@@ -490,92 +488,6 @@ class Reaction:
             return self.photo.band_rate
 
         return self.rate_segments.equivalent_rate
-
-    def evaluate_rate_coefficient(
-        self,
-        parameters: Mapping[str, Any] | None = None,
-        densities: Mapping[str, Any] | Sequence[float] | np.ndarray | None = None,
-        functions: Mapping[str, FunctionValue] | None = None,
-    ) -> float:
-        """Evaluate the rate coefficient numerically.
-
-        Every symbol in :attr:`rate_coefficient` needs a value, a density
-        ``nden[i]`` the density of species *i*, and every unknown function (one
-        the ``.jfunc`` file uses but does not define, such as an interpolated
-        shielding table) a value. Each argument is merged over the matching
-        table of ``net.analysis`` when analysis mode is on; values not used by
-        this reaction are ignored.
-
-        Parameters
-        ----------
-        parameters : mapping, optional
-            A number per parameter symbol, e.g. ``{"tgas": 100.0, "av": 1.0}``.
-        densities : mapping or array, optional
-            Number density (cm⁻³) per species name, or an array in species order.
-        functions : mapping, optional
-            Per unknown function name, a number, an expression of the parameters
-            or a callable without arguments returning either; the function's
-            arguments in the network are not used.
-
-        Returns
-        -------
-        float
-            The rate coefficient, in units set by the reaction order (e.g.
-            cm³ s⁻¹ for a two-body reaction).
-
-        Raises
-        ------
-        ValueError
-            Naming every parameter, density and function without a value.
-
-        Examples
-        --------
-        >>> from jaff import Network
-        >>> net = Network("networks/demos/water_co.jet")
-        >>> net.reactions[2].evaluate_rate_coefficient({"tgas": 100.0})
-        4.382088543149259e-07
-        """
-        return float(
-            evaluate(self.net, [self.rate_coefficient], parameters, densities, functions)[
-                0
-            ]
-        )
-
-    def evaluate_rate(
-        self,
-        parameters: Mapping[str, Any] | None = None,
-        densities: Mapping[str, Any] | Sequence[float] | np.ndarray | None = None,
-        functions: Mapping[str, FunctionValue] | None = None,
-    ) -> float:
-        """Evaluate the reaction rate :attr:`rate` numerically.
-
-        The rate coefficient times the number density of each core reactant;
-        values as in :meth:`evaluate_rate_coefficient`.
-
-        Parameters
-        ----------
-        parameters : mapping, optional
-            A number per parameter symbol, e.g. ``{"tgas": 100.0, "av": 1.0}``.
-        densities : mapping or array, optional
-            Number density (cm⁻³) per species name, or an array in species order.
-        functions : mapping, optional
-            Per unknown function name, a number, an expression of the parameters
-            or a callable without arguments returning either; the function's
-            arguments in the network are not used.
-
-        Returns
-        -------
-        float
-            The rate per unit volume, cm⁻³ s⁻¹.
-
-        Raises
-        ------
-        ValueError
-            Naming every parameter, density and function without a value.
-        """
-        return float(
-            evaluate(self.net, [self.rate.expanded], parameters, densities, functions)[0]
-        )
 
     @property
     def tmin(self) -> float | None:
