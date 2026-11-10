@@ -271,6 +271,15 @@ class TestReducedForm:
         with pytest.raises(ValueError, match="expanded, reduced"):
             rad_network.ode_system(form="inline")
 
+    def test_temperature_column_reuses_the_rate_symbols(self, tgas_network) -> None:
+        # dk/dT = krate[r] * dln(k)/dT: the Arrhenius rates are not written out again.
+        system = tgas_network.ode_system(thermal="dtdt", form="reduced")
+        t = tgas_network.species.count
+        column = [system.jacobian[i, t] for i in range(t)]
+
+        assert any(entry.has(tgas_network.symbols.krates) for entry in column)
+        assert not any(entry.has(sp.exp) for entry in column)
+
     def test_photo_rates_depend_on_the_radiation_state(self, rad_network) -> None:
         # The radiation case exercises the chain rule through a non-thermal column.
         system = rad_network.ode_system(radiation=True, form="reduced")

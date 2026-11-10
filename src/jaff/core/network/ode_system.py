@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Literal, cast
 
 from sympy import Basic, Expr, ImmutableMatrix, ImmutableSparseMatrix, Indexed
 
+from ...common.optimizations import derivative
 from ...io import jaff_progress
 from ...physics import Radiation
 from ..reaction.rate import check_form
@@ -213,12 +214,17 @@ class OdeSystem:
 
         Found from each coefficient's free symbols (unknown-function arguments
         included); a coefficient free of the state gets an empty entry.  Each
-        derivative is taken once and shared by every row holding ``krate[r]``.
+        derivative is taken once and shared by every row holding ``krate[r]``,
+        written with ``krate[r]`` itself where cheaper
+        (:func:`~jaff.common.optimizations.derivative`).
         """
         state = {var.symbol for var in self.state}
 
         return {
-            k: {y: coefficient.diff(y) for y in coefficient.free_symbols & state}
+            k: {
+                y: derivative(coefficient, y, value=k)
+                for y in coefficient.free_symbols & state
+            }
             for k, coefficient in self.rate_coefficients.items()
         }
 
@@ -268,7 +274,9 @@ class OdeSystem:
 
         summed over the reactions whose coefficient contains ``y_j`` (most often
         ``tgas``; a photo rate also holds the radiation densities).  Entries keep
-        the ``krate`` symbols; ``∂k_r/∂y_j`` is written out.
+        the ``krate`` symbols; ``∂k_r/∂y_j`` is ``krate[r] · ∂ln k_r/∂y_j`` where
+        that is cheaper than writing it out
+        (:func:`~jaff.common.optimizations.derivative`).
         """
         rows = cast(list[Expr], self.rhs.flat())
         columns = {

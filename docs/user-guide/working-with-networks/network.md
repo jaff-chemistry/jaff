@@ -332,8 +332,11 @@ densities):
 <!-- prettier-ignore -->
 $$ \frac{\partial F_i}{\partial y_j} = \frac{\partial F_i}{\partial y_j}\Big|_k + \sum_r \frac{\partial F_i}{\partial k_r}\frac{\partial k_r}{\partial y_j} $$
 
-Substituting `rate_coefficients` into the reduced `rhs` and `jacobian` gives the
-expanded ones.
+Each $\partial k_r/\partial y_j$ is written as `krate[r]` $\cdot\, \partial \ln k_r/\partial y_j$
+(per `Piecewise` branch) wherever that is cheaper than writing the derivative out:
+an Arrhenius rate's temperature derivative becomes `(50 - 0.7*tgas)*krate[0]/tgas**2`
+instead of repeating its `exp`. Substituting `rate_coefficients` into the reduced
+`rhs` and `jacobian` gives the expanded ones.
 
 `Codegen`'s `rhses` and `jacobian` print `system.rhs` and `system.jacobian`.
 
