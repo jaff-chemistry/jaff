@@ -218,6 +218,7 @@ nav = [
         "reference/core/networksymbols/ncol.md",
         "reference/core/networksymbols/free_symbols.md",
         "reference/core/networksymbols/ndens.md",
+        "reference/core/networksymbols/krates.md",
         "reference/core/networksymbols/ntot.md",
         "reference/core/networksymbols/rho.md",
         "reference/core/networksymbols/n_hnuc.md",
@@ -254,6 +255,15 @@ nav = [
         "reference/core/reactionradiation/compute.md",
         "reference/core/reactionradiation/expressions.md",
         "reference/core/reactionradiation/substitute.md",
+      ] },
+      { "core.Rate" = [
+        "reference/core/rate/index.md",
+        "reference/core/rate/coefficient.md",
+        "reference/core/rate/symbol.md",
+        "reference/core/rate/densities.md",
+        "reference/core/rate/expanded.md",
+        "reference/core/rate/reduced.md",
+        "reference/core/rate/form.md",
       ] },
       { "core.Analysis" = [
         "reference/core/analysis/index.md",

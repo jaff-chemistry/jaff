@@ -78,7 +78,7 @@ class TestRhs:
         system = rad_network.ode_system(thermal="dtdt", radiation=True, rad_order=1)
         expected = [
             *rad_network.reactions.odes(rad_network.species),
-            rad_network.thermodynamics.dTdt_tot,
+            rad_network.thermodynamics.dTdt_tot(),
             *rad_network.radiation.odes(1),
         ]
         assert list(system.rhs) == expected
@@ -88,7 +88,7 @@ class TestRhs:
     )
     def test_dedt_row_is_energy_rate_in_form(self, dedt_network, energy) -> None:
         system = dedt_network.ode_system(thermal="dedt", energy=energy)
-        assert system.rhs[3] == dedt_network.thermodynamics.dEdt_tot.normaliser(energy)
+        assert system.rhs[3] == dedt_network.thermodynamics.dEdt_tot().normaliser(energy)
 
     def test_none_has_species_rows_only(self, dedt_network) -> None:
         system = dedt_network.ode_system()

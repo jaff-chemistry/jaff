@@ -122,5 +122,14 @@ def test_yield_enters_density_equations_only(yield_network):
     nb = net.radiation.nbands
 
     for i in range(nb):
-        assert sp.simplify(odes[i] - rxn.rad.group_yields[i] * rxn.rate) == 0
+        assert sp.simplify(odes[i] - rxn.rad.group_yields[i] * rxn.rate.expanded) == 0
         assert odes[nb + i].is_zero
+
+
+def test_reduced_emission_uses_the_rate_symbol(yield_network):
+    net = yield_network(radiation=RadiationConfig(bands=BANDS))
+    rxn = net.reactions[0]
+    odes = net.radiation.odes(order=2, form="reduced")
+
+    for i in range(net.radiation.nbands):
+        assert sp.simplify(odes[i] - rxn.rad.group_yields[i] * rxn.rate.reduced) == 0

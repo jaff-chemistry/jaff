@@ -151,7 +151,7 @@ class OdeSystem:
         """Time derivative of the state, one row per :attr:`state` entry (n × 1).
 
         Species rows are :meth:`~jaff.core.Reactions.odes`; the thermal row is
-        :attr:`~jaff.physics.Thermodynamics.dTdt_tot` or ``dEdt_tot`` in the
+        :meth:`~jaff.physics.Thermodynamics.dTdt_tot` or ``dEdt_tot`` in the
         *energy* form; the radiation rows are :meth:`~jaff.physics.Radiation.odes`
         in *rad_order*.
         """
@@ -159,9 +159,9 @@ class OdeSystem:
         rows: list[Basic] = list(net.reactions.odes(net.species))
         thermo = net.thermodynamics
         if self.thermal == "dedt":
-            rows.append(thermo.dEdt_tot.normaliser(self.energy))
+            rows.append(thermo.dEdt_tot().normaliser(self.energy))
         elif self.thermal == "dtdt":
-            rows.append(thermo.dTdt_tot)
+            rows.append(thermo.dTdt_tot())
         if self.radiation:
             assert net.radiation is not None  # checked in __init__
             rows.extend(net.radiation.odes(self.rad_order))

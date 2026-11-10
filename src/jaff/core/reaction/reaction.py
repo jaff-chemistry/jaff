@@ -70,6 +70,7 @@ from ..analysis._evaluate import evaluate
 from ..analysis.tables import FunctionValue
 from .config import PhotoConfig, ReactionConfig
 from .photo_reaction import PhotoReaction
+from .rate import Rate
 from .reaction_radiation import ReactionRadiation
 from .types import RateSegment, RateSegments, ReactionSource
 
@@ -111,9 +112,11 @@ class Reaction:
         Read-only: the photo band rate when a radiation field sets it
         (``photo.band_rate``), else the :attr:`rate_segments` collapsed into
         one expression.
-    rate : Expr
-        ``rate_coefficient`` times the core reactants' number densities, the
-        reaction rate per unit volume used by every equation builder.
+    rate : Rate
+        The reaction rate per unit volume, ``rate_coefficient`` times the core
+        reactants' number densities, used by every equation builder:
+        ``rate.expanded`` writes the coefficient out, ``rate.reduced`` uses its
+        symbol ``krate[r]``.
     tmin : float or None
         Minimum gas temperature at which the rate is valid (Kelvin), from the
         lowest rate segment.  ``None`` means no lower bound.  Read-only.
@@ -269,7 +272,6 @@ class Reaction:
         self._metadata: dict = metadata if metadata is not None else {}
         self.source: ReactionSource = source
         self.index: int = source.index
-        self._rate: tuple[Expr, Expr] | None = None
         self.__check_functions()
         self.reactants: Species = Species(reactants, check_length=False)
         self.products: Species = Species(products, check_length=False)
@@ -571,7 +573,9 @@ class Reaction:
         ValueError
             Naming every parameter, density and function without a value.
         """
-        return float(evaluate(self.net, [self.rate], parameters, densities, functions)[0])
+        return float(
+            evaluate(self.net, [self.rate.expanded], parameters, densities, functions)[0]
+        )
 
     @property
     def tmin(self) -> float | None:
@@ -583,34 +587,27 @@ class Reaction:
         """Upper temperature bound of the highest rate segment (K); see the attributes."""
         return self.rate_segments.sort()[-1].tmax
 
-    @property
-    def rate(self) -> Expr:
+    @cached_property
+    def rate(self) -> Rate:
         """Reaction rate per unit volume, ``rate_coefficient · Π nden[reactants]``.
 
-        The rate coefficient times the number density (``net.symbols.ndens``)
-        of each core reactant; pseudo-species such as ``_PHOTON`` or ``_CR``
-        carry no density.  Cached until :attr:`rate_coefficient` changes.
+        A :class:`~jaff.core.reaction.Rate`: ``rate.expanded`` writes the rate
+        coefficient out, ``rate.reduced`` uses its symbol ``krate[r]``.  The densities
+        are those (``net.symbols.ndens``) of the core reactants; pseudo-species such as
+        ``_PHOTON`` or ``_CR`` carry no density.
 
         Returns
         -------
-        Expr
+        Rate
 
         Examples
         --------
         >>> from jaff import Network
         >>> net = Network("h_photoionization")
-        >>> net.reactions["H+.e-__H"].rate
+        >>> net.reactions["H+.e-__H"].rate.expanded
         1.65941781598291e-10*nden[1]*nden[2]/tgas**0.7
         """
-        coefficient = self.rate_coefficient
-        if self._rate is None or self._rate[0] is not coefficient:
-            nden = self.net.symbols.ndens
-            rate = coefficient
-            for s in self.reactants.core:
-                rate *= nden[self.net.species[s.name].index]
-            self._rate = (coefficient, rate)
-
-        return self._rate[1]
+        return Rate(self)
 
     @cached_property
     def species(self) -> Species:

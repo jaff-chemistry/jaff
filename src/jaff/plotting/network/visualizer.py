@@ -79,7 +79,9 @@ class NetworkVisualizer:
             )
 
         drawn = [self.network.reactions[i] for i in reactions]
-        exprs = [r.rate if colour_by == "rate" else r.rate_coefficient for r in drawn]
+        exprs = [
+            r.rate.expanded if colour_by == "rate" else r.rate_coefficient for r in drawn
+        ]
         values = evaluate(self.network, exprs)
         positions, span = rate_positions(values)
         cmap = rate_colormap(theme, rate_cmap)

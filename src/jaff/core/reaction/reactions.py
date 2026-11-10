@@ -24,6 +24,7 @@ from ..species import Species
 from ..analysis._evaluate import evaluate
 from ..analysis.tables import FunctionValue
 from .config import ReactionsConfig
+from .rate import check_form
 from .reaction import Reaction
 from .types import RateSegment
 
@@ -773,7 +774,9 @@ class Reactions(Catalogue[Reaction]):
         ValueError
             Naming every parameter, density and function without a value.
         """
-        return self._evaluate([r.rate for r in self], parameters, densities, functions)
+        return self._evaluate(
+            [r.rate.expanded for r in self], parameters, densities, functions
+        )
 
     def _evaluate(self, exprs, parameters, densities, functions) -> np.ndarray:
         if not exprs:
@@ -781,20 +784,33 @@ class Reactions(Catalogue[Reaction]):
 
         return evaluate(next(iter(self)).net, exprs, parameters, densities, functions)
 
-    def rates(self) -> Vector[Basic]:
+    def rates(self, form: str = "expanded") -> Vector[Basic]:
         """Return a ``Vector`` of reaction rates, ``rate_coefficient · Π nden``.
 
         ``Reaction.rate`` of each reaction (the rate per unit volume: the rate
         coefficient times each core reactant's number density), in catalogue
         order.  For the coefficients alone use :meth:`rate_coefficients`.
 
+        Parameters
+        ----------
+        form : {"expanded", "reduced"}, optional
+            ``"expanded"`` (default) writes each coefficient out, ``"reduced"``
+            uses its symbol ``krate[r]`` (see :class:`~jaff.core.reaction.Rate`).
+
         Returns
         -------
         Vector[Basic]
-        """
-        return Vector([r.rate for r in self])
 
-    def odes(self, species: Species) -> list[Basic]:
+        Raises
+        ------
+        ValueError
+            If *form* is unknown.
+        """
+        check_form(form)
+
+        return Vector([r.rate.form(form) for r in self])
+
+    def odes(self, species: Species, form: str = "expanded") -> list[Basic]:
         """Right-hand sides of the species ODEs, one per core species.
 
         ``d nden[s]/dt`` is the sum of the :meth:`rates` of the reactions
@@ -812,12 +828,19 @@ class Reactions(Catalogue[Reaction]):
             The network's species catalogue: the result has one entry per core
             species (pseudo-species such as ``_PHOTON`` are not integrated), in
             ``species.index`` order.
+        form : {"expanded", "reduced"}, optional
+            Form of the rates (see :meth:`rates`), by default ``"expanded"``.
 
         Returns
         -------
         list of sympy.Basic
             The time derivative of each core species' number density
             (cm⁻³ s⁻¹).
+
+        Raises
+        ------
+        ValueError
+            If *form* is unknown.
 
         Examples
         --------
@@ -829,7 +852,7 @@ class Reactions(Catalogue[Reaction]):
         >>> odes[1] == -odes[0]
         True
         """
-        rates = self.rates()
+        rates = self.rates(form)
         odes: list[Basic] = [Float(0.0) for _ in range(species.core.count)]
         for rate, reaction in zip(rates, self, strict=True):
             for reactant in reaction.reactants.core:

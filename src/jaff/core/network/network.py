@@ -206,10 +206,11 @@ class Network:
     thermodynamics : Thermodynamics
         Equation of state and thermal rates, built lazily: ``eos`` (internal
         energy for the configured EOS, an ideal gas by default),
-        ``dEdt_chemical`` (accumulated over all reactions), ``dEdt_extra``
+        ``dEdt_chemical()`` (accumulated over all reactions), ``dEdt_extra``
         (from the ``heatingcoolingrate`` auxiliary function, if present) and
-        ``dEdt_tot``, all in erg cm⁻³ s⁻¹, plus the matching temperature rates
-        ``dTdt_chemical``, ``dTdt_extra`` and ``dTdt_tot`` in K s⁻¹.
+        ``dEdt_tot()``, all in erg cm⁻³ s⁻¹, plus the matching temperature rates
+        ``dTdt_chemical()``, ``dTdt_extra`` and ``dTdt_tot()`` in K s⁻¹; the
+        methods take the ``form`` of the reaction rates.
     symbols : NetworkSymbols
         Canonical symbols, density expressions (``ndens``, ``ntot``, ``rho``,
         ``n_hnuc``), introspection sets and symbol standardization for this
@@ -1028,7 +1029,7 @@ class Network:
 
         return matrix
 
-    def sfluxes(self) -> list[Expr]:
+    def sfluxes(self, form: str = "expanded") -> list[Expr]:
         """Return symbolic flux expressions for all reactions.
 
         The flux of reaction *i* is ``rate_i * nden[r1] * nden[r2] * ...``,
@@ -1041,6 +1042,12 @@ class Network:
 
         with ``k_i`` the rate coefficient, ``R_j`` the core reactants and
         ``alpha_j`` their stoichiometric coefficients.
+
+        Parameters
+        ----------
+        form : {"expanded", "reduced"}, optional
+            ``"expanded"`` (default) writes each ``k_i`` out, ``"reduced"`` uses
+            its symbol ``krate[i]`` (see :class:`~jaff.core.reaction.Rate`).
 
         Returns
         -------
@@ -1055,7 +1062,7 @@ class Network:
         >>> net.sfluxes()[0].has(net.symbols.ndens[0] * net.symbols.ndens[1])
         True
         """
-        return list(self.reactions.rates())
+        return list(self.reactions.rates(form))
 
     def ode_system(
         self,
@@ -1097,7 +1104,7 @@ class Network:
         """
         return OdeSystem(self, thermal, energy, radiation, rad_order)
 
-    def sodes(self) -> list[Basic]:
+    def sodes(self, form: str = "expanded") -> list[Basic]:
         """Return symbolic ODE right-hand sides for all species.
 
         Each entry is the net rate of change of a species number density
@@ -1112,12 +1119,17 @@ class Network:
         :meth:`Reactions.odes`.  A species appearing
         several times on one side contributes the flux once per occurrence.
 
+        Parameters
+        ----------
+        form : {"expanded", "reduced"}, optional
+            Form of the fluxes (see :meth:`sfluxes`), by default ``"expanded"``.
+
         Returns
         -------
         list[Basic]
             One SymPy expression per species, in species-index order.
         """
-        return self.reactions.odes(self.species)
+        return self.reactions.odes(self.species, form)
 
     def sradodes(self, order: int = 0) -> list[Expr]:
         """Return symbolic radiation moment ODE right-hand sides.

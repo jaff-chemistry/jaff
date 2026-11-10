@@ -3,6 +3,7 @@
 
 from .photo_reaction import PhotoReaction
 from .reaction_radiation import ReactionRadiation
+from .rate import RATE_FORMS, Rate
 from .reaction import Reaction
 from .reactions import Reactions
 from .types import RateSegment, RateSegments, ReactionSource
@@ -15,4 +16,6 @@ __all__ = [
     "ReactionSource",
     "PhotoReaction",
     "ReactionRadiation",
+    "Rate",
+    "RATE_FORMS",
 ]

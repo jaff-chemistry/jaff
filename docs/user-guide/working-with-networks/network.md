@@ -143,7 +143,7 @@ net = Network(
 | `reactant_matrix` | `np.ndarray`      | Integer stoichiometry, shape `(n_reactions, n_species)` — reactant counts; built on first use, read-only            |
 | `product_matrix`  | `np.ndarray`      | Integer stoichiometry, same shape — product counts; built on first use, read-only                                   |
 | `visualize`       | `NetworkVisualizer` | Figures of the species and reactions: [`graph()` and `stoichiometry()`](visualization.md); built on first use |
-| `thermodynamics`  | `Thermodynamics`  | Thermal equations: `eos`, `dEdt_chemical`, `dEdt_extra`, `dEdt_tot`, `dTdt_chemical`, `dTdt_extra`, `dTdt_tot`; see [thermodynamics](../../reference/physics/thermodynamics/index.md) |
+| `thermodynamics`  | `Thermodynamics`  | Thermal equations: `eos`, `dEdt_chemical()`, `dEdt_extra`, `dEdt_tot()`, `dTdt_chemical()`, `dTdt_extra`, `dTdt_tot()`; see [thermodynamics](../../reference/physics/thermodynamics/index.md) |
 | `radiation`       | `Radiation\|None` | Radiation field object; `None` when the config has no `[network.radiation]` table                                   |
 | `dust`            | `Dust\|None`      | Dust module; `None` when the config has no `[network.dust]` table                                                   |
 | `symbols`         | `NetworkSymbols`  | Canonical symbols, densities (`ndens`, `ntot`, `rho`, `n_hnuc`), introspection sets and `standardize`; see [symbols](../../reference/core/networksymbols/index.md) |

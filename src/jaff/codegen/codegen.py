@@ -700,9 +700,9 @@ class Codegen:
     def get_dedt(self, energy: str = "volumetric") -> str:
         """Target-language code for the total energy time-derivative.
 
-        A thin printer over ``net.thermodynamics.dEdt_tot``
-        (:attr:`~jaff.physics.thermodynamics.Thermodynamics.dEdt_tot`): it
-        renders ``dEdt_tot.normaliser(energy)`` (see
+        A thin printer over ``net.thermodynamics.dEdt_tot()``
+        (:meth:`~jaff.physics.thermodynamics.Thermodynamics.dEdt_tot`): it
+        renders ``dEdt_tot().normaliser(energy)`` (see
         :meth:`~jaff.physics.thermodynamics.InternalEnergy.normaliser`) as a
         target-language expression.  For the temperature rate see
         :meth:`get_dtdt`.
@@ -749,14 +749,14 @@ class Codegen:
         >>> print(Codegen(net, lang="python").get_dedt())
         -2.29107354821899e-26*tgas**0.3*(0.684 - 0.0416*math.log(0.0001*tgas))*...
         """
-        expr = self.net.thermodynamics.dEdt_tot.normaliser(energy)
+        expr = self.net.thermodynamics.dEdt_tot().normaliser(energy)
         return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
 
     def get_dtdt(self) -> str:
         """Target-language code for the gas-temperature rate ``dT/dt``.
 
-        A thin printer over ``net.thermodynamics.dTdt_tot``
-        (:attr:`~jaff.physics.thermodynamics.Thermodynamics.dTdt_tot`).  It is
+        A thin printer over ``net.thermodynamics.dTdt_tot()``
+        (:meth:`~jaff.physics.thermodynamics.Thermodynamics.dTdt_tot`).  It is
         selected in the RHS and Jacobian generators with ``thermal="dtdt"``
         (template option group ``THERMAL { MODE -> dtdt }``).  For the energy
         rate see :meth:`get_dedt`.
@@ -786,7 +786,7 @@ class Codegen:
         >>> print(Codegen(net, lang="python").get_dtdt())
         (-2.29107354821899e-26*tgas**0.3*...)/(2.0709734999999e-16*nden[0] + ...)
         """
-        expr = self.net.thermodynamics.dTdt_tot
+        expr = self.net.thermodynamics.dTdt_tot()
         return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
 
     def get_indexed_odes(
@@ -1364,7 +1364,7 @@ class Codegen:
             Text appended after the index of each CSE temporary name, e.g.
             ``"_value"`` yields ``<cse_var>0_value``.  Default ``""``.
         energy : str, optional
-            Evolved internal-energy form (see :attr:`Thermodynamics.dEdt_tot`
+            Evolved internal-energy form (see :meth:`Thermodynamics.dEdt_tot`
             and :meth:`InternalEnergy.normaliser`).
             Default ``"volumetric"``.
         radiation : bool, optional

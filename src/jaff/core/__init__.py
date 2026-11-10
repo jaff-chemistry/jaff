@@ -53,6 +53,7 @@ from .elements import Element, Elements
 from .network import Network, NetworkSymbols, OdeSystem, StateVariable
 from .reaction import (
     PhotoReaction,
+    Rate,
     ReactionRadiation,
     Reaction,
     Reactions,
@@ -77,6 +78,7 @@ __all__ = [
     "StateVariable",
     "PhotoReaction",
     "ReactionRadiation",
+    "Rate",
     "Analysis",
     "AnalysisSpec",
     "AnalysisTable",

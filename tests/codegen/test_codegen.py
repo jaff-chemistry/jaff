@@ -432,7 +432,7 @@ class TestOdeJacobianWithInternalEnergy:
 
     def test_dedt_expression(self, dedt_network):
         assert (
-            str(dedt_network.thermodynamics.dEdt_chemical.volumetric)
+            str(dedt_network.thermodynamics.dEdt_chemical().volumetric)
             == "nden[0]**3*nden[1]"
         )
 
@@ -464,7 +464,7 @@ class TestThermalCodeStrings:
         thermo = dedt_codegen.net.thermodynamics
         for form in ("volumetric", "specific", "per_particle", "molar"):
             expected = dedt_codegen.lang.code_gen(
-                thermo.dEdt_tot.normaliser(form),
+                thermo.dEdt_tot().normaliser(form),
                 strict=False,
                 allow_unknown_functions=True,
             )
@@ -477,7 +477,7 @@ class TestThermalCodeStrings:
 
     def test_get_dtdt_prints_dTdt_tot(self, dedt_codegen) -> None:
         expected = dedt_codegen.lang.code_gen(
-            dedt_codegen.net.thermodynamics.dTdt_tot,
+            dedt_codegen.net.thermodynamics.dTdt_tot(),
             strict=False,
             allow_unknown_functions=True,
         )

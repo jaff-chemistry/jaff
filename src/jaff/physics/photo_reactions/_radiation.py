@@ -647,7 +647,7 @@ class Radiation:
             xsec, ph_E, group, ph_profile, energy_weighted=True
         )
 
-    def odes(self, order: int = 0) -> List[sp.Expr]:
+    def odes(self, order: int = 0, form: str = "expanded") -> List[sp.Expr]:
         """Symbolic right-hand sides of the radiation-moment equations of every band.
 
         Each band *i* has two moments, the density ``den[i]`` (``radeden`` in
@@ -680,6 +680,10 @@ class Radiation:
             - ``1``: ``[flux_0, den_0, flux_1, den_1, ...]``;
             - ``2``: ``[den_0, den_1, ..., flux_0, flux_1, ...]``;
             - ``3``: ``[flux_0, flux_1, ..., den_0, den_1, ...]``.
+        form : {"expanded", "reduced"}, optional
+            Form of the reaction rates in the emission term (see
+            :class:`~jaff.core.reaction.Rate`), by default ``"expanded"``.  The
+            photo losses use each band's own coefficient and are unaffected.
 
         Returns
         -------
@@ -689,7 +693,8 @@ class Radiation:
         Raises
         ------
         ValueError
-            If *order* is not one of ``0``, ``1``, ``2``, ``3``.
+            If *order* is not one of ``0``, ``1``, ``2``, ``3``, or *form* is
+            unknown.
         RuntimeError
             If a photo reaction without a custom rate has no per-band data.
 
@@ -705,12 +710,15 @@ class Radiation:
         """
         if order not in self.ORDERS:
             raise ValueError("Invalid order: Supported orders are 0, 1, 2, 3")
+        from ...core.reaction.rate import check_form  # core imports physics
+
+        check_form(form)
 
         # Obtain the flux-moment equation from the density-moment equation:
         # replace each density symbol den[i] with the flux rflux[i].
         flux_map = {g.sym: self.flux[g.index] for g in self.groups}
         losses = self._photo_losses()
-        emissions = self._emissions()
+        emissions = self._emissions(form)
         dust = self.network.dust
 
         odes: List[sp.Expr] = [sp.Float(0.0) for _ in range(2 * self.nbands)]
@@ -774,13 +782,13 @@ class Radiation:
 
         return losses
 
-    def _emissions(self) -> List[sp.Expr]:
+    def _emissions(self, form: str) -> List[sp.Expr]:
         """Per band, the radiation emitted by reactions with a spectral yield."""
         emissions: List[sp.Expr] = [sp.Float(0.0) for _ in self.groups]
         for reaction in self.network.reactions.radiation_emitters():
             yields = reaction.rad.group_yields
             for group, group_yield in zip(self.groups, yields, strict=True):
-                emissions[group.index] += group_yield * reaction.rate
+                emissions[group.index] += group_yield * reaction.rate.form(form)
 
         return emissions
 

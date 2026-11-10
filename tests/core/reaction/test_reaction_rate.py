@@ -19,10 +19,10 @@ def test_rate_is_coefficient_times_reactant_densities(make_network):
     h, c = nden[net.species["H"].index], nden[net.species["C"].index]
 
     hh = _rxn(net, "H.H__H2")
-    assert sp.simplify(hh.rate - hh.rate_coefficient * h**2) == 0
+    assert sp.simplify(hh.rate.expanded - hh.rate_coefficient * h**2) == 0
     # Pseudo-species (_PHOTON) carry no density.
     photo = _rxn(net, "C._PHOTON__C+.e-", "photo")
-    assert sp.simplify(photo.rate - photo.rate_coefficient * c) == 0
+    assert sp.simplify(photo.rate.expanded - photo.rate_coefficient * c) == 0
 
 
 def test_rate_coefficient_is_read_only(make_network):
@@ -35,20 +35,20 @@ def test_rate_coefficient_is_read_only(make_network):
 def test_rate_follows_the_segments(make_network):
     net = make_network(NETWORK, name="r.jet")
     rxn = _rxn(net, "H.H__H2")
-    before = rxn.rate
+    before = rxn.rate.expanded
 
     rxn.rate_segments.map_rates(lambda rate: 2 * rate)
 
-    assert rxn.rate != before
+    assert rxn.rate.expanded != before
     h = net.symbols.ndens[net.species["H"].index]
     assert rxn.rate_coefficient == pytest.approx(2.0e-17)
-    assert rxn.rate == rxn.rate_coefficient * h**2
+    assert rxn.rate.expanded == rxn.rate_coefficient * h**2
 
 
 def test_rate_is_cached(make_network):
     rxn = _rxn(make_network(NETWORK, name="r.jet"), "H.H__H2")
 
-    assert rxn.rate is rxn.rate
+    assert rxn.rate.expanded is rxn.rate.expanded
 
 
 def test_photo_band_rate_is_the_rate_coefficient(make_network):
@@ -72,13 +72,13 @@ def test_photo_without_radiation_uses_its_segments(make_network):
 def test_fluxes_use_rate(make_network):
     net = make_network(NETWORK, name="r.jet")
 
-    assert net.sfluxes() == [rxn.rate for rxn in net.reactions]
+    assert net.sfluxes() == [rxn.rate.expanded for rxn in net.reactions]
 
 
 def test_catalogue_rates_are_reaction_rates(make_network):
     net = make_network(NETWORK, name="r.jet")
 
-    assert list(net.reactions.rates()) == [rxn.rate for rxn in net.reactions]
+    assert list(net.reactions.rates()) == [rxn.rate.expanded for rxn in net.reactions]
 
 
 def test_catalogue_rate_coefficients_are_coefficients(make_network):

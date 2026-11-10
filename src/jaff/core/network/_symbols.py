@@ -32,7 +32,8 @@ class NetworkSymbols:
     Reached as ``net.symbols``.  It owns the fixed physics symbols
     (class attributes, also usable as ``NetworkSymbols.<name>`` without a
     network), the cached density expressions (:attr:`ndens`, :attr:`ntot`,
-    :attr:`rho`, :attr:`n_hnuc`, :meth:`element_sum`), the introspection sets
+    :attr:`rho`, :attr:`n_hnuc`, :meth:`element_sum`), the rate-coefficient
+    symbols (:attr:`krates`), the introspection sets
     filled after loading (:attr:`variables`, :attr:`interp_functions`,
     :attr:`undefined_functions`) and :meth:`standardize`.
 
@@ -98,6 +99,7 @@ class NetworkSymbols:
         """
         self._net: Network = net
         self._element_sums: dict[str, Expr | None] = {}
+        self._by_form: dict[tuple[str, str], Expr] = {}
 
     @staticmethod
     def ncol(name: str) -> Symbol:
@@ -148,6 +150,22 @@ class NetworkSymbols:
             The ``nden`` indexed base symbol.
         """
         return IndexedBase("nden", shape=(self._net.species.count,))
+
+    @cached_property
+    def krates(self) -> IndexedBase:
+        """Symbolic ``krate`` indexed base for the reactions' rate coefficients.
+
+        Entry ``krate[r]`` stands for the rate coefficient of ``net.reactions[r]``
+        (its position in the catalogue, ``Reaction.catalogue_index``), as used by
+        the reduced form of a rate (:class:`~jaff.core.reaction.Rate`).  Cached so
+        every consumer shares one symbol.
+
+        Returns
+        -------
+        sympy.IndexedBase
+            The ``krate`` indexed base symbol.
+        """
+        return IndexedBase("krate", shape=(len(self._net.reactions),))
 
     @cached_property
     def ntot(self) -> Expr:
@@ -221,7 +239,9 @@ class NetworkSymbols:
 
         return self._element_sums[element]
 
-    def weighted_rate(self, weights: Sequence[Basic | float], rtol: float = 0.0) -> Expr:
+    def weighted_rate(
+        self, weights: Sequence[Basic | float], rtol: float = 0.0, form: str = "expanded"
+    ) -> Expr:
         """Rate of ``Σ_i w_i n_i``: ``Σ_r (Σ_i w_i ν_ri) F_r``.
 
         ``ν = product_matrix − reactant_matrix`` (core species) and ``F_r`` are the
@@ -238,6 +258,9 @@ class NetworkSymbols:
             treated as zero when ``|c_r| <= rtol · Σ_i |w_i ν_ri|``, i.e. when it is a
             floating-point rounding residue of terms that cancel exactly in
             principle.  Default ``0.0`` keeps every non-zero coefficient.
+        form : {"expanded", "reduced"}, optional
+            Form of the fluxes (see :class:`~jaff.core.reaction.Rate`), by default
+            ``"expanded"``.
 
         Returns
         -------
@@ -247,7 +270,8 @@ class NetworkSymbols:
         Raises
         ------
         ValueError
-            If the number of weights differs from the number of species.
+            If the number of weights differs from the number of species, or
+            *form* is unknown.
         """
         weights = list(weights)
         if len(weights) != self._net.species.count:
@@ -259,7 +283,7 @@ class NetworkSymbols:
         net = self._net
         nu = net.product_matrix - net.reactant_matrix
         total = S.Zero
-        for row, flux in zip(nu, net.sfluxes()):
+        for row, flux in zip(nu, net.sfluxes(form)):
             terms = [w * int(n) for w, n in zip(weights, row) if n]
             coeff = sum(terms)
             if rtol and abs(coeff) <= rtol * sum(abs(t) for t in terms):
@@ -270,13 +294,28 @@ class NetworkSymbols:
 
         return total
 
-    @cached_property
-    def dntot_dt(self) -> Expr:
-        """Chemical rate of total number density, ``Σ_r Δn_r F_r`` [cm⁻³ s⁻¹]."""
-        return self.weighted_rate([1] * self._net.species.count)
+    def dntot_dt(self, form: str = "expanded") -> Expr:
+        """Chemical rate of total number density, ``Σ_r Δn_r F_r`` [cm⁻³ s⁻¹].
 
-    @cached_property
-    def drho_dt(self) -> Expr:
+        Parameters
+        ----------
+        form : {"expanded", "reduced"}, optional
+            Form of the fluxes (see :meth:`weighted_rate`), by default
+            ``"expanded"``.  Cached per form.
+
+        Returns
+        -------
+        Expr
+        """
+        key = ("dntot_dt", form)
+        if key not in self._by_form:
+            self._by_form[key] = self.weighted_rate(
+                [1] * self._net.species.count, form=form
+            )
+
+        return self._by_form[key]
+
+    def drho_dt(self, form: str = "expanded") -> Expr:
         """Chemical rate of mass density, ``Σ_r Δm_r F_r`` [g cm⁻³ s⁻¹].
 
         Never forced to zero: every reaction contributes its actual mass change,
@@ -285,9 +324,23 @@ class NetworkSymbols:
         (``|Δm_r| <= 1e-12 · Σ_i |m_i ν_ri|``, far below one electron mass) are
         dropped, so the expression -- and the Jacobian sparsity -- does not depend
         on the last bits of the species masses.  Unset masses count as ``0``.
+
+        Parameters
+        ----------
+        form : {"expanded", "reduced"}, optional
+            Form of the fluxes (see :meth:`weighted_rate`), by default
+            ``"expanded"``.  Cached per form.
+
+        Returns
+        -------
+        Expr
         """
-        masses = [s.mass or 0.0 for s in self._net.species]
-        return self.weighted_rate(masses, rtol=1e-12)
+        key = ("drho_dt", form)
+        if key not in self._by_form:
+            masses = [s.mass or 0.0 for s in self._net.species]
+            self._by_form[key] = self.weighted_rate(masses, rtol=1e-12, form=form)
+
+        return self._by_form[key]
 
     # The introspection caches below are filled on first access (Network.__init__,
     # after loading).  Mutating rates or thermodynamics afterwards leaves them stale.
@@ -304,7 +357,7 @@ class NetworkSymbols:
         net = self._net
         expressions = [
             *(r.rate_coefficient for r in net.reactions),
-            net.thermodynamics.dEdt_chemical.volumetric,
+            net.thermodynamics.dEdt_chemical().volumetric,
             net.thermodynamics.dEdt_extra.volumetric,
         ]
         if net.radiation is not None:

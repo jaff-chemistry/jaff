@@ -307,7 +307,12 @@ docs/           # Documentation
 - `core/network/network.py`: `Network`, loading/managing a chemical network
 - `core/network/ode_system.py`: `OdeSystem` (`net.ode_system(...)`), the state vector and
   rhs a solver integrates; `Codegen` prints it rather than assembling equations
-- `core/reaction/`, `core/species/`, `core/elements/`: reactions, species, elements
+- `core/reaction/`, `core/species/`, `core/elements/`: reactions, species, elements;
+  `reaction.rate` is a `Rate` with `.expanded` (coefficient written out) and `.reduced`
+  (`krate[r]` symbol, `r` = catalogue position) forms. Equation builders take
+  `form="expanded" | "reduced"`: `Reactions.rates/odes`, `Network.sfluxes/sodes`,
+  `NetworkSymbols.weighted_rate/dntot_dt()/drho_dt()`, `Radiation.odes`, and the
+  `Thermodynamics` methods `dEdt_chemical()`, `dEdt_tot()`, `dTdt_chemical()`, `dTdt_tot()`
 - `core/parsers/`: network file formats and `.jfunc` auxiliary functions
 - `core/analysis/`: `net.analysis` (analysis mode): values and legend labels for a
   network's parameters, species densities and unknown functions (`enable()`,

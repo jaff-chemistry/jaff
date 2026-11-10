@@ -46,13 +46,13 @@ def _ids(net):
 def test_dntot_dt_counts_particle_change(net):
     # TWO_SPECIES: H + H -> H2 (Δn = -1) ; H2 + H -> H (Δn = -1)
     flux = net.sfluxes()
-    assert sp.simplify(net.symbols.dntot_dt - (-flux[0] - flux[1])) == 0
+    assert sp.simplify(net.symbols.dntot_dt() - (-flux[0] - flux[1])) == 0
 
 
 def test_dntot_dt_zero_when_number_conserving(make_network):
     # H2 + O -> OH + H : Δn = 0, so the reaction drops out exactly
     net = make_network(NUMBER_CONSERVING, funcfile=False)
-    assert net.symbols.dntot_dt == 0
+    assert net.symbols.dntot_dt() == 0
 
 
 def test_drho_dt_is_mass_weighted_stoichiometric_sum(net):
@@ -61,12 +61,12 @@ def test_drho_dt_is_mass_weighted_stoichiometric_sum(net):
     flux = net.sfluxes()
     m_h, m_h2 = net.species["H"].mass, net.species["H2"].mass
     expected = (m_h2 - 2 * m_h) * flux[0] + (-m_h2) * flux[1]
-    assert sp.simplify(net.symbols.drho_dt - expected) == 0
+    assert sp.simplify(net.symbols.drho_dt() - expected) == 0
 
 
 def test_drho_dt_equals_weighted_rate_of_masses(net):
     masses = [s.mass for s in net.species]
-    assert net.symbols.drho_dt == net.symbols.weighted_rate(masses)
+    assert net.symbols.drho_dt() == net.symbols.weighted_rate(masses)
 
 
 def test_drho_dt_drops_float_rounding_residues(make_network):
@@ -75,14 +75,14 @@ def test_drho_dt_drops_float_rounding_residues(make_network):
     net = make_network("@format:idx,R,R,P,P,P,rate\n1,H,e-,H+,e-,e-,1\n", funcfile=False)
     h, e, hp = (net.species[s] for s in ("H", "e-", "H+"))
     assert hp.mass + 2 * e.mass - h.mass - e.mass != 0  # residue really exists
-    assert net.symbols.drho_dt == 0
+    assert net.symbols.drho_dt() == 0
 
 
 def test_weighted_rate_rtol_only_drops_rounding(net):
     # rtol drops a coefficient only when it is negligible against the
     # magnitudes that cancel to produce it; real changes survive.
     masses = [s.mass for s in net.species]
-    assert net.symbols.weighted_rate(masses, rtol=1e-12) == net.symbols.drho_dt
+    assert net.symbols.weighted_rate(masses, rtol=1e-12) == net.symbols.drho_dt()
     assert net.symbols.weighted_rate(masses, rtol=1e-12) != 0
 
 
@@ -96,7 +96,7 @@ def test_drho_dt_does_not_trust_check_mass(make_network, monkeypatch):
     m_e = 9.10938371e-28
     flux = net.sfluxes()
     expected = (net.species["H+"].mass - net.species["H"].mass) * flux[0]
-    assert sp.simplify(net.symbols.drho_dt - expected) == 0
+    assert sp.simplify(net.symbols.drho_dt() - expected) == 0
     assert abs(net.species["H+"].mass - net.species["H"].mass + m_e) < 1e-40
 
 
@@ -117,36 +117,38 @@ def test_weighted_rate_rejects_wrong_length(net):
 
 
 def test_rate_helpers_are_cached(net):
-    assert net.symbols.dntot_dt is net.symbols.dntot_dt
-    assert net.symbols.drho_dt is net.symbols.drho_dt
+    assert net.symbols.dntot_dt() is net.symbols.dntot_dt()
+    assert net.symbols.drho_dt() is net.symbols.drho_dt()
 
 
 def test_dedt_specific_uses_quotient_rule(net):
     th, sym = net.thermodynamics, net.symbols
-    e, edot, rho = th.eos.volumetric, th.dEdt_tot.volumetric, sym.rho
-    expected = edot / rho - e * sym.drho_dt / rho**2
-    assert sp.simplify(th.dEdt_tot.specific - expected) == 0
+    e, edot, rho = th.eos.volumetric, th.dEdt_tot().volumetric, sym.rho
+    expected = edot / rho - e * sym.drho_dt() / rho**2
+    assert sp.simplify(th.dEdt_tot().specific - expected) == 0
 
 
 def test_dedt_per_particle_uses_quotient_rule(net):
     th, sym = net.thermodynamics, net.symbols
-    e, edot, n = th.eos.volumetric, th.dEdt_tot.volumetric, sym.ntot
-    expected = edot / n - e * sym.dntot_dt / n**2
-    assert sp.simplify(th.dEdt_tot.per_particle - expected) == 0
+    e, edot, n = th.eos.volumetric, th.dEdt_tot().volumetric, sym.ntot
+    expected = edot / n - e * sym.dntot_dt() / n**2
+    assert sp.simplify(th.dEdt_tot().per_particle - expected) == 0
 
 
 def test_dedt_molar_is_avogadro_times_per_particle(net):
     th, sym = net.thermodynamics, net.symbols
-    e, edot, n = th.eos.volumetric, th.dEdt_tot.volumetric, sym.ntot
-    expected = N_A.cgs.value * (edot / n - e * sym.dntot_dt / n**2)
-    assert sp.simplify(th.dEdt_tot.molar - expected) == 0
+    e, edot, n = th.eos.volumetric, th.dEdt_tot().volumetric, sym.ntot
+    expected = N_A.cgs.value * (edot / n - e * sym.dntot_dt() / n**2)
+    assert sp.simplify(th.dEdt_tot().molar - expected) == 0
 
 
 def test_dtdt_tot_ideal_gas(net):
     th, sym = net.thermodynamics, net.symbols
     cv = k_B.cgs.value / (GAMMA - 1.0)
-    expected = (th.dEdt_tot.volumetric - cv * sym.tgas * sym.dntot_dt) / (cv * sym.ntot)
-    assert sp.simplify(th.dTdt_tot - expected) == 0
+    expected = (th.dEdt_tot().volumetric - cv * sym.tgas * sym.dntot_dt()) / (
+        cv * sym.ntot
+    )
+    assert sp.simplify(th.dTdt_tot() - expected) == 0
 
 
 def _numerically_equal(a: sp.Expr, b: sp.Expr) -> bool:
@@ -191,31 +193,30 @@ def test_dtdt_extra_has_no_composition_term(thermo_with_extra):
 def test_dtdt_chemical_carries_composition_term(thermo_with_extra):
     th, sym = thermo_with_extra, thermo_with_extra.net.symbols
     cv = k_B.cgs.value / (GAMMA - 1.0)
-    edot_chem = th.dEdt_chemical.volumetric
-    expected = (edot_chem - cv * sym.tgas * sym.dntot_dt) / (cv * sym.ntot)
-    assert sp.simplify(th.dTdt_chemical - expected) == 0
+    edot_chem = th.dEdt_chemical().volumetric
+    expected = (edot_chem - cv * sym.tgas * sym.dntot_dt()) / (cv * sym.ntot)
+    assert sp.simplify(th.dTdt_chemical() - expected) == 0
 
 
 def test_dtdt_parts_sum_to_total(thermo_with_extra):
     th = thermo_with_extra
-    assert sp.simplify(th.dTdt_chemical + th.dTdt_extra - th.dTdt_tot) == 0
+    assert sp.simplify(th.dTdt_chemical() + th.dTdt_extra - th.dTdt_tot()) == 0
 
 
-@pytest.mark.parametrize(
-    "name",
-    [
-        "dEdt_chemical",
-        "dEdt_extra",
-        "dEdt_tot",
-        "dTdt_chemical",
-        "dTdt_extra",
-        "dTdt_tot",
-    ],
-)
-def test_rates_are_lazy_and_cached(net, name):
+@pytest.mark.parametrize("name", ["dEdt_extra", "dTdt_extra"])
+def test_extra_rates_are_lazy_and_cached(net, name):
     th = Thermodynamics(net, net.config.thermodynamics)
     assert name not in vars(th)
     assert getattr(th, name) is getattr(th, name)
+
+
+@pytest.mark.parametrize(
+    "name", ["dEdt_chemical", "dEdt_tot", "dTdt_chemical", "dTdt_tot"]
+)
+def test_reaction_rates_are_lazy_and_cached(net, name):
+    th = Thermodynamics(net, net.config.thermodynamics)
+    assert not th._by_form
+    assert getattr(th, name)() is getattr(th, name)()
 
 
 class TestConfig:

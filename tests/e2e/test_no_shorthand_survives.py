@@ -43,7 +43,7 @@ def _expressions(net):
             yield group.emissivity
             yield group.absorption_coefficient
     thermo = net.thermodynamics
-    yield thermo.dEdt_chemical.volumetric
+    yield thermo.dEdt_chemical().volumetric
     yield thermo.dEdt_extra.volumetric
 
 
