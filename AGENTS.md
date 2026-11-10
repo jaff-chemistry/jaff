@@ -307,8 +307,10 @@ docs/           # Documentation
 - `core/network/network.py`: `Network`, loading/managing a chemical network
 - `core/network/kinetics.py`: `Kinetics` (`net.kinetics`), the chemistry's rates of change:
   species `odes()`, `weighted_rate()`, `dntot_dt()`, `drho_dt()` (no cache: callers cache)
-- `core/network/ode_system.py`: `OdeSystem` (`net.ode_system(...)`), the state vector and
-  rhs a solver integrates; `Codegen` prints it rather than assembling equations
+- `core/network/ode_system.py`: `OdeSystem` (`net.ode_system(...)`), the state vector,
+  rhs and Jacobian a solver integrates; `Codegen` prints it rather than assembling
+  equations. `form="reduced"` puts `krate[r]` in the rows (definitions in
+  `system.rate_coefficients`) and builds the Jacobian by the chain rule over them
 - `core/reaction/`, `core/species/`, `core/elements/`: reactions, species, elements;
   `reaction.rate` is a `Rate` with `.expanded` (coefficient written out) and `.reduced`
   (`krate[r]` symbol, `r` = catalogue position) forms. Equation builders take

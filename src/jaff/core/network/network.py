@@ -1041,6 +1041,7 @@ class Network:
         energy: str = "volumetric",
         radiation: bool = False,
         rad_order: int = 0,
+        form: str = "expanded",
     ) -> OdeSystem:
         """The ODE system a generated solver integrates, for the chosen equations.
 
@@ -1057,6 +1058,10 @@ class Network:
             Include the radiation-moment equations.  Default ``False``.
         rad_order : int, optional
             Layout of the radiation equations, ``0`` (default) to ``3``.
+        form : {"expanded", "reduced"}, optional
+            Rate coefficients written out (``"expanded"``, default) or as their
+            ``krate[r]`` symbols (``"reduced"``, defined in
+            :attr:`OdeSystem.rate_coefficients`).
 
         Returns
         -------
@@ -1073,7 +1078,7 @@ class Network:
         >>> net.ode_system(thermal="dedt").rhs.shape
         (4, 1)
         """
-        return OdeSystem(self, thermal, energy, radiation, rad_order)
+        return OdeSystem(self, thermal, energy, radiation, rad_order, form)
 
     def to_hdf5(
         self,

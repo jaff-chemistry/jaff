@@ -298,7 +298,7 @@ for var in system.state:
 system.rhs.shape  # (6, 1): one row per state entry, in the same order
 ```
 
-The species rows come from the reactions, the thermal row from
+The species rows come from `net.kinetics`, the thermal row from
 `net.thermodynamics` and the radiation rows from `net.radiation`.
 
 `system.jacobian` is the derivative of `rhs` with respect to the state, a sparse
@@ -309,6 +309,31 @@ energy column and the species columns go through the EOS chain rule
 
 <!-- prettier-ignore -->
 $$ \frac{\partial F}{\partial e} = \frac{\partial F}{\partial T}\frac{\partial T}{\partial e}, \qquad \frac{\partial F}{\partial n_j}\Big|_e = \frac{\partial F}{\partial n_j}\Big|_T + \frac{\partial F}{\partial T}\frac{\partial T}{\partial n_j}\Big|_e $$
+
+#### Rate coefficients as symbols
+
+`form="reduced"` writes each reaction's rate coefficient as its symbol `krate[r]`
+(see [reactions](reactions.md)) and keeps the definitions apart, in
+`system.rate_coefficients`, so generated code can evaluate every coefficient once and
+share it between the rhs and the Jacobian. The default `form="expanded"` writes the
+coefficients out.
+
+```python
+system = net.ode_system(thermal="dtdt", form="reduced")
+system.rhs[0]  # -krate[0]*nden[0] + krate[1]*nden[1]*nden[2]
+system.rate_coefficients  # {krate[0]: <photo rate>, krate[1]: 2.63e-13/(tgas/10000.0)**0.7}
+```
+
+A row then depends on the state also through the coefficients it holds, so the
+Jacobian takes the chain rule over them, for whichever state variables each
+coefficient contains (usually `tgas`; a photo rate also holds the radiation
+densities):
+
+<!-- prettier-ignore -->
+$$ \frac{\partial F_i}{\partial y_j} = \frac{\partial F_i}{\partial y_j}\Big|_k + \sum_r \frac{\partial F_i}{\partial k_r}\frac{\partial k_r}{\partial y_j} $$
+
+Substituting `rate_coefficients` into the reduced `rhs` and `jacobian` gives the
+expanded ones.
 
 `Codegen`'s `rhses` and `jacobian` print `system.rhs` and `system.jacobian`.
 

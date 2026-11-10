@@ -1,5 +1,7 @@
 # ABOUTME: Tests for OdeSystem: the state layout per thermal mode and radiation order,
-# ABOUTME: the rhs assembled from the components, and validation of the choices
+# ABOUTME: the rhs and Jacobian in both rate forms, and validation of the choices
+
+import random
 
 import pytest
 import sympy as sp
@@ -58,14 +60,15 @@ class TestState:
 
     def test_options_are_kept(self, rad_network) -> None:
         system = rad_network.ode_system(
-            thermal="dedt", energy="specific", radiation=True, rad_order=2
+            thermal="dedt", energy="specific", radiation=True, rad_order=2, form="reduced"
         )
-        assert (system.thermal, system.energy, system.radiation, system.rad_order) == (
-            "dedt",
-            "specific",
-            True,
-            2,
-        )
+        assert (
+            system.thermal,
+            system.energy,
+            system.radiation,
+            system.rad_order,
+            system.form,
+        ) == ("dedt", "specific", True, 2, "reduced")
 
 
 class TestRhs:
@@ -189,3 +192,121 @@ class TestJacobian:
                 assert float(got[i, j]) == pytest.approx(
                     float(want[i, j]), rel=1e-9, abs=1e-12 * scale
                 ), (i, j)
+
+
+# --------------------------------------------------------------------------- #
+# Reduced form: krate[r] symbols in the rows, the chain rule in the Jacobian   #
+# --------------------------------------------------------------------------- #
+
+FORM_CASES = [
+    pytest.param("tgas", {}, id="none"),
+    pytest.param("tgas", {"thermal": "dtdt"}, id="dtdt"),
+    *(
+        pytest.param("tgas", {"thermal": "dedt", "energy": e}, id=f"dedt-{e}")
+        for e in ("volumetric", "specific", "per_particle", "molar")
+    ),
+    pytest.param("rad", {"radiation": True}, id="radiation"),
+    pytest.param(
+        "rad", {"thermal": "dtdt", "radiation": True, "rad_order": 2}, id="rad-dtdt"
+    ),
+]
+
+
+@pytest.fixture
+def networks(tgas_network, rad_network):
+    return {"tgas": tgas_network, "rad": rad_network}
+
+
+def _state_values(system: OdeSystem, seed: int) -> dict:
+    """Random positive values of every state symbol (tgas in 100-300 K)."""
+    rng = random.Random(seed)
+    tgas = system.network.symbols.tgas
+    values = {var.symbol: rng.uniform(1.0, 3.0) for var in system.state}
+    values[tgas] = rng.uniform(100.0, 300.0)
+
+    return values
+
+
+def _numbers(matrix: sp.MatrixBase, values: dict) -> list[list[float]]:
+    rows, cols = matrix.shape
+    evaluated = matrix.xreplace(values)
+
+    return [[float(evaluated[i, j]) for j in range(cols)] for i in range(rows)]
+
+
+def _assert_close(got: list[list[float]], want: list[list[float]]) -> None:
+    for i, (got_row, want_row) in enumerate(zip(got, want, strict=True)):
+        # Exact zeros may come out as round-off of the row's scale
+        scale = max(abs(x) for x in want_row)
+        for j, (g, w) in enumerate(zip(got_row, want_row, strict=True)):
+            assert g == pytest.approx(w, rel=1e-9, abs=1e-12 * scale), (i, j)
+
+
+class TestReducedForm:
+    def test_expanded_is_the_default(self, rad_network) -> None:
+        system = rad_network.ode_system(radiation=True)
+
+        assert system.form == "expanded"
+        assert system.rate_coefficients == {}
+        assert not system.rhs.has(rad_network.symbols.krates)
+
+    def test_rate_coefficients_define_every_krate(self, rad_network) -> None:
+        system = rad_network.ode_system(form="reduced")
+
+        assert system.rate_coefficients == {
+            r.rate.symbol: r.rate.coefficient for r in rad_network.reactions
+        }
+        assert list(system.rate_coefficients) == [
+            rad_network.symbols.krates[i] for i in range(len(rad_network.reactions))
+        ]
+
+    def test_rows_hold_the_krate_symbols(self, rad_network) -> None:
+        system = rad_network.ode_system(thermal="dtdt", radiation=True, form="reduced")
+        species = rad_network.species.count
+
+        assert all(row.has(rad_network.symbols.krates) for row in system.rhs[:species])
+        assert system.rhs[species].has(rad_network.symbols.krates)
+
+    def test_unknown_form_raises(self, rad_network) -> None:
+        with pytest.raises(ValueError, match="expanded, reduced"):
+            rad_network.ode_system(form="inline")
+
+    def test_photo_rates_depend_on_the_radiation_state(self, rad_network) -> None:
+        # The radiation case exercises the chain rule through a non-thermal column.
+        system = rad_network.ode_system(radiation=True, form="reduced")
+        state = {var.symbol for var in system.state}
+
+        assert any(
+            coefficient.free_symbols & state - {rad_network.symbols.tgas}
+            for coefficient in system.rate_coefficients.values()
+        )
+
+    @pytest.mark.parametrize(("which", "options"), FORM_CASES)
+    def test_rhs_gives_the_expanded_one(self, networks, which, options) -> None:
+        net = networks[which]
+        reduced = net.ode_system(**options, form="reduced")
+        expanded = net.ode_system(**options)
+        rhs = reduced.rhs.xreplace(reduced.rate_coefficients)
+
+        for seed in range(3):
+            values = _state_values(reduced, seed)
+            _assert_close(_numbers(rhs, values), _numbers(expanded.rhs, values))
+
+    @pytest.mark.parametrize(("which", "options"), FORM_CASES)
+    def test_jacobian_gives_the_expanded_one(self, networks, which, options) -> None:
+        net = networks[which]
+        reduced = net.ode_system(**options, form="reduced")
+        expanded = net.ode_system(**options)
+        jacobian = reduced.jacobian.xreplace(reduced.rate_coefficients)
+
+        for seed in range(3):
+            values = _state_values(reduced, seed)
+            _assert_close(_numbers(jacobian, values), _numbers(expanded.jacobian, values))
+
+    @pytest.mark.parametrize(("which", "options"), FORM_CASES)
+    def test_jacobian_has_the_same_sparsity(self, networks, which, options) -> None:
+        net = networks[which]
+        reduced = net.ode_system(**options, form="reduced")
+        expanded = net.ode_system(**options)
+
+        assert set(reduced.jacobian.todok()) == set(expanded.jacobian.todok())
