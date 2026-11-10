@@ -409,7 +409,7 @@ def plot_rates(
     Parameters
     ----------
     rates : Reaction or sympy.Basic or tuple or list
-        A reaction (anything with ``rate_coefficient``, optionally ``tmin`` /
+        A reaction (anything with ``rate.coefficient``, optionally ``tmin`` /
         ``tmax`` / ``get_latex``), a SymPy expression (needs *tmin* and
         *tmax*), or an ``(x, y)`` tuple used verbatim; or a list of them.
         With *grid*, each top-level item is a panel and a nested list is

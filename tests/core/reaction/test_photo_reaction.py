@@ -38,7 +38,7 @@ class TestComponent:
         rxn = _photo_reaction(_net(make_network, radiation=BANDS))
 
         assert rxn.photo.bands is not None and len(rxn.photo.bands) == 2
-        assert rxn.rate_coefficient.has(rxn.net.radiation.den)
+        assert rxn.rate.coefficient.has(rxn.net.radiation.den)
 
 
 class TestPhotoMethods:

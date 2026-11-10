@@ -69,7 +69,7 @@ class TestCustomCrossSection:
         assert float(rxn.photo.xsec_total) == pytest.approx(1e-18, rel=1e-6, abs=0)
         bands = [float(band.xsec) for band in rxn.photo.bands]
         assert bands == pytest.approx([1e-18, 1e-18], rel=1e-6, abs=0)
-        assert rxn.rate_coefficient.has(rxn.net.radiation.den[0])
+        assert rxn.rate.coefficient.has(rxn.net.radiation.den[0])
 
     def test_energy_dependent_xsec_uses_photon_energy_symbol(self, xsec_network):
         """σ = 1e-18 above 13.6 eV only: zero in the lower band, full in the upper."""
@@ -93,7 +93,7 @@ class TestCustomCrossSection:
 
         assert float(rxn.photo.xsec_total / tgas) == pytest.approx(1e-18, rel=1e-6, abs=0)
         assert all(band.xsec.has(tgas) for band in rxn.photo.bands)
-        assert rxn.rate_coefficient.has(tgas)
+        assert rxn.rate.coefficient.has(tgas)
 
     def test_density_symbols_are_standardized(self, xsec_network):
         """A density in a custom σ reaches the band data and equations as nden."""

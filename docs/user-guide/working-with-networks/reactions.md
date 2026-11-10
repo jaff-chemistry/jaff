@@ -72,13 +72,13 @@ ideas to hold onto.
 ### The rate is symbolic, not a number
 
 The single most important thing about a `Reaction` is that its
-`rate_coefficient` is a **SymPy expression**, not a float. It is a formula in the gas temperature
+`rate.coefficient` is a **SymPy expression**, not a float. It is a formula in the gas temperature
 `tgas` (and possibly other symbols like `crate`, `av`, `ntot`), frozen at load
 time but not yet evaluated.
 
 ```python
 rec = net.reactions[1]  # H+ + e- -> H  (recombination)
-rec.rate_coefficient  # 2.63e-13/(tgas/10000.0)**0.7
+rec.rate.coefficient  # 2.63e-13/(tgas/10000.0)**0.7
 rec.rate.expanded  # 1.65941781598291e-10*nden[1]*nden[2]/tgas**0.7
 rec.rate.reduced  # krate[1]*nden[1]*nden[2]
 ```
@@ -105,7 +105,7 @@ reaction is classified as photochemical by the parser (via its `_PHOTON`
 reactant), not by inspecting the rate — see [reaction types](#reaction-types):
 
 ```python
-net.reactions[0].rate_coefficient  # photorates(1, 13.6, 1000…000.0)
+net.reactions[0].rate.coefficient  # photorates(1, 13.6, 1000…000.0)
 ```
 
 The open upper band edge is the float `1e99`; SymPy's `str` prints it in full
@@ -126,7 +126,7 @@ coefficient, a rate 𝓡 in cm⁻³ s⁻¹), a sequence a 1-D array (e.g.
 
 ```python
 net = Network("networks/demos/water_co.jet")
-net.analysis.evaluate(net.reactions[2].rate_coefficient, {"tgas": 100.0})
+net.analysis.evaluate(net.reactions[2].rate.coefficient, {"tgas": 100.0})
 # 4.382088543149259e-07
 
 parameters = {"tgas": 100.0, "crate": 1.3e-17, "av": 1.0, "chi": 1.0}
@@ -168,8 +168,7 @@ see [Analysis mode](analysis.md).
 | --------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `reactants`           | `Species`                    | Catalogue of reactant species (may repeat, e.g. for 3-body reactions)                                                                                                                                                                                                                                                                                                                                                                      |
 | `products`            | `Species`                    | Catalogue of product species                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `rate_coefficient`    | `sympy.Basic`                | Symbolic rate-coefficient expression (units depend on reaction order); read-only: the photo band rate with radiation, else the merged `rate_segments`                                                                                                                                                                                                                                                                                                                                                                      |
-| `rate`                | `sympy.Basic`                | Rate per unit volume: `rate_coefficient` × each core reactant's density                                                                                                                                                                                                                                                                                                                                                                    |
+| `rate`                | `Rate`                       | Rate per unit volume: `rate.coefficient` (symbolic rate coefficient, units depend on reaction order; read-only: the photo band rate with radiation, else the merged `rate_segments`), `rate.expanded` (`rate.coefficient` × each core reactant's density), `rate.reduced` (the same with `krate[r]`)                                                                                                                                                                                                                       |
 | `tmin`                | `float or None`              | Lower temperature bound of rate validity (K); `None` = unbounded                                                                                                                                                                                                                                                                                                                                                                           |
 | `tmax`                | `float or None`              | Upper temperature bound of rate validity (K); `None` = unbounded                                                                                                                                                                                                                                                                                                                                                                           |
 | `dE`                  | `sympy.Basic`                | Energy released per reaction event (erg), from a `.jfunc` aux function                                                                                                                                                                                                                                                                                                                                                                     |
@@ -181,7 +180,7 @@ see [Analysis mode](analysis.md).
 | `type`                | `str`                        | Reaction type concluded by the parser (verbatim): gas-phase `"photo"`/`"cosmic_ray"`/`"3_body"`/`"unknown"`, a KIDA `itype` type (`"two_body"`, `"recombination"`, …), or a grain surface-mechanism type — see [Reaction types](#reaction-types)                                                                                                                                                                                          |
 | `photo`               | `PhotoReaction or None` | The photo-reaction component, `None` for non-photo reactions: `config` (the resolved photo settings, same as `rxn.config.photo`), `xsec` (cross sections), `xsec_total` (the spectrum-averaged σ), `custom_rad_rate` (rate from a `.jfunc`, not cross-sections), `bands` (per-band data, each with its radiation `group`), `band_xsecs` (per-band table), `shielding_tables`, and `plot_xsecs()` — see [Photo-reactions](#photo-reactions-a-special-citizen) |
 | `t_cutoff`            | `str`                        | Behaviour past the outermost temperature bounds: `"clip"` or `"extrapolate"` (from [`t_cutoff`](../configuration/reference.md#networkreactions))                                                                                                                                                                                                                                                                                             |
-| `rate_segments`       | `RateSegments`               | The per-temperature-range pieces merged into `rate_coefficient` — see [Temperature ranges](#temperature-ranges-and-piecewise-rates)                                                                                                                                                                                                                                                                                                         |
+| `rate_segments`       | `RateSegments`               | The per-temperature-range pieces merged into `rate.coefficient` — see [Temperature ranges](#temperature-ranges-and-piecewise-rates)                                                                                                                                                                                                                                                                                                         |
 | `rad`                 | `ReactionRadiation`          | The reaction's radiation component: `spectral_yield` (its `.jfunc` `spectralYield`, or `None`) and `group_yields` (per radiation group, or `None`)                                                                                                                                                                                                                                                                                                |
 | `species`             | `Species`                    | Unique species on either side (reactants ∪ products), cached                                                                                                                                                                                                                                                                                                                                                                               |
 | `elements`            | `Elements`                   | Unique elements across reactants and products, cached                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -356,7 +355,7 @@ A reaction is valid over `[tmin, tmax]`. When the **same** reaction (same specie
 _and_ same `type`) appears in the network file across several **disjoint**
 temperature ranges — a common way to fit a rate accurately over a wide
 temperature span — JAFF keeps each range as a `RateSegment` and merges them into
-a single **piecewise** rate expression on `net.reactions[i].rate_coefficient`:
+a single **piecewise** rate expression on `net.reactions[i].rate.coefficient`:
 
 - each range contributes its own rate over that range;
 - the gap between two adjacent ranges is bridged by interpolating between the
@@ -368,7 +367,7 @@ a single **piecewise** rate expression on `net.reactions[i].rate_coefficient`:
   value; `extrapolate` lets the end segments run on).
 
 The individual pieces live on `rxn.rate_segments`; `rxn.tmin` / `rxn.tmax` span
-the full merged range. `rate_coefficient`, `tmin` and `tmax` are derived from the
+the full merged range. `rate.coefficient`, `tmin` and `tmax` are derived from the
 segments and are read-only; change the rates through the segments
 (`rxn.rate_segments.map_rates(f)` applies `f` to every piece). A bound of `None` means the range is open on that side
 (each format parser maps its "no limit" convention to `None`; see
@@ -400,7 +399,7 @@ carries a cross-section table instead of an analytic rate:
 ```python
 rxn = net.reactions[0]
 
-rxn.rate_coefficient  # photorates(1, 13.6, 1000…000.0)
+rxn.rate.coefficient  # photorates(1, 13.6, 1000…000.0)
 rxn.photo.xsec  # XsecProps: units, process, database,
 #   photon_energy, photo_absorption,
 #   photodecay, photodecay_expr, total

@@ -38,7 +38,7 @@ def _rxn(net, serialized):
 
 def _k(rxn, *args, **kwargs):
     """The rate coefficient of *rxn*, evaluated."""
-    return rxn.net.analysis.evaluate(rxn.rate_coefficient, *args, **kwargs)
+    return rxn.net.analysis.evaluate(rxn.rate.coefficient, *args, **kwargs)
 
 
 def _rate(rxn, *args, **kwargs):
@@ -273,7 +273,7 @@ def test_gow_with_densities_and_a_shielding_function():
 
 
 def test_list_gives_an_array(net):
-    exprs = [r.rate_coefficient for r in net.reactions]
+    exprs = [r.rate.coefficient for r in net.reactions]
     values = net.analysis.evaluate(exprs, PARAMETERS)
 
     assert isinstance(values, np.ndarray)

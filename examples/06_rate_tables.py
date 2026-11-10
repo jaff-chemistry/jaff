@@ -65,7 +65,7 @@ def _(mo, net, sympy, tabulable):
     _tgas = sympy.Symbol("tgas")
     _counts = {"depends only on temperature": 0, "constant": 0, "depends on more": 0}
     for _rxn in net.reactions:
-        _symbols = tabulable(_rxn.rate_coefficient).free_symbols
+        _symbols = tabulable(_rxn.rate.coefficient).free_symbols
         if not _symbols:
             _counts["constant"] += 1
         elif _symbols == {_tgas}:
@@ -222,7 +222,7 @@ def _(
 ):
     _rxn = reaction_by_name[reaction_picker.value]
     _row = table_data[table_names.index(reaction_picker.value)]
-    _exact = lambdify(sympy.Symbol("tgas"), tabulable(_rxn.rate_coefficient), "numpy")
+    _exact = lambdify(sympy.Symbol("tgas"), tabulable(_rxn.rate.coefficient), "numpy")
 
     _mid = np.sqrt(table_temps[1:] * table_temps[:-1])
     _interp = np.exp(0.5 * (np.log(_row[1:]) + np.log(_row[:-1])))

@@ -207,13 +207,13 @@ def _(mo, net1, net2, reaction_cmp):
             continue
         _r1 = net1.reactions.get(_row["serialized"])
         _r2 = net2.reactions.get(_row["serialized"])
-        _k1 = float(_r1.rate_coefficient.subs(CONDITIONS))
-        _k2 = float(_r2.rate_coefficient.subs(CONDITIONS))
+        _k1 = float(_r1.rate.coefficient.subs(CONDITIONS))
+        _k2 = float(_r2.rate.coefficient.subs(CONDITIONS))
         _rows.append(
             {
                 "reaction": _row["name"],
-                f"rate in {net1.label}": str(_r1.rate_coefficient),
-                f"rate in {net2.label}": str(_r2.rate_coefficient),
+                f"rate in {net1.label}": str(_r1.rate.coefficient),
+                f"rate in {net2.label}": str(_r2.rate.coefficient),
                 f"k ({net1.label})": f"{_k1:.3e}",
                 f"k ({net2.label})": f"{_k2:.3e}",
                 "ratio": f"{_k2 / _k1:.3g}",

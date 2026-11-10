@@ -20,7 +20,7 @@ TGAS = sympy.Symbol("tgas")
 
 def _r(k):
     return SimpleNamespace(
-        rate_coefficient=k * (TGAS / 300) ** 0.5,
+        rate=SimpleNamespace(coefficient=k * (TGAS / 300) ** 0.5),
         tmin=10,
         tmax=1000,
         get_latex=lambda: f"$R_{k}$",
@@ -96,12 +96,16 @@ class TestPlotRates:
         assert _labels(axes[0, 0]) == ["a", "b"]
 
     def test_unevaluable_panel_dropped(self):
-        bad = SimpleNamespace(rate_coefficient=sympy.Symbol("ntot"), tmin=None, tmax=None)
+        bad = SimpleNamespace(
+            rate=SimpleNamespace(coefficient=sympy.Symbol("ntot")), tmin=None, tmax=None
+        )
         _, axes = plot_rates([bad, _r(1)], grid=(1, 2), show=False)
         assert [a.axison for a in axes.ravel()] == [True, False]
 
     def test_nothing_evaluable_returns_none(self):
-        bad = SimpleNamespace(rate_coefficient=sympy.Symbol("ntot"), tmin=None, tmax=None)
+        bad = SimpleNamespace(
+            rate=SimpleNamespace(coefficient=sympy.Symbol("ntot")), tmin=None, tmax=None
+        )
         assert plot_rates(bad, show=False) is None
 
     def test_figure_title_not_leaked_from_panels(self):
@@ -226,7 +230,9 @@ class TestMisc:
         assert _labels(ax) == ["Photoabsorption", "Photodecay"]
 
     def test_labels_align_across_dropped_panel(self):
-        bad = SimpleNamespace(rate_coefficient=sympy.Symbol("ntot"), tmin=None, tmax=None)
+        bad = SimpleNamespace(
+            rate=SimpleNamespace(coefficient=sympy.Symbol("ntot")), tmin=None, tmax=None
+        )
         _, axes = plot_rates(
             [[_r(1)], [bad], [_r(2)]], labels=["a", "b", "c"], grid=(1, 3), show=False
         )
@@ -280,7 +286,9 @@ class TestLegendCapChunking:
         assert any("legend" in m for m in jaff_warnings)
 
     def test_unevaluable_not_counted(self):
-        bad = SimpleNamespace(rate_coefficient=sympy.Symbol("ntot"), tmin=None, tmax=None)
+        bad = SimpleNamespace(
+            rate=SimpleNamespace(coefficient=sympy.Symbol("ntot")), tmin=None, tmax=None
+        )
         _, axes = plot_rates([bad] + [_r(k) for k in range(1, 13)], show=False)
         assert axes.shape == (1, 1) and len(_labels(axes[0, 0])) == 12
 
@@ -333,7 +341,10 @@ class TestClose:
 
 def _zero(k):
     return SimpleNamespace(
-        rate_coefficient=0 * TGAS, tmin=10, tmax=1000, get_latex=lambda: f"$Z_{k}$"
+        rate=SimpleNamespace(coefficient=0 * TGAS),
+        tmin=10,
+        tmax=1000,
+        get_latex=lambda: f"$Z_{k}$",
     )
 
 
@@ -413,7 +424,11 @@ class TestReviewMinor:
 class TestWarningSummary:
     def test_unevaluable_rates_summarised(self, jaff_warnings):
         bad = [
-            SimpleNamespace(rate_coefficient=sympy.Symbol("ntot"), tmin=None, tmax=None)
+            SimpleNamespace(
+                rate=SimpleNamespace(coefficient=sympy.Symbol("ntot")),
+                tmin=None,
+                tmax=None,
+            )
         ] * 3
         _, axes = plot_rates(bad + [_r(1), _r(2)], show=False)
         assert len(_labels(axes[0, 0])) == 2
@@ -426,7 +441,9 @@ class TestWarningSummary:
 
 def test_grid_with_unevaluable_panels_warns_once_per_cause(jaff_warnings):
     bad = [
-        SimpleNamespace(rate_coefficient=sympy.Symbol("ntot"), tmin=None, tmax=None)
+        SimpleNamespace(
+            rate=SimpleNamespace(coefficient=sympy.Symbol("ntot")), tmin=None, tmax=None
+        )
     ] * 5
     plot_rates([*bad, _r(1), _r(2)], grid=(3, 3), show=False)
     assert not any("has nothing to plot" in m for m in jaff_warnings)

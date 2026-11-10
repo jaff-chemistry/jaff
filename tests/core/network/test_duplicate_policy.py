@@ -74,14 +74,14 @@ class TestDuplicateResolution:
     def test_preserve_first_keeps_first_coefficient(self):
         rea = _load(DUP, duplicate_policy="preserve-first").reactions[DUP_RXN]
         assert rea.rate_segments.count == 1
-        assert "1.00000000000000e-13" in str(rea.rate_coefficient)
+        assert "1.00000000000000e-13" in str(rea.rate.coefficient)
 
     def test_preserve_last_keeps_last_coefficient(self):
         # Regression: the duplicate carries a *different* rate, so removing the
         # stale segment must target the stored (old) segment, not the new one.
         rea = _load(DUP, duplicate_policy="preserve-last").reactions[DUP_RXN]
         assert rea.rate_segments.count == 1
-        assert "9.99000000000000e-13" in str(rea.rate_coefficient)
+        assert "9.99000000000000e-13" in str(rea.rate.coefficient)
 
     def test_error_raises_parsererror(self):
         with pytest.raises(ParserError, match="Duplicate reaction"):
@@ -136,4 +136,4 @@ class TestPerReactionPolicy:
 
         rea = _load(DUP, config=config).reactions[DUP_RXN]
 
-        assert "9.99000000000000e-13" in str(rea.rate_coefficient)
+        assert "9.99000000000000e-13" in str(rea.rate.coefficient)

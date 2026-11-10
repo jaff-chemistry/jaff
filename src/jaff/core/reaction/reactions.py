@@ -374,7 +374,7 @@ class Reactions(Catalogue[Reaction]):
         for reaction in self:
             refs = references[id(reaction)]
             if refs:
-                reaction.substitute({s: t.rate_coefficient for s, t in refs.items()})
+                reaction.substitute({s: t.rate.coefficient for s, t in refs.items()})
 
     def _link(self, reaction: Reaction, path: list[Reaction], done: set[int]) -> None:
         """Resolve the ``rc_`` references of *reaction*'s rate, depth first."""
@@ -388,11 +388,11 @@ class Reactions(Catalogue[Reaction]):
                 f"Rate coefficients reference each other in a cycle: {cycle}"
             )
 
-        refs = self._references([reaction.rate_coefficient])
+        refs = self._references([reaction.rate.coefficient])
         for target in refs.values():
             self._link(target, [*path, reaction], done)
         if refs:
-            reaction.substitute({s: t.rate_coefficient for s, t in refs.items()})
+            reaction.substitute({s: t.rate.coefficient for s, t in refs.items()})
 
         done.add(id(reaction))
 
@@ -420,7 +420,7 @@ class Reactions(Catalogue[Reaction]):
         """
         refs = self._references([expr])
 
-        return cast(Expr, expr.xreplace({s: t.rate_coefficient for s, t in refs.items()}))
+        return cast(Expr, expr.xreplace({s: t.rate.coefficient for s, t in refs.items()}))
 
     def _references(self, exprs: Sequence[Basic]) -> dict[Basic, Reaction]:
         """The ``rc_<N>`` symbols in *exprs*, each with its target reaction."""
@@ -681,7 +681,7 @@ class Reactions(Catalogue[Reaction]):
     def rate_coefficients(self) -> Vector[Basic]:
         """Return a ``Vector`` of rate-coefficient SymPy expressions.
 
-        ``Reaction.rate_coefficient`` of each reaction, in catalogue order.
+        ``Reaction.rate.coefficient`` of each reaction, in catalogue order.
         Units depend on the reaction order (e.g. cm³ s⁻¹ for two-body
         reactions).  For the full rates, including the reactant densities,
         use :meth:`rates`.
@@ -690,10 +690,10 @@ class Reactions(Catalogue[Reaction]):
         -------
         Vector[Basic]
         """
-        return Vector([r.rate_coefficient for r in self])
+        return Vector([r.rate.coefficient for r in self])
 
     def rates(self, form: str = "expanded") -> Vector[Basic]:
-        """Return a ``Vector`` of reaction rates, ``rate_coefficient · Π nden``.
+        """Return a ``Vector`` of reaction rates, ``rate.coefficient · Π nden``.
 
         ``Reaction.rate`` of each reaction (the rate per unit volume: the rate
         coefficient times each core reactant's number density), in catalogue

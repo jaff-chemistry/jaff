@@ -286,10 +286,10 @@ class Codegen:
         printed_rates: dict[int, str] = {}
         if use_cse:
             symbolic = {
-                i: rea.rate_coefficient
+                i: rea.rate.coefficient
                 for i, rea in enumerate(self.net.reactions)
                 # Skip raw-string rates — they are already valid target-language code
-                if not isinstance(rea.rate_coefficient, str)
+                if not isinstance(rea.rate.coefficient, str)
             }
             if symbolic:
                 printed = self._print_indexed(

@@ -154,18 +154,18 @@ rxn = net.reactions[0]
 
 rxn.verbatim  # 'H + _PHOTON -> H+ + e-'   ← verbatim is an attribute
 rxn.type  # 'photo'                     ← type is an attribute
-rxn.rate_coefficient  # a SymPy expression for the rate coefficient
+rxn.rate.coefficient  # a SymPy expression for the rate coefficient
 rxn.rate.expanded  # the coefficient times the reactant densities
 rxn.reactants  # species consumed
 rxn.products  # species created
 ```
 
 - `reactants` / `products` — the species on each side, as `Species` catalogues;
-- `rate_coefficient` — the rate coefficient as a **SymPy expression**, not a
+- `rate.coefficient` — the rate coefficient as a **SymPy expression**, not a
   number; it still contains the temperature symbol so it can be differentiated
   and emitted as code;
-- `rate` — `rate_coefficient` times the number density of each reactant (also a
-  SymPy expression; pseudo-species such as `_PHOTON` carry no density);
+- `rate.expanded` — `rate.coefficient` times the number density of each reactant
+  (also a SymPy expression; pseudo-species such as `_PHOTON` carry no density);
 - `type` — the classification (`photo`, `cosmic_ray`, `3_body`, `unknown`, or a
   grain surface-mechanism type such as `freeze`/`desorption_*` in gas-grain
   networks), concluded by the network-format parser as it reads the file;

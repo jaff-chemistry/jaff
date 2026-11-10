@@ -23,7 +23,7 @@ def link_network(make_network, tmp_path):
 
 
 def _rate(net, index):
-    return net.reactions.by_source_index(index).rate_coefficient
+    return net.reactions.by_source_index(index).rate.coefficient
 
 
 class TestLink:
@@ -100,5 +100,5 @@ class TestOwnership:
         rxn.substitute({x: sp.Float(1.0)})
 
         assert all(not e.has(x) for e in rxn.expressions())
-        assert float(rxn.rate_coefficient) == pytest.approx(3.0)
+        assert float(rxn.rate.coefficient) == pytest.approx(3.0)
         assert float(rxn.dE) == pytest.approx(2.0)

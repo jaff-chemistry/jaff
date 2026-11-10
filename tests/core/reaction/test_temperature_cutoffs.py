@@ -33,7 +33,7 @@ def _reactions(**reactions):
 
 def _is_clipped(net, srxn=RXN):
     """True when the reaction's rate still carries the boundary clamp (clip)."""
-    return net.reactions[srxn].rate_coefficient.has(Piecewise)
+    return net.reactions[srxn].rate.coefficient.has(Piecewise)
 
 
 def _write_toml(tmp_path, body):
@@ -48,7 +48,7 @@ class TestTemperatureCutoffResolution:
     def test_default_is_clip(self):
         # No config -> built-in default clamps tgas.
         assert _is_clipped(_load()) is True
-        assert symbols("tgas") in _load().reactions[RXN].rate_coefficient.free_symbols
+        assert symbols("tgas") in _load().reactions[RXN].rate.coefficient.free_symbols
 
     def test_jafftoml_global_extrapolate(self, tmp_path):
         cfg = _write_toml(tmp_path, '[network.reactions]\nt_cutoff = "extrapolate"\n')

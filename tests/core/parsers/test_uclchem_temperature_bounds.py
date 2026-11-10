@@ -15,6 +15,6 @@ def test_zero_tmin_is_unbounded(make_network):
 
 def test_zero_tmin_adds_no_singular_clip_branch(make_network):
     """Clipping at T = 0 evaluated (tgas/300)**-0.7 at zero: a zoo (or nan) branch."""
-    rate = make_network([RECOMBINATION]).reactions[0].rate_coefficient
+    rate = make_network([RECOMBINATION]).reactions[0].rate.coefficient
 
     assert not rate.has(sympy.zoo, sympy.nan)

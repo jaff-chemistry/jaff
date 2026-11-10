@@ -149,7 +149,7 @@ def _(mo):
     mo.md(r"""
     ## The rate is symbolic
 
-    `rxn.rate_coefficient` is a [SymPy](https://www.sympy.org) expression in the gas
+    `rxn.rate.coefficient` is a [SymPy](https://www.sympy.org) expression in the gas
     temperature `tgas`, not a number. Keeping it symbolic means one rate can be
     differentiated exactly, printed in any language, or evaluated on a
     temperature grid later, without re-parsing.
@@ -169,7 +169,7 @@ def _(mo):
 
 @app.cell
 def _(rxn):
-    rxn.rate_coefficient
+    rxn.rate.coefficient
     return
 
 
@@ -187,7 +187,7 @@ def _(mo):
 def _(rxn):
     import sympy
 
-    sympy.diff(rxn.rate_coefficient, sympy.Symbol("tgas"))
+    sympy.diff(rxn.rate.coefficient, sympy.Symbol("tgas"))
     return
 
 
@@ -417,9 +417,9 @@ def _(mo, two_range):
     mo.vstack(
         [
             mo.md("**clip**"),
-            two_range["clip"].rate_coefficient,
+            two_range["clip"].rate.coefficient,
             mo.md("**extrapolate**"),
-            two_range["extrapolate"].rate_coefficient,
+            two_range["extrapolate"].rate.coefficient,
         ]
     )
     return
@@ -462,7 +462,7 @@ def _(mo):
 def _(mo, net):
     mo.ui.table(
         [
-            {"reaction": rxn.verbatim, "rate": str(rxn.rate_coefficient)}
+            {"reaction": rxn.verbatim, "rate": str(rxn.rate.coefficient)}
             for rxn in net.reactions
             if "_PHOTON" in rxn.reactants.names()
         ],

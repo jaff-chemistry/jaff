@@ -252,7 +252,7 @@ class NetworkSymbols:
         """
         net = self._net
         expressions = [
-            *(r.rate_coefficient for r in net.reactions),
+            *(r.rate.coefficient for r in net.reactions),
             net.thermodynamics.dEdt_chemical().volumetric,
             net.thermodynamics.dEdt_extra.volumetric,
         ]

@@ -174,7 +174,7 @@ Inside a custom `@function` body you can reference the auto-generated rate
 coefficient of another reaction with the reserved symbol `rc_<N>`, where `N` is
 the reaction's 0-based **file-order number** — the same number used by
 `chemRateCoeff<N>` (see [Reaction numbers](#reaction-numbers)). JAFF resolves `rc_<N>`
-to that reaction's `rate_coefficient` (looked up with
+to that reaction's `rate.coefficient` (looked up with
 `network.reactions.by_source_index(N)`, not `network.reactions[N]`), so you can
 build one reaction's rate or energy term out of another's without restating its
 Arrhenius expression.

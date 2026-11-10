@@ -78,7 +78,7 @@ class TestNetworkCheck:
             net,
             [h],
             [h2],
-            net.reactions[0].rate_coefficient,
+            net.reactions[0].rate.coefficient,
             None,
             None,
             ReactionSource("H -> H2", 1, 99),

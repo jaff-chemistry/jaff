@@ -155,5 +155,5 @@ def test_cie_h_chemratecoeff_resolves_hepp_density(fixtures_dir):
 
     net = Network(str(fixtures_dir / "react_cie_hepp.jet"))
     idx = net.species["He++"].index
-    used = set().union(*(r.rate_coefficient.atoms(Indexed) for r in net.reactions))
+    used = set().union(*(r.rate.coefficient.atoms(Indexed) for r in net.reactions))
     assert net.symbols.ndens[idx] in used

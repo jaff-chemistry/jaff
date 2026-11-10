@@ -56,7 +56,7 @@ class TestFormatSpecifics:
         ]
         assert match, "expected H2 -> H + H photodissociation"
         assert (match[0].tmin, match[0].tmax) == (10, 3000)
-        assert "av" in str(match[0].rate_coefficient)
+        assert "av" in str(match[0].rate.coefficient)
 
     def test_prizmo_variable_substitution(self, load_sample):
         # y = tgas/300 is substituted into the O + H -> OH coefficient.
@@ -67,7 +67,7 @@ class TestFormatSpecifics:
             if r.reactants.count == 2 and "O" in r.reactants and "H" in r.reactants
         ]
         assert match, "expected O + H -> OH"
-        rate = str(match[0].rate_coefficient)
+        rate = str(match[0].rate.coefficient)
         assert "tgas" in rate.lower()
         assert "8.648" in rate or "8.65" in rate  # 9.9e-11 * 300**0.38
 
@@ -80,7 +80,7 @@ class TestFormatSpecifics:
 
     def test_prizmo_photo_reaction_typed(self, load_sample):
         net = load_sample("prizmo")
-        photo = [r for r in net.reactions if "photorates" in str(r.rate_coefficient)]
+        photo = [r for r in net.reactions if "photorates" in str(r.rate.coefficient)]
         assert photo, "expected a photochemistry reaction"
         assert all(r.type == "photo" for r in photo)
 
@@ -93,7 +93,7 @@ class TestFormatSpecifics:
             if r.reactants.count == 2 and "C+" in r.reactants and "H2" in r.reactants
         ]
         assert match, "expected C+ + H2 reaction"
-        rate = str(match[0].rate_coefficient).lower()
+        rate = str(match[0].rate.coefficient).lower()
         assert "tgas" in rate and "exp" in rate
 
     def test_uclchem_species_parsed_despite_nan_fields(self, load_sample):
@@ -142,7 +142,7 @@ class TestParserRobustness:
             ]
         )
         for r in net.reactions:
-            rate = str(r.rate_coefficient)
+            rate = str(r.rate.coefficient)
             assert "invte" not in rate and "t32" not in rate
             assert "tgas" in rate.lower()
 

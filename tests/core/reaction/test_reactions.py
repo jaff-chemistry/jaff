@@ -19,15 +19,15 @@ class TestRateExpressions:
     )
     def test_rate_parses_to_expression(self, make_network, line):
         rea = make_network([line]).reactions[0]
-        assert rea.rate_coefficient is not None
-        assert hasattr(rea.rate_coefficient, "free_symbols") or isinstance(
-            rea.rate_coefficient, (int, float)
+        assert rea.rate.coefficient is not None
+        assert hasattr(rea.rate.coefficient, "free_symbols") or isinstance(
+            rea.rate.coefficient, (int, float)
         )
 
     @pytest.mark.parametrize("rate", ["1e-50", "1e50", "0.0"])
     def test_extreme_rate_values_accepted(self, make_network, rate):
         rea = make_network([f"H -> H+ + e- [10,1000] {rate}"]).reactions[0]
-        assert rea.rate_coefficient is not None
+        assert rea.rate.coefficient is not None
 
     def test_malformed_rate_expr_is_tolerated(self, make_network):
         # Unknown functions/variables parse as free symbols rather than aborting;
@@ -65,9 +65,9 @@ class TestTemperatureLimits:
         rea = make_network(["H + e- -> H- [10,10000] 3e-16 * (tgas/300)**0.5"]).reactions[
             0
         ]
-        assert tgas in rea.rate_coefficient.free_symbols
+        assert tgas in rea.rate.coefficient.free_symbols
         assert rea.config.t_cutoff == "clip"
-        assert rea.rate_coefficient.has(Piecewise)
+        assert rea.rate.coefficient.has(Piecewise)
 
 
 class TestStoichiometry:
@@ -110,7 +110,7 @@ class TestParserMetadata:
             net,
             reactants=[h, h],
             products=[h2],
-            rate_coefficient=net.reactions[0].rate_coefficient,
+            rate_coefficient=net.reactions[0].rate.coefficient,
             tmin=None,
             tmax=None,
             source=ReactionSource("H + H -> H2", 1, 99, kwargs.pop("format", None)),
@@ -270,7 +270,7 @@ class TestAddRate:
 
         assert (rea.tmin, rea.tmax) == (10, 5000)
         tgas = rea.net.symbols.tgas
-        assert float(rea.rate_coefficient.subs(tgas, 3000)) == pytest.approx(2e-10)
+        assert float(rea.rate.coefficient.subs(tgas, 3000)) == pytest.approx(2e-10)
 
     def test_preserve_first_keeps_the_existing_rate(self, make_network):
         rea = self._add(self._net(make_network, "preserve-first"), 2e-10)

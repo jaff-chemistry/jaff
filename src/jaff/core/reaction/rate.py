@@ -40,7 +40,7 @@ class Rate:
     """Rate per unit volume of one reaction, ``k · Π nden[reactants]``.
 
     Reached as ``reaction.rate``.  The rate coefficient ``k`` appears in one of two
-    forms: :attr:`expanded` writes it out (``reaction.rate_coefficient``),
+    forms: :attr:`expanded` writes it out (:attr:`coefficient`),
     :attr:`reduced` uses the reaction's symbol ``krate[r]``, *r* being its position in
     ``net.reactions``.  Equations built from the reduced form, with the definitions
     ``krate[r] = coefficient`` kept apart, evaluate every coefficient once.
@@ -75,8 +75,19 @@ class Rate:
 
     @property
     def coefficient(self) -> Expr:
-        """The rate coefficient written out, ``reaction.rate_coefficient``."""
-        return self.reaction.rate_coefficient
+        """The rate coefficient ``k``, as a SymPy expression.
+
+        The photo band rate when a radiation field sets it
+        (``reaction.photo.band_rate``), else the reaction's rate segments collapsed
+        into one expression (``reaction.rate_segments.equivalent_rate``).  Units
+        depend on the reaction order (e.g. cm³ s⁻¹ for a two-body reaction).
+        Change it through ``reaction.rate_segments``.
+        """
+        reaction = self.reaction
+        if reaction.photo is not None and reaction.photo.band_rate is not None:
+            return reaction.photo.band_rate
+
+        return reaction.rate_segments.equivalent_rate
 
     @property
     def symbol(self) -> Indexed:

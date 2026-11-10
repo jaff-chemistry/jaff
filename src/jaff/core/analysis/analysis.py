@@ -65,7 +65,7 @@ class Analysis:
     >>> net.analysis.enable(parameters={"tgas": 100.0, "av": 1.0})
     >>> net.analysis.parameters.values()
     {'av': 1.0, 'tgas': 100.0}
-    >>> net.analysis.evaluate(net.reactions[2].rate_coefficient)
+    >>> net.analysis.evaluate(net.reactions[2].rate.coefficient)
     4.382088543149259e-07
     """
 
@@ -155,7 +155,7 @@ class Analysis:
         Parameters
         ----------
         exprs : Expr, sequence of Expr, or Matrix
-            What to evaluate: one expression (e.g. ``reaction.rate_coefficient``),
+            What to evaluate: one expression (e.g. ``reaction.rate.coefficient``),
             a sequence of them (e.g. ``net.reactions.rates()``) or a matrix (e.g.
             an :class:`~jaff.core.OdeSystem`'s ``rhs`` or ``jacobian``).  Rates
             and equations must be in the expanded form: a ``krate[r]`` symbol has
@@ -186,7 +186,7 @@ class Analysis:
         --------
         >>> from jaff import Network
         >>> net = Network("networks/demos/water_co.jet")
-        >>> net.analysis.evaluate(net.reactions[2].rate_coefficient, {"tgas": 100.0})
+        >>> net.analysis.evaluate(net.reactions[2].rate.coefficient, {"tgas": 100.0})
         4.382088543149259e-07
         >>> parameters = {"tgas": 100.0, "crate": 1.3e-17, "av": 1.0, "chi": 1.0}
         >>> net.analysis.evaluate(net.reactions.rate_coefficients(), parameters)[
@@ -249,7 +249,7 @@ class Analysis:
         symbols: set[str] = set()
         functions: set[str] = set()
         for reaction in self.network.reactions:
-            expr = reaction.rate_coefficient
+            expr = reaction.rate.coefficient
             indexed = {a.base.label for a in expr.atoms(Indexed)}
             symbols |= {
                 s.name for s in expr.free_symbols - indexed if isinstance(s, Symbol)

@@ -120,7 +120,7 @@ parse file → build reactions and species → elements
 
 The hook sees the full `Network` API (`network.reactions`, `network.species`, `network.elements`, filters such as `with_type` and `with_format`). Rates are still raw SymPy expressions: they have not been standardised yet.
 
-The hook **may** change things *on* existing reactions: `rate_segments[i].rate`, `rate_coefficient`, other reaction properties, and `_metadata`.
+The hook **may** change things *on* existing reactions: `rate_segments[i].rate`, `rate.coefficient`, other reaction properties, and `_metadata`.
 
 The hook **may not** add or remove reactions or species. Both catalogues are frozen before the hooks run, so `add()` raises `RuntimeError`.
 

@@ -104,17 +104,14 @@ class Reaction:
         Ordered species catalogue of reactant species.
     products : Species
         Ordered species catalogue of product species.
-    rate_coefficient : Expr
-        SymPy expression for the reaction rate coefficient (units depend on
-        the reaction order; typically cm³ s⁻¹ for two-body reactions).
-        Read-only: the photo band rate when a radiation field sets it
-        (``photo.band_rate``), else the :attr:`rate_segments` collapsed into
-        one expression.
     rate : Rate
-        The reaction rate per unit volume, ``rate_coefficient`` times the core
-        reactants' number densities, used by every equation builder:
-        ``rate.expanded`` writes the coefficient out, ``rate.reduced`` uses its
-        symbol ``krate[r]``.
+        The reaction rate per unit volume and its parts: ``rate.coefficient``,
+        the SymPy rate coefficient (the photo band rate when a radiation field
+        sets it, else the :attr:`rate_segments` collapsed into one expression;
+        units depend on the reaction order, typically cm³ s⁻¹ for two-body
+        reactions); ``rate.expanded``, the coefficient times the core reactants'
+        number densities; ``rate.reduced``, the same with the coefficient as its
+        symbol ``krate[r]``.  Used by every equation builder.
     tmin : float or None
         Minimum gas temperature at which the rate is valid (Kelvin), from the
         lowest rate segment.  ``None`` means no lower bound.  Read-only.
@@ -131,7 +128,7 @@ class Reaction:
     rate_segments : RateSegments
         Per-temperature-range rate pieces.  A single-range reaction holds one
         segment; reactions merged across disjoint ranges accumulate several,
-        collapsed into :attr:`rate_coefficient` (``rate_segments.equivalent_rate``).
+        collapsed into ``rate.coefficient`` (``rate_segments.equivalent_rate``).
         Change the rates through it (``map_rates``, ``Reactions.add_rate``).
     dE : Basic
         SymPy expression for the energy released per reaction event (erg),
@@ -189,7 +186,7 @@ class Reaction:
     For a photo reaction the constructor also looks up its cross sections
     (from a ``.jfunc`` ``photoCrossSection<N>`` function or the
     cross-section databases) and, when the network has a radiation field,
-    replaces :attr:`rate_coefficient` with the sum of its per-band rate
+    replaces ``rate.coefficient`` with the sum of its per-band rate
     coefficients.  A photo reaction whose rate comes from a ``.jfunc``
     ``chemRateCoeff<N>`` keeps that rate (``photo.custom_rad_rate`` is ``True``)
     and is not coupled to the bands, unless ``override_custom_rate`` is set.
@@ -206,7 +203,7 @@ class Reaction:
     'H+ + e- -> H'
     >>> rxn.type, rxn.index, rxn.catalogue_index
     ('unknown', 1, 1)
-    >>> rxn.rate_coefficient
+    >>> rxn.rate.coefficient
     2.63e-13/(tgas/10000.0)**0.7
     >>> net.reactions[0].type
     'photo'
@@ -472,24 +469,6 @@ class Reaction:
         return photo
 
     @property
-    def rate_coefficient(self) -> Expr:
-        """SymPy rate coefficient; see the class attributes.
-
-        The photo band rate when a radiation field sets it, else the rate
-        segments collapsed into one expression.  Units depend on the reaction
-        order (e.g. cm³ s⁻¹ for a two-body reaction).  Change it through
-        :attr:`rate_segments`.
-
-        Returns
-        -------
-        Expr
-        """
-        if self.photo is not None and self.photo.band_rate is not None:
-            return self.photo.band_rate
-
-        return self.rate_segments.equivalent_rate
-
-    @property
     def tmin(self) -> float | None:
         """Lower temperature bound of the lowest rate segment (K); see the attributes."""
         return self.rate_segments.sort()[0].tmin
@@ -501,7 +480,7 @@ class Reaction:
 
     @cached_property
     def rate(self) -> Rate:
-        """Reaction rate per unit volume, ``rate_coefficient · Π nden[reactants]``.
+        """Reaction rate per unit volume, ``rate.coefficient · Π nden[reactants]``.
 
         A :class:`~jaff.core.reaction.Rate`: ``rate.expanded`` writes the rate
         coefficient out, ``rate.reduced`` uses its symbol ``krate[r]``.  The densities
@@ -923,14 +902,14 @@ class Reaction:
     def get_sympy(self) -> Basic:
         """Return the rate as a canonical SymPy expression.
 
-        The :attr:`rate_coefficient` passed through ``sympify``; it can go
+        The ``rate.coefficient`` passed through ``sympify``; it can go
         straight to SymPy's code printers or differentiation routines.
 
         Returns
         -------
         Basic
         """
-        return sympify(self.rate_coefficient)
+        return sympify(self.rate.coefficient)
 
     def plot_rate_coefficient(self, **kwargs: Any) -> tuple[plt.Figure, Any] | None:
         """Plot the rate coefficient as a function of gas temperature.

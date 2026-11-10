@@ -449,7 +449,7 @@ rxn.photo.xsec.photon_energy  # eV grid
 rxn.photo.xsec.photodecay  # cm² array (or None)
 rxn.photo.xsec_total  # spectrum-averaged σ (cm²); None without radiation
 rxn.photo.band_xsecs  # per-band <σ> and fractions (DataFrame)
-rxn.rate_coefficient  # Σ_i k_i, with the radiation density symbols
+rxn.rate.coefficient  # Σ_i k_i, with the radiation density symbols
 rxn.photo.plot_xsecs()  # visualise σ(E)
 
 # Symbolic radiation ODEs

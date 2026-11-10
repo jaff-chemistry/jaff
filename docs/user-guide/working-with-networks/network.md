@@ -220,7 +220,7 @@ atoms):
 
 ```python
 g = Network("networks/GOW/GOW.jet")
-g.reactions.with_type("cosmic_ray")[0].rate_coefficient
+g.reactions.with_type("cosmic_ray")[0].rate.coefficient
 # crate*(1.5*nden[0]/(nden[0] + nden[10] + nden[14] + nden[15] + 3*nden[16] + nden[1] + 2*nden[3] + 2*nden[4]) + ...)
 ```
 

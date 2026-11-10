@@ -85,7 +85,7 @@ class TestCall:
         rxn = net.reactions[-1]
 
         n_c = _std(net, "n_C")
-        value = float(rxn.rate_coefficient.subs(n_c, 2.0))
+        value = float(rxn.rate.coefficient.subs(n_c, 2.0))
 
         assert value == pytest.approx(1e-17 / 21.0, rel=1e-12)
 
@@ -131,12 +131,12 @@ class TestReactionFunction:
         net = func_network("@function chemRate0(n_e)\n@return 2*n_e\n")
 
         assert net.reactions[0].function("chemRateCoeff") is None
-        assert net.reactions[0].rate_coefficient == pytest.approx(1e-10)
+        assert net.reactions[0].rate.coefficient == pytest.approx(1e-10)
 
     def test_chem_rate_parameters_are_standardized(self, func_network):
         net = func_network("@function chemRateCoeff0(tgas, n_H2)\n@return 1e-10*n_H2\n")
 
-        assert net.reactions[0].rate_coefficient == 1e-10 * _std(net, "n_H2")
+        assert net.reactions[0].rate.coefficient == 1e-10 * _std(net, "n_H2")
 
 
 class TestRateReferences:
@@ -144,8 +144,8 @@ class TestRateReferences:
         net = func_network("@function chemRateCoeff1(n_e)\n@return 2*rc_2*n_e\n")
         target = net.reactions.by_source_index(2)
 
-        assert net.reactions.by_source_index(1).rate_coefficient == (
-            2 * target.rate_coefficient * _std(net, "n_e")
+        assert net.reactions.by_source_index(1).rate.coefficient == (
+            2 * target.rate.coefficient * _std(net, "n_e")
         )
 
     def test_rate_reference_to_a_later_reaction_is_standardized(self, func_network):
@@ -153,7 +153,7 @@ class TestRateReferences:
         lines = "H + E -> H-  []  2*rc_1\nCH -> C + H  []  1e-9*n_H\n"
         net = func_network("", lines=lines)
 
-        free = {str(s) for s in net.reactions[0].rate_coefficient.free_symbols}
+        free = {str(s) for s in net.reactions[0].rate.coefficient.free_symbols}
         assert not any(name.startswith(("n_", "rc_")) for name in free)
 
     def test_rate_reference_in_cross_section_raises(self, func_network):

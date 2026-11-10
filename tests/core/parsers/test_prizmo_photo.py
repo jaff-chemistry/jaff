@@ -26,14 +26,14 @@ def test_photo_reactions_numbered_from_one(make_network):
 
     c = _rxn(net, "C + _PHOTON -> C+ + e-")
     o = _rxn(net, "O + _PHOTON -> O+ + e-")
-    assert _photorates_args(c.rate_coefficient) == pytest.approx([1, 11.3, 1e99])
-    assert _photorates_args(o.rate_coefficient) == pytest.approx([2, 13.6, 20])
+    assert _photorates_args(c.rate.coefficient) == pytest.approx([1, 11.3, 1e99])
+    assert _photorates_args(o.rate.coefficient) == pytest.approx([2, 13.6, 20])
 
 
 def test_bare_photo_defaults_both_band_edges(make_network):
     net = make_network("C -> C+ + E [] PHOTO\n", name="p.jet")
 
-    rate = net.reactions[0].rate_coefficient
+    rate = net.reactions[0].rate.coefficient
     assert _photorates_args(rate) == pytest.approx([1, 1e99, 1e99])
 
 
@@ -41,7 +41,7 @@ def test_no_placeholder_left(make_network):
     net = make_network(NETWORK, name="p.jet")
 
     for rxn in net.reactions:
-        assert "prizmo_photo" not in str(rxn.rate_coefficient)
+        assert "prizmo_photo" not in str(rxn.rate.coefficient)
         assert all("prizmo_photo" not in str(s.rate) for s in rxn.rate_segments)
 
 
@@ -50,13 +50,13 @@ def test_chemratecoeff_reaction_keeps_its_number_unused(make_network, tmp_path):
     net = make_network(NETWORK, name="p.jet")
 
     o = _rxn(net, "O + _PHOTON -> O+ + e-")
-    assert _photorates_args(o.rate_coefficient) == pytest.approx([2, 13.6, 20])
+    assert _photorates_args(o.rate.coefficient) == pytest.approx([2, 13.6, 20])
 
 
 def test_photo_only_detected_at_start_of_rate(make_network):
     net = make_network("H + H -> H2 [] 1e-10*photofac\n", name="p.jet")
 
-    rate = net.reactions[0].rate_coefficient
+    rate = net.reactions[0].rate.coefficient
     assert "photofac" in str(rate)
     assert "photorates" not in str(rate)
 

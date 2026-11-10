@@ -312,7 +312,8 @@ docs/           # Documentation
   equations. `form="reduced"` puts `krate[r]` in the rows (definitions in
   `system.rate_coefficients`) and builds the Jacobian by the chain rule over them
 - `core/reaction/`, `core/species/`, `core/elements/`: reactions, species, elements;
-  `reaction.rate` is a `Rate` with `.expanded` (coefficient written out) and `.reduced`
+  `reaction.rate` is a `Rate`: `.coefficient` (the only way to the rate coefficient),
+  `.expanded` (coefficient × reactant densities) and `.reduced`
   (`krate[r]` symbol, `r` = catalogue position) forms. Equation builders take
   `form="expanded" | "reduced"`: `Reactions.rates`, the `Kinetics` methods,
   `Radiation.odes`, and the `Thermodynamics` methods `dEdt_chemical()`, `dEdt_tot()`,

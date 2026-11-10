@@ -83,11 +83,20 @@ def test_densities_are_the_core_reactant_densities(net):
 def test_forms(net):
     rate = _rxn(net, "H+.e-__H").rate
 
-    assert rate.coefficient is rate.reaction.rate_coefficient
     assert _same(rate.expanded, rate.coefficient * rate.densities)
     assert rate.reduced == rate.symbol * rate.densities
     assert rate.form("expanded") == rate.expanded
     assert rate.form("reduced") == rate.reduced
+
+
+def test_coefficient_is_the_merged_segments(net):
+    rxn = _rxn(net, "H+.e-__H")
+
+    assert rxn.rate.coefficient == rxn.rate_segments.equivalent_rate
+
+
+def test_coefficient_is_the_only_way_to_the_coefficient(net):
+    assert not hasattr(_rxn(net, "H.H__H2"), "rate_coefficient")
 
 
 def test_unknown_form_raises(net):
@@ -104,7 +113,7 @@ def test_expanded_follows_the_coefficient(net):
 
     assert rxn.rate is rate
     assert rate.expanded != before
-    assert _same(rate.expanded, rxn.rate_coefficient * rate.densities)
+    assert _same(rate.expanded, rxn.rate.coefficient * rate.densities)
 
 
 def test_expanded_is_cached(net):

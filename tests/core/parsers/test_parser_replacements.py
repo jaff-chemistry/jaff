@@ -14,7 +14,7 @@ def _rate(make_network, rate_str, reactants="H,C", product="CH", **kw):
         ],
         **kw,
     )
-    return net, net.reactions[0].rate_coefficient
+    return net, net.reactions[0].rate.coefficient
 
 
 def _at(rate, t=100):

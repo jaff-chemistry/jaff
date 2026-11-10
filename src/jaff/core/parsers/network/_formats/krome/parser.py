@@ -95,7 +95,7 @@ class KromeParser(Parser):
             rea.rate_segments.map_rates(lambda rate, n=n: self._number_photo(rate, n))
 
         for rea in network.reactions.with_format(self.name):
-            exprs = [rea.rate_coefficient, *(seg.rate for seg in rea.rate_segments)]
+            exprs = [rea.rate.coefficient, *(seg.rate for seg in rea.rate_segments)]
             if any(self._placeholders(expr) for expr in exprs):
                 raise ParserError(f"Unresolved photo placeholder in {rea}")
 

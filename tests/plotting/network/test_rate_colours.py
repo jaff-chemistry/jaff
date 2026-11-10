@@ -131,7 +131,7 @@ def _patches(ax, prefix):
 
 def _expected_colours(net, indices, cmap, rates=False):
     exprs = [
-        net.reactions[i].rate.expanded if rates else net.reactions[i].rate_coefficient
+        net.reactions[i].rate.expanded if rates else net.reactions[i].rate.coefficient
         for i in indices
     ]
     k = net.analysis.evaluate(exprs)

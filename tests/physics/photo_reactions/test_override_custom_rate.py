@@ -45,7 +45,7 @@ class TestGlobalFlag:
         )
 
         assert rxn.photo.custom_rad_rate is False
-        assert rxn.rate_coefficient.has(rxn.net.radiation.den[0])
+        assert rxn.rate.coefficient.has(rxn.net.radiation.den[0])
         assert len(rxn.photo.bands) == len(BANDS) - 1
 
     def test_without_radiation_custom_rate_is_kept(self, custom_network, tmp_path):
@@ -56,7 +56,7 @@ class TestGlobalFlag:
         rxn = _photo(custom_network(config=str(cfg)))
 
         assert rxn.photo.custom_rad_rate is True
-        assert float(rxn.rate_coefficient) == pytest.approx(1e-10, rel=1e-6, abs=0)
+        assert float(rxn.rate.coefficient) == pytest.approx(1e-10, rel=1e-6, abs=0)
 
 
 class TestPerReaction:

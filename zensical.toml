@@ -117,7 +117,6 @@ nav = [
         "reference/core/reaction/function.md",
         "reference/core/reaction/expressions.md",
         "reference/core/reaction/substitute.md",
-        "reference/core/reaction/rate_coefficient.md",
         "reference/core/reaction/tmin.md",
         "reference/core/reaction/tmax.md",
         "reference/core/reaction/rate.md",

@@ -828,7 +828,10 @@ def test_plot_rates_kappa_label():
     from types import SimpleNamespace
 
     r = SimpleNamespace(
-        rate_coefficient=1e-10 * tgas, tmin=10, tmax=1000, get_latex=lambda: "R"
+        rate=SimpleNamespace(coefficient=1e-10 * tgas),
+        tmin=10,
+        tmax=1000,
+        get_latex=lambda: "R",
     )
     _, axes = plot_rates([r], show=False)
     assert axes[0, 0].get_ylabel() == r"$\log_{10}$ $\kappa$"

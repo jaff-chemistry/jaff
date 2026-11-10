@@ -126,7 +126,7 @@ given values are used. Missing values raise one `ValueError` naming all of them:
 
 ```python
 rxn = net.reactions[24]  # CO + H3+ -> H2 + HCO+
-net.analysis.evaluate(rxn.rate_coefficient)  # 1.7e-09
+net.analysis.evaluate(rxn.rate.coefficient)  # 1.7e-09
 net.analysis.evaluate(rxn.rate.expanded)
 # ValueError: Cannot evaluate: no density for CO, H3+
 ```

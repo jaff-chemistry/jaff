@@ -12,6 +12,6 @@ def test_auto_becomes_numbered_photorates(make_network):
     net = make_network(NETWORK, name="react_test")
 
     rxn = next(r for r in net.reactions if r.type == "photo")
-    assert rxn.rate_coefficient.func == NetworkSymbols.photorates
-    assert [float(a) for a in rxn.rate_coefficient.args] == pytest.approx([1, 1e99, 1e99])
+    assert rxn.rate.coefficient.func == NetworkSymbols.photorates
+    assert [float(a) for a in rxn.rate.coefficient.args] == pytest.approx([1, 1e99, 1e99])
     assert all("krome_photo" not in str(s.rate) for s in rxn.rate_segments)
