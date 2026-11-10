@@ -330,9 +330,11 @@ docs/           # Documentation
   stoichiometry-matrix figures of a network's species and reactions; `graph()` /
   `species()` colour by `colour_by="rate_coefficient" | "rate"` from `net.analysis`
   and list its labelled entries in the legend panel under the drawing
-- `common/optimizations/`: exact SymPy rewrites for cheaper generated code;
-  `derivative(expr, y, value)` writes `∂expr/∂y` as `value · ∂ln(expr)/∂y` per `Piecewise`
-  branch where cheaper (used for the reduced Jacobian's `∂k/∂y`). Add new ones here
+- `common/derivative.py`: `derivative(expr, y, value)`, `∂expr/∂y` per `Piecewise` branch,
+  using the log-derivative optimization where it applies (the reduced Jacobian's `∂k/∂y`)
+- `common/optimizations/`: exact SymPy rewrites that make generated code cheaper, one
+  module each: `log_derivative` (`value · ∂ln(expr)/∂y` for products of powers and
+  `exp`); shared CSE goes here too. Helpers that only use them live outside it
 - `codegen/`: `Codegen`, `Language`s, the `$$JAFF` template engine (`templating/`);
   `$$JAFF CALL` inserts text from `@jaffgen_function` functions in a template's
   `jaffgen_template_functions.py` (`templating/functions.py`)
