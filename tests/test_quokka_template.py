@@ -57,8 +57,14 @@ def test_species_bands_and_masses(generated):
 
 
 def test_rhs_and_jacobian_use_the_quokka_solver_vector(generated):
-    assert "void network_rhs(State const &state, NetworkParams const &p, rosenbrock::Vector<NumEqs> &ydot)" in generated
-    assert "void network_jac(State const &state, NetworkParams const &p, rosenbrock::Matrix<NumEqs> &J)" in generated
+    assert (
+        "void network_rhs(State const &state, NetworkParams const &p, rosenbrock::Vector<NumEqs> &ydot)"
+        in generated
+    )
+    assert (
+        "void network_jac(State const &state, NetworkParams const &p, rosenbrock::Matrix<NumEqs> &J)"
+        in generated
+    )
     assert "ydot[0] = " in generated  # 0-based rows
     assert "J(0, 0) = " in generated  # 0-based entries
     assert "state.xn[0]" in generated
@@ -68,5 +74,32 @@ def test_rhs_and_jacobian_use_the_quokka_solver_vector(generated):
 
 
 def test_no_microphysics(generated):
-    for token in ("burn_t", "Array1D", "network_rp", "extern_parameters", "actual_rhs", "jacobian_utilities"):
+    for token in (
+        "burn_t",
+        "Array1D",
+        "network_rp",
+        "extern_parameters",
+        "actual_rhs",
+        "jacobian_utilities",
+    ):
         assert token not in generated, token
+
+
+def test_shared_rhs_jacobian_with_radiation(generated):
+    """network_rhs_jac shares the rates between the RHS and the Jacobian, radiation rows included."""
+    assert "#define NETWORK_HAS_RHS_JAC" in generated
+    body = generated[generated.index("void network_rhs_jac(") :]
+    # every row, the photon number and the flux factor included, is written once
+    for row in range(6):
+        assert f"ydot[{row}] =" in body
+    # the radiation columns are present (photon number 4, flux factor 5)
+    assert "J(4, 4) =" in body
+    assert "J(5, 5) =" in body
+
+
+def test_flux_factor_is_a_passive_entry(generated):
+    assert "#define NETWORK_HAS_NUM_ACTIVE_EQS" in generated
+    assert (
+        "constexpr int NumActiveEqs = (NumChemBands == 1) ? NumSpec + 2 : NumEqs;"
+        in generated
+    )

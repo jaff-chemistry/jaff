@@ -15,7 +15,7 @@
 // spmasses, gammas, NumChemBands, NumChemRadVarsPerGroup, NumChemRadEqs, NumThermalBands,
 // ChemBandsHeader(), ChemBandsPowerLawIndex_; and in namespace network: NumEqs, State,
 // NetworkParams, network_rhs, network_jac. Optional, and provided here: NumActiveEqs
-// (NETWORK_HAS_NUM_ACTIVE_EQS).
+// (NETWORK_HAS_NUM_ACTIVE_EQS) and network_rhs_jac (NETWORK_HAS_RHS_JAC).
 $$JAFF DEFINE quokka {
     REPLACE {
         "radeden\[\s*(\d+)\s*\]" -> "state.rn[NumChemRadVarsPerGroup*\1]"
@@ -147,6 +147,28 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_jac(State const &state, Ne
 	}
 	$$JAFF REPEAT idx, expr, cse IN jacobian { USE quokka }
 	const amrex::Real cse$idx$ = $cse$;
+	J($idx$, $idx$) = $expr$;
+	$$JAFF END
+}
+
+/// The right-hand side and the Jacobian at one state, sharing every temperature-only rate
+/// coefficient and its derivative (JAFF's rhs_jacobian): Quokka's solver calls it where it needs
+/// both, at the start of each step, and network_rhs alone for the other stages.
+#define NETWORK_HAS_RHS_JAC
+AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void network_rhs_jac(State const &state, NetworkParams const &p, rosenbrock::Vector<NumEqs> &ydot,
+							     rosenbrock::Matrix<NumEqs> &J)
+{
+	amrex::ignore_unused(p);
+	for (int j = 0; j < NumEqs; ++j) {
+		for (int i = 0; i < NumEqs; ++i) {
+			J(i, j) = 0.0;
+		}
+	}
+	$$JAFF REPEAT idx, rhs, cse IN rhs_jacobian { USE quokka }
+	const amrex::Real cse$idx$ = $cse$;
+	ydot[$idx$] = $rhs$;
+	$$JAFF END
+	$$JAFF REPEAT idx, expr IN rhs_jacobian_entries { USE quokka }
 	J($idx$, $idx$) = $expr$;
 	$$JAFF END
 }
