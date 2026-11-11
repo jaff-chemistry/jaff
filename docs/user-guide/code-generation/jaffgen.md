@@ -196,3 +196,21 @@ Collections live under `src/jaff/templates/generator/`. List them with:
 ```bash
 ls src/jaff/templates/generator/
 ```
+
+### `quokka`: a network for Quokka
+
+The `quokka` collection writes one C++ header, `network.hpp`, for the photochemistry solver of [Quokka](https://github.com/quokka-astro/quokka). It holds the species as `Species::` identifiers (with `+` written `_p` and `-` dropped, so `H+` is `H_p` and `e-` is `e`), their masses, the band edges and the band profile index as constants, and `network_rhs` and `network_jac` over Quokka's solver vector: the species number densities, the specific internal energy, then the photon number density and the flux attenuation factor of each band. The thermal row is in specific `de/dt` and the radiation terms are on.
+
+The template needs radiation bands, `mode = "nph"` and `rsl = "c_hat"`: Quokka passes the reduced speed of light as `c_hat`. A `--config` of your own replaces the shipped `jaffgen.toml`, so repeat them there:
+
+```toml
+[network.radiation]
+bands = [13.6, 26.0]
+profile_index = 0
+mode = "nph"
+rsl = "c_hat"
+```
+
+```bash
+jaffgen --config jaffgen.toml --network photoionization_H_caseB.jet --template quokka --outdir out/
+```

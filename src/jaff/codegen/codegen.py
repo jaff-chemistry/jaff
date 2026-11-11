@@ -1469,6 +1469,8 @@ class Codegen:
         cse_var: str = "cse",
         energy: str = "volumetric",
         cse_suffix: str = "",
+        radiation: bool = False,
+        rad_order: int = 0,
     ) -> IndexedReturn:
         """Return the RHS and the analytical Jacobian sharing one set of temporaries.
 
@@ -1511,6 +1513,14 @@ class Codegen:
             Evolved internal-energy form.  Default ``"volumetric"``.
         cse_suffix : str, optional
             Text appended after the index of each temporary name.
+        radiation : bool, optional
+            Include the radiation moment ODEs and their columns, as in
+            :meth:`get_indexed_jacobian`: the rows follow the thermal row, the
+            columns follow the thermal column. Rates that read a radiation
+            quantity are not temperature-only and stay inlined. Default ``False``.
+        rad_order : int, optional
+            Radiation moment closure order (``0``–``3``), used only when
+            *radiation* is ``True``.
 
         Returns
         -------
@@ -1526,19 +1536,26 @@ class Codegen:
             raise ValueError(f"Invalid part {part!r}; expected 'rhs' or 'jacobian'")
         if not use_cse:
             raise ValueError("get_indexed_rhs_jacobian always shares temporaries")
+        if radiation and rad_order not in [0, 1, 2, 3]:
+            raise ValueError("Invalid order: Supported orders are 0, 1, 2, 3")
+        radiation = bool(radiation and self.net.radiation)
 
         key = (
             thermal,
             cse_var,
             energy,
             cse_suffix,
+            radiation,
+            rad_order,
             self.lang.name,
             self.lang.lb,
             self.lang.rb,
         )
         cache = self.__dict__.setdefault("_rhs_jacobian_cache", {})
         if key not in cache:
-            cache[key] = self.__build_rhs_jacobian(thermal, cse_var, energy, cse_suffix)
+            cache[key] = self.__build_rhs_jacobian(
+                thermal, cse_var, energy, cse_suffix, radiation, rad_order
+            )
 
         rhs_ir, jac_ir = cache[key]
         return rhs_ir if part == "rhs" else jac_ir
@@ -1581,13 +1598,17 @@ class Codegen:
         return candidate if sp.count_ops(candidate) < sp.count_ops(plain) else plain
 
     def __symbolic_rate_odes(
-        self, y_syms: List[sp.Symbol], nden_to_y: dict
+        self, y_syms: List[sp.Symbol], to_y: dict
     ) -> Tuple[List[sp.Expr], dict, dict]:
         """Species ODEs with each temperature-only rate coefficient as a symbol.
 
         A reaction's flux ``rate`` is ``k * prod(nden)``; when ``rate / k`` is
         free of temperature and ``k`` of number densities, the flux is rebuilt
         as ``k_sym * (rate / k)``. Other reactions keep their inlined flux.
+
+        *to_y* maps the number densities (and, with radiation, the radiation
+        quantities) to the scalar symbols *y_syms*; a rate that reads any of
+        them is not temperature-only and keeps its inlined flux.
 
         Returns
         -------
@@ -1601,8 +1622,8 @@ class Codegen:
         k_syms: dict = {}
         fluxes = []
         for i, rea in enumerate(self.net.reactions):
-            flux = rea.rate.xreplace(nden_to_y)
-            k = rea.rate_coefficient.xreplace(nden_to_y)
+            flux = rea.rate.xreplace(to_y)
+            k = rea.rate_coefficient.xreplace(to_y)
             monomial = flux / k if k != 0 else None
             if (
                 monomial is not None
@@ -1633,7 +1654,13 @@ class Codegen:
         return odes, k_defs, k_syms
 
     def __build_rhs_jacobian(
-        self, thermal: str, cse_var: str, energy: str, cse_suffix: str
+        self,
+        thermal: str,
+        cse_var: str,
+        energy: str,
+        cse_suffix: str,
+        radiation: bool = False,
+        rad_order: int = 0,
     ) -> Tuple[IndexedReturn, IndexedReturn]:
         """Build both parts of :meth:`get_indexed_rhs_jacobian`."""
         with jaff_progress.indeterminate("Generating shared rhs/jacobian"):
@@ -1643,14 +1670,39 @@ class Codegen:
             y_syms = [sp.symbols(f"y_{i}") for i in range(n_species)]
             nden_to_y = {nden_matrix[i]: y_syms[i] for i in range(n_species)}
 
-            odes, k_defs, k_syms = self.__symbolic_rate_odes(y_syms, nden_to_y)
+            # Radiation quantities get scalar symbols of their own, in the order
+            # of the radiation ODEs, as in get_indexed_jacobian.
+            rad_to_y: dict = {}
+            rad = self.net.radiation if radiation else None
+            if rad is not None:
+                n_rad = 2 * rad.nbands
+                rad_syms: List[sp.Symbol] = [sp.Symbol("xx")] * n_rad
+                radden = sp.IndexedBase(
+                    "radeden" if rad.mode == "u" else "photden", shape=(rad.nbands,)
+                )
+                radflux = sp.IndexedBase("rflux", shape=(rad.nbands,))
+                for i in range(rad.nbands):
+                    ei, fi = rad.ordered_index(i, rad_order)
+                    rad_syms[ei] = sp.symbols(f"ry_{i}")
+                    rad_syms[fi] = sp.symbols(f"fy_{i}")
+                    rad_to_y[radden[i]] = rad_syms[ei]
+                    rad_to_y[radflux[i]] = rad_syms[fi]
+                y_syms = [*y_syms, *rad_syms]
+            to_y = {**nden_to_y, **rad_to_y}
+
+            odes, k_defs, k_syms = self.__symbolic_rate_odes(y_syms, to_y)
             thermal_rows = [
-                row.xreplace(nden_to_y) for row in self._thermal_rows(thermal, energy)
+                row.xreplace(to_y) for row in self._thermal_rows(thermal, energy)
             ]
-            odes = [*odes, *thermal_rows]
+            rad_rows = (
+                [row.xreplace(to_y) for row in self.net.sradodes(order=rad_order)]
+                if rad is not None
+                else []
+            )
+            odes = [*odes, *thermal_rows, *rad_rows]
             n_eqns = len(odes)
 
-            jac = sp.zeros(n_eqns, n_species)
+            jac = sp.zeros(n_eqns, len(y_syms))
             y_index = {sym: col for col, sym in enumerate(y_syms)}
             for row, ode in enumerate(odes):
                 for sym in ode.free_symbols:
@@ -1674,8 +1726,9 @@ class Codegen:
                     dde = sp.Matrix(dxdot_dtgas)
                 else:
                     dde = self._energy_column(jac, dxdot_dtgas, nden_matrix, energy)
-                jac = jac.row_join(dde)
-            jac = jac.xreplace(nden_to_y)
+                # the thermal column goes between the species and the radiation columns
+                jac = jac[:, :n_species].row_join(dde).row_join(jac[:, n_species:])
+            jac = jac.xreplace(to_y)
 
         with jaff_progress.indeterminate("Generating shared cse expressions"):
             # One CSE over the rate coefficients, the RHS and the Jacobian, so
@@ -1695,14 +1748,22 @@ class Codegen:
             defs = self.__prune_cse(self._topological_defs(defs), reduced)
             replacements_dict = {str(k): v for k, v in defs}
 
-        dpattern = re.compile(r"\by_(\d+)\b")
+        lb, rb = self.lang.lb, self.lang.rb
+        back = [(re.compile(r"\by_(\d+)\b"), "nden")]
+        if rad is not None:
+            back.append(
+                (re.compile(r"\bry_(\d+)\b"), "radeden" if rad.mode == "u" else "photden")
+            )
+            back.append((re.compile(r"\bfy_(\d+)\b"), "rflux"))
 
         def emit(expr: sp.Expr) -> str:
             expr = self.__convert_unknown_derivatives(expr, replacements_dict)
             text = self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
-            return dpattern.sub(
-                lambda m: f"nden{self.lang.lb}{int(m.group(1))}{self.lang.rb}", text
-            )
+            for pattern, name in back:
+                text = pattern.sub(
+                    lambda m, n=name: f"{n}{lb}{int(m.group(1))}{rb}", text
+                )
+            return text
 
         rhs_ir: IndexedReturn = {
             "extras": {"cse": IndexedList()},
