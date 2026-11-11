@@ -69,7 +69,6 @@ _THERMAL = {
         "ORDER": Setting("rad_order", parse_int),
     },
 }
-_THERMAL_ONLY = {"THERMAL": _THERMAL["THERMAL"]}
 _RADODES = {"RADIATION": {"ORDER": Setting("order", parse_int)}}
 _SIGN = {"SIGN": {"POS": Setting("pos", parse_text), "NEG": Setting("neg", parse_text)}}
 
@@ -108,12 +107,12 @@ PROPERTIES: Dict[str, RepeatProp] = {
     "rhs_jacobian": RepeatProp(
         ("idx", "rhs", "cse"),
         lambda c, kw: c.cg.get_indexed_rhs_jacobian(part="rhs", **kw),
-        _THERMAL_ONLY,
+        _THERMAL,
     ),
     "rhs_jacobian_entries": RepeatProp(
         ("idx", "expr"),
         lambda c, kw: c.cg.get_indexed_rhs_jacobian(part="jacobian", **kw)["expressions"],
-        _THERMAL_ONLY,
+        _THERMAL,
     ),
     "reactions": _items("reaction", lambda c: c.net.reactions.verbatim()),
     "species": _items("specie", lambda c: c.net.species.names()),
