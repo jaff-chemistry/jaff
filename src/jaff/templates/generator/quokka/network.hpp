@@ -14,7 +14,8 @@
 // The network contract (see Quokka's src/radiation/photochemistry.hpp): global NumSpec, Species::,
 // spmasses, gammas, NumChemBands, NumChemRadVarsPerGroup, NumChemRadEqs, NumThermalBands,
 // ChemBandsHeader(), ChemBandsPowerLawIndex_; and in namespace network: NumEqs, State,
-// NetworkParams, network_rhs, network_jac.
+// NetworkParams, network_rhs, network_jac. Optional, and provided here: NumActiveEqs
+// (NETWORK_HAS_NUM_ACTIVE_EQS).
 $$JAFF DEFINE quokka {
     REPLACE {
         "radeden\[\s*(\d+)\s*\]" -> "state.rn[NumChemRadVarsPerGroup*\1]"
@@ -104,6 +105,15 @@ using amrex::Real;
 
 constexpr int NumEqs = NumSpec + 1 + NumChemRadEqs + NumThermalBands;
 using State = quokka::photochemistry::State<NumSpec, NumChemRadEqs, NumThermalBands>;
+
+// The flux-attenuation factor rflux of a band is read by no right-hand side but its own, so its
+// Jacobian column is zero off the diagonal: it is a passive entry, which Quokka's solver
+// back-substitutes instead of factoring (rosenbrock/dense_lu.hpp). Passive entries must come last;
+// with one band the layout [n, e, photden, rflux] does that, so the active block is the species,
+// the energy and the photon number. With several bands the rflux entries are interleaved with the
+// photon numbers, and the whole system is factored.
+#define NETWORK_HAS_NUM_ACTIVE_EQS
+constexpr int NumActiveEqs = (NumChemBands == 1) ? NumSpec + 2 : NumEqs;
 
 /// runtime parameters, read from the "network" ParmParse prefix
 struct NetworkParams {
