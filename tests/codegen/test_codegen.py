@@ -483,6 +483,31 @@ class TestThermalCodeStrings:
         )
         assert dedt_codegen.get_dtdt() == expected
 
+    def test_get_eos_prints_volumetric_internal_energy(self, dedt_codegen) -> None:
+        expected = dedt_codegen.lang.code_gen(
+            dedt_codegen.net.thermodynamics.eos.volumetric,
+            strict=False,
+            allow_unknown_functions=True,
+        )
+        assert dedt_codegen.get_eos() == expected
+
+    def test_get_eos_follows_the_configured_eos(self) -> None:
+        eos = {"type": "multi_gamma", "default_gamma": 5 / 3, "gamma_map": {"H2": 1.4}}
+        net = Network("COthin", thermodynamics={"eos": eos})
+        code = Codegen(net, lang="python").get_eos()
+        nden = sp.IndexedBase("nden")
+        h2 = net.species["H2"].index
+        co = net.species["CO"].index
+
+        energy = sp.sympify(code, locals={"nden": nden, "tgas": sp.Symbol("tgas")})
+        # k_B T / (gamma_i - 1) per species: 1.4 for H2, 5/3 for the rest
+        assert float(energy.coeff(nden[h2]).subs("tgas", 1)) == pytest.approx(
+            1.380649e-16 / 0.4
+        )
+        assert float(energy.coeff(nden[co]).subs("tgas", 1)) == pytest.approx(
+            1.380649e-16 / (2 / 3)
+        )
+
 
 class TestThermalModes:
     """``thermal`` selects the thermal ODE row: none, dE/dt (dedt) or dT/dt (dtdt)."""

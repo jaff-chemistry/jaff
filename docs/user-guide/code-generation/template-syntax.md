@@ -139,6 +139,7 @@ $$JAFF END
 | `e_idx`    | `int`  | Index of the electron species              |
 | `dedt`     | `str`  | Language-specific total `dE/dt` expression |
 | `dtdt`     | `str`  | Language-specific total `dT/dt` expression |
+| `eos`      | `str`  | Language-specific EOS internal energy `E(T, n)` [erg cm⁻³] |
 
 Integer tokens accept inline arithmetic with `+`, `-`, `*`, `/` (see
 [Placeholders](#placeholders)):

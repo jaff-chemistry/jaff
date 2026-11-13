@@ -377,6 +377,7 @@ nav = [
         "reference/codegen/codegen/get_ode_expressions_str.md",
         "reference/codegen/codegen/get_dedt.md",
         "reference/codegen/codegen/get_dtdt.md",
+        "reference/codegen/codegen/get_eos.md",
         "reference/codegen/codegen/get_indexed_odes.md",
         "reference/codegen/codegen/get_ode_str.md",
         "reference/codegen/codegen/get_indexed_rhs.md",

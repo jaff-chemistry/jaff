@@ -62,6 +62,13 @@ def test_sub_filename_and_label(ctx):
     assert out == '"t.py" "react_cie_hepp"\n'
 
 
+def test_sub_eos_prints_the_eos_internal_energy(ctx):
+    out = Sub(("eos",)).render(["    return $eos$\n"], resolved(), ctx)
+    assert out == f"    return {ctx.cg.get_eos()}\n"
+    assert "tgas" in out
+    assert "nden[0]" in out
+
+
 def test_sub_rejects_unknown_token(ctx):
     with pytest.raises(TemplateError, match="SUB has no token nspecs"):
         Sub(("nspec", "nspecs")).validate([], resolved(), ctx)
