@@ -53,6 +53,12 @@ def test_python_solve_ivp_driver_runs(tmp_path):
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
+    # The driver saves time, temperature and every species' density per output time.
+    lines = (out / "solution.dat").read_text().splitlines()
+    assert lines[0].split() == ["#", "t[s]", "T[K]", "e-", "CO+", "CO"]
+    assert len(lines) == 1 + 101
+    assert "evolution saved to solution.dat" in proc.stdout
+
 
 @pytest.mark.skipif(
     not sys.platform.startswith("linux")
