@@ -1,5 +1,5 @@
 # ABOUTME: Tests for optimizations.log_derivative: value · ∂ln(expr)/∂y for products of
-# ABOUTME: powers and exponentials when cheaper than diff, else None
+# ABOUTME: powers and exponentials when no dearer than diff (weighted cost), else None
 
 import pytest
 import sympy as sp
@@ -33,6 +33,20 @@ def test_is_exact(expr, t):
 
 def test_arrhenius_drops_the_exponential():
     assert not log_derivative(ARRHENIUS, T, K).has(sp.exp)
+
+
+def test_power_law_reuses_the_value():
+    # d(a T^b)/dT = b k / T: no new pow (count_ops tied the two forms).
+    result = log_derivative(4.12e-10 * T**-0.8, T, K)
+
+    assert result is not None
+    assert result.has(K)
+    assert not any(not p.exp.is_Integer for p in result.atoms(sp.Pow))
+
+
+def test_does_not_apply_to_a_square():
+    # d(a T^2)/dT = 2 a T is cheaper than 2 k / T.
+    assert log_derivative(1e-12 * T**2, T, K) is None
 
 
 def test_logarithm_of_a_sum_does_not_apply():

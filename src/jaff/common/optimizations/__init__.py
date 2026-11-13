@@ -5,7 +5,8 @@
 Each one is exact: it changes how an expression is written, never its value.
 """
 
+from .cost import cost
 from .cse import prune, shared_cse
 from .log_derivative import log_derivative
 
-__all__ = ["log_derivative", "prune", "shared_cse"]
+__all__ = ["cost", "log_derivative", "prune", "shared_cse"]

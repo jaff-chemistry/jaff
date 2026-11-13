@@ -4,7 +4,9 @@
 
 from __future__ import annotations
 
-from sympy import Basic, Expr, count_ops, diff, expand_log, log, sympify
+from sympy import Basic, Expr, diff, expand_log, log, sympify
+
+from .cost import cost
 
 
 def log_derivative(expr: Basic, y: Basic, value: Basic) -> Expr | None:
@@ -17,8 +19,10 @@ def log_derivative(expr: Basic, y: Basic, value: Basic) -> Expr | None:
     exponentials again.  The rewrite is exact: ``value · ∂ln f/∂y = ∂f/∂y``.
 
     It does not apply (``None``) when ``expr`` does not depend on *y*, when its
-    logarithm keeps a sum (``ln(a + b)``), or when it has no fewer operations
-    (``count_ops``) than ``diff(expr, y)``.
+    logarithm keeps a sum (``ln(a + b)``), or when it costs more to evaluate
+    (:func:`~jaff.common.optimizations.cost`) than ``diff(expr, y)``; a tie goes to
+    the rewrite, since *value* is already computed.  So a power law ``a·T^b``
+    becomes ``b·value/T`` rather than a new ``pow``.
 
     Parameters
     ----------
@@ -57,4 +61,4 @@ def log_derivative(expr: Basic, y: Basic, value: Basic) -> Expr | None:
 
     candidate = value * diff(logarithm, y)
 
-    return candidate if count_ops(candidate) < count_ops(plain) else None
+    return candidate if cost(candidate) <= cost(plain) else None

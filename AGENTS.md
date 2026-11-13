@@ -333,8 +333,9 @@ docs/           # Documentation
 - `common/derivative.py`: `derivative(expr, y, value)`, `∂expr/∂y` per `Piecewise` branch,
   using the log-derivative optimization where it applies (the reduced Jacobian's `∂k/∂y`)
 - `common/optimizations/`: exact SymPy rewrites that make generated code cheaper, one
-  module each: `log_derivative` (`value · ∂ln(expr)/∂y` for products of powers and
-  `exp`), `shared_cse` (one CSE over expressions and symbol definitions such as
+  module each: `cost` (weighted op count: arithmetic 1, division 4, `exp`/`log`/real
+  `pow`/calls 20), `log_derivative` (`value · ∂ln(expr)/∂y` for products of powers and
+  `exp`, when its `cost` is no higher than `diff`'s), `shared_cse` (one CSE over expressions and symbol definitions such as
   `krate[r]`, topologically ordered, no aliases, pruned; every `Codegen` getter prints
   through it). Helpers that only use them live outside it
 - `codegen/`: `Codegen`, `Language`s, the `$$JAFF` template engine (`templating/`);
