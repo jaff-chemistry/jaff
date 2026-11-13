@@ -97,6 +97,13 @@ def _expressions(
     )
 
 
+def _parameters(ctx: RenderContext, kwargs: Dict[str, Any]) -> list[str]:
+    """The ODE system's free parameters, printed as in the generated code."""
+    system = ctx.net.ode_system(**kwargs)
+
+    return [ctx.cg.lang.code_gen(p, strict=False) for p in system.parameters]
+
+
 def _no_source(ctx: RenderContext, kwargs: Dict[str, Any]) -> Any:
     """``cses`` items come from its group, not from a source (see :mod:`.groups`)."""
     raise TypeError("REPEAT IN cses takes its items from its CSE group")
@@ -115,6 +122,7 @@ PROPERTIES: Dict[str, RepeatProp] = {
     "radodes": _expressions("radode", "radodes", "get_indexed_radodes", _RADODES),
     "rhses": _expressions("rhs", "rhs", "get_indexed_rhs", _THERMAL),
     "jacobian": _expressions("jac", "jacobian", "get_indexed_jacobian", _THERMAL),
+    "parameters": RepeatProp(("idx", "parameter"), _parameters, _THERMAL),
     "reactions": _items("reaction", lambda c: c.net.reactions.verbatim()),
     "species": _items("specie", lambda c: c.net.species.names()),
     "species_with_normalized_sign": RepeatProp(

@@ -231,6 +231,7 @@ nav = [
         "reference/core/odesystem/index.md",
         "reference/core/odesystem/rhs.md",
         "reference/core/odesystem/rate_coefficients.md",
+        "reference/core/odesystem/parameters.md",
         "reference/core/odesystem/jacobian.md",
       ] },
       { "core.StateVariable" = [

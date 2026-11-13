@@ -369,6 +369,7 @@ with `CSE` among their option groups can join a [CSE group](#cse-common-subexpre
 | `rhses`            | `idx, rhs`             | RHS including the thermal row    | `THERMAL`, `RADIATION`, `CSE`               |
 | `jacobian`         | `idx, jac`             | Jacobian matrix elements (2D)    | `THERMAL`, `RADIATION`, `CSE`               |
 | `radodes`          | `idx, radode`          | Radiation moment ODEs            | `RADIATION` (`ORDER` only), `CSE`           |
+| `parameters`       | `idx, parameter`       | Free parameters of the ODE system (names, sorted; `tgas` only with `MODE -> none`) | `THERMAL`, `RADIATION` |
 | `flux_expressions` | `idx, flux_expression` | Flux = rate × reactant densities | —                                           |
 | `ode_expressions`  | `idx, ode_expression`  | ODE terms without assignment     | —                                           |
 
@@ -429,7 +430,7 @@ everywhere; see [Options](#options) for their general rules.
 
 | Group       | Key       | Values                                       | Description                                                                                       |
 | ----------- | --------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `THERMAL`   | `MODE`    | `none`, `dedt`, `dtdt`                       | Thermal ODE row: none, `dE/dt` or `dT/dt`. Default `none` (for both `rhses` and `jacobian`).        |
+| `THERMAL`   | `MODE`    | `none`, `dedt`, `dtdt`                       | Thermal ODE row: none, `dE/dt` or `dT/dt`. Default `none` (for `rhses`, `jacobian` and `parameters`).        |
 | `THERMAL`   | `ENERGY`  | `volumetric`, `specific`, `per_particle`, `molar` | Internal-energy form used when `MODE` is `dedt` (default `volumetric`).                      |
 | `RADIATION` | `ENABLED` | `True`/`False`                               | Include radiation ODE / Jacobian terms (`rhses`, `jacobian`).                                     |
 | `RADIATION` | `ORDER`   | `0`–`3`                                      | Layout of the per-band density and flux equations (`rhses`, `jacobian`, `radodes`); see [Codegen](../advanced-code-generation/codegen.md#radiation-odes-get_radode_str). |

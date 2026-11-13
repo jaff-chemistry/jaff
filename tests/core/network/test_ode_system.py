@@ -319,3 +319,54 @@ class TestReducedForm:
         expanded = net.ode_system(**options)
 
         assert set(reduced.jacobian.todok()) == set(expanded.jacobian.todok())
+
+
+PARAM_NETWORK = [
+    "H -> H+ + e- [10,1e4] 1e-17*crate*exp(-2.5*av)",
+    "H+ + e- -> H [10,1e4] 2e-10*tgas**(-0.7)",
+    "H + H -> H2 [10,1e4] 3e-17*(tdust/100)**0.5",
+]
+
+
+@pytest.fixture(scope="module")
+def param_network(tmp_path_factory):
+    """Rates carrying free parameters: ``crate``, ``av``, ``tdust`` and ``tgas``."""
+    path = tmp_path_factory.mktemp("ode") / "params.dat"
+    path.write_text("\n".join(PARAM_NETWORK) + "\n", encoding="utf-8")
+    return Network(str(path), funcfile=False)
+
+
+def _names(system: OdeSystem) -> list[str]:
+    return [str(p) for p in system.parameters]
+
+
+class TestParameters:
+    def test_free_symbols_sorted_by_name(self, param_network) -> None:
+        system = param_network.ode_system()
+        assert _names(system) == ["av", "crate", "tdust", "tgas"]
+
+    def test_temperature_is_state_not_parameter_when_evolved(self, param_network) -> None:
+        for thermal in ("dtdt", "dedt"):
+            system = param_network.ode_system(thermal=thermal)
+            assert _names(system) == ["av", "crate", "tdust"]
+
+    def test_reduced_form_has_the_same_parameters(self, param_network) -> None:
+        for thermal in ("none", "dtdt"):
+            expanded = param_network.ode_system(thermal=thermal)
+            reduced = param_network.ode_system(thermal=thermal, form="reduced")
+            assert _names(reduced) == _names(expanded)
+
+    def test_are_plain_symbols(self, param_network) -> None:
+        parameters = param_network.ode_system(thermal="dtdt").parameters
+        assert all(isinstance(p, sp.Symbol) for p in parameters)
+
+    def test_are_the_network_variables_minus_the_state(self) -> None:
+        net = Network("GOW")
+        thermal = _names(net.ode_system(thermal="dtdt"))
+
+        assert thermal == [
+            "av", "chi", "crate", "d2g", "gradv",
+            "ncol_C", "ncol_CO", "ncol_H", "ncol_H2", "vdisp",
+        ]  # fmt: skip
+        # network-wide: gradv, used only by the energy equation, is listed without it
+        assert _names(net.ode_system()) == sorted([*thermal, "tgas"])

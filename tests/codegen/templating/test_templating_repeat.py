@@ -240,3 +240,41 @@ def test_radodes_takes_the_radiation_order(tmp_path):
     assert render(photo, tmp_path, text) == "".join(
         f"r[{i[0]}] = {v}\n" for i, v in radodes["expressions"]
     )
+
+
+PARAM_NETWORK = [
+    "H -> H+ + e- [10,1e4] 1e-17*crate*exp(-2.5*av)",
+    "H+ + e- -> H [10,1e4] 2e-10*tgas**(-0.7)",
+]
+
+
+@pytest.fixture(scope="module")
+def param_net(tmp_path_factory) -> Network:
+    path = tmp_path_factory.mktemp("params") / "params.dat"
+    path.write_text("\n".join(PARAM_NETWORK) + "\n", encoding="utf-8")
+    return Network(str(path), funcfile=False)
+
+
+def test_parameters_lists_the_free_parameters(param_net, tmp_path):
+    text = block(
+        "REPEAT idx, parameter IN parameters", '$parameter$ = params["$parameter$"]'
+    )
+    assert render(param_net, tmp_path, text) == (
+        'av = params["av"]\ncrate = params["crate"]\ntgas = params["tgas"]\n'
+    )
+
+
+def test_parameters_drop_the_evolved_temperature(param_net, tmp_path):
+    text = block(
+        "REPEAT idx, parameter IN parameters { THERMAL { MODE -> dtdt } }",
+        "p[$idx$] = $parameter$",
+    )
+    assert render(param_net, tmp_path, text) == "p[0] = av\np[1] = crate\n"
+
+
+def test_parameters_inline_list(param_net, tmp_path):
+    text = block(
+        "REPEAT parameter IN parameters { THERMAL { MODE -> dtdt } }",
+        'PARAMETERS = ("$parameter$", )',
+    )
+    assert render(param_net, tmp_path, text) == 'PARAMETERS = ("av", "crate")\n'

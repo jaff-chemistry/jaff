@@ -209,6 +209,32 @@ class OdeSystem:
         return {r.rate.symbol: r.rate.coefficient for r in self.network.reactions}
 
     @cached_property
+    def parameters(self) -> tuple[Basic, ...]:
+        """The system's free parameters: the network's variables that are not state.
+
+        The network's free symbols
+        (:attr:`~jaff.core.network.NetworkSymbols.variables`, across rates, energy
+        and radiation sources) minus this system's state variables, sorted by name; a
+        generated solver needs a value for each.  ``tgas`` is a parameter only when
+        the thermal mode is ``"none"``; otherwise it is state.  The list is
+        network-wide: a symbol used only by the thermal or radiation equations is
+        listed even when the system leaves those out.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> net = Network("COthin")
+        >>> net.ode_system().parameters
+        (av, crate, tdust, tgas)
+        >>> net.ode_system(thermal="dtdt").parameters
+        (av, crate, tdust)
+        """
+        state = {var.symbol for var in self.state}
+        names = (s for s in self.network.symbols.variables if s not in state)
+
+        return tuple(sorted(names, key=str))
+
+    @cached_property
     def _rate_derivatives(self) -> dict[Indexed, dict[Basic, Expr]]:
         """``∂k_r/∂y`` per ``krate[r]``, for the state symbols *y* that k_r contains.
 

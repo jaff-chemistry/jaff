@@ -33,8 +33,8 @@ def options(text: str, line: int = 1):
     return parse_header(f"$$JAFF REPEAT x IN p {{{text}}}", line, Path("t")).options
 
 
-def test_properties_are_the_old_engine_ones_and_cses():
-    assert set(PROPERTIES) == OLD_PROPS | {"cses"}
+def test_properties_are_the_old_engine_ones_cses_and_parameters():
+    assert set(PROPERTIES) == OLD_PROPS | {"cses", "parameters"}
 
 
 @pytest.mark.parametrize(
