@@ -21,7 +21,9 @@ SPECIE_MASSES[2] = 9.10938371e-28
 
 def rates():
     k = {}
-    # $$JAFF REPEAT idx, rate, cse IN rates
+    # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rates } }
+    # $$JAFF END
+    # $$JAFF REPEAT idx, rate IN rates { CSE { GROUP -> rates } }
     k[0] = 1.68692851322685e-18*c_hat*photden[0]
     k[1] = 1.65941781598291e-10*tgas**(-0.7)
     # $$JAFF END
@@ -52,8 +54,10 @@ def ode_expressions():
 
 def odes():
     out = {}
-    # $$JAFF REPEAT idx, ode, cse IN odes
+    # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> odes } }
     cse0 = 1.68692851322685e-18*c_hat*nden[0]*photden[0] - 1.65941781598291e-10*tgas**(-0.7)*nden[1]*nden[2]
+    # $$JAFF END
+    # $$JAFF REPEAT idx, ode IN odes { CSE { GROUP -> odes } }
     out[0] = -cse0
     out[1] = cse0
     out[2] = cse0
@@ -63,8 +67,10 @@ def odes():
 
 def radodes():
     out = {}
-    # $$JAFF REPEAT idx, radode, cse IN radodes
+    # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> radodes } }
     cse0 = 1.68692851322685e-18*c_hat*nden[0]
+    # $$JAFF END
+    # $$JAFF REPEAT idx, radode IN radodes { CSE { GROUP -> radodes } }
     out[0] = -cse0*photden[0]
     out[1] = -cse0*rflux[0]
     # $$JAFF END
@@ -79,10 +85,12 @@ def dedt():
 
 def rhs_volumetric():
     out = {}
-    # $$JAFF REPEAT idx, rhs, cse IN rhses { RADIATION { ENABLED -> True } }
+    # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rhs } }
     cse0 = c_hat*nden[0]*photden[0]
     cse1 = 1.68692851322685e-18*cse0
     cse2 = cse1 - 1.65941781598291e-10*tgas**(-0.7)*nden[1]*nden[2]
+    # $$JAFF END
+    # $$JAFF REPEAT idx, rhs IN rhses { RADIATION { ENABLED -> True }  THERMAL { MODE -> dedt }  CSE { GROUP -> rhs } }
     out[0] = -cse2
     out[1] = cse2
     out[2] = cse2
@@ -95,13 +103,18 @@ def rhs_volumetric():
 
 def rhs_specific_mass():
     out = {}
-    # $$JAFF REPEAT idx, rhs, cse IN rhses {
-        # RADIATION { ENABLED -> True }
-        # THERMAL { ENERGY -> specific }
+    # $$JAFF REPEAT idx, cse IN cses {
+        # GROUP { NAME -> rhs_1 }
     # }
     cse0 = c_hat*nden[0]*photden[0]
     cse1 = 1.68692851322685e-18*cse0
     cse2 = cse1 - 1.65941781598291e-10*tgas**(-0.7)*nden[1]*nden[2]
+    # $$JAFF END
+    # $$JAFF REPEAT idx, rhs IN rhses {
+        # RADIATION { ENABLED -> True }
+        # THERMAL { MODE -> dedt  ENERGY -> specific }
+        # CSE { GROUP -> rhs_1 }
+    # }
     out[0] = -cse2
     out[1] = cse2
     out[2] = cse2
@@ -114,14 +127,19 @@ def rhs_specific_mass():
 
 def rhs_specific_number():
     out = {}
-    # $$JAFF REPEAT idx, rhs, cse IN rhses {
-        # RADIATION { ENABLED -> True }
-        # THERMAL { ENERGY -> per_particle }
+    # $$JAFF REPEAT idx, cse IN cses {
+        # GROUP { NAME -> rhs_2 }
     # }
     cse0 = c_hat*nden[0]*photden[0]
     cse1 = 1.68692851322685e-18*cse0
     cse2 = cse1 - 1.65941781598291e-10*tgas**(-0.7)*nden[1]*nden[2]
     cse3 = nden[0] + nden[1] + nden[2]
+    # $$JAFF END
+    # $$JAFF REPEAT idx, rhs IN rhses {
+        # RADIATION { ENABLED -> True }
+        # THERMAL { MODE -> dedt  ENERGY -> per_particle }
+        # CSE { GROUP -> rhs_2 }
+    # }
     out[0] = -cse2
     out[1] = cse2
     out[2] = cse2
@@ -134,7 +152,7 @@ def rhs_specific_number():
 
 def jacobian_species():
     out = {}
-    # $$JAFF REPEAT idx, expr, cse IN jacobian { RADIATION { ENABLED -> True } }
+    # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> jacobian } }
     cse0 = 1.68692851322685e-18*c_hat
     cse1 = cse0*photden[0]
     cse2 = -cse1
@@ -145,6 +163,8 @@ def jacobian_species():
     cse7 = -cse6
     cse8 = -cse4
     cse9 = -cse5
+    # $$JAFF END
+    # $$JAFF REPEAT idx, jac IN jacobian { RADIATION { ENABLED -> True }  CSE { GROUP -> jacobian } }
     out[(0, 0)] = cse2
     out[(0, 1)] = cse4
     out[(0, 2)] = cse5
@@ -167,9 +187,8 @@ def jacobian_species():
 
 def jacobian_volumetric():
     out = {}
-    # $$JAFF REPEAT idx, expr, cse IN jacobian {
-        # RADIATION { ENABLED -> True }
-        # THERMAL { MODE -> dedt }
+    # $$JAFF REPEAT idx, cse IN cses {
+        # GROUP { NAME -> jacobian_1 }
     # }
     cse0 = 1.68692851322685e-18*c_hat
     cse1 = cse0*photden[0]
@@ -192,6 +211,12 @@ def jacobian_volumetric():
     cse18 = cse2*(-6.87322064465696e-27*cse17*cse5 + 9.53086596059098e-28*cse3*nden[1]*nden[2])
     cse19 = 2.0709734999999e-16*cse18*tgas
     cse20 = 2.29107354821899e-26*cse17*tgas**0.3
+    # $$JAFF END
+    # $$JAFF REPEAT idx, jac IN jacobian {
+        # RADIATION { ENABLED -> True }
+        # THERMAL { MODE -> dedt }
+        # CSE { GROUP -> jacobian_1 }
+    # }
     out[(0, 0)] = -cse7
     out[(0, 1)] = cse9
     out[(0, 2)] = cse10
@@ -222,131 +247,134 @@ def jacobian_volumetric():
 
 def jacobian_specific_mass():
     out = {}
-    # $$JAFF REPEAT idx, expr, cse IN jacobian {
-        # RADIATION { ENABLED -> True }
-        # THERMAL { MODE -> dedt  ENERGY -> specific }
+    # $$JAFF REPEAT idx, cse IN cses {
+        # GROUP { NAME -> jacobian_2 }
     # }
     cse0 = 1.68692851322685e-18*c_hat
     cse1 = cse0*photden[0]
-    cse2 = tgas**(-1.7)
-    cse3 = 1.673773e-24*nden[0] + 1.672862061629e-24*nden[1] + 9.10938371e-28*nden[2]
-    cse4 = 1.380649e-16*nden[0] + 1.380649e-16*nden[1] + 1.380649e-16*nden[2]
-    cse5 = 1/cse4
-    cse6 = 2.0709734999999e-16*tgas/cse3
-    cse7 = cse4*tgas/cse3**2
-    cse8 = cse6 - 2.51065949999987e-24*cse7
-    cse9 = cse1 - 7.74394980792062e-11*cse2*cse3*cse5*cse8*nden[1]*nden[2]
-    cse10 = tgas**(-0.7)
-    cse11 = 1.65941781598291e-10*cse10
-    cse12 = cse6 - 2.50929309244337e-24*cse7
-    cse13 = nden[1]*nden[2]
-    cse14 = cse3*cse5
-    cse15 = 7.74394980792062e-11*cse13*cse14*cse2
-    cse16 = cse11*nden[2] + cse12*cse15
-    cse17 = cse6 - 1.36640755649993e-27*cse7
-    cse18 = cse11*nden[1] + cse15*cse17
-    cse19 = cse0*nden[0]
-    cse20 = -cse19
-    cse21 = -cse16
-    cse22 = -cse18
-    cse23 = 1.673773e-24*nden[0] + 1.672862061629e-24*nden[1] + 9.10938371e-28*nden[2]
-    cse24 = 1/cse23
-    cse25 = 0.684 - 0.0416*math.log(0.0001*tgas)
-    cse26 = 2.29107354821899e-26*cse25*tgas**0.3
-    cse27 = (1.07963424846518e-29*c_hat*photden[0]*nden[0] - cse13*cse26)/cse23**2
-    cse28 = 0.6666666666667*cse14*cse24*(-6.87322064465696e-27*cse10*cse13*cse25 + 9.53086596059098e-28*cse10*nden[1]*nden[2])
-    cse29 = cse24*cse26
-    out[(0, 0)] = -cse9
-    out[(0, 1)] = cse16
-    out[(0, 2)] = cse18
-    out[(0, 3)] = -cse15
-    out[(0, 4)] = cse20
-    out[(1, 0)] = cse9
-    out[(1, 1)] = cse21
-    out[(1, 2)] = cse22
-    out[(1, 3)] = cse15
-    out[(1, 4)] = cse19
-    out[(2, 0)] = cse9
-    out[(2, 1)] = cse21
-    out[(2, 2)] = cse22
-    out[(2, 3)] = cse15
-    out[(2, 4)] = cse19
-    out[(3, 0)] = 1.07963424846518e-29*c_hat*cse24*photden[0] - 1.673773e-24*cse27 - cse28*cse8
-    out[(3, 1)] = -cse12*cse28 - 1.672862061629e-24*cse27 - cse29*nden[2]
-    out[(3, 2)] = -cse17*cse28 - 9.10938371e-28*cse27 - cse29*nden[1]
-    out[(3, 3)] = cse28
-    out[(3, 4)] = 1.07963424846518e-29*c_hat*cse24*nden[0]
+    cse2 = 1.673773e-24*nden[0] + 1.672862061629e-24*nden[1] + 9.10938371e-28*nden[2]
+    cse3 = 1/cse2
+    cse4 = 2.0709734999999e-16*cse3*tgas
+    cse5 = 1.380649e-16*nden[0] + 1.380649e-16*nden[1] + 1.380649e-16*nden[2]
+    cse6 = cse2**(-2)
+    cse7 = -cse4 + 2.51065949999987e-24*cse5*cse6*tgas
+    cse8 = 1/cse5
+    cse9 = nden[1]*nden[2]
+    cse10 = 7.74394980792062e-11*cse2*cse8*cse9*tgas**(-1.7)
+    cse11 = cse1 + cse10*cse7
+    cse12 = tgas**(-0.7)
+    cse13 = -cse4 + 2.50929309244337e-24*cse5*cse6*tgas
+    cse14 = cse10*cse13 - 1.65941781598291e-10*cse12*nden[2]
+    cse15 = -cse4 + 1.36640755649993e-27*cse5*cse6*tgas
+    cse16 = cse10*cse15 - 1.65941781598291e-10*cse12*nden[1]
+    cse17 = cse0*nden[0]
+    cse18 = -cse17
+    cse19 = 1.07963424846518e-29*c_hat*photden[0]
+    cse20 = 0.684 - 0.0416*math.log(0.0001*tgas)
+    cse21 = 2.29107354821899e-26*cse20*tgas**0.3
+    cse22 = cse6*(cse19*nden[0] - cse21*cse9)
+    cse23 = -6.87322064465696e-27*cse12*cse20*cse9 + 9.53086596059098e-28*cse12*nden[1]*nden[2]
+    cse24 = 0.6666666666667*cse23*cse8
+    cse25 = cse21*cse3
+    # $$JAFF END
+    # $$JAFF REPEAT idx, jac IN jacobian {
+        # RADIATION { ENABLED -> True }
+        # THERMAL { MODE -> dedt  ENERGY -> specific }
+        # CSE { GROUP -> jacobian_2 }
+    # }
+    out[(0, 0)] = -cse11
+    out[(0, 1)] = -cse14
+    out[(0, 2)] = -cse16
+    out[(0, 3)] = -cse10
+    out[(0, 4)] = cse18
+    out[(1, 0)] = cse11
+    out[(1, 1)] = cse14
+    out[(1, 2)] = cse16
+    out[(1, 3)] = cse10
+    out[(1, 4)] = cse17
+    out[(2, 0)] = cse11
+    out[(2, 1)] = cse14
+    out[(2, 2)] = cse16
+    out[(2, 3)] = cse10
+    out[(2, 4)] = cse17
+    out[(3, 0)] = cse19*cse3 - 1.673773e-24*cse22 + cse24*cse7
+    out[(3, 1)] = 0.6666666666667*cse13*cse23*cse8 - 1.672862061629e-24*cse22 - cse25*nden[2]
+    out[(3, 2)] = 0.6666666666667*cse15*cse23*cse8 - 9.10938371e-28*cse22 - cse25*nden[1]
+    out[(3, 3)] = cse24
+    out[(3, 4)] = 1.07963424846518e-29*c_hat*cse3*nden[0]
     out[(4, 0)] = -cse1
-    out[(4, 4)] = cse20
+    out[(4, 4)] = cse18
     out[(5, 0)] = -cse0*rflux[0]
-    out[(5, 5)] = cse20
+    out[(5, 5)] = cse18
     # $$JAFF END
     return out
 
 
 def jacobian_specific_number():
     out = {}
-    # $$JAFF REPEAT idx, expr, cse IN jacobian {
-        # RADIATION { ENABLED -> True }
-        # THERMAL { MODE -> dedt  ENERGY -> per_particle }
+    # $$JAFF REPEAT idx, cse IN cses {
+        # GROUP { NAME -> jacobian_3 }
     # }
     cse0 = 1.68692851322685e-18*c_hat
     cse1 = cse0*photden[0]
     cse2 = nden[0] + nden[1] + nden[2]
-    cse3 = 1.380649e-16*nden[0] + 1.380649e-16*nden[1] + 1.380649e-16*nden[2]
-    cse4 = 2.0709734999999e-16*tgas/cse2 - 1.49999999999992*cse3*tgas/cse2**2
-    cse5 = nden[1]*nden[2]
-    cse6 = cse2/cse3
-    cse7 = 7.74394980792062e-11*cse5*cse6*tgas**(-1.7)
-    cse8 = cse4*cse7
-    cse9 = cse1 - cse8
-    cse10 = tgas**(-0.7)
-    cse11 = 1.65941781598291e-10*cse10
-    cse12 = cse11*nden[2]
-    cse13 = cse12 + cse8
-    cse14 = cse11*nden[1] + cse8
-    cse15 = cse0*nden[0]
-    cse16 = -cse15
-    cse17 = -cse13
-    cse18 = -cse14
-    cse19 = nden[0] + nden[1] + nden[2]
-    cse20 = 1/cse19
+    cse3 = 1/cse2
+    cse4 = 2.0709734999999e-16*tgas
+    cse5 = 1.380649e-16*nden[0] + 1.380649e-16*nden[1] + 1.380649e-16*nden[2]
+    cse6 = cse5*tgas
+    cse7 = cse2**(-2)
+    cse8 = 1.49999999999992*cse7
+    cse9 = -cse3*cse4 + cse6*cse8
+    cse10 = nden[1]*nden[2]
+    cse11 = 1/cse5
+    cse12 = cse11*cse2
+    cse13 = 7.74394980792062e-11*cse10*cse12*tgas**(-1.7)
+    cse14 = cse13*cse9
+    cse15 = cse1 + cse14
+    cse16 = tgas**(-0.7)
+    cse17 = cse14 - 1.65941781598291e-10*cse16*nden[2]
+    cse18 = cse14 - 1.65941781598291e-10*cse16*nden[1]
+    cse19 = cse0*nden[0]
+    cse20 = -cse19
     cse21 = c_hat*photden[0]
-    cse22 = cse19**(-2)
-    cse23 = 1.380649e-16*nden[0] + 1.380649e-16*nden[1] + 1.380649e-16*nden[2]
-    cse24 = 2.53039276984015e-18*cse22*cse23*tgas
-    cse25 = tgas**0.3
-    cse26 = 0.684 - 0.0416*math.log(0.0001*tgas)
-    cse27 = 2.29107354821899e-26*cse25*cse26
-    cse28 = cse1*nden[0] - cse12*nden[1]
-    cse29 = cse22*cse28
-    cse30 = cse10*cse5
-    cse31 = 0.6666666666667*cse6*(cse20*(9.53086596059098e-28*cse10*nden[1]*nden[2] - 6.87322064465696e-27*cse26*cse30) - 1.74238870678197e-10*cse22*cse23*cse30 - 1.49999999999992*cse23*cse29)
-    cse32 = cse22*(1.07963424846518e-29*cse21*nden[0] - cse27*cse5) + 2.0709734999999e-16*cse29*tgas + cse31*cse4 - 2.99999999999985*cse23*cse28*tgas/cse19**3
-    cse33 = cse20*cse27
-    out[(0, 0)] = -cse9
-    out[(0, 1)] = cse13
-    out[(0, 2)] = cse14
-    out[(0, 3)] = -cse7
-    out[(0, 4)] = cse16
-    out[(1, 0)] = cse9
+    cse22 = 2.53039276984015e-18*cse6*cse7
+    cse23 = tgas**0.3
+    cse24 = 0.684 - 0.0416*math.log(0.0001*tgas)
+    cse25 = 2.29107354821899e-26*cse23*cse24
+    cse26 = cse1*nden[0] - 1.65941781598291e-10*cse16*nden[1]*nden[2]
+    cse27 = cse10*cse16
+    cse28 = -cse26*cse5*cse8 - 1.74238870678197e-10*cse27*cse5*cse7 + cse3*(9.53086596059098e-28*cse16*nden[1]*nden[2] - 6.87322064465696e-27*cse24*cse27)
+    cse29 = -0.6666666666667*cse11*cse2*cse28*cse9 + cse26*cse4*cse7 + cse7*(-cse10*cse25 + 1.07963424846518e-29*cse21*nden[0]) - 2.99999999999985*cse26*cse5*tgas/cse2**3
+    cse30 = cse25*cse3
+    # $$JAFF END
+    # $$JAFF REPEAT idx, jac IN jacobian {
+        # RADIATION { ENABLED -> True }
+        # THERMAL { MODE -> dedt  ENERGY -> per_particle }
+        # CSE { GROUP -> jacobian_3 }
+    # }
+    out[(0, 0)] = -cse15
+    out[(0, 1)] = -cse17
+    out[(0, 2)] = -cse18
+    out[(0, 3)] = -cse13
+    out[(0, 4)] = cse20
+    out[(1, 0)] = cse15
     out[(1, 1)] = cse17
     out[(1, 2)] = cse18
-    out[(1, 3)] = cse7
-    out[(1, 4)] = cse15
-    out[(2, 0)] = cse9
+    out[(1, 3)] = cse13
+    out[(1, 4)] = cse19
+    out[(2, 0)] = cse15
     out[(2, 1)] = cse17
     out[(2, 2)] = cse18
-    out[(2, 3)] = cse7
-    out[(2, 4)] = cse15
-    out[(3, 0)] = 1.07963424846518e-29*c_hat*cse20*photden[0] - cse21*cse24 - cse32
-    out[(3, 1)] = 2.48912672397424e-10*cse22*cse23*cse25*nden[2] - cse32 - cse33*nden[2]
-    out[(3, 2)] = 2.48912672397424e-10*cse22*cse23*cse25*nden[1] - cse32 - cse33*nden[1]
-    out[(3, 3)] = cse31
-    out[(3, 4)] = 1.07963424846518e-29*c_hat*cse20*nden[0] - c_hat*cse24*nden[0]
+    out[(2, 3)] = cse13
+    out[(2, 4)] = cse19
+    out[(3, 0)] = 1.07963424846518e-29*c_hat*cse3*photden[0] - cse21*cse22 - cse29
+    out[(3, 1)] = 2.48912672397424e-10*cse23*cse5*cse7*nden[2] - cse29 - cse30*nden[2]
+    out[(3, 2)] = 2.48912672397424e-10*cse23*cse5*cse7*nden[1] - cse29 - cse30*nden[1]
+    out[(3, 3)] = 0.6666666666667*cse12*cse28
+    out[(3, 4)] = -c_hat*cse22*nden[0] + 1.07963424846518e-29*c_hat*cse3*nden[0]
     out[(4, 0)] = -cse1
-    out[(4, 4)] = cse16
+    out[(4, 4)] = cse20
     out[(5, 0)] = -cse0*rflux[0]
-    out[(5, 5)] = cse16
+    out[(5, 5)] = cse20
     # $$JAFF END
     return out
