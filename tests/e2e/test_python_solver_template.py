@@ -1,9 +1,7 @@
 # ABOUTME: The python_solve_ivp template as a standalone solver: generated for real
 # ABOUTME: networks, its Jacobian matches the rhs and solve() integrates with Radau
 
-import importlib
 import re
-import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -12,7 +10,7 @@ import pytest
 
 from jaff import Network
 from tests._paths import REPO_ROOT
-from tests.jaffgen_run import run_jaffgen
+from tests.python_solver import generate, load
 
 NETWORKS = {
     "demo2": str(REPO_ROOT / "networks" / "demos" / "demo2.jet"),
@@ -35,41 +33,6 @@ NCOL = 1e14
 TEMPERATURE = 1000.0
 
 
-def _generate(network: str, outdir: Path) -> Path:
-    args = SimpleNamespace(
-        network=network,
-        config=None,
-        label=None,
-        funcfile=None,
-        duplicate_policy=None,
-        expand_nuclei=None,
-        strict=None,
-        network_config=None,
-        outdir=str(outdir),
-        indir=None,
-        files=None,
-        template="python_solve_ivp",
-    )
-
-    return run_jaffgen(args).output_dir
-
-
-def _load(folder: Path) -> SimpleNamespace:
-    """Import the generated ``chemistry`` and ``solver`` modules of *folder* afresh."""
-    for name in ("chemistry", "solver"):
-        sys.modules.pop(name, None)
-    sys.path.insert(0, str(folder))
-    try:
-        chemistry = importlib.import_module("chemistry")
-        solver = importlib.import_module("solver")
-    finally:
-        sys.path.remove(str(folder))
-        for name in ("chemistry", "solver"):
-            sys.modules.pop(name, None)
-
-    return SimpleNamespace(chemistry=chemistry, solver=solver)
-
-
 def _stub_unknown_functions(chemistry: ModuleType, net: Network, folder: Path) -> None:
     """Unknown functions return 1, so their ``<name>_partial_<n>`` derivatives 0."""
     source = (folder / "chemistry.py").read_text(encoding="utf-8")
@@ -90,8 +53,8 @@ def _params(chemistry: ModuleType) -> dict[str, float]:
 def generated(request, tmp_path_factory) -> SimpleNamespace:
     network = NETWORKS[request.param]
     net = Network(network)
-    folder = _generate(network, tmp_path_factory.mktemp(request.param))
-    modules = _load(folder)
+    folder = generate(network, tmp_path_factory.mktemp(request.param))
+    modules = load(folder)
     _stub_unknown_functions(modules.chemistry, net, folder)
 
     return SimpleNamespace(net=net, folder=folder, **vars(modules))
