@@ -1,7 +1,8 @@
-# ABOUTME: TypedDict definitions for the structured values Codegen methods return.
-# ABOUTME: ExtrasDict (CSE temporaries etc.) and IndexedReturn (extras + expressions).
-"""TypedDict definitions for Codegen structured return values."""
+# ABOUTME: Structured values Codegen methods return: ExtrasDict (CSE temporaries etc.),
+# ABOUTME: IndexedReturn (extras + expressions) and CseGroup (shared temporaries + parts)
+"""Definitions of the structured values Codegen methods return."""
 
+from dataclasses import dataclass
 from typing import TypedDict
 
 from ...types import IndexedList
@@ -65,3 +66,26 @@ Examples
 >>> out["expressions"][5].indices, out["expressions"][5].value
 ([5], '3.00351426766844e-16*tgas**0.25')
 """
+
+
+@dataclass(frozen=True)
+class CseGroup:
+    """Expressions of several kinds printed with one shared set of CSE temporaries.
+
+    Returned by :meth:`~jaff.codegen.Codegen.cse_group`.  Emit :attr:`temporaries`
+    first, then each member's expressions in the same scope: they read the
+    temporaries by name.
+
+    Attributes
+    ----------
+    temporaries : IndexedList
+        The shared temporaries as :class:`~jaff.types.IndexedValue` items
+        ``([i], expr_str)``, in evaluation order (each after the ones it reads).
+    expressions : tuple of IndexedList
+        One list per member, in the order the members were given, of
+        ``(indices, expr_str)`` items as the member's ``get_indexed_*`` method
+        would index them (``[i]``, or ``[i, j]`` for a Jacobian element).
+    """
+
+    temporaries: IndexedList
+    expressions: tuple[IndexedList, ...]

@@ -52,7 +52,7 @@ const int n = 37;
 """
 
 from ._languages import Language
-from ._typing import ExtrasDict, IndexedReturn
+from ._typing import CseGroup, ExtrasDict, IndexedReturn
 from .codegen import Codegen
 from .templating import TemplateFunctions, TemplateParser, jaffgen_function
 
@@ -60,6 +60,7 @@ __all__ = [
     "Codegen",
     "Language",
     "IndexedReturn",
+    "CseGroup",
     "TemplateParser",
     "TemplateFunctions",
     "jaffgen_function",

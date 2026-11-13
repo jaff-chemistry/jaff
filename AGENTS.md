@@ -338,8 +338,9 @@ docs/           # Documentation
   `krate[r]`, topologically ordered, no aliases, pruned; every `Codegen` getter prints
   through it). Helpers that only use them live outside it
 - `codegen/`: `Codegen`, `Language`s, the `$$JAFF` template engine (`templating/`);
-  `get_indexed_rhs_jacobian(part=...)` prints the reduced rhs and Jacobian sharing one
-  set of temporaries (built once, cached);
+  `cse_group([(kind, options), ...])` prints several kinds (rates, odes, radodes, rhs,
+  jacobian) with one shared CSE (reduced form with several members; cached); each
+  `get_indexed_*` getter is a one-member build (`_part`) printed by `_print_parts`;
   `$$JAFF CALL` inserts text from `@jaffgen_function` functions in a template's
   `jaffgen_template_functions.py` (`templating/functions.py`)
 - `config/`: config base models, loader, JSON schemas, reference generator

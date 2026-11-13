@@ -26,6 +26,7 @@ per-method bracket/token overrides are applied by the
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from itertools import count
 from typing import TYPE_CHECKING, Any, Iterator, Mapping, Sequence, cast
 
@@ -35,12 +36,34 @@ from ..common.optimizations import shared_cse
 from ..io._logger import JaffLogger, jaff_progress
 from ..types import IndexedList, IndexedValue
 from ._languages import Language, scoped_tokens
-from ._typing import IndexedReturn
+from ._typing import CseGroup, IndexedReturn
 
 if TYPE_CHECKING:
     import logging
 
     from ..core.network import Network
+
+
+@dataclass(frozen=True)
+class _Part:
+    """The expressions of one kind, before CSE and printing.
+
+    Attributes
+    ----------
+    items : list
+        SymPy expressions, or strings already in the target language.
+    indices : list of list of int
+        The index of each item (``[i]``, or ``[i, j]`` for a Jacobian entry).
+    name : str
+        What the items are, for the progress description.
+    optimizations : str or None
+        The :func:`sympy.cse` optimizations this kind asks for.
+    """
+
+    items: Sequence[sp.Basic | str]
+    indices: Sequence[list[int]]
+    name: str
+    optimizations: str | None = None
 
 
 class Codegen:
@@ -278,37 +301,7 @@ class Codegen:
         [0] 5.85154082319921e-8*photden[1] + 1.1420465158197e-10*photden[2]
         [1] 1.65941781598291e-10*tgas**(-0.7)
         """
-        out: IndexedReturn = {
-            "extras": {"cse": IndexedList()},
-            "expressions": IndexedList(),
-        }
-        # Reaction index -> CSE-reduced printed rate.  String rates are excluded
-        # (see docstring) and, like every rate without CSE, use get_code().
-        printed_rates: dict[int, str] = {}
-        if use_cse:
-            symbolic = {
-                i: rea.rate.coefficient
-                for i, rea in enumerate(self.net.reactions)
-                # Skip raw-string rates — they are already valid target-language code
-                if not isinstance(rea.rate.coefficient, str)
-            }
-            if symbolic:
-                printed = self._print_indexed(
-                    list(symbolic.values()),
-                    use_cse,
-                    cse_var,
-                    cse_suffix,
-                    optimizations="basic",
-                )
-                out["extras"]["cse"] = printed["extras"]["cse"]
-                for key, (_, expr) in zip(symbolic, printed["expressions"]):
-                    printed_rates[key] = expr
-
-        for i, rea in enumerate(self.net.reactions):
-            rate = printed_rates.get(i) or rea.get_code(self.lang.name)
-            out["expressions"].append(IndexedValue([i], rate))
-
-        return out
+        return self._indexed("rates", {}, use_cse, cse_var, cse_suffix)
 
     @scoped_tokens("lang")
     def get_rates_str(
@@ -859,12 +852,7 @@ class Codegen:
         [1] cse1
         [2] cse1
         """
-        with jaff_progress.indeterminate("Generating odes"):
-            odes = self.net.kinetics.odes()
-
-        return self._print_indexed(
-            odes, use_cse, cse_var, cse_suffix, description="Generating ode code"
-        )
+        return self._indexed("odes", {}, use_cse, cse_var, cse_suffix)
 
     @scoped_tokens("lang")
     def get_ode_str(
@@ -1025,13 +1013,14 @@ class Codegen:
         >>> len(rhs["expressions"])  # 3 species + 3 bands x (density, flux)
         9
         """
-        with jaff_progress.indeterminate("Generating rhs equations"):
-            system = self.net.ode_system(thermal, energy, radiation, rad_order)
-            rhs = system.rhs.flat()
+        options = {
+            "thermal": thermal,
+            "energy": energy,
+            "radiation": radiation,
+            "rad_order": rad_order,
+        }
 
-        return self._print_indexed(
-            rhs, use_cse, cse_var, cse_suffix, description="Generating RHS code"
-        )
+        return self._indexed("rhs", options, use_cse, cse_var, cse_suffix)
 
     @scoped_tokens("lang")
     def get_rhs_str(
@@ -1222,16 +1211,7 @@ class Codegen:
         Band 0 (1–13.6 eV) lies below the H ionisation threshold, so its
         equations vanish.
         """
-        if self.net.radiation is None:
-            raise RuntimeError("The network has no radiation field: no radiation odes")
-
-        return self._print_indexed(
-            self.net.radiation.odes(order),
-            use_cse,
-            cse_var,
-            cse_suffix,
-            description="Generating radiation ode code",
-        )
+        return self._indexed("radodes", {"order": order}, use_cse, cse_var, cse_suffix)
 
     @scoped_tokens("lang")
     def get_radode_str(
@@ -1417,62 +1397,40 @@ class Codegen:
         [0] 5.8515408231992116e-8*photden[1] + 1.1420465158197018e-10*photden[2]
         [1] 1.6594178159829075e-10*std::pow(tgas, -0.69999999999999996)
         """
+        options = {
+            "thermal": thermal,
+            "energy": energy,
+            "radiation": radiation,
+            "rad_order": rad_order,
+        }
 
-        system = self.net.ode_system(thermal, energy, radiation, rad_order)
-        entries = sorted(system.jacobian.todok().items())
+        return self._indexed("jacobian", options, use_cse, cse_var, cse_suffix)
 
-        return self._print_indexed(
-            [expr for _, expr in entries],
-            use_cse,
-            cse_var,
-            cse_suffix,
-            description="Generating jacobian code",
-            indices=[[i, j] for (i, j), _ in entries],
-        )
-
-    def get_indexed_rhs_jacobian(
+    def cse_group(
         self,
-        part: str = "rhs",
-        thermal: str = "none",
-        energy: str = "volumetric",
-        radiation: bool = False,
-        rad_order: int = 0,
-        use_cse: bool = True,
+        members: Sequence[tuple[str, Mapping[str, Any]]],
         cse_var: str = "cse",
         cse_suffix: str = "",
-    ) -> IndexedReturn:
-        """The rhs and the Jacobian at one state, sharing one set of temporaries.
+    ) -> CseGroup:
+        """Several kinds of expressions printed with one shared set of CSE temporaries.
 
-        A solver evaluating both at the same state (e.g. a Rosenbrock method) can
-        emit them into one function.  They come from the reduced
-        :class:`~jaff.core.OdeSystem` (``form="reduced"``), whose rows hold each
-        rate coefficient as ``krate[r]`` and whose Jacobian reuses it (``∂k/∂T`` as
-        ``krate[r] · ∂ln k/∂T`` where cheaper); one
-        :func:`~jaff.common.optimizations.shared_cse` over the rows, the Jacobian
-        entries and the rate coefficients makes every coefficient a temporary
-        evaluated once, ordered after what it reads.
+        Each member is ``(kind, options)``: *kind* one of ``"rates"``,
+        ``"odes"``, ``"radodes"``, ``"rhs"`` and ``"jacobian"``, *options* the
+        keyword arguments of the matching ``get_indexed_*`` method other than the
+        CSE ones (e.g. ``{"thermal": "dedt"}`` or ``{"order": 2}``).  One
+        :func:`~jaff.common.optimizations.shared_cse` runs over every member's
+        expressions, so sub-expressions are computed once for all of them.
 
-        Both parts are built together and cached, so a template prints the
-        ``"rhs"`` part (the temporaries and the rows) and then the ``"jacobian"``
-        part (the entries, reading the same temporaries) in one scope.
+        With several members the equations are built in the reduced form
+        (:class:`~jaff.core.reaction.Rate`): every rate coefficient becomes a
+        temporary evaluated once, and the Jacobian's derivatives reuse it.  A single
+        member prints exactly as its ``get_indexed_*`` method with CSE.  The result
+        is cached per members, temporary names and language tokens.
 
         Parameters
         ----------
-        part : {"rhs", "jacobian"}, optional
-            ``"rhs"`` (default): the temporaries and the rhs rows, indexed ``[i]``.
-            ``"jacobian"``: no temporaries, the non-zero Jacobian entries indexed
-            ``[i, j]``.
-        thermal : str, optional
-            Thermal equation: ``"none"`` (default), ``"dedt"`` or ``"dtdt"``.
-        energy : str, optional
-            Evolved internal-energy form with ``"dedt"``.  Default
-            ``"volumetric"``.
-        radiation : bool, optional
-            Include the radiation-moment equations.  Default ``False``.
-        rad_order : int, optional
-            Layout of the radiation equations, ``0`` (default) to ``3``.
-        use_cse : bool, optional
-            Must be ``True`` (default): the shared temporaries are the point.
+        members : sequence of (str, mapping)
+            The kinds of expressions and their options.
         cse_var : str, optional
             Prefix of the temporaries.  Default ``"cse"``.
         cse_suffix : str, optional
@@ -1480,86 +1438,65 @@ class Codegen:
 
         Returns
         -------
-        IndexedReturn
-            ``"extras"["cse"]`` and ``"expressions"`` of the chosen *part*.
+        CseGroup
+            The temporaries, and each member's expressions in member order.
 
         Raises
         ------
         ValueError
-            If *part* is unknown, *use_cse* is false, or a choice of equations is
-            invalid (see :class:`~jaff.core.OdeSystem`).
+            If there is no member, a kind is unknown, or an option is invalid.
+        RuntimeError
+            If ``"radodes"`` is asked of a network without a radiation field.
 
         Examples
         --------
         >>> from jaff import Network
         >>> from jaff.codegen import Codegen
         >>> cg = Codegen(Network("h_photoionization"), lang="cxx")
-        >>> rhs = cg.get_indexed_rhs_jacobian("rhs", thermal="dtdt")
-        >>> for idx, expr in rhs["extras"]["cse"][:2]:
+        >>> members = [("rhs", {"thermal": "dtdt"}), ("jacobian", {"thermal": "dtdt"})]
+        >>> group = cg.cse_group(members)
+        >>> for idx, expr in group.temporaries[:2]:
         ...     print(idx, expr)
         [17] photorates(1, 13.6, 1.0e+99)
         [0] cse17*nden[0]
-        >>> jac = cg.get_indexed_rhs_jacobian("jacobian", thermal="dtdt")
-        >>> for idx, expr in jac["expressions"][:2]:
+        >>> rhs, jacobian = group.expressions
+        >>> for idx, expr in jacobian[:2]:
         ...     print(idx, expr)
         [0, 0] -cse17
         [0, 1] cse5
 
         ``cse17`` is the photo rate coefficient (``krate[0]``): evaluated first, as
-        the temporaries after it read it, and once for both parts.
+        the temporaries after it read it, and once for the rhs and the Jacobian.
         """
-        if part not in ("rhs", "jacobian"):
-            raise ValueError(f"Invalid part {part!r}; expected 'rhs' or 'jacobian'")
-        if not use_cse:
-            raise ValueError("get_indexed_rhs_jacobian always shares temporaries")
+        members = [(kind, dict(options)) for kind, options in members]
+        if not members:
+            raise ValueError("A CSE group needs at least one member")
 
-        key = (thermal, energy, radiation, rad_order, cse_var, cse_suffix)
-        key += (self.lang.name, self.lang.lb, self.lang.rb)
-        cache = self.__dict__.setdefault("_rhs_jacobian", {})
-        if key not in cache:
-            cache[key] = self.__rhs_jacobian(
-                thermal, energy, radiation, rad_order, cse_var, cse_suffix
-            )
-
-        return cache[key][0 if part == "rhs" else 1]
-
-    def __rhs_jacobian(
-        self,
-        thermal: str,
-        energy: str,
-        radiation: bool,
-        rad_order: int,
-        cse_var: str,
-        cse_suffix: str,
-    ) -> tuple[IndexedReturn, IndexedReturn]:
-        """Both parts of :meth:`get_indexed_rhs_jacobian`."""
-        with jaff_progress.indeterminate("Generating shared rhs/jacobian"):
-            system = self.net.ode_system(
-                thermal, energy, radiation, rad_order, form="reduced"
-            )
-            rows = system.rhs.flat()
-            entries = sorted(system.jacobian.todok().items())
-
-        printed = self._print_indexed(
-            [*rows, *(expr for _, expr in entries)],
-            True,
+        key = (
+            tuple((kind, tuple(sorted(options.items()))) for kind, options in members),
             cse_var,
             cse_suffix,
-            description="Generating rhs/jacobian code",
-            indices=[[i] for i in range(len(rows))] + [[i, j] for (i, j), _ in entries],
-            definitions=system.rate_coefficients,
+            self.lang.name,
+            self.lang.lb,
+            self.lang.rb,
         )
-        expressions = printed["expressions"]
-        rhs: IndexedReturn = {
-            "extras": {"cse": printed["extras"]["cse"]},
-            "expressions": IndexedList(expressions[: len(rows)]),
-        }
-        jacobian: IndexedReturn = {
-            "extras": {"cse": IndexedList()},
-            "expressions": IndexedList(expressions[len(rows) :]),
-        }
+        cache = self.__dict__.setdefault("_cse_groups", {})
+        if key not in cache:
+            form = "reduced" if len(members) > 1 else "expanded"
+            parts = [self._part(kind, options, form) for kind, options in members]
+            definitions = None
+            if form == "reduced":
+                definitions = {
+                    r.rate.symbol: r.rate.coefficient
+                    for r in self.net.reactions
+                    if not isinstance(r.rate.coefficient, str)
+                }
+            temporaries, printed = self._print_parts(
+                parts, True, cse_var, cse_suffix, definitions
+            )
+            cache[key] = CseGroup(temporaries, tuple(printed))
 
-        return rhs, jacobian
+        return cache[key]
 
     @scoped_tokens("lang")
     def get_jacobian_str(
@@ -1692,55 +1629,138 @@ class Codegen:
 
         return jac_code
 
-    def _print_indexed(
+    def _indexed(
         self,
-        exprs: Sequence[sp.Basic],
+        kind: str,
+        options: Mapping[str, Any],
+        use_cse: bool,
+        cse_var: str,
+        cse_suffix: str,
+    ) -> IndexedReturn:
+        """One kind of expressions printed alone, as an :class:`IndexedReturn`."""
+        temporaries, (expressions,) = self._print_parts(
+            [self._part(kind, options)], use_cse, cse_var, cse_suffix
+        )
+
+        return {"extras": {"cse": temporaries}, "expressions": expressions}
+
+    def _part(
+        self, kind: str, options: Mapping[str, Any], form: str = "expanded"
+    ) -> _Part:
+        """The symbolic expressions of one *kind*, built with *options* in *form*."""
+        builders = {
+            "rates": self.__rates_part,
+            "odes": self.__odes_part,
+            "radodes": self.__radodes_part,
+            "rhs": self.__rhs_part,
+            "jacobian": self.__jacobian_part,
+        }
+        if kind not in builders:
+            raise ValueError(
+                f"Unknown expression kind {kind!r}; expected one of: "
+                f"{', '.join(builders)}"
+            )
+
+        return builders[kind](form, **options)
+
+    def __rates_part(self, form: str) -> _Part:
+        """Every rate coefficient; a raw-string rate is already target-language code."""
+        items: list[sp.Basic | str] = []
+        for rea in self.net.reactions:
+            k = rea.rate.coefficient
+            items.append(rea.get_code(self.lang.name) if isinstance(k, str) else k)
+
+        return _Part(items, [[i] for i in range(len(items))], "rate", "basic")
+
+    def __odes_part(self, form: str) -> _Part:
+        """The species ODEs (:meth:`Kinetics.odes <jaff.core.Kinetics.odes>`)."""
+        with jaff_progress.indeterminate("Generating odes"):
+            odes = list(self.net.kinetics.odes(form))
+
+        return _Part(odes, [[i] for i in range(len(odes))], "ode")
+
+    def __radodes_part(self, form: str, order: int = 0) -> _Part:
+        """The radiation-moment ODEs (:meth:`~jaff.physics.Radiation.odes`)."""
+        if self.net.radiation is None:
+            raise RuntimeError("The network has no radiation field: no radiation odes")
+
+        odes = list(self.net.radiation.odes(order, form))
+
+        return _Part(odes, [[i] for i in range(len(odes))], "radiation ode")
+
+    def __rhs_part(self, form: str, **choices: Any) -> _Part:
+        """The rhs of :meth:`Network.ode_system <jaff.core.Network.ode_system>`."""
+        with jaff_progress.indeterminate("Generating rhs equations"):
+            rows = self.net.ode_system(**choices, form=form).rhs.flat()
+
+        return _Part(rows, [[i] for i in range(len(rows))], "RHS")
+
+    def __jacobian_part(self, form: str, **choices: Any) -> _Part:
+        """The non-zero Jacobian entries of the ODE system, by row then column."""
+        system = self.net.ode_system(**choices, form=form)
+        entries = sorted(system.jacobian.todok().items())
+
+        return _Part(
+            [e for _, e in entries], [[i, j] for (i, j), _ in entries], "jacobian"
+        )
+
+    def _print_parts(
+        self,
+        parts: Sequence[_Part],
         use_cse: bool,
         cse_var: str,
         cse_suffix: str = "",
-        description: str = "Generating code",
-        indices: Sequence[list[int]] | None = None,
-        optimizations: str | None = None,
         definitions: Mapping[Any, sp.Basic] | None = None,
-    ) -> IndexedReturn:
-        """CSE *exprs* (optionally) and print everything.
+    ) -> tuple[IndexedList, list[IndexedList]]:
+        """CSE the symbolic items of *parts* together (optionally) and print them.
 
         The CSE is :func:`~jaff.common.optimizations.shared_cse`: with
-        *definitions* (symbols used in *exprs* and their values, e.g. an
-        :class:`~jaff.core.OdeSystem`'s ``rate_coefficients``) each definition
-        becomes a temporary shared with *exprs*.  Entry *k* gets ``indices[k]``
-        (default ``[k]``).  Derivatives of undefined functions become
-        ``<name>_partial_<n>(...)`` calls (see :meth:`__convert_unknown_derivatives`).
+        *definitions* (symbols used in the items and their values, e.g. the
+        ``krate[r]`` of the reduced form) each definition becomes a temporary
+        shared with the items; ``optimizations="basic"`` when every part asks for
+        it.  String items are printed as they are.  Derivatives of undefined
+        functions become ``<name>_partial_<n>(...)`` calls (see
+        :meth:`__convert_unknown_derivatives`).
+
+        Returns
+        -------
+        tuple
+            The temporaries, and one :class:`~jaff.types.IndexedList` per part.
         """
-        out: IndexedReturn = {
-            "extras": {"cse": IndexedList()},
-            "expressions": IndexedList(),
-        }
+        symbolic = [i for part in parts for i in part.items if not isinstance(i, str)]
+        temporaries = IndexedList()
         cse_defs: dict[str, sp.Basic] | None = None
-        if use_cse:
+        if use_cse and symbolic:
+            basic = all(part.optimizations == "basic" for part in parts)
             with jaff_progress.indeterminate("Generating cse expressions"):
-                replacements, exprs = shared_cse(
-                    list(exprs),
+                replacements, symbolic = shared_cse(
+                    symbolic,
                     definitions or {},
                     self._cse_symbols(cse_var, cse_suffix),
-                    optimizations,
+                    "basic" if basic else None,
                 )
                 # str-keyed so __convert_unknown_derivatives can resolve CSE
                 # symbols back to their defining expressions
                 cse_defs = {str(var): expr for var, expr in replacements}
                 for var, expr in replacements:
                     idx = self._cse_index(var, cse_var, cse_suffix)
-                    out["extras"]["cse"].append(
-                        IndexedValue([idx], self._code(expr, cse_defs))
-                    )
+                    temporaries.append(IndexedValue([idx], self._code(expr, cse_defs)))
 
-        keys = indices if indices is not None else [[k] for k in range(len(exprs))]
-        for key, expr in jaff_progress.track(
-            list(zip(keys, exprs)), description=description
-        ):
-            out["expressions"].append(IndexedValue(key, self._code(expr, cse_defs)))
+        reduced = iter(symbolic)
+        printed = []
+        for part in parts:
+            out = IndexedList()
+            for key, item in jaff_progress.track(
+                list(zip(part.indices, part.items)),
+                description=f"Generating {part.name} code",
+            ):
+                text = (
+                    item if isinstance(item, str) else self._code(next(reduced), cse_defs)
+                )
+                out.append(IndexedValue(key, text))
+            printed.append(out)
 
-        return out
+        return temporaries, printed
 
     def _code(self, expr: sp.Basic, cse_defs: dict[str, sp.Basic] | None = None) -> str:
         """*expr* printed in the target language, unknown derivatives resolved."""

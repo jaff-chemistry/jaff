@@ -383,25 +383,28 @@ Every method runs the same CSE, `jaff.common.optimizations.shared_cse`: SymPy's
 `cse`, then the temporaries in evaluation order (each after the ones it reads),
 without aliases (`cse5 = cse3` is substituted away) and without unused ones.
 
-### The rhs and the Jacobian together
+### Several kinds sharing one CSE
 
-A solver that needs the rhs and the Jacobian at the same state (a Rosenbrock
-method, say) can compute both in one function with
-`get_indexed_rhs_jacobian(part, thermal, energy, radiation, rad_order)`. It
-prints the [reduced ODE system](../working-with-networks/network.md#rate-coefficients-as-symbols),
-whose rows hold each rate coefficient as `krate[r]`, with one CSE over the rows,
-the Jacobian entries and the coefficients: every rate coefficient becomes a
-temporary evaluated once, and the Jacobian's temperature column reuses it.
+`cse_group(members, cse_var, cse_suffix)` prints several kinds of expressions
+(`"rates"`, `"odes"`, `"radodes"`, `"rhs"`, `"jacobian"`, each with the options of
+its `get_indexed_*` method) with one CSE over all of them. A solver that needs the
+rhs and the Jacobian at the same state (a Rosenbrock method, say) computes both in
+one function:
 
 ```python
-rhs = cg.get_indexed_rhs_jacobian("rhs", thermal="dtdt")  # temporaries + rows [i]
-jac = cg.get_indexed_rhs_jacobian("jacobian", thermal="dtdt")  # entries [i, j] only
+members = [("rhs", {"thermal": "dtdt"}), ("jacobian", {"thermal": "dtdt"})]
+group = cg.cse_group(members)
+group.temporaries  # shared temporaries, in evaluation order
+rhs, jac = group.expressions  # rows [i], non-zero entries [i, j]
 ```
 
-Print the `"rhs"` part first (its temporaries, then its rows) and the
-`"jacobian"` part after it in the same scope: the entries read the same
-temporaries. Both parts are built once and cached. On the bundled networks this
-halves the `exp`/`log`/`pow` calls of a separate rhs and Jacobian.
+Emit the temporaries first, then each member's expressions in the same scope.
+With several members the equations are built in the
+[reduced form](../working-with-networks/network.md#rate-coefficients-as-symbols):
+each rate coefficient becomes a temporary evaluated once, and the Jacobian's
+temperature column reuses it. On the bundled networks this halves the
+`exp`/`log`/`pow` calls of a separate rhs and Jacobian. A single member prints
+exactly as its `get_indexed_*` method. The result is cached.
 
 ---
 
@@ -420,7 +423,7 @@ template engine, renumbering them, or post-processing — every emitter has an
 | `get_rhs_str()`              | `get_indexed_rhs()`              |
 | `get_radode_str()`           | `get_indexed_radodes()`          |
 | `get_jacobian_str()`         | `get_indexed_jacobian()`         |
-| —                            | `get_indexed_rhs_jacobian()`     |
+| —                            | `cse_group()`                    |
 
 The rate/ODE/RHS/Jacobian variants return a dict with two keys —
 `"extras"["cse"]` (the CSE temporaries) and `"expressions"` (the main
