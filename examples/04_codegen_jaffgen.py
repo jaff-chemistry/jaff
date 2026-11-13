@@ -80,19 +80,22 @@ def _(mo):
     mo.md("""
     ## What a template looks like
 
-    Here is `rates.py` from the `python_solve_ivp` collection. It is plain Python
-    apart from the block between `$$JAFF REPEAT` and `$$JAFF END`:
+    Here is `chemistry.py` from the `python_solve_ivp` collection. It is plain
+    Python apart from the blocks between a `$$JAFF` directive and `$$JAFF END`:
 
-    - `$$JAFF REPEAT idx, rate IN rates` repeats the enclosed lines once per
-      reaction, binding `idx` to the reaction's index and `rate` to its rate
-      coefficient printed as Python;
-    - `$idx$` and `$rate$` mark where those values are substituted.
+    - `$$JAFF REPEAT idx, specie IN species` repeats the enclosed line once per
+      species, binding `idx` to its index and `specie` to its name; `$idx$` and
+      `$specie$` mark where those values are substituted;
+    - `$$JAFF REPEAT ... IN parameters` lists the network's free parameters, so
+      the generated functions read exactly the ones the network uses;
+    - `$$JAFF SUB` substitutes single values, such as the number of species or
+      the EOS energy;
+    - the `rhses` and `jacobian` blocks print the right-hand side and Jacobian
+      (with `THERMAL { MODE -> dtdt }`, including the gas temperature), sharing
+      common subexpressions through the `cses` blocks.
 
-    Other directives work the same way: `$$JAFF SUB` substitutes single values
-    (such as the number of species), and the iterable after `IN` can be species,
-    fluxes, ODE right-hand sides, Jacobian entries and more. The language is
-    taken from the file extension, so the same directive prints Fortran in a
-    `.f90` file.
+    The language is taken from the file extension, so the same directives print
+    Fortran in a `.f90` file.
     """)
     return
 
@@ -101,7 +104,7 @@ def _(mo):
 def _(TEMPLATES_DIR, mo):
     mo.md(
         "```python\n"
-        + (TEMPLATES_DIR / "python_solve_ivp" / "rates.py").read_text()
+        + (TEMPLATES_DIR / "python_solve_ivp" / "chemistry.py").read_text()
         + "\n```"
     )
     return
@@ -153,12 +156,12 @@ def _(DEMO2, JAFFGEN, run, scratch):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    `jaffgen` wrote one file per template. `commons.py` holds the species
-    indices and sizes, `rates.py` the rate coefficients, `fluxes.py` the
-    reaction fluxes and `ode.py` the right-hand side of the rate equations;
-    `main.py` is the hand-written driver that integrates them with SciPy's
-    `solve_ivp`. `jaffgen` also writes `config.toml`, a record of the settings
-    used for the run, which can be passed back with `--config` to repeat it.
+    `jaffgen` wrote one file per template. `chemistry.py` is rendered for the
+    network: species map, parameter names, EOS energy, right-hand side and
+    Jacobian. `solver.py` (`solve()`, SciPy's Radau with the analytic Jacobian)
+    and `main.py` (the driver) are copied as they are. `jaffgen` also writes
+    `config.toml`, a record of the settings used for the run, which can be
+    passed back with `--config` to repeat it.
     """)
     return
 
@@ -172,16 +175,17 @@ def _(file_table, py_out):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    The rendered `rates.py` shows the directive at work. The block now holds one
-    line per reaction of `demo2`, and the directive itself is kept as a comment
-    (`--echo`, on by default) so you can see where generated code came from:
+    The rendered `chemistry.py` shows the directives at work. Each block now
+    holds the code for `demo2`, and the directives themselves are kept as
+    comments (`--echo`, on by default) so you can see where generated code came
+    from:
     """)
     return
 
 
 @app.cell
 def _(mo, py_out):
-    mo.md("```python\n" + (py_out / "rates.py").read_text() + "\n```")
+    mo.md("```python\n" + (py_out / "chemistry.py").read_text() + "\n```")
     return
 
 
@@ -190,21 +194,18 @@ def _(mo):
     mo.md("""
     ### Running it
 
-    The generated directory is a self-contained program. Running its driver
-    integrates the chemistry from pure CO at 100 K for $10^6$ years. The driver
-    calls `plt.show()`, so it is run with the non-interactive `Agg` backend;
-    what matters here is that it exits 0.
+    The generated directory is a self-contained program that needs only NumPy
+    and SciPy. The driver starts from the inputs block at the top of `main.py`;
+    as generated, every density is 0 and every parameter a placeholder 1, so
+    edit that block for a real run. Here it just shows the program runs and
+    saves `solution.dat`.
     """)
     return
 
 
 @app.cell
-def _(os, py_out, run, sys):
-    run(
-        [sys.executable, "main.py"],
-        cwd=py_out,
-        env={**os.environ, "MPLBACKEND": "Agg"},
-    )
+def _(py_out, run, sys):
+    run([sys.executable, "main.py"], cwd=py_out)
     return
 
 
@@ -212,8 +213,9 @@ def _(os, py_out, run, sys):
 def _(mo):
     mo.md("""
     The generated modules can also be imported and used directly. The next cell
-    imports `get_ode` from the generated `ode.py` and integrates it the same way
-    the driver does. CO is ionised by starlight (`CO -> CO+ + e-`, attenuated
+    calls `solve()` from the generated `solver.py`, starting from pure CO at
+    100 K, with densities given by species name and the one parameter `demo2`
+    uses, $A_V$. CO is ionised by starlight (`CO -> CO+ + e-`, attenuated
     by $A_V = 1$) while CO⁺ recombines with electrons (`CO+ + e- -> CO`). The
     two balance once ionisation and recombination rates are equal, and CO⁺ and
     e⁻ settle at the same equilibrium density.
@@ -223,34 +225,22 @@ def _(mo):
 
 @app.cell
 def _(PLOT_SIZE, import_generated, np, plt, py_out):
-    from scipy.integrate import solve_ivp
+    _gen = import_generated(py_out, ["chemistry", "solver"])
+    _chemistry, _solver = _gen["chemistry"], _gen["solver"]
 
-    _gen = import_generated(py_out, ["commons", "rates", "fluxes", "ode"])
-    _commons, _ode = _gen["commons"], _gen["ode"]
-
-    _y0 = np.zeros(_commons.nvars)
-    _y0[_commons.idx_co] = 1e2  # cm^-3
-    _y0[_commons.idx_tgas] = 1e2  # K
     _year = 365.0 * 24 * 3600
-    _t_eval = np.logspace(2, 6, 100) * _year
-    _crate, _av = 1e-17, 1.0
-
-    _sol = solve_ivp(
-        lambda t, y: _ode.get_ode(y, y[_commons.idx_tgas], _crate, _av),
-        (0, _t_eval[-1]),
-        _y0,
+    _t_eval = np.geomspace(1e2, 1e6, 100) * _year
+    _result = _solver.solve(
+        {"CO": 1e2},  # cm^-3
+        100.0,  # K
+        _t_eval[-1],
+        {"av": 1.0},  # every name in _chemistry.PARAMETERS
         t_eval=_t_eval,
-        method="LSODA",
     )
-    assert _sol.success, _sol.message
 
     _fig, _ax = plt.subplots(figsize=PLOT_SIZE)
-    for _name, _idx in [
-        ("CO", _commons.idx_co),
-        ("CO+", _commons.idx_coj),
-        ("e-", _commons.idx_e),
-    ]:
-        _ax.loglog(_sol.t / _year, _sol.y[_idx], label=_name)
+    for _name in ("CO", "CO+", "e-"):
+        _ax.loglog(_result.t / _year, _result.n[_name], label=_name)
     _ax.set_xlabel("time (yr)")
     _ax.set_ylabel("number density (cm$^{-3}$)")
     _ax.legend()
@@ -264,8 +254,8 @@ def _(mo):
     ## Generating the Fortran solver
 
     Switching language means switching collection; the network stays the same.
-    `fortran_dlsodes` produces Fortran modules for the same rates, fluxes and
-    ODEs, plus a driver (`main.f90`), a `Makefile` and the ODEPACK sources of the
+    `fortran_dlsodes` produces Fortran modules for the network's rates, fluxes
+    and ODEs, plus a driver (`main.f90`), a `Makefile` and the ODEPACK sources of the
     stiff solver DLSODES.
     """)
     return

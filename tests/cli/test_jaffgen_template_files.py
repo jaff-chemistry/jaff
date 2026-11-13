@@ -13,7 +13,7 @@ from tests._paths import REPO_ROOT
 #: Static solver files each template ships besides its $$JAFF templates.
 STATIC = {
     "fortran_dlsodes": {"main.f90", "Makefile", "opkda1.f", "opkda2.f", "opkdmain.f"},
-    "python_solve_ivp": {"main.py"},
+    "python_solve_ivp": {"main.py", "solver.py"},
     "microphysics": {"actual_network.H", "Make.package"},
 }
 

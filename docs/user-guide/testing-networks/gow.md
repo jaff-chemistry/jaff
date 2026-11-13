@@ -29,7 +29,7 @@ A network this size has no analytic solution, but it is still testable because i
 !!! warning "Backend requirements"
     This test asks more of a host code than the other two. The backend needs to support HDF5 table interpolation, integrate a gas-energy equation alongside the species, carry number densities, and make the environment parameters below available at runtime.
 
-    The `python_solve_ivp` template does **not** meet these requirements on its own. It can integrate the gas temperature (opt-in at runtime with `evolve_tgas=True`), but its rate function takes only `tgas`, `crate` and `av`, while the GOW rates also refer to `chi`, `d2g`, `gradv`, `vdisp` and the column densities `ncol_*`. For this test you will need a backend that provides those parameters and solves the thermal equation, or you can wire the generated right-hand side into a driver of your own (see the [worked example](../code-generation/worked-example.md)).
+    The `python_solve_ivp` template meets all of them except the table interpolation. Its `solve()` takes every GOW parameter by name (`chemistry.PARAMETERS`: `av`, `chi`, `crate`, `d2g`, `gradv`, `ncol_*`, `vdisp`) and integrates the gas temperature with `evolve_temperature=True`. The interpolators (`alpha_co_interp2d`, `fshield_co_interp2d`, ...) and the partial derivatives the Jacobian calls (`<name>_partial_<n>`) are left to you: define them in the generated `chemistry.py` from `GOW.hdf5` before running.
 
 ## Setup
 
