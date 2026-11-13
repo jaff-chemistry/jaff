@@ -341,6 +341,10 @@ docs/           # Documentation
   `cse_group([(kind, options), ...])` prints several kinds (rates, odes, radodes, rhs,
   jacobian) with one shared CSE (reduced form with several members; cached); each
   `get_indexed_*` getter is a one-member build (`_part`) printed by `_print_parts`;
+  in templates, `REPEAT idx, cse IN cses { GROUP { NAME -> g } }` emits a CSE group's
+  temporaries and expression blocks (`rates`, `odes`, `radodes`, `rhses`, `jacobian`;
+  item `$jac$` for the Jacobian) join it with `CSE { GROUP -> g }` (no embedded `cse`
+  variable; groups per file, checked in `render.py`, built by `Codegen.cse_group`);
   `$$JAFF CALL` inserts text from `@jaffgen_function` functions in a template's
   `jaffgen_template_functions.py` (`templating/functions.py`)
 - `config/`: config base models, loader, JSON schemas, reference generator

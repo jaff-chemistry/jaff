@@ -26,14 +26,20 @@ $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt  ENERGY -> per_particle
 f_per_particle[$idx$] = $rhs$
 $$JAFF END
 
-$$JAFF REPEAT idx, expr, cse IN jacobian {
+$$JAFF REPEAT idx, cse IN cses {
     REPLACE { "nden\[(\d+)\]" -> "y[\1]" }
-    THERMAL { MODE -> dtdt  ENERGY -> specific }
+    GROUP { NAME -> jacobian }
 }
 c$idx$ = $cse$
-J[$idx$, $idx$] = $expr$
+$$JAFF END
+$$JAFF REPEAT idx, jac IN jacobian {
+    REPLACE { "nden\[(\d+)\]" -> "y[\1]" }
+    THERMAL { MODE -> dtdt  ENERGY -> specific }
+    CSE { GROUP -> jacobian }
+}
+J[$idx$, $idx$] = $jac$
 $$JAFF END
 
-$$JAFF REPEAT idx, expr IN jacobian { THERMAL { MODE -> none } }
-J_none[$idx$, $idx$] = $expr$
+$$JAFF REPEAT idx, jac IN jacobian { THERMAL { MODE -> none } }
+J_none[$idx$, $idx$] = $jac$
 $$JAFF END

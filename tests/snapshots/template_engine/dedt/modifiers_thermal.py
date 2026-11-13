@@ -40,9 +40,9 @@ f_per_particle[2] = nden[0]**2*nden[1]
 f_per_particle[3] = 1.49999999999992*tgas*(1.380649e-16*nden[0] + 1.380649e-16*nden[1] + 1.380649e-16*nden[2])*nden[0]**2*nden[1]/(nden[0] + nden[1] + nden[2])**2 + nden[0]**3*nden[1]/(nden[0] + nden[1] + nden[2])
 # $$JAFF END
 
-# $$JAFF REPEAT idx, expr, cse IN jacobian {
+# $$JAFF REPEAT idx, cse IN cses {
     # REPLACE { "nden\[(\d+)\]" -> "y[\1]" }
-    # THERMAL { MODE -> dtdt  ENERGY -> specific }
+    # GROUP { NAME -> jacobian }
 # }
 c0 = y[0]*y[1]
 c1 = 2*c0
@@ -55,6 +55,12 @@ c7 = 1/c6
 c8 = y[0]**3
 c9 = c3*tgas
 c10 = -2.0709734999999e-16*(c5*c9 + c8*y[1])/c6**2
+# $$JAFF END
+# $$JAFF REPEAT idx, jac IN jacobian {
+    # REPLACE { "nden\[(\d+)\]" -> "y[\1]" }
+    # THERMAL { MODE -> dtdt  ENERGY -> specific }
+    # CSE { GROUP -> jacobian }
+# }
 J[0, 0] = c2
 J[0, 1] = c4
 J[1, 0] = c2
@@ -67,7 +73,7 @@ J[3, 2] = c10
 J[3, 3] = c3*c5*c7
 # $$JAFF END
 
-# $$JAFF REPEAT idx, expr IN jacobian { THERMAL { MODE -> none } }
+# $$JAFF REPEAT idx, jac IN jacobian { THERMAL { MODE -> none } }
 J_none[0, 0] = -2*nden[0]*nden[1]
 J_none[0, 1] = -nden[0]**2
 J_none[1, 0] = -2*nden[0]*nden[1]

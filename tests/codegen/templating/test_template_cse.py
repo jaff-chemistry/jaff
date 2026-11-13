@@ -1,5 +1,5 @@
-# ABOUTME: CSE temporaries in REPEAT blocks: the $cse$ line's identifier pattern
-# ABOUTME: (prefix$idx$suffix) must name both declarations and references, or be rejected
+# ABOUTME: CSE groups in templates (REPEAT IN cses + CSE { GROUP }): the $cse$ line's
+# ABOUTME: identifier pattern names declarations and references; shared groups evaluate
 
 import math
 import re
@@ -22,7 +22,7 @@ PROPS = {
     "rates": ("rate", "f[$idx$] = $rate$"),
     "odes": ("ode", "f[$idx$] = $ode$"),
     "rhses": ("rhs", "f[$idx$] = $rhs$"),
-    "jacobian": ("expr", "f[$idx$, $idx$] = $expr$"),
+    "jacobian": ("jac", "f[$idx$, $idx$] = $jac$"),
 }
 
 
@@ -35,6 +35,22 @@ def cse_net() -> Network:
 def _render(net: Network, tmp_path: Path, header: str, body: str) -> str:
     template = tmp_path / "t.py"
     template.write_text(f"$$JAFF REPEAT {header}\n{body}\n$$JAFF END\n")
+    return TemplateParser(net, template).parse_file()
+
+
+def _render_group(
+    net: Network, tmp_path: Path, cse_line: str, header: str, body: str
+) -> str:
+    """A CSE block naming group g, then one expression block *header* joining it."""
+    template = tmp_path / "t.py"
+    prop, _, options = header.partition("{")
+    options = options.rstrip(" }")
+    template.write_text(
+        "$$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> g } }\n"
+        f"{cse_line}\n$$JAFF END\n"
+        f"$$JAFF REPEAT {prop.strip()} {{ {options} CSE {{ GROUP -> g }} }}\n"
+        f"{body}\n$$JAFF END\n"
+    )
     return TemplateParser(net, template).parse_file()
 
 
@@ -76,9 +92,7 @@ def _assert_names_consistent(code: str, pattern: str) -> None:
 def test_cse_names_match_template_pattern(
     cse_net: Network, tmp_path: Path, cse_line: str, rate_line: str, pattern: str
 ) -> None:
-    out = _render(
-        cse_net, tmp_path, "idx, rate, cse IN rates", f"{cse_line}\n{rate_line}"
-    )
+    out = _render_group(cse_net, tmp_path, cse_line, "idx, rate IN rates", rate_line)
     _assert_names_consistent(out.replace("s.x", "x"), pattern)
 
 
@@ -93,9 +107,7 @@ def test_cse_rates_evaluate_like_plain_rates(
         _render(cse_net, tmp_path, "idx, rate IN rates", "k[$idx$] = $rate$")
     )
     rate_line = "k[$idx$]=$rate$" if "=$" in cse_line else "k[$idx$] = $rate$"
-    source = _render(
-        cse_net, tmp_path, "idx, rate, cse IN rates", f"{cse_line}\n{rate_line}"
-    )
+    source = _render_group(cse_net, tmp_path, cse_line, "idx, rate IN rates", rate_line)
     with_cse = _exec_rates(source)
     assert with_cse.keys() == plain.keys()
     for i, value in plain.items():
@@ -107,29 +119,32 @@ def test_suffix_pattern_consistent_for_every_prop(
     cse_net: Network, tmp_path: Path, prop: str
 ) -> None:
     var, main_line = PROPS[prop]
-    body = f"tmp$idx$_value = $cse$\n{main_line}"
-    out = _render(cse_net, tmp_path, f"idx, {var}, cse IN {prop}", body)
+    out = _render_group(
+        cse_net, tmp_path, "tmp$idx$_value = $cse$", f"idx, {var} IN {prop}", main_line
+    )
     _assert_names_consistent(out, r"\btmp\d+_value\b")
 
 
 @pytest.mark.parametrize(
-    "body, match",
+    "cse_line, match",
     [
         # identifier would start with a digit: 0x, 1x, ...
-        ("$idx$x = $cse$\nk[$idx$] = $rate$", "identifier"),
+        ("$idx$x = $cse$", "identifier"),
         # array-style temporaries are not identifiers
-        ("cse[$idx$] = $cse$\nk[$idx$] = $rate$", "identifier"),
+        ("cse[$idx$] = $cse$", "identifier"),
         # arithmetic on the index would declare cse1 for temporary cse0
-        ("cse$idx+1$ = $cse$\nk[$idx$] = $rate$", "arithmetic"),
-        # temporaries must be emitted (and named) before they are used
-        ("k[$idx$] = $rate$\ncse$idx$ = $cse$", r"\$cse\$"),
+        ("cse$idx+1$ = $cse$", "arithmetic"),
+        # the CSE block's first expanded line names the temporaries
+        ("k[$idx$] = 0\ncse$idx$ = $cse$", r"\$cse\$"),
     ],
 )
 def test_unsupported_cse_patterns_rejected(
-    cse_net: Network, tmp_path: Path, body: str, match: str
+    cse_net: Network, tmp_path: Path, cse_line: str, match: str
 ) -> None:
     with pytest.raises(ParserError, match=match):
-        _render(cse_net, tmp_path, "idx, rate, cse IN rates", body)
+        _render_group(
+            cse_net, tmp_path, cse_line, "idx, rate IN rates", "k[$idx$] = $rate$"
+        )
 
 
 def test_horizontal_rates_without_cse_do_not_need_idx(
@@ -159,3 +174,67 @@ def test_codegen_cse_suffix_names_temporaries(cse_net: Network, getter: str) -> 
     referenced = set(re.findall(r"\bt\d+_v\b", code))
     assert referenced and referenced <= declared
     assert not re.search(r"\bt\d+\b", code)
+
+
+# --------------------------------------------------------------------------- #
+# A group of several blocks: one CSE, rate coefficients shared                 #
+# --------------------------------------------------------------------------- #
+
+PAIR = """\
+$$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rhs_jac } }
+cse$idx$ = $cse$
+$$JAFF END
+$$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dtdt }  CSE { GROUP -> rhs_jac } }
+f[$idx$] = $rhs$
+$$JAFF END
+$$JAFF REPEAT idx, jac IN jacobian { THERMAL { MODE -> dtdt }  CSE { GROUP -> rhs_jac } }
+J[$idx$, $idx$] = $jac$
+$$JAFF END
+"""
+
+SEPARATE = """\
+$$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dtdt } }
+f[$idx$] = $rhs$
+$$JAFF END
+$$JAFF REPEAT idx, jac IN jacobian { THERMAL { MODE -> dtdt } }
+J[$idx$, $idx$] = $jac$
+$$JAFF END
+"""
+
+
+def _run(net: Network, tmp_path: Path, text: str) -> Dict[str, Dict]:
+    template = tmp_path / "t.py"
+    template.write_text(text)
+    scope: Dict[str, Any] = {
+        "math": math,
+        "tgas": TGAS,
+        "nden": [1.0 + 0.1 * i for i in range(net.species.count)],
+        "f": {},
+        "J": {},
+    }
+    exec(TemplateParser(net, template).parse_file(), scope)
+    return {"f": scope["f"], "J": scope["J"]}
+
+
+def test_rhs_and_jacobian_group_matches_separate_blocks(
+    cse_net: Network, tmp_path: Path
+) -> None:
+    shared = _run(cse_net, tmp_path, PAIR)
+    separate = _run(cse_net, tmp_path, SEPARATE)
+    for name in ("f", "J"):
+        assert shared[name].keys() == separate[name].keys()
+        scale = max(abs(v) for v in separate[name].values())
+        for key, value in separate[name].items():
+            assert shared[name][key] == pytest.approx(value, rel=1e-9, abs=1e-12 * scale)
+
+
+def test_rhs_and_jacobian_group_evaluates_each_exponential_once(
+    cse_net: Network, tmp_path: Path
+) -> None:
+    template = tmp_path / "t.py"
+    template.write_text(PAIR)
+    shared = TemplateParser(cse_net, template, echo_directives=False).parse_file()
+    template.write_text(SEPARATE)
+    separate = TemplateParser(cse_net, template, echo_directives=False).parse_file()
+
+    assert shared.count("math.exp") < separate.count("math.exp")

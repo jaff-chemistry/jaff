@@ -6,8 +6,10 @@ drad[0] = -5.05728445450563e-8*nden[0]*photden[0]
 drad[1] = -5.05728445450563e-8*nden[0]*rflux[0]
 # $$JAFF END
 
-# $$JAFF REPEAT idx, radode, cse IN radodes
+# $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> radodes } }
 r0 = 5.05728445450563e-8*nden[0]
+# $$JAFF END
+# $$JAFF REPEAT idx, radode IN radodes { CSE { GROUP -> radodes } }
 drad[0] = -r0*photden[0]
 drad[1] = -r0*rflux[0]
 # $$JAFF END
@@ -37,7 +39,7 @@ f_rad1[4] = -5.05728445450563e-8*nden[0]*rflux[0]
 f_rad1[5] = -5.05728445450563e-8*nden[0]*photden[0]
 # $$JAFF END
 
-# $$JAFF REPEAT idx, expr, cse IN jacobian {
+# $$JAFF REPEAT idx, cse IN cses {
     # REPLACE {
         # "photden\[\s*(\d+)\s*\]" -> "rn[2*\1]"
         # "rflux\[\s*(\d+)\s*\]" -> "rn[2*\1+1]"
@@ -45,7 +47,7 @@ f_rad1[5] = -5.05728445450563e-8*nden[0]*photden[0]
         # "tgas" -> "T"
         # "c_hat" -> "chat"
     # }
-    # RADIATION { ENABLED -> True }
+    # GROUP { NAME -> jacobian }
 # }
 c0 = 5.05728445450563e-8*rn[2*0]
 c1 = -c0
@@ -56,6 +58,18 @@ c5 = 5.05728445450563e-8*xn[0]
 c6 = -c5
 c7 = -c3
 c8 = -c4
+# $$JAFF END
+# $$JAFF REPEAT idx, jac IN jacobian {
+    # REPLACE {
+        # "photden\[\s*(\d+)\s*\]" -> "rn[2*\1]"
+        # "rflux\[\s*(\d+)\s*\]" -> "rn[2*\1+1]"
+        # "nden\[\s*(\d+)\s*\]" -> "xn[\1]"
+        # "tgas" -> "T"
+        # "c_hat" -> "chat"
+    # }
+    # RADIATION { ENABLED -> True }
+    # CSE { GROUP -> jacobian }
+# }
 J[0, 0] = c1
 J[0, 1] = c3
 J[0, 2] = c4

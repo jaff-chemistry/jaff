@@ -33,13 +33,34 @@ def options(text: str, line: int = 1):
     return parse_header(f"$$JAFF REPEAT x IN p {{{text}}}", line, Path("t")).options
 
 
-def test_properties_match_the_old_engine():
-    assert set(PROPERTIES) == OLD_PROPS
+def test_properties_are_the_old_engine_ones_and_cses():
+    assert set(PROPERTIES) == OLD_PROPS | {"cses"}
 
 
-@pytest.mark.parametrize("name", ["rates", "odes", "radodes", "rhses", "jacobian"])
-def test_expression_properties_offer_cse(name):
-    assert PROPERTIES[name].special == ("cse",)
+@pytest.mark.parametrize(
+    ("name", "item"),
+    [
+        ("rates", "rate"),
+        ("odes", "ode"),
+        ("radodes", "radode"),
+        ("rhses", "rhs"),
+        ("jacobian", "jac"),
+    ],
+)
+def test_expression_properties_join_cse_groups(name, item):
+    assert PROPERTIES[name].vars == ("idx", item)
+    assert set(PROPERTIES[name].groups["CSE"]) == {"GROUP"}
+
+
+def test_cses_names_its_group():
+    assert PROPERTIES["cses"].vars == ("idx", "cse")
+    assert {g: set(k) for g, k in PROPERTIES["cses"].groups.items()} == {
+        "GROUP": {"NAME"}
+    }
+
+
+def test_cse_group_option_becomes_a_kwarg():
+    assert option_kwargs("rhses", options(" CSE { GROUP -> g } ")) == {"cse_group": "g"}
 
 
 def test_item_variable():
@@ -52,6 +73,8 @@ def test_groups_are_the_union_over_properties():
         "THERMAL": {"MODE", "ENERGY"},
         "RADIATION": {"ENABLED", "ORDER"},
         "SIGN": {"POS", "NEG"},
+        "CSE": {"GROUP"},
+        "GROUP": {"NAME"},
     }
 
 

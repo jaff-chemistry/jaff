@@ -1,5 +1,5 @@
 # ABOUTME: Tests for the REPEAT command rendered through the new engine's TemplateParser
-# ABOUTME: Vertical/horizontal expansion, which lines expand, CSE naming and options
+# ABOUTME: Vertical/horizontal expansion, which lines expand, CSE groups and options
 
 
 import pytest
@@ -97,40 +97,95 @@ def test_horizontal_replace_sees_only_the_content(net, tmp_path):
     assert render(net, tmp_path, text) == "  N = [H, e-, H+, He++, He+]\n"
 
 
-def test_cse_block_names_temporaries(net, tmp_path):
+def cses(name: str, *body: str) -> str:
+    return block(f"REPEAT idx, cse IN cses {{ GROUP {{ NAME -> {name} }} }}", *body)
+
+
+def test_cse_group_names_temporaries(net, tmp_path):
     odes = Codegen(network=net, lang="python").get_indexed_odes(cse_var="t")
-    text = block("REPEAT idx, ode, cse IN odes", "t$idx$ = $cse$", "dy[$idx$] = $ode$")
+    text = cses("g", "t$idx$ = $cse$") + block(
+        "REPEAT idx, ode IN odes { CSE { GROUP -> g } }", "dy[$idx$] = $ode$"
+    )
     temporaries = "".join(f"t{i[0]} = {v}\n" for i, v in odes["extras"]["cse"])
     odes_lines = "".join(f"dy[{i[0]}] = {v}\n" for i, v in odes["expressions"])
     assert render(net, tmp_path, text) == temporaries + odes_lines
 
 
+def test_block_in_no_group_prints_without_cse(net, tmp_path):
+    odes = Codegen(network=net, lang="python").get_indexed_odes(use_cse=False)
+    text = block("REPEAT idx, ode IN odes", "dy[$idx$] = $ode$")
+    expected = "".join(f"dy[{i[0]}] = {v}\n" for i, v in odes["expressions"])
+    assert render(net, tmp_path, text) == expected
+
+
 def test_cse_line_without_shared_terms_produces_nothing(net, tmp_path):
     rates = Codegen(network=net, lang="python").get_indexed_rates(cse_var="c")
     assert not rates["extras"]["cse"]
-    text = block("REPEAT idx, rate, cse IN rates", "c$idx$ = $cse$", "k[$idx$] = $rate$")
+    text = cses("g", "c$idx$ = $cse$") + block(
+        "REPEAT idx, rate IN rates { CSE { GROUP -> g } }", "k[$idx$] = $rate$"
+    )
     expected = "".join(f"k[{i[0]}] = {v}\n" for i, v in rates["expressions"])
     assert render(net, tmp_path, text) == expected
 
 
-def test_cse_line_is_not_special_unless_cse_is_declared(net, tmp_path):
+def test_cse_line_is_not_special_in_an_expression_block(net, tmp_path):
     text = block("REPEAT idx, rate IN rates", "# c = $cse$")
     assert render(net, tmp_path, text) == "# c = $cse$\n"
+
+
+def test_cse_variable_of_an_expression_block_points_to_cses(net, tmp_path):
+    text = block("REPEAT idx, rate, cse IN rates", "c$idx$ = $cse$", "k[$idx$] = $rate$")
+    with pytest.raises(ParserError, match="IN cses"):
+        render(net, tmp_path, text)
 
 
 @pytest.mark.parametrize(
     "body, message",
     [
-        (["k[$idx$] = $rate$", "c$idx$ = $cse$"], "must be the first line"),
+        (["k[$idx$] = 0", "c$idx$ = $cse$"], "must be the first line"),
         (["c$idx+1$ = $cse$"], "cannot use arithmetic on"),
         (["[$idx$] = $cse$"], "must be an identifier"),
     ],
 )
 def test_bad_cse_line_is_an_error_at_that_line(net, tmp_path, body, message):
-    text = block("REPEAT idx, rate, cse IN rates", "x", *body)
+    text = cses("g", "x", *body) + block(
+        "REPEAT idx, rate IN rates { CSE { GROUP -> g } }", "k[$idx$] = $rate$"
+    )
     with pytest.raises(ParserError, match=message) as err:
         render(net, tmp_path, text)
     assert err.value.nline == 3
+
+
+def test_group_without_a_cses_block_is_an_error(net, tmp_path):
+    text = block("REPEAT idx, rate IN rates { CSE { GROUP -> g } }", "k[$idx$] = $rate$")
+    with pytest.raises(ParserError, match="no REPEAT idx, cse IN cses block") as err:
+        render(net, tmp_path, text)
+    assert err.value.nline == 1
+
+
+def test_cses_block_no_block_joins_is_an_error(net, tmp_path):
+    text = block("REPEAT idx, rate IN rates", "k[$idx$] = $rate$") + cses(
+        "g", "c$idx$ = $cse$"
+    )
+    with pytest.raises(ParserError, match="no block joins CSE group g") as err:
+        render(net, tmp_path, text)
+    assert err.value.nline == 4
+
+
+def test_group_declared_twice_is_an_error(net, tmp_path):
+    text = (
+        cses("g", "c$idx$ = $cse$")
+        + cses("g", "c$idx$ = $cse$")
+        + block("REPEAT idx, rate IN rates { CSE { GROUP -> g } }", "k[$idx$] = $rate$")
+    )
+    with pytest.raises(ParserError, match="CSE group g is declared twice") as err:
+        render(net, tmp_path, text)
+    assert err.value.nline == 4
+
+
+def test_cses_block_needs_a_group_name(net, tmp_path):
+    with pytest.raises(ParserError, match="GROUP"):
+        render(net, tmp_path, block("REPEAT idx, cse IN cses", "c$idx$ = $cse$"))
 
 
 def test_idx_count_must_match_the_dimension(net, tmp_path):

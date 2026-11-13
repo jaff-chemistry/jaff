@@ -84,8 +84,8 @@ inline void derivatives(const double* nden, double tgas, double* f) {
 inline void jacobian(const double* nden, double tgas, double** J) {
     for (int i = 0; i < NSPEC; ++i)
         for (int j = 0; j < NSPEC; ++j) J[i][j] = 0.0;
-    $$JAFF REPEAT idx, expr IN jacobian
-    J[$idx$][$idx$] = $expr$;
+    $$JAFF REPEAT idx, jac IN jacobian
+    J[$idx$][$idx$] = $jac$;
     $$JAFF END
 }
 ```
@@ -99,9 +99,9 @@ Three directives carry the whole template:
   [`odes`](template-syntax.md#expression-generating-properties)
   collection inlines the rate coefficients, so the rates never need a separate
   array here.
-- **`REPEAT idx, expr IN jacobian`** emits the analytic Jacobian. It is a 2D
+- **`REPEAT idx, jac IN jacobian`** emits the analytic Jacobian. It is a 2D
   collection, so the body carries two `$idx$` tokens (row, then column) and one
-  `$expr$`. JAFF differentiates the ODEs symbolically and writes only the
+  `$jac$`. JAFF differentiates the ODEs symbolically and writes only the
   **non-zero** `J[i][j]` entries — which is why the function clears `J` to zero
   first. The implicit solver in section 4 needs this matrix; an explicit method
   would not.
@@ -167,7 +167,7 @@ inline void derivatives(const double* nden, double tgas, double* f) {
 inline void jacobian(const double* nden, double tgas, double** J) {
     for (int i = 0; i < NSPEC; ++i)
         for (int j = 0; j < NSPEC; ++j) J[i][j] = 0.0;
-    // $$JAFF REPEAT idx, expr IN jacobian
+    // $$JAFF REPEAT idx, jac IN jacobian
     J[0][0] = -6.9282032302755097e-9*std::pow(tgas, -0.5)*nden[0];
     J[0][1] = 4.0000000000000002e-9*std::exp(-100.0/tgas);
     J[1][0] = 3.4641016151377549e-9*std::pow(tgas, -0.5)*nden[0];

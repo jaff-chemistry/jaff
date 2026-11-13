@@ -57,8 +57,10 @@ struct ChemistryODE {
     $$JAFF END
 
     // Compute derivatives for each species
-    $$JAFF REPEAT idx, ode, cse IN odes
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> odes } }
     const double cse$idx$ = $cse$;
+    $$JAFF END
+    $$JAFF REPEAT idx, ode IN odes { CSE { GROUP -> odes } }
     f[$idx$] = $ode$;
     $$JAFF END
   }
@@ -94,9 +96,11 @@ struct ChemistryODE {
     $$JAFF END
 
     // Compute analytical Jacobian
-    $$JAFF REPEAT idx, expr, cse IN jacobian
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> jacobian } }
     const double cse$idx$ = $cse$;
-    J[$idx$][$idx$] = $expr$;
+    $$JAFF END
+    $$JAFF REPEAT idx, jac IN jacobian { CSE { GROUP -> jacobian } }
+    J[$idx$][$idx$] = $jac$;
     $$JAFF END
   }
 };

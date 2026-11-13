@@ -12,7 +12,9 @@ def rates():
 
 def rates_cse():
     k = {}
-    # $$JAFF REPEAT idx, rate, cse IN rates
+    # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rates } }
+    # $$JAFF END
+    # $$JAFF REPEAT idx, rate IN rates { CSE { GROUP -> rates } }
     k[0] = 5.05728445450563e-8*photden[0]
     k[1] = 1.65941781598291e-10*tgas**(-0.7)
     # $$JAFF END
@@ -49,9 +51,11 @@ def odes():
 
 
 def odes_cse():
-    # $$JAFF REPEAT idx, ode, cse IN odes
+    # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> odes } }
     tmp0_v = 1.65941781598291e-10*tgas**(-0.7)*nden[1]*nden[2] - 5.05728445450563e-8*nden[0]*photden[0]
     tmp1_v = -tmp0_v
+    # $$JAFF END
+    # $$JAFF REPEAT idx, ode IN odes { CSE { GROUP -> odes } }
     dy[0] = tmp0_v
     dy[1] = tmp1_v
     dy[2] = tmp1_v
@@ -68,16 +72,25 @@ def rhs():
 
 
 def rhs_cse_replace():
-    # $$JAFF REPEAT idx, rhs, cse IN rhses {
+    # $$JAFF REPEAT idx, cse IN cses {
+        # REPLACE {
+            # "nden\[(\d+)\]" -> "y[\1]"
+            # "tgas" -> "T"
+        # }
+        # GROUP { NAME -> rhs }
+    # }
+    x0 = y[1]*y[2]
+    x1 = 1.65941781598291e-10*T**(-0.7)*x0 - 5.05728445450563e-8*y[0]*photden[0]
+    x2 = -x1
+    # $$JAFF END
+    # $$JAFF REPEAT idx, rhs IN rhses {
         # REPLACE {
             # "nden\[(\d+)\]" -> "y[\1]"
             # "tgas" -> "T"
         # }
         # THERMAL { MODE -> dedt }
+        # CSE { GROUP -> rhs }
     # }
-    x0 = y[1]*y[2]
-    x1 = 1.65941781598291e-10*T**(-0.7)*x0 - 5.05728445450563e-8*y[0]*photden[0]
-    x2 = -x1
     f[1] = x1
     f[2] = x2
     f[3] = x2
@@ -86,7 +99,7 @@ def rhs_cse_replace():
 
 
 def jacobian():
-    # $$JAFF REPEAT idx, expr IN jacobian
+    # $$JAFF REPEAT idx, jac IN jacobian
     J[0][0] = -5.05728445450563e-8*photden[0]
     J[0][1] = 1.65941781598291e-10*tgas**(-0.7)*nden[2]
     J[0][2] = 1.65941781598291e-10*tgas**(-0.7)*nden[1]
@@ -100,13 +113,15 @@ def jacobian():
 
 
 def jacobian_cse():
-    # $$JAFF REPEAT idx, expr, cse IN jacobian
+    # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> jacobian } }
     c0 = 5.05728445450563e-8*photden[0]
     c1 = 1.65941781598291e-10*tgas**(-0.7)
     c2 = c1*nden[2]
     c3 = c1*nden[1]
     c4 = -c2
     c5 = -c3
+    # $$JAFF END
+    # $$JAFF REPEAT idx, jac IN jacobian { CSE { GROUP -> jacobian } }
     J[0, 0] = -c0
     J[0, 1] = c2
     J[0, 2] = c3

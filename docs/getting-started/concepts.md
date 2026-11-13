@@ -274,8 +274,9 @@ So the same template gives `k[0]` in C++ and `k(1)` in Fortran with no change.
 ### Common Subexpression Elimination (CSE)
 
 The indexed collections (`rates`, `odes`, `jacobian`, …) can factor repeated
-work into temporaries so each sub-expression is computed once. You opt in by
-adding the `cse` variable to a `REPEAT`:
+work into temporaries so each sub-expression is computed once. A
+`REPEAT idx, cse IN cses` block names a CSE group and emits its temporaries; the
+blocks it serves join it with `CSE { GROUP -> name }`:
 
 === "Without CSE"
 
@@ -288,8 +289,10 @@ adding the `cse` variable to a `REPEAT`:
 === "With CSE"
 
     ```cpp
-    $$JAFF REPEAT idx, rate, cse IN rates
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rates } }
     const double x$idx$ = $cse$;
+    $$JAFF END
+    $$JAFF REPEAT idx, rate IN rates { CSE { GROUP -> rates } }
     k[$idx$] = $rate$;
     $$JAFF END
     ```
@@ -312,8 +315,8 @@ $$JAFF REPEAT idx, ode IN odes
 dydt[$idx$] = $ode$;
 $$JAFF END
 
-$$JAFF REPEAT idx, expr IN jacobian
-J[$idx$][$idx$] = $expr$;
+$$JAFF REPEAT idx, jac IN jacobian
+J[$idx$][$idx$] = $jac$;
 $$JAFF END
 ```
 

@@ -37,7 +37,7 @@ def parse(text: str, line: int = 1):
 @pytest.mark.parametrize(
     "text, command",
     [
-        ("REPEAT idx, rhs, cse IN rhses", Repeat(("idx", "rhs", "cse"), "rhses")),
+        ("REPEAT idx, cse IN cses", Repeat(("idx", "cse"), "cses")),
         ("SUB nspec, label", Sub(("nspec", "label"))),
         (
             "GET specie_idx, specie_mass IN H+",

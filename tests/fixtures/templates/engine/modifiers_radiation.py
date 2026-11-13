@@ -5,8 +5,10 @@ $$JAFF REPEAT idx, radode IN radodes
 drad[$idx$] = $radode$
 $$JAFF END
 
-$$JAFF REPEAT idx, radode, cse IN radodes
+$$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> radodes } }
 r$idx$ = $cse$
+$$JAFF END
+$$JAFF REPEAT idx, radode IN radodes { CSE { GROUP -> radodes } }
 drad[$idx$] = $radode$
 $$JAFF END
 
@@ -22,7 +24,19 @@ $$JAFF REPEAT idx, rhs IN rhses { RADIATION { ENABLED -> true  ORDER -> 1 }  THE
 f_rad1[$idx$] = $rhs$
 $$JAFF END
 
-$$JAFF REPEAT idx, expr, cse IN jacobian {
+$$JAFF REPEAT idx, cse IN cses {
+    REPLACE {
+        "photden\[\s*(\d+)\s*\]" -> "rn[2*\1]"
+        "rflux\[\s*(\d+)\s*\]" -> "rn[2*\1+1]"
+        "nden\[\s*(\d+)\s*\]" -> "xn[\1]"
+        "tgas" -> "T"
+        "c_hat" -> "chat"
+    }
+    GROUP { NAME -> jacobian }
+}
+c$idx$ = $cse$
+$$JAFF END
+$$JAFF REPEAT idx, jac IN jacobian {
     REPLACE {
         "photden\[\s*(\d+)\s*\]" -> "rn[2*\1]"
         "rflux\[\s*(\d+)\s*\]" -> "rn[2*\1+1]"
@@ -31,7 +45,7 @@ $$JAFF REPEAT idx, expr, cse IN jacobian {
         "c_hat" -> "chat"
     }
     RADIATION { ENABLED -> True }
+    CSE { GROUP -> jacobian }
 }
-c$idx$ = $cse$
-J[$idx$, $idx$] = $expr$
+J[$idx$, $idx$] = $jac$
 $$JAFF END

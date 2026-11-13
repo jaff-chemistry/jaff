@@ -11,7 +11,9 @@ def rates():
 
 def rates_cse():
     k = {}
-    # $$JAFF REPEAT idx, rate, cse IN rates
+    # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rates } }
+    # $$JAFF END
+    # $$JAFF REPEAT idx, rate IN rates { CSE { GROUP -> rates } }
     k[0] = nden[0]
     # $$JAFF END
     return k
@@ -46,9 +48,11 @@ def odes():
 
 
 def odes_cse():
-    # $$JAFF REPEAT idx, ode, cse IN odes
+    # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> odes } }
     tmp0_v = nden[0]**2*nden[1]
     tmp1_v = -tmp0_v
+    # $$JAFF END
+    # $$JAFF REPEAT idx, ode IN odes { CSE { GROUP -> odes } }
     dy[0] = tmp1_v
     dy[1] = tmp1_v
     dy[2] = tmp0_v
@@ -65,15 +69,24 @@ def rhs():
 
 
 def rhs_cse_replace():
-    # $$JAFF REPEAT idx, rhs, cse IN rhses {
+    # $$JAFF REPEAT idx, cse IN cses {
+        # REPLACE {
+            # "nden\[(\d+)\]" -> "y[\1]"
+            # "tgas" -> "T"
+        # }
+        # GROUP { NAME -> rhs }
+    # }
+    x0 = y[0]**2*y[1]
+    x1 = -x0
+    # $$JAFF END
+    # $$JAFF REPEAT idx, rhs IN rhses {
         # REPLACE {
             # "nden\[(\d+)\]" -> "y[\1]"
             # "tgas" -> "T"
         # }
         # THERMAL { MODE -> dedt }
+        # CSE { GROUP -> rhs }
     # }
-    x0 = y[0]**2*y[1]
-    x1 = -x0
     f[1] = x1
     f[2] = x1
     f[3] = x0
@@ -82,7 +95,7 @@ def rhs_cse_replace():
 
 
 def jacobian():
-    # $$JAFF REPEAT idx, expr IN jacobian
+    # $$JAFF REPEAT idx, jac IN jacobian
     J[0][0] = -2*nden[0]*nden[1]
     J[0][1] = -nden[0]**2
     J[1][0] = -2*nden[0]*nden[1]
@@ -93,11 +106,13 @@ def jacobian():
 
 
 def jacobian_cse():
-    # $$JAFF REPEAT idx, expr, cse IN jacobian
+    # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> jacobian } }
     c0 = 2*nden[0]*nden[1]
     c1 = -c0
     c2 = nden[0]**2
     c3 = -c2
+    # $$JAFF END
+    # $$JAFF REPEAT idx, jac IN jacobian { CSE { GROUP -> jacobian } }
     J[0, 0] = c1
     J[0, 1] = c3
     J[1, 0] = c1

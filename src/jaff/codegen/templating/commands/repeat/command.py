@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Set, Tuple
 from ...errors import TemplateError
 from ...placeholders import split_line
 from ..base import Command, check_names, finish_line
+from . import groups
 from .props import GROUPS, PROPERTIES, RepeatProp, option_kwargs
 from .expand import as_flattened, expand_horizontal, expand_vertical, find_idx
 
@@ -21,9 +22,9 @@ if TYPE_CHECKING:
 def _active(line: str, names: Tuple[str, ...]) -> bool:
     """Whether a body line holds a placeholder of this REPEAT.
 
-    Placeholders are ``$name$`` for *names* (the item and the declared special
-    variables such as ``cse``), ``$idx$`` with or without arithmetic, and
-    ``$IDX$``. Other lines are copied, with REPLACE applied.
+    Placeholders are ``$name$`` for *names* (the item variable), ``$idx$`` with
+    or without arithmetic, and ``$IDX$``. Other lines are copied, with REPLACE
+    applied.
     """
     pattern = "|".join(re.escape(name) for name in names)
     placeholder = re.search(rf"\$(?:{pattern})\$", line)
@@ -39,11 +40,32 @@ class Repeat(Command):
     prop: str
 
     def validate(self, body: List[str], resolved: Resolved, ctx: RenderContext) -> None:
-        """Check the property, its variables, its options and the CSE line."""
+        """Check the property, its variables, its options and the CSE line.
+
+        A ``REPEAT IN cses`` block declares its CSE group, and an expression block
+        with ``CSE { GROUP -> name }`` joins one (see :mod:`.groups`).
+        """
         check_names(self.keyword, "property", (self.prop,), tuple(PROPERTIES))
         prop = PROPERTIES[self.prop]
+        if prop.kind and "cse" in self.vars:
+            raise TemplateError(
+                f"REPEAT IN {self.prop} has no cse variable: declare the temporaries "
+                "in their own block, REPEAT idx, cse IN cses { GROUP { NAME -> g } }, "
+                "and join it with CSE { GROUP -> g }"
+            )
+
         check_names(f"{self.keyword} IN {self.prop}", "variable", self.vars, prop.vars)
-        self._kwargs(body, resolved)
+        kwargs = self._kwargs(body, resolved)
+        if self.prop == "cses":
+            if "name" not in kwargs:
+                raise TemplateError("REPEAT IN cses needs its group: GROUP { NAME -> g }")
+            groups.declare(
+                ctx, self, kwargs["name"], kwargs["cse_var"], kwargs["cse_suffix"]
+            )
+        elif "cse_group" in kwargs:
+            name = kwargs.pop("cse_group")
+            assert prop.kind is not None  # only expression properties take CSE
+            groups.join(ctx, self, name, prop.kind, kwargs)
 
     def render(self, body: List[str], resolved: Resolved, ctx: RenderContext) -> str:
         """Expand every line holding a placeholder; copy the others once.
@@ -51,54 +73,50 @@ class Repeat(Command):
         REPLACE runs on the content of every output line, expanded or copied.
         """
         prop = PROPERTIES[self.prop]
-        # Recomputed rather than kept from validate: commands are immutable, and
-        # the options and CSE scan are cheap next to codegen.
-        kwargs = self._kwargs(body, resolved)
         items: Any = None
         out: List[str] = []
         for index, raw in enumerate(body):
             indent, line = split_line(raw)
             contents = [line]
-            if _active(line, self._names(prop)):
+            if _active(line, (prop.item,)):
                 if items is None:
-                    items = prop.source(ctx, kwargs)
+                    items = self._items(body, resolved, ctx)
                 contents = self._expand(prop, items, line, index)
 
             out.extend(finish_line(indent, c, resolved.replacements) for c in contents)
 
         return "".join(out)
 
+    def _items(self, body: List[str], resolved: Resolved, ctx: RenderContext) -> Any:
+        """The items: from the CSE group, or from the property's source."""
+        if self.prop == "cses":
+            return groups.temporaries(ctx, self._kwargs(body, resolved)["name"])
+
+        if id(self) in ctx.cse_members:
+            return groups.expressions(ctx, self)
+
+        # Recomputed rather than kept from validate: commands are immutable, and
+        # the options are cheap next to codegen.
+        return PROPERTIES[self.prop].source(ctx, self._kwargs(body, resolved))
+
     def _expand(self, prop: RepeatProp, items: Any, line: str, index: int) -> List[str]:
         """The contents of the output lines for one line holding a placeholder."""
-        extras: Dict[str, Any] = {}
-        if prop.special:
-            extras, items = items["extras"], items["expressions"]
-
         if "idx" not in self.vars:
             expanded = expand_horizontal(items, prop.item, line)
             return [line if expanded is None else expanded]
 
-        for var in prop.special:
-            if var in self.vars and f"${var}$" in line:
-                return expand_vertical(extras[var], line, f"${var}$", index)
-
         return expand_vertical(as_flattened(items), line, f"${prop.item}$", index)
 
-    def _names(self, prop: RepeatProp) -> Tuple[str, ...]:
-        """The item variable and the special variables this REPEAT declares."""
-        return (prop.item, *(var for var in prop.special if var in self.vars))
-
     def _kwargs(self, body: List[str], resolved: Resolved) -> Dict[str, Any]:
-        """Keyword arguments for the property's source: options, then CSE naming."""
-        prop = PROPERTIES[self.prop]
+        """Keyword arguments from the options; for ``cses``, the temporaries' names."""
         kwargs = option_kwargs(self.prop, resolved.options)
-        if "cse" in prop.special:
-            kwargs.update(self._cse_kwargs(body, prop))
+        if self.prop == "cses":
+            kwargs.update(self._cse_names(body))
 
         return kwargs
 
-    def _cse_kwargs(self, body: List[str], prop: RepeatProp) -> Dict[str, Any]:
-        """CSE switch and temporary names, taken from the ``$cse$`` line.
+    def _cse_names(self, body: List[str]) -> Dict[str, Any]:
+        """The temporaries' names, taken from the ``$cse$`` line of a ``cses`` block.
 
         The ``$cse$`` line must be the first line that expands, and names its
         temporaries with an identifier around a plain ``$idx$``, e.g. ``cse$idx$``.
@@ -106,15 +124,11 @@ class Repeat(Command):
         Raises:
             TemplateError: At the offending body line.
         """
-        if "cse" not in self.vars:
-            return {"use_cse": False}
-
         index = next(
-            (i for i, raw in enumerate(body) if _active(raw.strip(), self._names(prop))),
-            None,
+            (i for i, raw in enumerate(body) if _active(raw.strip(), ("cse",))), None
         )
         if index is None:
-            return {"use_cse": True}
+            return {"cse_var": "cse", "cse_suffix": ""}
 
         line = body[index].strip()
 
@@ -145,4 +159,4 @@ class Repeat(Command):
                 f"got '{prefix}$idx${suffix}'"
             )
 
-        return {"use_cse": True, "cse_var": prefix, "cse_suffix": suffix}
+        return {"cse_var": prefix, "cse_suffix": suffix}

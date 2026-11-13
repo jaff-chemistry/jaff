@@ -17,8 +17,10 @@ $$JAFF END
 
 def rates():
     k = {}
-    $$JAFF REPEAT idx, rate, cse IN rates
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rates } }
     x$idx$ = $cse$
+    $$JAFF END
+    $$JAFF REPEAT idx, rate IN rates { CSE { GROUP -> rates } }
     k[$idx$] = $rate$
     $$JAFF END
     return k
@@ -45,8 +47,10 @@ def ode_expressions():
 
 def odes():
     out = {}
-    $$JAFF REPEAT idx, ode, cse IN odes
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> odes } }
     cse$idx$ = $cse$
+    $$JAFF END
+    $$JAFF REPEAT idx, ode IN odes { CSE { GROUP -> odes } }
     out[$idx$] = $ode$
     $$JAFF END
     return out
@@ -54,8 +58,10 @@ def odes():
 
 def radodes():
     out = {}
-    $$JAFF REPEAT idx, radode, cse IN radodes
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> radodes } }
     cse$idx$ = $cse$
+    $$JAFF END
+    $$JAFF REPEAT idx, radode IN radodes { CSE { GROUP -> radodes } }
     out[$idx$] = $radode$
     $$JAFF END
     return out
@@ -69,8 +75,10 @@ def dedt():
 
 def rhs_volumetric():
     out = {}
-    $$JAFF REPEAT idx, rhs, cse IN rhses { RADIATION { ENABLED -> True }  THERMAL { MODE -> dedt } }
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rhs } }
     cse$idx$ = $cse$
+    $$JAFF END
+    $$JAFF REPEAT idx, rhs IN rhses { RADIATION { ENABLED -> True }  THERMAL { MODE -> dedt }  CSE { GROUP -> rhs } }
     out[$idx$] = $rhs$
     $$JAFF END
     return out
@@ -78,11 +86,16 @@ def rhs_volumetric():
 
 def rhs_specific_mass():
     out = {}
-    $$JAFF REPEAT idx, rhs, cse IN rhses {
-        RADIATION { ENABLED -> True }
-        THERMAL { MODE -> dedt  ENERGY -> specific }
+    $$JAFF REPEAT idx, cse IN cses {
+        GROUP { NAME -> rhs_1 }
     }
     cse$idx$ = $cse$
+    $$JAFF END
+    $$JAFF REPEAT idx, rhs IN rhses {
+        RADIATION { ENABLED -> True }
+        THERMAL { MODE -> dedt  ENERGY -> specific }
+        CSE { GROUP -> rhs_1 }
+    }
     out[$idx$] = $rhs$
     $$JAFF END
     return out
@@ -90,11 +103,16 @@ def rhs_specific_mass():
 
 def rhs_specific_number():
     out = {}
-    $$JAFF REPEAT idx, rhs, cse IN rhses {
-        RADIATION { ENABLED -> True }
-        THERMAL { MODE -> dedt  ENERGY -> per_particle }
+    $$JAFF REPEAT idx, cse IN cses {
+        GROUP { NAME -> rhs_2 }
     }
     cse$idx$ = $cse$
+    $$JAFF END
+    $$JAFF REPEAT idx, rhs IN rhses {
+        RADIATION { ENABLED -> True }
+        THERMAL { MODE -> dedt  ENERGY -> per_particle }
+        CSE { GROUP -> rhs_2 }
+    }
     out[$idx$] = $rhs$
     $$JAFF END
     return out
@@ -102,44 +120,61 @@ def rhs_specific_number():
 
 def jacobian_species():
     out = {}
-    $$JAFF REPEAT idx, expr, cse IN jacobian { RADIATION { ENABLED -> True } }
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> jacobian } }
     cse$idx$ = $cse$
-    out[($idx$, $idx$)] = $expr$
+    $$JAFF END
+    $$JAFF REPEAT idx, jac IN jacobian { RADIATION { ENABLED -> True }  CSE { GROUP -> jacobian } }
+    out[($idx$, $idx$)] = $jac$
     $$JAFF END
     return out
 
 
 def jacobian_volumetric():
     out = {}
-    $$JAFF REPEAT idx, expr, cse IN jacobian {
-        RADIATION { ENABLED -> True }
-        THERMAL { MODE -> dedt }
+    $$JAFF REPEAT idx, cse IN cses {
+        GROUP { NAME -> jacobian_1 }
     }
     cse$idx$ = $cse$
-    out[($idx$, $idx$)] = $expr$
+    $$JAFF END
+    $$JAFF REPEAT idx, jac IN jacobian {
+        RADIATION { ENABLED -> True }
+        THERMAL { MODE -> dedt }
+        CSE { GROUP -> jacobian_1 }
+    }
+    out[($idx$, $idx$)] = $jac$
     $$JAFF END
     return out
 
 
 def jacobian_specific_mass():
     out = {}
-    $$JAFF REPEAT idx, expr, cse IN jacobian {
-        RADIATION { ENABLED -> True }
-        THERMAL { MODE -> dedt  ENERGY -> specific }
+    $$JAFF REPEAT idx, cse IN cses {
+        GROUP { NAME -> jacobian_2 }
     }
     cse$idx$ = $cse$
-    out[($idx$, $idx$)] = $expr$
+    $$JAFF END
+    $$JAFF REPEAT idx, jac IN jacobian {
+        RADIATION { ENABLED -> True }
+        THERMAL { MODE -> dedt  ENERGY -> specific }
+        CSE { GROUP -> jacobian_2 }
+    }
+    out[($idx$, $idx$)] = $jac$
     $$JAFF END
     return out
 
 
 def jacobian_specific_number():
     out = {}
-    $$JAFF REPEAT idx, expr, cse IN jacobian {
-        RADIATION { ENABLED -> True }
-        THERMAL { MODE -> dedt  ENERGY -> per_particle }
+    $$JAFF REPEAT idx, cse IN cses {
+        GROUP { NAME -> jacobian_3 }
     }
     cse$idx$ = $cse$
-    out[($idx$, $idx$)] = $expr$
+    $$JAFF END
+    $$JAFF REPEAT idx, jac IN jacobian {
+        RADIATION { ENABLED -> True }
+        THERMAL { MODE -> dedt  ENERGY -> per_particle }
+        CSE { GROUP -> jacobian_3 }
+    }
+    out[($idx$, $idx$)] = $jac$
     $$JAFF END
     return out

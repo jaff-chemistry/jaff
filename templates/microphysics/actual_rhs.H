@@ -23,6 +23,10 @@ $$JAFF DEFINE microphysics {
         "tgas" -> "state.T"
         "c_hat" -> "state.c_hat"
     }
+}
+
+// The equations integrated, shared by the RHS and the Jacobian.
+$$JAFF DEFINE microphysics_equations {
     THERMAL { MODE -> dedt  ENERGY -> specific }
     # RADIATION { ENABLED -> True }
 }
@@ -32,8 +36,12 @@ actual_rhs(const burn_t &state, amrex::Array1D<amrex::Real, 1, neqs> &ydot) {
 
   using namespace Rates;
 
-  $$JAFF REPEAT idx, rhs, cse IN rhses { USE microphysics }
+  $$JAFF REPEAT idx, cse IN cses { USE microphysics  GROUP { NAME -> rhs } }
   const amrex::Real cse$idx$ = $cse$;
+  $$JAFF END
+  $$JAFF REPEAT idx, rhs IN rhses {
+      USE microphysics  USE microphysics_equations  CSE { GROUP -> rhs }
+  }
   ydot($idx+1$) = $rhs$;
   $$JAFF END
 }
@@ -43,9 +51,13 @@ AMREX_GPU_HOST_DEVICE AMREX_INLINE void actual_jac(const burn_t &state,
                                                    MatrixType &jac) {
   jac.zero();
 
-  $$JAFF REPEAT idx, expr, cse IN jacobian { USE microphysics }
+  $$JAFF REPEAT idx, cse IN cses { USE microphysics  GROUP { NAME -> jacobian } }
   const amrex::Real cse$idx$ = $cse$;
-  jac($idx+1$, $idx+1$) = $expr$;
+  $$JAFF END
+  $$JAFF REPEAT idx, jac IN jacobian {
+      USE microphysics  USE microphysics_equations  CSE { GROUP -> jacobian }
+  }
+  jac($idx+1$, $idx+1$) = $jac$;
   $$JAFF END
 }
 

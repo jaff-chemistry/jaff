@@ -15,8 +15,10 @@ def get_ode(y, tgas, crate, av, evolve_tgas=False):
     # the composition term from reactions changing the particle number)
     rhs = np.zeros(nvars)
 
-    $$JAFF REPEAT idx, rhs, cse IN rhses { THERMAL { MODE -> dtdt } }
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rhs } }
     x$idx$ = $cse$
+    $$JAFF END
+    $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dtdt }  CSE { GROUP -> rhs } }
     rhs[$idx$] = $rhs$
     $$JAFF END
 

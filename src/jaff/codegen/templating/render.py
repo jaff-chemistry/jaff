@@ -1,11 +1,12 @@
 # ABOUTME: Renders split template blocks: validates every block first, then renders
-# ABOUTME: Resolves USE layering, registers DEFINEs and echoes directives as comments
+# ABOUTME: Resolves USE layering, registers DEFINEs and CSE groups, echoes directives
 
 from typing import Dict, List, Set
 
 from ...errors import ParserError
 from .blocks import Block, CommandBlock, TextBlock
 from .commands import COMMANDS, Define
+from .commands.repeat.groups import problem as cse_group_problem
 from .context import RenderContext
 from .placeholders import split_line
 from .errors import TemplateError
@@ -71,6 +72,19 @@ def echo(lines: List[str], comment: str) -> str:
     return "".join(out)
 
 
+def _check_cse_groups(blocks: List[Block], ctx: RenderContext) -> None:
+    """Every CSE group has its ``REPEAT IN cses`` block and at least one member."""
+    found = cse_group_problem(ctx)
+    if found is None:
+        return
+
+    command, message = found
+    block = next(
+        b for b in blocks if isinstance(b, CommandBlock) and id(b.command) == command
+    )
+    raise _error(block, TemplateError(message), ctx)
+
+
 def render_blocks(blocks: List[Block], ctx: RenderContext) -> str:
     """Validate every block, then render them all in order.
 
@@ -91,6 +105,7 @@ def render_blocks(blocks: List[Block], ctx: RenderContext) -> str:
         _prepare(block, ctx) if isinstance(block, CommandBlock) else None
         for block in blocks
     ]
+    _check_cse_groups(blocks, ctx)
     comment = ctx.comment or ctx.cg.lang.comment
     out: List[str] = []
     for block, resolved in zip(blocks, prepared):

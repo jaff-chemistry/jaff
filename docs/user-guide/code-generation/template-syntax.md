@@ -182,9 +182,8 @@ per item (**vertical**); without it, the body's bracketed list is filled inline
 
 ### Vertical mode
 
-Every body line holding a placeholder of the REPEAT (`$idx…$`, `$IDX$`, the item
-variable or a declared `$cse$`) is written once per item; other lines are copied
-once. `$idx$` is the zero-based index; `$idx+N$`, `$idx-N$`, `$idx*N$` and
+Every body line holding a placeholder of the REPEAT (`$idx…$`, `$IDX$` or the
+item variable) is written once per item; other lines are copied once. `$idx$` is the zero-based index; `$idx+N$`, `$idx-N$`, `$idx*N$` and
 `$idx/N$` transform it. If a line has `$idx$` tokens, their number must match the
 collection's dimensionality (1 for lists, 2 for matrices).
 
@@ -278,26 +277,31 @@ std::vector<std::string> species = {"H", "e-", "H+", "He++", "He+"};
 
 ### CSE (common subexpression elimination)
 
-`rates`, `odes`, `rhses`, `radodes`, and `jacobian` support a third variable, `cse`, that
-holds repeated sub-expressions as named temporaries. The temporaries are
-emitted only where a sub-expression is **actually shared** across items — a tiny
-network with no repetition produces none.
+Repeated sub-expressions are computed once, as named temporaries, by a **CSE
+group**: a `REPEAT idx, cse IN cses` block emits the temporaries, and the
+expression blocks it serves join it with `CSE { GROUP -> name }`. `rates`, `odes`,
+`rhses`, `radodes` and `jacobian` can join a group; a block in no group prints its
+expressions without CSE. The temporaries are emitted only where a sub-expression
+is **actually shared**, so a tiny network with no repetition produces none.
 
 ```cpp
-$$JAFF REPEAT idx, ode, cse IN odes
+$$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> odes } }
 const double x$idx$ = $cse$;
+$$JAFF END
+$$JAFF REPEAT idx, ode IN odes { CSE { GROUP -> odes } }
 dydt[$idx$] = $ode$;
 $$JAFF END
 ```
 
 Output (here two sub-expressions are shared, so the `$cse$` line expands to two
-temporaries and the ODE lines reference them; without shared sub-expressions
-the `$cse$` line produces nothing):
+temporaries and the ODE lines reference them):
 
 ```cpp
-// $$JAFF REPEAT idx, ode, cse IN odes
+// $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> odes } }
 const double x0 = 4.1207223003988966e-10*std::pow(tgas, -0.80000000000000004)*nden[1]*nden[2] - 5.8500000000000005e-11*std::sqrt(tgas)*std::exp(-157809.10000000001/tgas)*nden[0]*nden[1];
 const double x1 = nden[1]*std::pow(nden[3], 2);
+// $$JAFF END
+// $$JAFF REPEAT idx, ode IN odes { CSE { GROUP -> odes } }
 dydt[0] = x0;
 dydt[1] = -x0 - x1;
 dydt[2] = -x0;
@@ -306,32 +310,61 @@ dydt[4] = x1;
 // $$JAFF END
 ```
 
+Each block keeps its own options (`THERMAL`, `RADIATION`, `REPLACE`, …); the CSE
+block takes `GROUP` and `REPLACE` / `USE` only, so give it the same `REPLACE` as
+the blocks it serves (a shared `DEFINE` holding just the `REPLACE` works well).
+Emit the CSE block before the expression blocks in the generated code: they
+read its temporaries.
+
+**Several blocks in one group** share one set of temporaries. A solver that
+evaluates the RHS and the Jacobian at the same state can compute both in one
+function, with every rate coefficient evaluated once and the Jacobian's
+derivatives reusing it (the group is built from the
+[reduced form](../working-with-networks/network.md#rate-coefficients-as-symbols)):
+
+```cpp
+$$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rhs_jac } }
+const double cse$idx$ = $cse$;
+$$JAFF END
+$$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt }  CSE { GROUP -> rhs_jac } }
+ydot[$idx$] = $rhs$;
+$$JAFF END
+$$JAFF REPEAT idx, jac IN jacobian { THERMAL { MODE -> dedt }  CSE { GROUP -> rhs_jac } }
+J[$idx$][$idx$] = $jac$;
+$$JAFF END
+```
+
+Groups are per template file, and a block joins one by name, so two blocks with
+the same options can still be in different groups (or in none). A group named by
+a block but without a `cses` block, a `cses` block no block joins, and a group
+name declared twice are errors.
+
 The temporaries are named after the identifier that contains `$idx$` on the
 `$cse$` line: `x$idx$` gives `x0, x1, …` and `tmp$idx$_value` gives
 `tmp0_value, tmp1_value, …`, with or without spaces around `=`. That line must
-be the first line of the block that expands, since the temporaries have to be
-declared before the other lines use them. The identifier must start with a
-letter or underscore before `$idx$`, and the index takes no arithmetic, so
-`$idx$x`, `cse[$idx$]` and `cse$idx+1$` are rejected with a `ParserError`. A
-`$cse$` line is only special when `cse` is in the variable list.
+be the first line of the `cses` block that expands. The identifier must start
+with a letter or underscore before `$idx$`, and the index takes no arithmetic, so
+`$idx$x`, `cse[$idx$]` and `cse$idx+1$` are rejected with a `ParserError`.
 
 ### Properties
 
-`REPEAT vars IN property` — the variables are written in the order shown:
-`idx`, the item variable, then `cse` where the property supports it.
+`REPEAT vars IN property` — the variables are written in the order shown: `idx`,
+then the item variable.
 
 #### Expression-generating properties
 
-These produce code expressions (rendered in the target language). Only those
-with a `cse` variable support CSE.
+These produce code expressions (rendered in the target language). The ones
+with `CSE` among their option groups can join a [CSE group](#cse-common-subexpression-elimination);
+`cses` emits a group's temporaries.
 
 | Property           | Variables              | Description                      | Option groups                               |
 | ------------------ | ---------------------- | -------------------------------- | ------------------------------------------- |
-| `rates`            | `idx, rate, cse`       | Rate-coefficient expressions     | —                                           |
-| `odes`             | `idx, ode, cse`        | Full ODE expressions (dy/dt)     | —                                           |
-| `rhses`            | `idx, rhs, cse`        | RHS including the thermal row    | `THERMAL`, `RADIATION`              |
-| `jacobian`         | `idx, expr, cse`       | Jacobian matrix elements (2D)    | `THERMAL`, `RADIATION`              |
-| `radodes`          | `idx, radode, cse`     | Radiation moment ODEs            | `RADIATION` (`ORDER` only)          |
+| `cses`             | `idx, cse`             | Temporaries of a CSE group       | `GROUP`                                     |
+| `rates`            | `idx, rate`            | Rate-coefficient expressions     | `CSE`                                       |
+| `odes`             | `idx, ode`             | Full ODE expressions (dy/dt)     | `CSE`                                       |
+| `rhses`            | `idx, rhs`             | RHS including the thermal row    | `THERMAL`, `RADIATION`, `CSE`               |
+| `jacobian`         | `idx, jac`             | Jacobian matrix elements (2D)    | `THERMAL`, `RADIATION`, `CSE`               |
+| `radodes`          | `idx, radode`          | Radiation moment ODEs            | `RADIATION` (`ORDER` only), `CSE`           |
 | `flux_expressions` | `idx, flux_expression` | Flux = rate × reactant densities | —                                           |
 | `ode_expressions`  | `idx, ode_expression`  | ODE terms without assignment     | —                                           |
 
@@ -396,6 +429,8 @@ everywhere; see [Options](#options) for their general rules.
 | `THERMAL`   | `ENERGY`  | `volumetric`, `specific`, `per_particle`, `molar` | Internal-energy form used when `MODE` is `dedt` (default `volumetric`).                      |
 | `RADIATION` | `ENABLED` | `True`/`False`                               | Include radiation ODE / Jacobian terms (`rhses`, `jacobian`).                                     |
 | `RADIATION` | `ORDER`   | `0`–`3`                                      | Layout of the per-band density and flux equations (`rhses`, `jacobian`, `radodes`); see [Codegen](../advanced-code-generation/codegen.md#radiation-odes-get_radode_str). |
+| `GROUP`     | `NAME`    | text                                         | The CSE group a `cses` block emits the temporaries of (required).                                 |
+| `CSE`       | `GROUP`   | text                                         | The CSE group an expression block joins; without it the block prints without CSE.                 |
 | `SIGN`      | `POS`     | text                                         | String for the `+` charge marker (`species_with_normalized_sign`, default `j`).                   |
 | `SIGN`      | `NEG`     | text                                         | String for the `-` charge marker (`species_with_normalized_sign`, default `k`).                   |
 
@@ -405,16 +440,22 @@ A realistic Jacobian directive remaps array accessors and picks the thermal
 (`dE/dt`) row and energy form:
 
 ```cpp
-$$JAFF REPEAT idx, expr, cse IN jacobian {
+$$JAFF DEFINE state {
     REPLACE {
         "nden\[\s*(\d+)\s*\]" -> "state.xn[\1]"
         "tgas" -> "state.T"
     }
+}
+$$JAFF REPEAT idx, cse IN cses { USE state  GROUP { NAME -> jac } }
+cse$idx$ = $cse$;
+$$JAFF END
+$$JAFF REPEAT idx, jac IN jacobian {
+    USE state
     THERMAL { MODE -> dedt  ENERGY -> specific }
     RADIATION { ENABLED -> False }
+    CSE { GROUP -> jac }
 }
-cse$idx$ = $cse$;
-J[$idx$][$idx$] = $expr$;
+J[$idx$][$idx$] = $jac$;
 $$JAFF END
 ```
 
@@ -422,17 +463,13 @@ Output (abridged — the full block has 30 temporaries; the extra column `[5]` i
 the derivative with respect to the thermal variable):
 
 ```cpp
-// $$JAFF REPEAT idx, expr, cse IN jacobian {
-    // REPLACE {
-        // "nden\[\s*(\d+)\s*\]" -> "state.xn[\1]"
-        // "tgas" -> "state.T"
-    // }
-    // THERMAL { MODE -> dedt  ENERGY -> specific }
-    // RADIATION { ENABLED -> False }
-// }
+...
 cse0 = std::exp(-157809.10000000001/state.T);
 cse1 = cse0*state.xn[1];
 cse2 = std::sqrt(state.T);
+...
+// $$JAFF END
+// $$JAFF REPEAT idx, jac IN jacobian {
 ...
 J[0][0] = -cse13*cse9 - cse4;
 J[0][1] = -cse13*cse17 + cse15 - cse16;
@@ -763,7 +800,7 @@ Body lines are substituted as follows:
   (`$idx+1$`, `$idx * 2$`, …). **Every** `$idx…$` token on a line counts
   towards the dimensionality check. `$IDX$` is the first index, through the
   arithmetic of the line's first `$idx…$` token if it has one.
-- A `cse` variable's line `cse$idx$ = $cse$` must be the first line that
+- In a `cses` block, the line `cse$idx$ = $cse$` must be the first line that
   expands (see [CSE](#cse-common-subexpression-elimination)).
 - In `REDUCE`, `$( … )$` marks the part repeated per item.
 

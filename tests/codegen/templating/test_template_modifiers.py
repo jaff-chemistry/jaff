@@ -116,7 +116,7 @@ def test_pos_neg_stay_strings(
     assert any(line.startswith(f"f_{expected} =") for line in lines), lines
 
 
-JAC = ("idx, expr IN jacobian", "f[$idx$, $idx$] = $expr$")
+JAC = ("idx, jac IN jacobian", "f[$idx$, $idx$] = $jac$")
 RHS = ("idx, rhs IN rhses", "f[$idx$] = $rhs$")
 
 

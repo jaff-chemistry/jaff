@@ -1,5 +1,5 @@
 # ABOUTME: REPEAT's properties: where each one's items come from, its variables, options
-# ABOUTME: Option groups map to keyword arguments of the source, checked per property
+# ABOUTME: Option groups map to keyword arguments of the source; expression props join CSE
 
 from __future__ import annotations
 
@@ -36,25 +36,23 @@ class RepeatProp:
     """A property REPEAT can iterate over.
 
     Attributes:
-        vars: Variables it offers: ``idx``, the item variable, then special ones
-            such as ``cse``.
+        vars: Variables it offers: ``idx`` and the item variable.
         source: Builds the items from the context and the keyword arguments.
         groups: Option groups it accepts, key by key.
+        kind: For an expression property, the :meth:`Codegen.cse_group
+            <jaff.codegen.Codegen.cse_group>` kind it prints; it can then join a
+            CSE group with ``CSE { GROUP -> name }``.
     """
 
     vars: Tuple[str, ...]
     source: Source
     groups: Mapping[str, Mapping[str, Setting]] = field(default_factory=dict)
+    kind: Optional[str] = None
 
     @property
     def item(self) -> str:
         """The variable holding each item, e.g. ``specie``."""
         return self.vars[1]
-
-    @property
-    def special(self) -> Tuple[str, ...]:
-        """Variables beyond ``idx`` and the item, e.g. ``("cse",)``."""
-        return self.vars[2:]
 
 
 _THERMAL = {
@@ -70,6 +68,8 @@ _THERMAL = {
     },
 }
 _RADODES = {"RADIATION": {"ORDER": Setting("order", parse_int)}}
+_JOIN = {"CSE": {"GROUP": Setting("cse_group", parse_text)}}
+_NAME = {"GROUP": {"NAME": Setting("name", parse_text)}}
 _SIGN = {"SIGN": {"POS": Setting("pos", parse_text), "NEG": Setting("neg", parse_text)}}
 
 
@@ -79,28 +79,42 @@ def _items(item: str, getter: Callable[[RenderContext], Any]) -> RepeatProp:
 
 
 def _expressions(
-    item: str, method: str, groups: Optional[Mapping[str, Mapping[str, Setting]]] = None
+    item: str,
+    kind: str,
+    method: str,
+    groups: Optional[Mapping[str, Mapping[str, Setting]]] = None,
 ) -> RepeatProp:
-    """A property of codegen expressions with CSE; *method* is a Codegen method."""
+    """Codegen expressions of *kind*; *method* prints them alone, without CSE.
+
+    In a CSE group (``CSE { GROUP -> name }``) the REPEAT command takes them from
+    the group instead (see :mod:`.groups`).
+    """
     return RepeatProp(
-        ("idx", item, "cse"),
-        lambda c, kw: getattr(c.cg, method)(**kw),
-        groups or {},
+        ("idx", item),
+        lambda c, kw: getattr(c.cg, method)(**kw, use_cse=False)["expressions"],
+        {**(groups or {}), **_JOIN},
+        kind,
     )
 
 
+def _no_source(ctx: RenderContext, kwargs: Dict[str, Any]) -> Any:
+    """``cses`` items come from its group, not from a source (see :mod:`.groups`)."""
+    raise TypeError("REPEAT IN cses takes its items from its CSE group")
+
+
 PROPERTIES: Dict[str, RepeatProp] = {
-    "rates": _expressions("rate", "get_indexed_rates"),
+    "cses": RepeatProp(("idx", "cse"), _no_source, _NAME),
+    "rates": _expressions("rate", "rates", "get_indexed_rates"),
     "flux_expressions": _items(
         "flux_expression", lambda c: c.cg.get_indexed_flux_expressions()
     ),
     "ode_expressions": _items(
         "ode_expression", lambda c: c.cg.get_indexed_ode_expressions()
     ),
-    "odes": _expressions("ode", "get_indexed_odes"),
-    "radodes": _expressions("radode", "get_indexed_radodes", _RADODES),
-    "rhses": _expressions("rhs", "get_indexed_rhs", _THERMAL),
-    "jacobian": _expressions("expr", "get_indexed_jacobian", _THERMAL),
+    "odes": _expressions("ode", "odes", "get_indexed_odes"),
+    "radodes": _expressions("radode", "radodes", "get_indexed_radodes", _RADODES),
+    "rhses": _expressions("rhs", "rhs", "get_indexed_rhs", _THERMAL),
+    "jacobian": _expressions("jac", "jacobian", "get_indexed_jacobian", _THERMAL),
     "reactions": _items("reaction", lambda c: c.net.reactions.verbatim()),
     "species": _items("specie", lambda c: c.net.species.names()),
     "species_with_normalized_sign": RepeatProp(

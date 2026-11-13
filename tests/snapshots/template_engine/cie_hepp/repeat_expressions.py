@@ -13,7 +13,9 @@ def rates():
 
 def rates_cse():
     k = {}
-    # $$JAFF REPEAT idx, rate, cse IN rates
+    # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rates } }
+    # $$JAFF END
+    # $$JAFF REPEAT idx, rate IN rates { CSE { GROUP -> rates } }
     k[0] = 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)
     k[1] = 4.1207223003989e-10*tgas**(-0.8)
     k[2] = nden[3]
@@ -56,9 +58,11 @@ def odes():
 
 
 def odes_cse():
-    # $$JAFF REPEAT idx, ode, cse IN odes
+    # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> odes } }
     tmp0_v = 4.1207223003989e-10*tgas**(-0.8)*nden[1]*nden[2] - 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]*nden[1]
     tmp1_v = nden[1]*nden[3]**2
+    # $$JAFF END
+    # $$JAFF REPEAT idx, ode IN odes { CSE { GROUP -> odes } }
     dy[0] = tmp0_v
     dy[1] = -tmp0_v - tmp1_v
     dy[2] = -tmp0_v
@@ -79,15 +83,24 @@ def rhs():
 
 
 def rhs_cse_replace():
-    # $$JAFF REPEAT idx, rhs, cse IN rhses {
+    # $$JAFF REPEAT idx, cse IN cses {
+        # REPLACE {
+            # "nden\[(\d+)\]" -> "y[\1]"
+            # "tgas" -> "T"
+        # }
+        # GROUP { NAME -> rhs }
+    # }
+    x0 = 4.1207223003989e-10*T**(-0.8)*y[1]*y[2] - 5.85e-11*math.sqrt(T)*math.exp(-157809.1/T)*y[0]*y[1]
+    x1 = y[1]*y[3]**2
+    # $$JAFF END
+    # $$JAFF REPEAT idx, rhs IN rhses {
         # REPLACE {
             # "nden\[(\d+)\]" -> "y[\1]"
             # "tgas" -> "T"
         # }
         # THERMAL { MODE -> dedt }
+        # CSE { GROUP -> rhs }
     # }
-    x0 = 4.1207223003989e-10*T**(-0.8)*y[1]*y[2] - 5.85e-11*math.sqrt(T)*math.exp(-157809.1/T)*y[0]*y[1]
-    x1 = y[1]*y[3]**2
     f[1] = x0
     f[2] = -x0 - x1
     f[3] = -x0
@@ -98,7 +111,7 @@ def rhs_cse_replace():
 
 
 def jacobian():
-    # $$JAFF REPEAT idx, expr IN jacobian
+    # $$JAFF REPEAT idx, jac IN jacobian
     J[0][0] = -5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[1]
     J[0][1] = 4.1207223003989e-10*tgas**(-0.8)*nden[2] - 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]
     J[0][2] = 4.1207223003989e-10*tgas**(-0.8)*nden[1]
@@ -117,7 +130,7 @@ def jacobian():
 
 
 def jacobian_cse():
-    # $$JAFF REPEAT idx, expr, cse IN jacobian
+    # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> jacobian } }
     c0 = 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)
     c1 = c0*nden[1]
     c2 = 4.1207223003989e-10*tgas**(-0.8)
@@ -127,6 +140,8 @@ def jacobian_cse():
     c6 = -c4
     c7 = 2*nden[1]*nden[3]
     c8 = -c7
+    # $$JAFF END
+    # $$JAFF REPEAT idx, jac IN jacobian { CSE { GROUP -> jacobian } }
     J[0, 0] = -c1
     J[0, 1] = c3
     J[0, 2] = c4

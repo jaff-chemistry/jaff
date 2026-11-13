@@ -1,17 +1,18 @@
 # ABOUTME: Render context shared by every command while one template is rendered
-# ABOUTME: Network, codegen, template path, echo settings, DEFINEs and CALL functions
+# ABOUTME: Network, codegen, template path, echo settings, DEFINEs, CALL functions, CSE groups
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
 from .options import Options
 
 if TYPE_CHECKING:
     from ...core.network.network import Network
     from ..codegen import Codegen
+    from .commands.repeat.groups import CseGroupSpec
     from .functions import TemplateFunctions
 
 
@@ -30,6 +31,9 @@ class RenderContext:
         defines: Option sets registered by ``DEFINE``, by name.
         functions: Functions for ``$$JAFF CALL``, or ``None`` without a
             ``jaffgen_template_functions.py``.
+        cse_groups: CSE groups by name, filled while the blocks are validated.
+        cse_members: ``id`` of each block joining a CSE group, to its group's name
+            and its position among the members.
     """
 
     net: Network
@@ -39,3 +43,5 @@ class RenderContext:
     comment: Optional[str] = None
     defines: Dict[str, Options] = field(default_factory=dict)
     functions: Optional[TemplateFunctions] = None
+    cse_groups: Dict[str, CseGroupSpec] = field(default_factory=dict)
+    cse_members: Dict[int, Tuple[str, int]] = field(default_factory=dict)
