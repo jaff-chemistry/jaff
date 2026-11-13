@@ -334,6 +334,9 @@ J[$idx$][$idx$] = $jac$;
 $$JAFF END
 ```
 
+The bundled `rosenbrock_cpp` template builds its `rhs_jac()` this way, and its
+integrator calls it whenever it needs an analytic Jacobian.
+
 Groups are per template file, and a block joins one by name, so two blocks with
 the same options can still be in different groups (or in none). A group named by
 a block but without a `cses` block, a `cses` block no block joins, and a group
