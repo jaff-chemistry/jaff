@@ -8,11 +8,19 @@ temperature ``tgas`` [K]. Functions the network calls but does not define
 define them here, or set them as module attributes before solving. The
 Jacobian also calls their partial derivatives, ``<name>_partial_<n>(...)``
 for the derivative with respect to argument ``n`` (counted from 0).
+
+The expressions call numpy's ``exp``, ``log``, ... rather than ``math``'s: like
+compiled code they follow IEEE arithmetic (``log(0) = -inf``, overflow gives
+``inf``) instead of raising, so a term evaluated outside the branch that guards it
+(common-subexpression elimination hoists some) does no harm.
 """
 
-import math
-
 import numpy as np
+
+# Generated expressions print math.<f>; call numpy's instead (IEEE semantics).
+$$JAFF DEFINE numpy {
+    REPLACE { "math\." -> "np." }
+}
 
 $$JAFF SUB nspec
 NSPEC = $nspec$
@@ -36,7 +44,7 @@ PARAMETERS = (
 
 def internal_energy(nden, tgas):
     """Internal energy of the gas [erg cm^-3] from the EOS."""
-    $$JAFF SUB eos
+    $$JAFF SUB eos { USE numpy }
     return $eos$
     $$JAFF END
 
@@ -48,10 +56,12 @@ def rhs(nden, tgas, params):
     $$JAFF END
     dydt = np.zeros(NSPEC + 1)
 
-    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rhs } }
+    $$JAFF REPEAT idx, cse IN cses { USE numpy  GROUP { NAME -> rhs } }
     x$idx$ = $cse$
     $$JAFF END
-    $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dtdt }  CSE { GROUP -> rhs } }
+    $$JAFF REPEAT idx, rhs IN rhses {
+        USE numpy  THERMAL { MODE -> dtdt }  CSE { GROUP -> rhs }
+    }
     dydt[$idx$] = $rhs$
     $$JAFF END
 
@@ -65,10 +75,12 @@ def jacobian(nden, tgas, params):
     $$JAFF END
     jac = np.zeros((NSPEC + 1, NSPEC + 1))
 
-    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> jac } }
+    $$JAFF REPEAT idx, cse IN cses { USE numpy  GROUP { NAME -> jac } }
     x$idx$ = $cse$
     $$JAFF END
-    $$JAFF REPEAT idx, jac IN jacobian { THERMAL { MODE -> dtdt }  CSE { GROUP -> jac } }
+    $$JAFF REPEAT idx, jac IN jacobian {
+        USE numpy  THERMAL { MODE -> dtdt }  CSE { GROUP -> jac }
+    }
     jac[$idx$, $idx$] = $jac$
     $$JAFF END
 

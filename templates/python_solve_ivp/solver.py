@@ -49,11 +49,12 @@ def _check_params(params):
 
 
 def _rates_or_nan(size, *args):
-    """``rhs(*args)``, or NaNs when a math function fails at a trial state.
+    """``rhs(*args)``, or NaNs if evaluating it raises at a trial state.
 
-    Radau probes states where a density or the temperature may be slightly
-    negative; ``math.log`` and friends raise there. A non-finite rhs makes Radau
-    reject the trial and shrink the step, so the failure stays recoverable.
+    The generated expressions use numpy, which returns ``inf`` / ``nan`` rather
+    than raising; this guards what remains (e.g. plain Python arithmetic). A
+    non-finite rhs makes Radau reject the trial and shrink the step, so the
+    failure stays recoverable.
     """
     try:
         return rhs(*args)[:size]
@@ -116,6 +117,7 @@ def solve(
     """
     _check_params(params)
     nden0 = _initial_densities(n0)
+    temperature = np.float64(temperature)  # numpy scalars overflow to inf, not raise
 
     if evolve_temperature:
         y0 = np.append(nden0, temperature)
@@ -135,9 +137,19 @@ def solve(
         def jac(t, y):
             return jacobian(y, temperature, params)[:NSPEC, :NSPEC]
 
-    sol = solve_ivp(
-        f, (0.0, t_end), y0, method="Radau", jac=jac, t_eval=t_eval, rtol=rtol, atol=atol
-    )
+    # IEEE arithmetic as in compiled code: overflow, log(0), ... give inf / nan
+    # quietly (a guarded branch may be evaluated and then discarded).
+    with np.errstate(all="ignore"):
+        sol = solve_ivp(
+            f,
+            (0.0, t_end),
+            y0,
+            method="Radau",
+            jac=jac,
+            t_eval=t_eval,
+            rtol=rtol,
+            atol=atol,
+        )
     if not sol.success:
         raise RuntimeError(f"integration failed: {sol.message}")
 

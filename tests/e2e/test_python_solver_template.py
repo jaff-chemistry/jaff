@@ -134,6 +134,29 @@ def test_internal_energy_is_positive(generated):
     assert chem.internal_energy(nden, tgas) > 0.0
 
 
+def test_expressions_use_numpy_not_math(generated):
+    source = (generated.folder / "chemistry.py").read_text(encoding="utf-8")
+    code = [line for line in source.splitlines() if not line.lstrip().startswith("#")]
+
+    assert not any("math." in line for line in code)
+
+
+def test_guarded_branches_do_not_raise_when_cold(generated):
+    # GOW's reaction 41 is 0 below 700 K, but the Jacobian's CSE hoists
+    # log(6.67e-12 sqrt(T) exp(-63590/T - 1)) out of the branch: at 30 K the exp
+    # underflows and log(0) must give -inf in the discarded branch, as in C++.
+    chem = generated.chemistry
+    nden, _ = _state(chem.NSPEC)
+
+    with np.errstate(all="ignore"):
+        dydt = chem.rhs(nden, 30.0, _params(chem))
+        jac = chem.jacobian(nden, 30.0, _params(chem))
+
+    if generated.net.label == "GOW":
+        assert np.all(np.isfinite(dydt))
+        assert np.all(np.isfinite(jac))
+
+
 def test_jacobian_matches_finite_differences(generated):
     chem = generated.chemistry
     params = _params(chem)
