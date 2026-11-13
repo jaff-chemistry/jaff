@@ -384,6 +384,7 @@ nav = [
         "reference/codegen/codegen/get_indexed_radodes.md",
         "reference/codegen/codegen/get_radode_str.md",
         "reference/codegen/codegen/get_indexed_jacobian.md",
+        "reference/codegen/codegen/get_indexed_rhs_jacobian.md",
         "reference/codegen/codegen/get_jacobian_str.md",
       ] },
       { "codegen.Language" = [

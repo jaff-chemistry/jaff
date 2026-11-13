@@ -334,8 +334,12 @@ docs/           # Documentation
   using the log-derivative optimization where it applies (the reduced Jacobian's `∂k/∂y`)
 - `common/optimizations/`: exact SymPy rewrites that make generated code cheaper, one
   module each: `log_derivative` (`value · ∂ln(expr)/∂y` for products of powers and
-  `exp`); shared CSE goes here too. Helpers that only use them live outside it
+  `exp`), `shared_cse` (one CSE over expressions and symbol definitions such as
+  `krate[r]`, topologically ordered, no aliases, pruned; every `Codegen` getter prints
+  through it). Helpers that only use them live outside it
 - `codegen/`: `Codegen`, `Language`s, the `$$JAFF` template engine (`templating/`);
+  `get_indexed_rhs_jacobian(part=...)` prints the reduced rhs and Jacobian sharing one
+  set of temporaries (built once, cached);
   `$$JAFF CALL` inserts text from `@jaffgen_function` functions in a template's
   `jaffgen_template_functions.py` (`templating/functions.py`)
 - `config/`: config base models, loader, JSON schemas, reference generator

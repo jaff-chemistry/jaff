@@ -27,10 +27,11 @@ per-method bracket/token overrides are applied by the
 from __future__ import annotations
 
 from itertools import count
-from typing import TYPE_CHECKING, Iterator, List, Sequence, Set, Tuple, cast
+from typing import TYPE_CHECKING, Any, Iterator, Mapping, Sequence, cast
 
 import sympy as sp
 
+from ..common.optimizations import shared_cse
 from ..io._logger import JaffLogger, jaff_progress
 from ..types import IndexedList, IndexedValue
 from ._languages import Language, scoped_tokens
@@ -1429,6 +1430,137 @@ class Codegen:
             indices=[[i, j] for (i, j), _ in entries],
         )
 
+    def get_indexed_rhs_jacobian(
+        self,
+        part: str = "rhs",
+        thermal: str = "none",
+        energy: str = "volumetric",
+        radiation: bool = False,
+        rad_order: int = 0,
+        use_cse: bool = True,
+        cse_var: str = "cse",
+        cse_suffix: str = "",
+    ) -> IndexedReturn:
+        """The rhs and the Jacobian at one state, sharing one set of temporaries.
+
+        A solver evaluating both at the same state (e.g. a Rosenbrock method) can
+        emit them into one function.  They come from the reduced
+        :class:`~jaff.core.OdeSystem` (``form="reduced"``), whose rows hold each
+        rate coefficient as ``krate[r]`` and whose Jacobian reuses it (``∂k/∂T`` as
+        ``krate[r] · ∂ln k/∂T`` where cheaper); one
+        :func:`~jaff.common.optimizations.shared_cse` over the rows, the Jacobian
+        entries and the rate coefficients makes every coefficient a temporary
+        evaluated once, ordered after what it reads.
+
+        Both parts are built together and cached, so a template prints the
+        ``"rhs"`` part (the temporaries and the rows) and then the ``"jacobian"``
+        part (the entries, reading the same temporaries) in one scope.
+
+        Parameters
+        ----------
+        part : {"rhs", "jacobian"}, optional
+            ``"rhs"`` (default): the temporaries and the rhs rows, indexed ``[i]``.
+            ``"jacobian"``: no temporaries, the non-zero Jacobian entries indexed
+            ``[i, j]``.
+        thermal : str, optional
+            Thermal equation: ``"none"`` (default), ``"dedt"`` or ``"dtdt"``.
+        energy : str, optional
+            Evolved internal-energy form with ``"dedt"``.  Default
+            ``"volumetric"``.
+        radiation : bool, optional
+            Include the radiation-moment equations.  Default ``False``.
+        rad_order : int, optional
+            Layout of the radiation equations, ``0`` (default) to ``3``.
+        use_cse : bool, optional
+            Must be ``True`` (default): the shared temporaries are the point.
+        cse_var : str, optional
+            Prefix of the temporaries.  Default ``"cse"``.
+        cse_suffix : str, optional
+            Text appended after each temporary's index.  Default ``""``.
+
+        Returns
+        -------
+        IndexedReturn
+            ``"extras"["cse"]`` and ``"expressions"`` of the chosen *part*.
+
+        Raises
+        ------
+        ValueError
+            If *part* is unknown, *use_cse* is false, or a choice of equations is
+            invalid (see :class:`~jaff.core.OdeSystem`).
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> cg = Codegen(Network("h_photoionization"), lang="cxx")
+        >>> rhs = cg.get_indexed_rhs_jacobian("rhs", thermal="dtdt")
+        >>> for idx, expr in rhs["extras"]["cse"][:2]:
+        ...     print(idx, expr)
+        [17] photorates(1, 13.6, 1.0e+99)
+        [0] cse17*nden[0]
+        >>> jac = cg.get_indexed_rhs_jacobian("jacobian", thermal="dtdt")
+        >>> for idx, expr in jac["expressions"][:2]:
+        ...     print(idx, expr)
+        [0, 0] -cse17
+        [0, 1] cse5
+
+        ``cse17`` is the photo rate coefficient (``krate[0]``): evaluated first, as
+        the temporaries after it read it, and once for both parts.
+        """
+        if part not in ("rhs", "jacobian"):
+            raise ValueError(f"Invalid part {part!r}; expected 'rhs' or 'jacobian'")
+        if not use_cse:
+            raise ValueError("get_indexed_rhs_jacobian always shares temporaries")
+
+        key = (thermal, energy, radiation, rad_order, cse_var, cse_suffix)
+        key += (self.lang.name, self.lang.lb, self.lang.rb)
+        cache = self.__dict__.setdefault("_rhs_jacobian", {})
+        if key not in cache:
+            cache[key] = self.__rhs_jacobian(
+                thermal, energy, radiation, rad_order, cse_var, cse_suffix
+            )
+
+        return cache[key][0 if part == "rhs" else 1]
+
+    def __rhs_jacobian(
+        self,
+        thermal: str,
+        energy: str,
+        radiation: bool,
+        rad_order: int,
+        cse_var: str,
+        cse_suffix: str,
+    ) -> tuple[IndexedReturn, IndexedReturn]:
+        """Both parts of :meth:`get_indexed_rhs_jacobian`."""
+        with jaff_progress.indeterminate("Generating shared rhs/jacobian"):
+            system = self.net.ode_system(
+                thermal, energy, radiation, rad_order, form="reduced"
+            )
+            rows = system.rhs.flat()
+            entries = sorted(system.jacobian.todok().items())
+
+        printed = self._print_indexed(
+            [*rows, *(expr for _, expr in entries)],
+            True,
+            cse_var,
+            cse_suffix,
+            description="Generating rhs/jacobian code",
+            indices=[[i] for i in range(len(rows))] + [[i, j] for (i, j), _ in entries],
+            definitions=system.rate_coefficients,
+        )
+        expressions = printed["expressions"]
+        rhs: IndexedReturn = {
+            "extras": {"cse": printed["extras"]["cse"]},
+            "expressions": IndexedList(expressions[: len(rows)]),
+        }
+        jacobian: IndexedReturn = {
+            "extras": {"cse": IndexedList()},
+            "expressions": IndexedList(expressions[len(rows) :]),
+        }
+
+        return rhs, jacobian
+
     @scoped_tokens("lang")
     def get_jacobian_str(
         self,
@@ -1569,12 +1701,16 @@ class Codegen:
         description: str = "Generating code",
         indices: Sequence[list[int]] | None = None,
         optimizations: str | None = None,
+        definitions: Mapping[Any, sp.Basic] | None = None,
     ) -> IndexedReturn:
-        """CSE *exprs* (optionally), prune unused temporaries and print everything.
+        """CSE *exprs* (optionally) and print everything.
 
-        Entry *k* gets ``indices[k]`` (default ``[k]``).  Derivatives of
-        undefined functions become ``<name>_partial_<n>(...)`` calls (see
-        :meth:`__convert_unknown_derivatives`).
+        The CSE is :func:`~jaff.common.optimizations.shared_cse`: with
+        *definitions* (symbols used in *exprs* and their values, e.g. an
+        :class:`~jaff.core.OdeSystem`'s ``rate_coefficients``) each definition
+        becomes a temporary shared with *exprs*.  Entry *k* gets ``indices[k]``
+        (default ``[k]``).  Derivatives of undefined functions become
+        ``<name>_partial_<n>(...)`` calls (see :meth:`__convert_unknown_derivatives`).
         """
         out: IndexedReturn = {
             "extras": {"cse": IndexedList()},
@@ -1583,12 +1719,12 @@ class Codegen:
         cse_defs: dict[str, sp.Basic] | None = None
         if use_cse:
             with jaff_progress.indeterminate("Generating cse expressions"):
-                cse_symbols = self._cse_symbols(cse_var, cse_suffix)
-                replacements, exprs = sp.cse(
-                    list(exprs), symbols=cse_symbols, optimizations=optimizations
+                replacements, exprs = shared_cse(
+                    list(exprs),
+                    definitions or {},
+                    self._cse_symbols(cse_var, cse_suffix),
+                    optimizations,
                 )
-                # Drop CSE temporaries not referenced by any reduced expression
-                replacements = self.__prune_cse(replacements, exprs)
                 # str-keyed so __convert_unknown_derivatives can resolve CSE
                 # symbols back to their defining expressions
                 cse_defs = {str(var): expr for var, expr in replacements}
@@ -1754,7 +1890,7 @@ class Codegen:
             yield sp.Symbol(f"{prefix}{n}{suffix}")
 
     @staticmethod
-    def _cse_index(var: sp.Symbol, prefix: str, suffix: str = "") -> int:
+    def _cse_index(var: sp.Basic, prefix: str, suffix: str = "") -> int:
         """Recover the counter of a CSE temporary named ``<prefix><n><suffix>``.
 
         Only the text between *prefix* and *suffix* is parsed, so digits inside
@@ -1792,59 +1928,3 @@ class Codegen:
             )
 
         return int(index)
-
-    @staticmethod
-    def __prune_cse(
-        replacements: list[tuple[sp.Symbol, sp.Expr]], expressions: List[sp.Expr]
-    ) -> List[Tuple[sp.Symbol, sp.Expr]]:
-        """Remove CSE temporaries not transitively used by any reduced expression.
-
-        SymPy's :func:`~sympy.cse` can produce temporaries that are only
-        referenced by *other* temporaries that themselves become unreferenced
-        after the ``optimizations="basic"`` pass.  This method performs a
-        depth-first reachability analysis starting from all free symbols in
-        *expressions* and discards every temporary not on a live path.
-
-        Parameters
-        ----------
-        replacements : list of (sympy.Symbol, sympy.Expr)
-            CSE output in order: each tuple ``(tmp_sym, defining_expr)``.
-        expressions : list of sympy.Expr
-            The CSE-reduced main expressions that reference the temporaries.
-
-        Returns
-        -------
-        list of (sympy.Symbol, sympy.Expr)
-            Subset of *replacements* containing only live temporaries,
-            preserving their original order (important for correct emission
-            order in the generated code).
-        """
-        if not replacements:
-            return []
-
-        dep_map = dict(replacements)
-        cse_syms = set(dep_map.keys())
-
-        used: set = set()
-
-        def _dfs(sym: sp.Symbol) -> None:
-            """Recursively mark *sym* and all CSE symbols it depends on as used."""
-            if sym in used:
-                return
-            used.add(sym)
-
-            expr = dep_map.get(sym)
-            if expr is None:
-                return
-
-            # Recurse into any CSE temporaries appearing inside this definition
-            for dep in cast(Set[sp.Symbol], expr.free_symbols & cse_syms):
-                _dfs(dep)
-
-        # Seed the reachability search from the main (non-temporary) expressions
-        for expr in expressions:
-            for sym in cast(Set[sp.Symbol], expr.free_symbols & cse_syms):
-                _dfs(sym)
-
-        # Return only live temporaries in their original definition order
-        return [(var, dep_map[var]) for var, _ in replacements if var in used]

@@ -379,6 +379,30 @@ cg.get_rates_str(use_cse=True, cse_var="tmp")  # shared pieces lifted to tmp0, t
 Rates stored as raw code strings are left out of CSE because they can't be
 simplified symbolically.
 
+Every method runs the same CSE, `jaff.common.optimizations.shared_cse`: SymPy's
+`cse`, then the temporaries in evaluation order (each after the ones it reads),
+without aliases (`cse5 = cse3` is substituted away) and without unused ones.
+
+### The rhs and the Jacobian together
+
+A solver that needs the rhs and the Jacobian at the same state (a Rosenbrock
+method, say) can compute both in one function with
+`get_indexed_rhs_jacobian(part, thermal, energy, radiation, rad_order)`. It
+prints the [reduced ODE system](../working-with-networks/network.md#rate-coefficients-as-symbols),
+whose rows hold each rate coefficient as `krate[r]`, with one CSE over the rows,
+the Jacobian entries and the coefficients: every rate coefficient becomes a
+temporary evaluated once, and the Jacobian's temperature column reuses it.
+
+```python
+rhs = cg.get_indexed_rhs_jacobian("rhs", thermal="dtdt")  # temporaries + rows [i]
+jac = cg.get_indexed_rhs_jacobian("jacobian", thermal="dtdt")  # entries [i, j] only
+```
+
+Print the `"rhs"` part first (its temporaries, then its rows) and the
+`"jacobian"` part after it in the same scope: the entries read the same
+temporaries. Both parts are built once and cached. On the bundled networks this
+halves the `exp`/`log`/`pow` calls of a separate rhs and Jacobian.
+
 ---
 
 ## The structured form: `#!python get_indexed_*()`
@@ -396,6 +420,7 @@ template engine, renumbering them, or post-processing — every emitter has an
 | `get_rhs_str()`              | `get_indexed_rhs()`              |
 | `get_radode_str()`           | `get_indexed_radodes()`          |
 | `get_jacobian_str()`         | `get_indexed_jacobian()`         |
+| —                            | `get_indexed_rhs_jacobian()`     |
 
 The rate/ODE/RHS/Jacobian variants return a dict with two keys —
 `"extras"["cse"]` (the CSE temporaries) and `"expressions"` (the main
