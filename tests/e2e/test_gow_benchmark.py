@@ -1,5 +1,5 @@
-# ABOUTME: Benchmark: the generated Python and Fortran solvers evolve the GOW network to
-# ABOUTME: equilibrium at n_H = 100, chi = 0.1, 1, 10 and match the reference within 1e-6
+# ABOUTME: Benchmark: the generated Python, Fortran and C++ solvers evolve the GOW network
+# ABOUTME: to equilibrium at n_H = 100, chi = 0.1, 1, 10 and match the reference to 1e-6
 """GOW one-zone equilibrium against reference runs.
 
 The network is ``tests/fixtures/GOW_benchmark``: ``networks/GOW`` without the
@@ -9,10 +9,11 @@ same network) start from the Gong+17 abundances at n_H = 100 cm^-3 and 100 K and
 reach equilibrium by ~2e13 s; their last row (7e20 s) is the equilibrium state.
 
 The RHS and Jacobian are generated from the network by the current code, for
-the ``python_solve_ivp`` and ``fortran_dlsodes`` templates; the test supplies only
-the table functions (:mod:`tests.gow_tables`, and the same tables in Fortran in
-``tests/fixtures/GOW_benchmark/user_functions.f90``), the start state (the
-reference's first row) and the parameters below. The gas sits at the cloud face:
+the ``python_solve_ivp``, ``fortran_dlsodes`` and ``rosenbrock_cpp`` templates;
+the test supplies only the table functions (:mod:`tests.gow_tables`, and the same
+tables in ``tests/fixtures/GOW_benchmark/user_functions.f90`` and ``.hpp``), the
+start state (the reference's first row) and the parameters below. The C++
+integrator evolves the specific internal energy instead of the temperature. The gas sits at the cloud face:
 no extinction, all column densities 0, so every shielding factor is 1.
 """
 
@@ -195,6 +196,84 @@ def test_fortran_equilibrium_matches_the_reference(fortran, tag):
     final = [float(v) for v in proc.stdout.split()]
     temperature, densities = final[0], dict(zip(fortran.species, final[1:]))
 
+    assert temperature == pytest.approx(ref["Tgas"][-1], rel=AGREEMENT)
+    for column, name in SPECIES.items():
+        assert densities[name] == pytest.approx(ref[column][-1], rel=AGREEMENT), name
+
+
+# --------------------------------------------------------------------------- #
+# C++ (rosenbrock_cpp)                                                         #
+# --------------------------------------------------------------------------- #
+
+needs_gxx = pytest.mark.skipif(
+    not sys.platform.startswith("linux") or shutil.which("g++") is None,
+    reason="needs Linux with g++",
+)
+
+
+def _cpp_driver(tag: str) -> str:
+    """A program solving the benchmark for *tag* and printing T then the densities."""
+    ref = _reference(tag)
+    densities = "\n".join(
+        f'    n[chem::species_index("{name}")] = {float(ref[column][0])!r};'
+        for column, name in SPECIES.items()
+    )
+    parameters = "\n".join(
+        f"    p.{name} = {value!r};" for name, value in _parameters(CHI[tag]).items()
+    )
+
+    return f"""#include <cstdio>
+#include "solver.hpp"
+
+int main() {{
+    chem::Parameters p;
+{parameters}
+    double n[chem::nspecs] = {{}};
+{densities}
+    double e = chem::energy(n, {float(ref["Tgas"][0])!r});
+    chem::Options options;
+    options.rtol = {RTOL!r};
+    options.atol = {ATOL!r};
+    const chem::Status status = chem::solve(n, e, {T_END!r}, p, options);
+    std::printf("%d %.17e", static_cast<int>(status), chem::temperature(n, e));
+    for (int i = 0; i < chem::nspecs; ++i) std::printf(" %.17e", n[i]);
+    std::printf("\\n");
+}}
+"""
+
+
+@pytest.fixture(scope="module")
+def cpp(tmp_path_factory) -> SimpleNamespace:
+    """The generated C++, with the benchmark's table functions."""
+    folder = generate(
+        str(BENCHMARK / "GOW.jet"), tmp_path_factory.mktemp("gow_cpp"), "rosenbrock_cpp"
+    )
+    shutil.copy(BENCHMARK / "user_functions.hpp", folder / "user_functions.hpp")
+    names = re.findall(r'^\s*"([^"]+)",$', (folder / "chemistry.hpp").read_text(), re.M)
+
+    return SimpleNamespace(folder=folder, species=names)
+
+
+@needs_gxx
+@pytest.mark.parametrize("tag", list(CHI))
+def test_cpp_equilibrium_matches_the_reference(cpp, tag):
+    ref = _reference(tag)
+    source = cpp.folder / f"benchmark_{tag}.cpp"
+    source.write_text(_cpp_driver(tag), encoding="utf-8")
+    exe = cpp.folder / f"benchmark_{tag}"
+    subprocess.run(
+        ["g++", "-std=c++17", "-O2", f"-I{cpp.folder}", str(source), "-o", str(exe)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    proc = subprocess.run([str(exe)], cwd=cpp.folder, capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    status, temperature, *values = [float(v) for v in proc.stdout.split()]
+    densities = dict(zip(cpp.species, values))
+
+    assert status == 0, proc.stdout
     assert temperature == pytest.approx(ref["Tgas"][-1], rel=AGREEMENT)
     for column, name in SPECIES.items():
         assert densities[name] == pytest.approx(ref[column][-1], rel=AGREEMENT), name
