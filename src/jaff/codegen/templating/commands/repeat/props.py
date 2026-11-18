@@ -104,6 +104,26 @@ def _parameters(ctx: RenderContext, kwargs: Dict[str, Any]) -> list[str]:
     return [ctx.cg.lang.code_gen(p, strict=False) for p in system.parameters]
 
 
+def _functions(ctx: RenderContext) -> list[str]:
+    """Stub signatures of the network's undefined functions and their derivatives.
+
+    Each function called undefined (:attr:`NetworkSymbols.applied_functions
+    <jaff.core.network.NetworkSymbols.applied_functions>`) with *k* arguments
+    gives ``name(a0, ..., a<k-1>)`` and its ``k`` first partial derivatives
+    ``name_partial_<i>(...)``, named as the printed Jacobian calls them; sorted.
+    """
+    arities = {
+        call.func.__name__: len(call.args) for call in ctx.net.symbols.applied_functions
+    }
+    signatures = []
+    for name, nargs in sorted(arities.items()):
+        arguments = f"({', '.join(f'a{i}' for i in range(nargs))})"
+        signatures.append(name + arguments)
+        signatures.extend(f"{name}_partial_{i}{arguments}" for i in range(nargs))
+
+    return signatures
+
+
 def _no_source(ctx: RenderContext, kwargs: Dict[str, Any]) -> Any:
     """``cses`` items come from its group, not from a source (see :mod:`.groups`)."""
     raise TypeError("REPEAT IN cses takes its items from its CSE group")
@@ -123,6 +143,7 @@ PROPERTIES: Dict[str, RepeatProp] = {
     "rhses": _expressions("rhs", "rhs", "get_indexed_rhs", _THERMAL),
     "jacobian": _expressions("jac", "jacobian", "get_indexed_jacobian", _THERMAL),
     "parameters": RepeatProp(("idx", "parameter"), _parameters, _THERMAL),
+    "functions": _items("function", _functions),
     "reactions": _items("reaction", lambda c: c.net.reactions.verbatim()),
     "species": _items("specie", lambda c: c.net.species.names()),
     "species_with_normalized_sign": RepeatProp(

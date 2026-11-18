@@ -215,6 +215,7 @@ nav = [
         "reference/core/networksymbols/n_hnuc.md",
         "reference/core/networksymbols/element_sum.md",
         "reference/core/networksymbols/variables.md",
+        "reference/core/networksymbols/applied_functions.md",
         "reference/core/networksymbols/interp_functions.md",
         "reference/core/networksymbols/undefined_functions.md",
         "reference/core/networksymbols/standardize.md",

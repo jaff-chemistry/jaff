@@ -370,6 +370,7 @@ with `CSE` among their option groups can join a [CSE group](#cse-common-subexpre
 | `jacobian`         | `idx, jac`             | Jacobian matrix elements (2D)    | `THERMAL`, `RADIATION`, `CSE`               |
 | `radodes`          | `idx, radode`          | Radiation moment ODEs            | `RADIATION` (`ORDER` only), `CSE`           |
 | `parameters`       | `idx, parameter`       | Free parameters of the ODE system (names, sorted; `tgas` only with `MODE -> none`) | `THERMAL`, `RADIATION` |
+| `functions`        | `idx, function`        | Undefined functions the network calls and all their first partial derivatives (`name_partial_<i>`, as the Jacobian calls them), as stub signatures (`name(a0, a1)`, sorted) | — |
 | `flux_expressions` | `idx, flux_expression` | Flux = rate × reactant densities | —                                           |
 | `ode_expressions`  | `idx, ode_expression`  | ODE terms without assignment     | —                                           |
 

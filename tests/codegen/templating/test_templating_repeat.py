@@ -2,6 +2,8 @@
 # ABOUTME: Vertical/horizontal expansion, which lines expand, CSE groups and options
 
 
+import re
+
 import pytest
 
 from jaff import Network
@@ -278,3 +280,40 @@ def test_parameters_inline_list(param_net, tmp_path):
         'PARAMETERS = ("$parameter$", )',
     )
     assert render(param_net, tmp_path, text) == 'PARAMETERS = ("av", "crate")\n'
+
+
+UNKNOWN_NETWORK = [
+    "H -> H+ + e- [10,1e4] 1e-17*shield_interp1d(av)*crate",
+    "H+ + e- -> H [10,1e4] 2e-10*tgas**(-0.7)*boost(tgas, av)",
+]
+
+
+@pytest.fixture(scope="module")
+def unknown_net(tmp_path_factory) -> Network:
+    path = tmp_path_factory.mktemp("unknown") / "unknown.dat"
+    path.write_text("\n".join(UNKNOWN_NETWORK) + "\n", encoding="utf-8")
+    return Network(str(path), funcfile=False)
+
+
+def test_functions_lists_stubs_with_every_partial_derivative(unknown_net, tmp_path):
+    text = block("REPEAT idx, function IN functions", "function $function$ result(r)")
+    assert render(unknown_net, tmp_path, text) == (
+        "function boost(a0, a1) result(r)\n"
+        "function boost_partial_0(a0, a1) result(r)\n"
+        "function boost_partial_1(a0, a1) result(r)\n"
+        "function shield_interp1d(a0) result(r)\n"
+        "function shield_interp1d_partial_0(a0) result(r)\n"
+    )
+
+
+def test_functions_cover_every_call_of_the_printed_jacobian(unknown_net, tmp_path):
+    jacobian = Codegen(network=unknown_net, lang="python").get_indexed_jacobian(
+        thermal="dtdt", use_cse=False
+    )
+    code = " ".join(text for _, text in jacobian["expressions"])
+    called = set(re.findall(r"\b((?:boost|shield)\w*)\(", code))
+    stubs = render(
+        unknown_net, tmp_path, block("REPEAT idx, function IN functions", "$function$")
+    )
+
+    assert called <= {line.split("(")[0] for line in stubs.splitlines()}

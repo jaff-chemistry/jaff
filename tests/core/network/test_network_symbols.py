@@ -112,9 +112,21 @@ def test_introspection_sets(make_network):
     assert net.symbols.undefined_functions == frozenset({"bar"})
 
 
+def test_applied_functions_keep_the_calls(make_network):
+    net = make_network(INTROSPECT, funcfile=False)
+    calls = {call.func.__name__: call.args for call in net.symbols.applied_functions}
+
+    assert calls == {"foo_interp": (Symbol("tgas"),), "bar": (Symbol("crate"),)}
+
+
 def test_introspection_sets_are_cached_frozensets(make_network):
     net = make_network(INTROSPECT, funcfile=False)
-    for name in ("variables", "interp_functions", "undefined_functions"):
+    for name in (
+        "variables",
+        "applied_functions",
+        "interp_functions",
+        "undefined_functions",
+    ):
         value = getattr(net.symbols, name)
         assert isinstance(value, frozenset)
         assert getattr(net.symbols, name) is value

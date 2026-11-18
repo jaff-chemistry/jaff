@@ -272,23 +272,30 @@ class NetworkSymbols:
         return frozenset().union(*(self.free_symbols(e) for e in self._expressions()))
 
     @cached_property
-    def _applied_functions(self) -> frozenset[str]:
-        """Names of all undefined (applied) functions across network expressions."""
+    def applied_functions(self) -> frozenset[AppliedUndef]:
+        """Calls of undefined functions across network expressions, with their arguments.
+
+        Each call is a SymPy ``AppliedUndef`` (``call.func.__name__`` its name,
+        ``call.args`` its arguments). :attr:`interp_functions` and
+        :attr:`undefined_functions` are their names.
+        """
         return frozenset(
-            call.func.__name__
-            for e in self._expressions()
-            for call in e.atoms(AppliedUndef)
+            call for e in self._expressions() for call in e.atoms(AppliedUndef)
         )
 
     @cached_property
     def interp_functions(self) -> frozenset[str]:
         """Names of interpolation functions (containing ``"interp"``)."""
-        return frozenset(name for name in self._applied_functions if "interp" in name)
+        names = (call.func.__name__ for call in self.applied_functions)
+
+        return frozenset(name for name in names if "interp" in name)
 
     @cached_property
     def undefined_functions(self) -> frozenset[str]:
         """Names of undefined, non-interpolation functions."""
-        return frozenset(name for name in self._applied_functions if "interp" not in name)
+        names = (call.func.__name__ for call in self.applied_functions)
+
+        return frozenset(name for name in names if "interp" not in name)
 
     @cached_property
     def _element_lookup(self) -> dict[str, str]:
