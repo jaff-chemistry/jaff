@@ -14,8 +14,8 @@ from tests.jaffgen_run import run_jaffgen
 MODULES = ("chemistry", "solver")
 
 
-def generate(network: str, outdir: Path) -> Path:
-    """Run jaffgen with the ``python_solve_ivp`` template; return the run folder."""
+def generate(network: str, outdir: Path, template: str = "python_solve_ivp") -> Path:
+    """Run jaffgen with *template* (default ``python_solve_ivp``); return the run folder."""
     args = SimpleNamespace(
         network=network,
         config=None,
@@ -28,7 +28,7 @@ def generate(network: str, outdir: Path) -> Path:
         outdir=str(outdir),
         indir=None,
         files=None,
-        template="python_solve_ivp",
+        template=template,
     )
 
     return run_jaffgen(args).output_dir

@@ -1,53 +1,34 @@
+! ABOUTME: Driver of the generated solver: edit the block of inputs, then `make` and
+! ABOUTME: `./test`; prints the final state and saves the evolution to solution.dat
+!
+! A network that calls functions it does not define needs them implemented in
+! user_functions.f90 first.
 program main
-    use commons
-    use ode
+    use chemistry
+    use solver
     implicit none
-    integer,parameter::neq=nspecs+1
-    integer,parameter::meth=2
-    integer,parameter::lrw=20+3*neq**2+20*neq
-    integer,parameter::liw=30
-    real*8::RWORK(lrw), n(neq), rtol(neq), atol(neq), tloc, dt
-    integer::IWORK(liw), itask, istate, iopt, mf, neqa(1), itol
-    external::DLSODES
+    real*8 :: n(nspecs), temperature, t_end
+    integer :: i
 
-    IWORK = 0
-    RWORK = 0d0
-    itol = 4
+    ! ---- inputs: edit here ---------------------------------------------------------
+    ! initial number densities [cm^-3]
+    $$JAFF REPEAT idx, specie IN species
+    n($idx+1$) = 0d0  ! $specie$
+    $$JAFF END
+    ! parameters: placeholders, set physical values
+    $$JAFF REPEAT idx, parameter IN parameters { THERMAL { MODE -> dtdt } }
+    $parameter$ = 1d0
+    $$JAFF END
+    temperature = 1d2           ! initial gas temperature [K]
+    t_end = 3.15576d13          ! end time [s] (1 Myr)
+    evolve_temperature = .false. ! .true.: evolve the temperature with the EOS
+    ! --------------------------------------------------------------------------------
 
-    neqa = neq
-    itask = 1
-    iopt = 0
-    mf = 222
+    call solve(n, temperature, t_end, "solution.dat")
 
-    atol = 1d-6
-    rtol = 1d-6
-
-    tloc = 0d0
-
-    n = 0d0
-    n(idx_CO) = 1d2
-    n(idx_tgas) = 1d2
-    dt = 1d0
-
-    common_av = 1d0
-    common_crate = 1d-17
-
-
-    istate = 1
-
-    CALL DLSODES(fex, neqa(:), n(:), tloc, dt, &
-                ITOL, RTOL, ATOL, ITASK, ISTATE, IOPT, RWORK, LRW, IWORK, &
-                LIW, JES, MF)
-
-    ! A negative istate means DLSODES failed; stop with a nonzero exit code.
-    if (istate < 0) then
-        print *, "DLSODES failed with istate = ", istate
-        error stop 1
-    end if
-
-    print '(a, es12.5)', "t    = ", tloc
-    print '(a, es12.5)', "tgas = ", n(idx_tgas)
-    print '(a)', "species number densities (by index):"
-    print '(es12.5)', n(1:nspecs)
-
+    print '(a, es13.6, a, es13.6, a)', "t = ", t_end, " s, T = ", temperature, " K"
+    do i = 1, nspecs
+        print '(2x, a10, es14.6, a)', species_name(i), n(i), " cm^-3"
+    end do
+    print '(a)', "evolution saved to solution.dat"
 end program main

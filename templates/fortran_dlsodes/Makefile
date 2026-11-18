@@ -7,7 +7,7 @@ ifeq "$(wres)" "0"
 	fc = ifx
 	switchOPT = -O3 -g -traceback -xHost -fp-model=precise
 	switchDBG = -O0 -check all -warn all -save-temps
-	switchDBG += -fpe0 -u -traceback -warn nounused -g
+	switchDBG += -u -traceback -warn nounused -g
 	switchDBG += -init=snan,zero,arrays -ftrapuv -check noarg_temp_created
 	switchOMP = -qopenmp
 	nowarn = -nowarn
@@ -15,7 +15,6 @@ else
 	fc = gfortran
 	switchOPT = -ffree-line-length-none -O3 -g -fallow-argument-mismatch
 	switchDBG = -fbacktrace -g -fallow-argument-mismatch
-	switchDBG += -ffpe-trap=zero,overflow,invalid
 	switchDBG += -fbounds-check -ffree-line-length-none -O0
 	nowarn = -w
 endif
@@ -42,10 +41,9 @@ cswitch = $(cswitchOPT)
 objs = opkda1.o
 objs += opkda2.o
 objs += opkdmain.o
-objs += commons.o
-objs += reactions.o
-objs += fluxes.o
-objs += ode.o
+objs += user_functions.o
+objs += chemistry.o
+objs += solver.o
 
 obj_main = main.o
 
@@ -54,24 +52,18 @@ all:	$(objs) $(obj_main)
 	$(fc) $(fswitch) $(objs) $(obj_main) -o $(exe) $(lib)
 
 # Module dependencies
-# commons module is used by reactions, fluxes, ode, and main
-reactions.o: reactions.f90 commons.o
+# user_functions has no dependencies; chemistry uses it
+user_functions.o: user_functions.f90
 	$(fc) $(fswitch) -c $< -o $@ $(lib)
 
-# fluxes module uses commons and reactions
-fluxes.o: fluxes.f90 commons.o reactions.o
+chemistry.o: chemistry.f90 user_functions.o
 	$(fc) $(fswitch) -c $< -o $@ $(lib)
 
-# ode module uses commons and fluxes
-ode.o: ode.f90 commons.o fluxes.o
+# solver uses chemistry; main uses both
+solver.o: solver.f90 chemistry.o
 	$(fc) $(fswitch) -c $< -o $@ $(lib)
 
-# main uses commons and ode
-main.o: main.f90 commons.o ode.o
-	$(fc) $(fswitch) -c $< -o $@ $(lib)
-
-# commons has no dependencies
-commons.o: commons.f90
+main.o: main.f90 chemistry.o solver.o
 	$(fc) $(fswitch) -c $< -o $@ $(lib)
 
 #full debug target
