@@ -317,3 +317,48 @@ def test_functions_cover_every_call_of_the_printed_jacobian(unknown_net, tmp_pat
     )
 
     assert called <= {line.split("(")[0] for line in stubs.splitlines()}
+
+
+SPLIT_TEMPLATE = """\
+$$JAFF DEFINE system { THERMAL { MODE -> dedt  ENERGY -> specific } }
+$$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> g } }
+x$idx$ = $cse$
+$$JAFF END
+$$JAFF REPEAT idx, jac IN jacobian_fixed_t { USE system  CSE { GROUP -> g } }
+A[$idx$][$idx$] = $jac$
+$$JAFF END
+$$JAFF REPEAT idx, rhs_dt IN rhs_dt { USE system  CSE { GROUP -> g } }
+a[$idx$] = $rhs_dt$
+$$JAFF END
+$$JAFF REPEAT idx, dtdy IN temperature_gradient { USE system  CSE { GROUP -> g } }
+c[$idx$] = $dtdy$
+$$JAFF END
+$$JAFF REPEAT idx, jac IN jacobian { USE system }
+J[$idx$][$idx$] = $jac$
+$$JAFF END
+"""
+
+
+def test_split_jacobian_properties_reassemble_the_jacobian(net, tmp_path):
+    import math
+
+    code = render(net, tmp_path, SPLIT_TEMPLATE)
+    neq = net.species.count + 1
+    scope = {
+        "math": math,
+        "nden": [1.0 + 0.3 * i for i in range(net.species.count)],
+        "tgas": 3000.0,
+        "A": [[0.0] * neq for _ in range(neq)],
+        "J": [[0.0] * neq for _ in range(neq)],
+        "a": [0.0] * neq,
+        "c": [0.0] * neq,
+    }
+    exec(code, scope)  # noqa: S102 - code rendered from a test template
+
+    for i in range(neq):
+        for j in range(neq):
+            assembled = scope["A"][i][j] + scope["a"][i] * scope["c"][j]
+            assert assembled == pytest.approx(scope["J"][i][j], rel=1e-9, abs=1e-30)
+    assert sum(1 for row in scope["A"] for v in row if v != 0) < sum(
+        1 for row in scope["J"] for v in row if v != 0
+    )

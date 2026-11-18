@@ -142,6 +142,14 @@ PROPERTIES: Dict[str, RepeatProp] = {
     "radodes": _expressions("radode", "radodes", "get_indexed_radodes", _RADODES),
     "rhses": _expressions("rhs", "rhs", "get_indexed_rhs", _THERMAL),
     "jacobian": _expressions("jac", "jacobian", "get_indexed_jacobian", _THERMAL),
+    # The split dedt Jacobian J = A + a c^T (OdeSystem.jacobian_split)
+    "jacobian_fixed_t": _expressions(
+        "jac", "jacobian_fixed_t", "get_indexed_jacobian_fixed_t", _THERMAL
+    ),
+    "rhs_dt": _expressions("rhs_dt", "rhs_dt", "get_indexed_rhs_dt", _THERMAL),
+    "temperature_gradient": _expressions(
+        "dtdy", "temperature_gradient", "get_indexed_temperature_gradient", _THERMAL
+    ),
     "parameters": RepeatProp(("idx", "parameter"), _parameters, _THERMAL),
     "functions": _items("function", _functions),
     "reactions": _items("reaction", lambda c: c.net.reactions.verbatim()),

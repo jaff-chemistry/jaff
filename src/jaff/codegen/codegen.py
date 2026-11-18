@@ -41,7 +41,7 @@ from ._typing import CseGroup, IndexedReturn
 if TYPE_CHECKING:
     import logging
 
-    from ..core.network import Network
+    from ..core.network import Network, OdeSystem
 
 
 @dataclass(frozen=True)
@@ -1456,6 +1456,142 @@ class Codegen:
 
         return self._indexed("jacobian", options, use_cse, cse_var, cse_suffix)
 
+    def _split_options(
+        self, thermal: str, energy: str, radiation: bool, rad_order: int
+    ) -> dict[str, Any]:
+        return {
+            "thermal": thermal,
+            "energy": energy,
+            "radiation": radiation,
+            "rad_order": rad_order,
+        }
+
+    def get_indexed_jacobian_fixed_t(
+        self,
+        thermal: str = "dedt",
+        use_cse: bool = True,
+        cse_var: str = "cse",
+        energy: str = "volumetric",
+        radiation: bool = False,
+        rad_order: int = 0,
+        cse_suffix: str = "",
+    ) -> IndexedReturn:
+        """The fixed-temperature part A of the split ``dedt`` Jacobian ``J = A + a cᵀ``.
+
+        Prints the non-zero entries of ``A`` from
+        :attr:`OdeSystem.jacobian_split <jaff.core.OdeSystem.jacobian_split>`
+        (``[i, j]`` indices, energy column empty), with CSE as
+        :meth:`get_indexed_jacobian`; template property ``jacobian_fixed_t``.
+        Unlike the full Jacobian it keeps the chemistry's sparsity, so a solver
+        can factor ``I/(γh) - A`` sparsely and add the rank-one term ``a cᵀ``
+        (:meth:`get_indexed_rhs_dt`, :meth:`get_indexed_temperature_gradient`)
+        with the Sherman-Morrison formula.
+
+        Parameters
+        ----------
+        thermal : str, optional
+            Must be ``"dedt"`` (the default): the split needs the energy in the
+            state.
+        use_cse, cse_var, cse_suffix
+            As for :meth:`get_indexed_jacobian`.
+        energy, radiation, rad_order
+            The ODE system, as for :meth:`get_indexed_jacobian`.
+
+        Returns
+        -------
+        IndexedReturn
+            CSE temporaries and the ``[i, j]``-indexed entries.
+
+        Raises
+        ------
+        ValueError
+            If *thermal* is not ``"dedt"``.
+        """
+        options = self._split_options(thermal, energy, radiation, rad_order)
+
+        return self._indexed("jacobian_fixed_t", options, use_cse, cse_var, cse_suffix)
+
+    def get_indexed_rhs_dt(
+        self,
+        thermal: str = "dedt",
+        use_cse: bool = True,
+        cse_var: str = "cse",
+        energy: str = "volumetric",
+        radiation: bool = False,
+        rad_order: int = 0,
+        cse_suffix: str = "",
+    ) -> IndexedReturn:
+        """The column ``a = ∂rhs/∂T`` of the split ``dedt`` Jacobian ``J = A + a cᵀ``.
+
+        Prints the non-zero entries (``[i]`` = row) of ``a`` from
+        :attr:`OdeSystem.jacobian_split <jaff.core.OdeSystem.jacobian_split>`;
+        template property ``rhs_dt``.  See :meth:`get_indexed_jacobian_fixed_t`.
+
+        Parameters
+        ----------
+        thermal : str, optional
+            Must be ``"dedt"`` (the default).
+        use_cse, cse_var, cse_suffix
+            As for :meth:`get_indexed_jacobian`.
+        energy, radiation, rad_order
+            The ODE system, as for :meth:`get_indexed_jacobian`.
+
+        Returns
+        -------
+        IndexedReturn
+            CSE temporaries and the ``[i]``-indexed entries.
+
+        Raises
+        ------
+        ValueError
+            If *thermal* is not ``"dedt"``.
+        """
+        options = self._split_options(thermal, energy, radiation, rad_order)
+
+        return self._indexed("rhs_dt", options, use_cse, cse_var, cse_suffix)
+
+    def get_indexed_temperature_gradient(
+        self,
+        thermal: str = "dedt",
+        use_cse: bool = True,
+        cse_var: str = "cse",
+        energy: str = "volumetric",
+        radiation: bool = False,
+        rad_order: int = 0,
+        cse_suffix: str = "",
+    ) -> IndexedReturn:
+        """The row ``c = ∂T/∂state`` of the split ``dedt`` Jacobian ``J = A + a cᵀ``.
+
+        Prints the non-zero entries (``[j]`` = state index) of ``c`` from
+        :attr:`OdeSystem.jacobian_split <jaff.core.OdeSystem.jacobian_split>`:
+        ``∂T/∂n_j`` at fixed energy, then ``∂T/∂e``; template property
+        ``temperature_gradient``.  See :meth:`get_indexed_jacobian_fixed_t`.
+
+        Parameters
+        ----------
+        thermal : str, optional
+            Must be ``"dedt"`` (the default).
+        use_cse, cse_var, cse_suffix
+            As for :meth:`get_indexed_jacobian`.
+        energy, radiation, rad_order
+            The ODE system, as for :meth:`get_indexed_jacobian`.
+
+        Returns
+        -------
+        IndexedReturn
+            CSE temporaries and the ``[j]``-indexed entries.
+
+        Raises
+        ------
+        ValueError
+            If *thermal* is not ``"dedt"``.
+        """
+        options = self._split_options(thermal, energy, radiation, rad_order)
+
+        return self._indexed(
+            "temperature_gradient", options, use_cse, cse_var, cse_suffix
+        )
+
     def cse_group(
         self,
         members: Sequence[tuple[str, Mapping[str, Any]]],
@@ -1465,7 +1601,9 @@ class Codegen:
         """Several kinds of expressions printed with one shared set of CSE temporaries.
 
         Each member is ``(kind, options)``: *kind* one of ``"rates"``,
-        ``"odes"``, ``"radodes"``, ``"rhs"`` and ``"jacobian"``, *options* the
+        ``"odes"``, ``"radodes"``, ``"rhs"``, ``"jacobian"`` and the split
+        Jacobian's ``"jacobian_fixed_t"``, ``"rhs_dt"`` and
+        ``"temperature_gradient"``, *options* the
         keyword arguments of the matching ``get_indexed_*`` method other than the
         CSE ones (e.g. ``{"thermal": "dedt"}`` or ``{"order": 2}``).  One
         :func:`~jaff.common.optimizations.shared_cse` runs over every member's
@@ -1704,6 +1842,9 @@ class Codegen:
             "radodes": self.__radodes_part,
             "rhs": self.__rhs_part,
             "jacobian": self.__jacobian_part,
+            "jacobian_fixed_t": self.__jacobian_fixed_t_part,
+            "rhs_dt": self.__rhs_dt_part,
+            "temperature_gradient": self.__temperature_gradient_part,
         }
         if kind not in builders:
             raise ValueError(
@@ -1738,21 +1879,58 @@ class Codegen:
 
         return _Part(odes, [[i] for i in range(len(odes))], "radiation ode")
 
+    def _system(self, form: str, **choices: Any) -> OdeSystem:
+        """The ODE system for *choices* in *form*, built once per Codegen.
+
+        Every part of one system (rhs, Jacobian, split Jacobian) reads the same
+        :class:`~jaff.core.OdeSystem`, so its derivatives are taken once.
+        """
+        key = (form, tuple(sorted(choices.items())))
+        systems = self.__dict__.setdefault("_systems", {})
+        if key not in systems:
+            systems[key] = self.net.ode_system(**choices, form=form)
+
+        return systems[key]
+
     def __rhs_part(self, form: str, **choices: Any) -> _Part:
         """The rhs of :meth:`Network.ode_system <jaff.core.Network.ode_system>`."""
         with jaff_progress.indeterminate("Generating rhs equations"):
-            rows = self.net.ode_system(**choices, form=form).rhs.flat()
+            rows = self._system(form, **choices).rhs.flat()
 
         return _Part(rows, [[i] for i in range(len(rows))], "RHS")
 
     def __jacobian_part(self, form: str, **choices: Any) -> _Part:
         """The non-zero Jacobian entries of the ODE system, by row then column."""
-        system = self.net.ode_system(**choices, form=form)
-        entries = sorted(system.jacobian.todok().items())
+        entries = sorted(self._system(form, **choices).jacobian.todok().items())
 
         return _Part(
             [e for _, e in entries], [[i, j] for (i, j), _ in entries], "jacobian"
         )
+
+    def __jacobian_fixed_t_part(self, form: str, **choices: Any) -> _Part:
+        """The non-zero entries of the split Jacobian's fixed-T part A."""
+        fixed_t, _, _ = self._system(form, **choices).jacobian_split
+        entries = sorted(fixed_t.todok().items())
+
+        return _Part(
+            [e for _, e in entries],
+            [[i, j] for (i, j), _ in entries],
+            "fixed-temperature jacobian",
+        )
+
+    def __rhs_dt_part(self, form: str, **choices: Any) -> _Part:
+        """The non-zero entries of the split Jacobian's column a = ∂rhs/∂T."""
+        _, column, _ = self._system(form, **choices).jacobian_split
+        entries = [(i, e) for i, e in enumerate(column) if e != 0]
+
+        return _Part([e for _, e in entries], [[i] for i, _ in entries], "rhs dT")
+
+    def __temperature_gradient_part(self, form: str, **choices: Any) -> _Part:
+        """The non-zero entries of the split Jacobian's row c = ∂T/∂state."""
+        _, _, row = self._system(form, **choices).jacobian_split
+        entries = [(j, e) for j, e in enumerate(row) if e != 0]
+
+        return _Part([e for _, e in entries], [[j] for j, _ in entries], "dT/dstate")
 
     def _print_parts(
         self,

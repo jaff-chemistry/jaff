@@ -339,6 +339,15 @@ $$JAFF END
 The bundled `rosenbrock_cpp` template builds its `rhs_jac()` this way, and its
 integrator calls it whenever it needs an analytic Jacobian.
 
+With the energy in the state (`THERMAL { MODE -> dedt }`) the temperature
+`T(e, n)` depends on every density, so the Jacobian is nearly dense. The split
+properties give it as `J = A + a cᵀ`: `jacobian_fixed_t` is the sparse part at
+fixed temperature (energy column empty), `rhs_dt` the column `a` and
+`temperature_gradient` the row `c`. A solver can factor `I/(γh) - A` sparsely and
+add the rank-one term with the Sherman–Morrison formula. Like the other
+expression properties they print only non-zero entries and can join a CSE group
+with `rhses`. They need `MODE -> dedt`.
+
 Groups are per template file, and a block joins one by name, so two blocks with
 the same options can still be in different groups (or in none). A group named by
 a block but without a `cses` block, a `cses` block no block joins, and a group
@@ -369,6 +378,9 @@ with `CSE` among their option groups can join a [CSE group](#cse-common-subexpre
 | `odes`             | `idx, ode`             | Full ODE expressions (dy/dt)     | `CSE`                                       |
 | `rhses`            | `idx, rhs`             | RHS including the thermal row    | `THERMAL`, `RADIATION`, `CSE`               |
 | `jacobian`         | `idx, jac`             | Jacobian matrix elements (2D)    | `THERMAL`, `RADIATION`, `CSE`               |
+| `jacobian_fixed_t` | `idx, jac`             | Split `dedt` Jacobian: fixed-temperature part `A` (2D, sparse) | `THERMAL`, `RADIATION`, `CSE`  |
+| `rhs_dt`           | `idx, rhs_dt`          | Split `dedt` Jacobian: column `a = ∂rhs/∂T` | `THERMAL`, `RADIATION`, `CSE`               |
+| `temperature_gradient` | `idx, dtdy`        | Split `dedt` Jacobian: row `c = ∂T/∂state` (`∂T/∂n_j`, then `∂T/∂e`) | `THERMAL`, `RADIATION`, `CSE` |
 | `radodes`          | `idx, radode`          | Radiation moment ODEs            | `RADIATION` (`ORDER` only), `CSE`           |
 | `parameters`       | `idx, parameter`       | Free parameters of the ODE system (names, sorted; `tgas` only with `MODE -> none`) | `THERMAL`, `RADIATION` |
 | `functions`        | `idx, function`        | Undefined functions the network calls and all their first partial derivatives (`name_partial_<i>`, as the Jacobian calls them), as stub signatures (`name(a0, a1)`, sorted) | — |

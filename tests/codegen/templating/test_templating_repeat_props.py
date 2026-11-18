@@ -34,7 +34,14 @@ def options(text: str, line: int = 1):
 
 
 def test_properties_are_the_old_engine_ones_and_the_new_ones():
-    assert set(PROPERTIES) == OLD_PROPS | {"cses", "parameters", "functions"}
+    assert set(PROPERTIES) == OLD_PROPS | {
+        "cses",
+        "parameters",
+        "functions",
+        "jacobian_fixed_t",
+        "rhs_dt",
+        "temperature_gradient",
+    }
 
 
 @pytest.mark.parametrize(

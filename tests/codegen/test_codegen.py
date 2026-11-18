@@ -9,7 +9,7 @@ import sympy as sp
 
 from jaff import Network
 from jaff.codegen import Codegen
-from tests._paths import FIXTURES_DIR
+from tests._paths import FIXTURES_DIR, REPO_ROOT
 
 FIXTURES = FIXTURES_DIR
 
@@ -604,3 +604,77 @@ class TestJacobianStrOptions:
         assert len(_rhs_terms(text)) > len(
             self._indexed_terms(rad_codegen, thermal="dtdt")
         )
+
+
+SPLIT = {"thermal": "dedt", "energy": "specific"}
+DEMO2 = REPO_ROOT / "networks" / "demos" / "demo2.jet"
+
+
+@pytest.fixture(scope="module")
+def split_codegen():
+    """demo2 (a temperature-dependent rate) in Python, for the split-Jacobian printers."""
+    return Codegen(Network(str(DEMO2)), lang="python")
+
+
+def _printed_split(cg: Codegen) -> tuple[dict, dict, dict]:
+    """The split Jacobian of ``SPLIT`` printed without CSE, keyed by index."""
+    fixed_t = cg.get_indexed_jacobian_fixed_t(**SPLIT, use_cse=False)["expressions"]
+    rhs_dt = cg.get_indexed_rhs_dt(**SPLIT, use_cse=False)["expressions"]
+    gradient = cg.get_indexed_temperature_gradient(**SPLIT, use_cse=False)["expressions"]
+
+    return (
+        {tuple(i): e for i, e in fixed_t},
+        {i[0]: e for i, e in rhs_dt},
+        {i[0]: e for i, e in gradient},
+    )
+
+
+class TestSplitJacobianPrinters:
+    """``get_indexed_jacobian_fixed_t`` / ``rhs_dt`` / ``temperature_gradient``."""
+
+    def test_print_the_nonzero_split_entries(self, split_codegen) -> None:
+        a_matrix, a, c = split_codegen.net.ode_system(**SPLIT).jacobian_split
+        code = split_codegen.lang.code_gen
+        fixed_t, rhs_dt, gradient = _printed_split(split_codegen)
+
+        assert fixed_t == {
+            key: code(e, strict=False, allow_unknown_functions=True)
+            for key, e in sorted(a_matrix.todok().items())
+        }
+        assert rhs_dt == {
+            i: code(e, strict=False, allow_unknown_functions=True)
+            for i, e in enumerate(a)
+            if e != 0
+        }
+        assert gradient == {
+            j: code(e, strict=False, allow_unknown_functions=True)
+            for j, e in enumerate(c)
+            if e != 0
+        }
+
+    def test_fixed_temperature_part_is_sparser_than_the_jacobian(
+        self, split_codegen
+    ) -> None:
+        fixed_t = split_codegen.get_indexed_jacobian_fixed_t(**SPLIT, use_cse=False)
+        full = split_codegen.get_indexed_jacobian(**SPLIT, use_cse=False)
+
+        assert len(fixed_t["expressions"]) < len(full["expressions"])
+
+    def test_need_an_evolved_energy(self, split_codegen) -> None:
+        with pytest.raises(ValueError, match="dedt"):
+            split_codegen.get_indexed_rhs_dt(thermal="dtdt")
+
+    def test_one_cse_group_builds_the_system_once(self, monkeypatch) -> None:
+        net = Network(str(DEMO2))
+        cg = Codegen(net, lang="python")
+        calls = []
+        build = net.ode_system
+        monkeypatch.setattr(
+            net, "ode_system", lambda **kw: calls.append(kw) or build(**kw)
+        )
+        kinds = ("rhs", "jacobian_fixed_t", "rhs_dt", "temperature_gradient")
+
+        group = cg.cse_group([(kind, SPLIT) for kind in kinds])
+
+        assert len(group.expressions) == 4
+        assert len(calls) == 1
