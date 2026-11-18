@@ -34,8 +34,10 @@ enum class Status : int {
   bad_tolerances = 6,         // rtol or atol not positive
 };
 
-// sparse: LU on the Jacobian's sparsity pattern with a fixed pivot order (no
-//   pivoting; a zero pivot rejects the step). dense: LU with partial pivoting.
+// sparse: LU of the fixed-temperature part A (its sparsity pattern, fixed pivot
+//   order, no pivoting; a zero pivot rejects the step) plus a Sherman-Morrison
+//   correction for the rank-one temperature coupling. dense: LU of the full
+//   Jacobian with partial pivoting on the system scaled by atol + rtol |y|.
 enum class LinearSolver { sparse, dense };
 
 struct Options {
@@ -59,7 +61,8 @@ namespace detail {
 using Vector = std::array<double, neq>;
 using Tableau = rosenbrock::rodas5p_tableau;
 
-// Dense LU with partial pivoting, in place. Returns false if singular.
+// Dense LU with partial pivoting, in place (LINPACK dgefa layout: pivot[k] is the
+// row interchanged with k at step k). Returns false if singular.
 inline bool lu_decompose(Matrix &a, std::array<int, neq> &pivot) {
   for (int k = 0; k < neq; ++k) {
     int p = k;
@@ -72,8 +75,12 @@ inline bool lu_decompose(Matrix &a, std::array<int, neq> &pivot) {
     if (a[p][k] == 0.0 || !std::isfinite(a[p][k])) {
       return false;
     }
+    // Interchange rows k and p from column k on only (LINPACK order): the
+    // multipliers of earlier columns stay in place, as lu_solve expects.
     if (p != k) {
-      std::swap(a[p], a[k]);
+      for (int j = k; j < neq; ++j) {
+        std::swap(a[p][j], a[k][j]);
+      }
     }
     const double inv = 1.0 / a[k][k];
     for (int i = k + 1; i < neq; ++i) {
@@ -106,8 +113,9 @@ inline void lu_solve(const Matrix &a, const std::array<int, neq> &pivot, Vector 
 }
 
 // Elimination schedule of the sparse LU, built once from jacobian_pattern and
-// read-only afterwards. The matrix W = I/(gamma h) - J has the Jacobian's pattern
-// plus the diagonal; pivots follow a minimum-degree order of that pattern
+// read-only afterwards. The matrix B = I/(gamma h) - A has the pattern of A (the
+// fixed-temperature Jacobian) plus the diagonal; pivots follow a minimum-degree
+// order of that pattern
 // (symmetrised), and for pivot k the schedule lists the rows below it and the
 // columns right of it that are nonzero once fill-in is included. Factorisation
 // and solves work in the dense Matrix but touch only these entries.
@@ -251,8 +259,11 @@ inline bool finite(const Vector &y) {
 struct Workspace {
   Vector y{}, ynew{}, err{}, f{};
   std::array<Vector, Tableau::stages> k{};
-  Matrix jac{};
-  std::array<int, neq> pivot{};
+  Matrix jac{};                  // J (dense path) or A (sparse path), then factors
+  std::array<int, neq> pivot{};  // dense path
+  Vector a{}, c{}, z{};          // sparse path: J = A + a c^T, z = B^-1 a
+  Vector scale{};                // dense path: D = atol + rtol |y|
+  double denominator = 1.0;      // sparse path: 1 - c.z
 };
 
 // dy/dt with the energy row zeroed when e is held fixed
@@ -267,21 +278,37 @@ inline bool rate(const Vector &y, const Parameters &p, const Options &o, Vector 
   return finite(f);
 }
 
-// Jacobian of rate(); the energy row and column are zeroed when e is held fixed
-inline bool jacobian(const Vector &y, const Parameters &p, const Options &o,
-                     Vector &f, Matrix &jac) {
-  for (auto &row : jac) {
-    row.fill(0.0);
-  }
-  if (!rhs_jac(y.data(), p, f.data(), jac)) {
-    return false;
+// Jacobian of rate() into w: the full J (dense path) or the split A, a, c
+// (sparse path). With e held fixed its row and column are zeroed: in the split,
+// A's energy row, a_e and c_e (A's energy column is empty).
+inline bool jacobian(const Vector &y, const Parameters &p, const Options &o, Workspace &w) {
+  if (o.lu == LinearSolver::dense) {
+    if (!rhs_jac(y.data(), p, w.f.data(), w.jac)) {
+      return false;
+    }
+    if (!o.evolve_energy) {
+      for (int i = 0; i < neq; ++i) {
+        w.jac[nspecs][i] = 0.0;
+        w.jac[i][nspecs] = 0.0;
+      }
+    }
+  } else {
+    for (auto &row : w.jac) {
+      row.fill(0.0);
+    }
+    w.a.fill(0.0);
+    w.c.fill(0.0);
+    if (!rhs_jac_split(y.data(), p, w.f.data(), w.jac, w.a.data(), w.c.data())) {
+      return false;
+    }
+    if (!o.evolve_energy) {
+      w.jac[nspecs].fill(0.0);
+      w.a[nspecs] = 0.0;
+      w.c[nspecs] = 0.0;
+    }
   }
   if (!o.evolve_energy) {
-    f[nspecs] = 0.0;
-    for (int i = 0; i < neq; ++i) {
-      jac[nspecs][i] = 0.0;
-      jac[i][nspecs] = 0.0;
-    }
+    w.f[nspecs] = 0.0;
   }
 
   return true;
@@ -303,13 +330,15 @@ inline bool step(Workspace &w, const Parameters &p, const Options &o, double h,
                  Stats &stats, bool &singular) {
   using C = Tableau;
   singular = false;
-  if (!jacobian(w.y, p, o, w.f, w.jac)) {
+  if (!jacobian(w.y, p, o, w)) {
     return false;
   }
   stats.jacobians += 1;
   stats.rhs += 1;
 
-  // W = I / (gamma h) - J
+  // W = I / (gamma h) - J. Dense: J itself. Sparse: B = I / (gamma h) - A, and
+  // W = B - a c^T is solved by Sherman-Morrison:
+  //   W^-1 r = B^-1 r + z (c . B^-1 r) / (1 - c . z),   z = B^-1 a.
   const double fac = 1.0 / (h * C::gamma);
   for (int i = 0; i < neq; ++i) {
     for (int j = 0; j < neq; ++j) {
@@ -318,15 +347,55 @@ inline bool step(Workspace &w, const Parameters &p, const Options &o, double h,
     w.jac[i][i] += fac;
   }
   const bool sparse = o.lu == LinearSolver::sparse;
+  if (!sparse) {
+    // Pivot on comparably scaled entries: factor D^-1 W D with D = atol + rtol |y|.
+    // Unscaled, partial pivoting picks the energy row (e ~ 1e10 erg/g) over trace
+    // species and loses their relative accuracy.
+    for (int i = 0; i < neq; ++i) {
+      w.scale[i] = o.atol + o.rtol * std::abs(w.y[i]);
+    }
+    for (int i = 0; i < neq; ++i) {
+      for (int j = 0; j < neq; ++j) {
+        w.jac[i][j] *= w.scale[j] / w.scale[i];
+      }
+    }
+  }
   if (!(sparse ? sparse_decompose(w.jac) : lu_decompose(w.jac, w.pivot))) {
     singular = true;
     return false;
   }
+  if (sparse) {
+    w.z = w.a;
+    sparse_solve(w.jac, w.z);
+    double cz = 0.0;
+    for (int i = 0; i < neq; ++i) {
+      cz += w.c[i] * w.z[i];
+    }
+    w.denominator = 1.0 - cz;
+    if (!std::isfinite(w.denominator) || std::abs(w.denominator) < 1e-12) {
+      singular = true;
+      return false;
+    }
+  }
   auto linear_solve = [&](Vector &b) {
-    if (sparse) {
-      sparse_solve(w.jac, b);
-    } else {
+    if (!sparse) {
+      for (int i = 0; i < neq; ++i) {
+        b[i] /= w.scale[i];
+      }
       lu_solve(w.jac, w.pivot, b);
+      for (int i = 0; i < neq; ++i) {
+        b[i] *= w.scale[i];
+      }
+      return;
+    }
+    sparse_solve(w.jac, b);
+    double cb = 0.0;
+    for (int i = 0; i < neq; ++i) {
+      cb += w.c[i] * b[i];
+    }
+    const double scale = cb / w.denominator;
+    for (int i = 0; i < neq; ++i) {
+      b[i] += w.z[i] * scale;
     }
   };
 

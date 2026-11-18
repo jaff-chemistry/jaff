@@ -270,24 +270,51 @@ def test_sparse_lu_is_the_default(generated):
     assert _run(generated.folder, "default_lu", body).stdout.split() == ["1"]
 
 
-def test_pattern_covers_every_jacobian_entry(generated):
+def test_pattern_covers_the_fixed_temperature_part(generated):
     body = f"""
     chem::Parameters p;
 {_parameters(generated.net)}
-    double y[chem::neq], f[chem::neq];
+    double y[chem::neq], f[chem::neq], a[chem::neq] = {{}}, c[chem::neq] = {{}};
     for (int i = 0; i < chem::nspecs; ++i) y[i] = 1e2 * (1.0 + 0.37 * i);
     y[chem::nspecs] = chem::energy(y, {TEMPERATURE!r});
-    chem::Matrix jac{{}};
-    chem::rhs_jac(y, p, f, jac);
+    chem::Matrix fixed_t{{}};
+    chem::rhs_jac_split(y, p, f, fixed_t, a, c);
     bool in_pattern[chem::neq][chem::neq] = {{}};
     for (const auto &entry : chem::jacobian_pattern) in_pattern[entry[0]][entry[1]] = true;
-    int missing = 0;
-    for (int i = 0; i < chem::neq; ++i)
+    int missing = 0, energy_column = 0;
+    for (int i = 0; i < chem::neq; ++i) {{
+        energy_column += fixed_t[i][chem::nspecs] != 0.0;
         for (int j = 0; j < chem::neq; ++j)
-            if (jac[i][j] != 0.0 && !in_pattern[i][j]) ++missing;
-    std::printf("%d\\n", missing);
+            if (fixed_t[i][j] != 0.0 && !in_pattern[i][j]) ++missing;
+    }}
+    std::printf("%d %d\\n", missing, energy_column);
 """
-    assert _run(generated.folder, "pattern", body).stdout.split() == ["0"]
+    assert _run(generated.folder, "pattern", body).stdout.split() == ["0", "0"]
+
+
+def test_split_reassembles_the_jacobian(generated):
+    body = f"""
+    chem::Parameters p;
+{_parameters(generated.net)}
+    double y[chem::neq], f[chem::neq], g[chem::neq];
+    double a[chem::neq] = {{}}, c[chem::neq] = {{}};
+    for (int i = 0; i < chem::nspecs; ++i) y[i] = 1e2 * (1.0 + 0.37 * i);
+    y[chem::nspecs] = chem::energy(y, {TEMPERATURE!r});
+    chem::Matrix fixed_t{{}}, jac{{}};
+    chem::rhs_jac_split(y, p, f, fixed_t, a, c);
+    chem::rhs_jac(y, p, g, jac);
+    double worst = 0.0;
+    for (int i = 0; i < chem::neq; ++i)
+        for (int j = 0; j < chem::neq; ++j) {{
+            const double assembled = fixed_t[i][j] + a[i] * c[j];
+            const double scale = std::abs(jac[i][j]) + 1e-300;
+            worst = std::max(worst, std::abs(assembled - jac[i][j]) / scale);
+        }}
+    std::printf("%.3e\\n", worst);
+"""
+    worst = float(_run(generated.folder, "reassemble", body).stdout)
+
+    assert worst < 1e-12
 
 
 @pytest.mark.parametrize("evolve", [False, True])
@@ -329,10 +356,38 @@ def test_generated_driver_builds_and_runs(generated):
     if generated.net.label != "demo2":
         pytest.skip("the generated driver's placeholder inputs suit demo2 only")
 
-    proc = subprocess.run(["./test"], cwd=generated.folder, capture_output=True, text=True)
+    proc = subprocess.run(
+        ["./test"], cwd=generated.folder, capture_output=True, text=True
+    )
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "evolution saved to solution.dat" in proc.stdout
     lines = (generated.folder / "solution.dat").read_text().splitlines()
     assert lines[0].split() == ["#", "t[s]", "T[K]", *generated.net.species.names()]
     assert len(lines) == 1 + 101
+
+
+def test_dense_lu_solves_systems_that_need_pivoting(generated):
+    # A small diagonal forces row interchanges at every step of the factorisation.
+    body = """
+    chem::Matrix a{};
+    chem::detail::Vector x{}, b{};
+    for (int i = 0; i < chem::neq; ++i) {
+        x[i] = 1.0 + 0.1 * i;
+        for (int j = 0; j < chem::neq; ++j)
+            a[i][j] = i == j ? 1e-8 : 1.0 / (1.0 + i + 2.0 * j) + (i > j ? 0.5 : 0.0);
+    }
+    for (int i = 0; i < chem::neq; ++i)
+        for (int j = 0; j < chem::neq; ++j) b[i] += a[i][j] * x[j];
+    std::array<int, chem::neq> pivot{};
+    chem::Matrix lu = a;
+    const bool ok = chem::detail::lu_decompose(lu, pivot);
+    chem::detail::lu_solve(lu, pivot, b);
+    double worst = 0.0;
+    for (int i = 0; i < chem::neq; ++i) worst = std::max(worst, std::abs(b[i] - x[i]) / x[i]);
+    std::printf("%d %.3e\\n", ok ? 1 : 0, worst);
+"""
+    ok, worst = _numbers(_run(generated.folder, "pivoting", body).stdout)
+
+    assert ok == 1
+    assert worst < 1e-8

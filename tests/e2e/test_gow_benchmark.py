@@ -211,8 +211,9 @@ needs_gxx = pytest.mark.skipif(
 )
 
 
-def _cpp_driver(tag: str) -> str:
-    """A program solving the benchmark for *tag* and printing T then the densities."""
+def _cpp_driver(tag: str, lu: str) -> str:
+    """A program solving the benchmark for *tag* with linear solver *lu* and
+    printing the status, T, then the densities."""
     ref = _reference(tag)
     densities = "\n".join(
         f'    n[chem::species_index("{name}")] = {float(ref[column][0])!r};'
@@ -234,6 +235,7 @@ int main() {{
     chem::Options options;
     options.rtol = {RTOL!r};
     options.atol = {ATOL!r};
+    options.lu = chem::LinearSolver::{lu};
     const chem::Status status = chem::solve(n, e, {T_END!r}, p, options);
     std::printf("%d %.17e", static_cast<int>(status), chem::temperature(n, e));
     for (int i = 0; i < chem::nspecs; ++i) std::printf(" %.17e", n[i]);
@@ -255,12 +257,13 @@ def cpp(tmp_path_factory) -> SimpleNamespace:
 
 
 @needs_gxx
+@pytest.mark.parametrize("lu", ["sparse", "dense"])
 @pytest.mark.parametrize("tag", list(CHI))
-def test_cpp_equilibrium_matches_the_reference(cpp, tag):
+def test_cpp_equilibrium_matches_the_reference(cpp, tag, lu):
     ref = _reference(tag)
-    source = cpp.folder / f"benchmark_{tag}.cpp"
-    source.write_text(_cpp_driver(tag), encoding="utf-8")
-    exe = cpp.folder / f"benchmark_{tag}"
+    source = cpp.folder / f"benchmark_{tag}_{lu}.cpp"
+    source.write_text(_cpp_driver(tag, lu), encoding="utf-8")
+    exe = cpp.folder / f"benchmark_{tag}_{lu}"
     subprocess.run(
         ["g++", "-std=c++17", "-O2", f"-I{cpp.folder}", str(source), "-o", str(exe)],
         check=True,

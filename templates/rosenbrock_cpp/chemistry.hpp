@@ -145,10 +145,14 @@ inline bool rhs(const double *y, const Parameters &p, double *ydot) {
   return true;
 }
 
-// dy/dt and the Jacobian d(dy/dt)/dy at state y, sharing every subexpression.
-// Writes only the Jacobian's structurally nonzero entries. Returns false if the
+// dy/dt and the Jacobian split as J = A + a c^T, sharing every subexpression:
+// A = d(dy/dt)/dy at fixed temperature (sparse; its energy column is empty),
+// a = d(dy/dt)/dT and c = dT/dy (dT/dn_j at fixed e, then dT/de). The rank-one
+// term is what makes J dense (T depends on every density); solve() keeps it apart.
+// Writes only nonzero entries: zero A, a and c first. Returns false if the
 // temperature cannot be recovered from e.
-inline bool rhs_jac(const double *y, const Parameters &p, double *ydot, Matrix &jac) {
+inline bool rhs_jac_split(const double *y, const Parameters &p, double *ydot, Matrix &A,
+                          double *a, double *c) {
   const double *nden = y;
   const double tgas = temperature(nden, y[nspecs]);
   if (std::isnan(tgas)) {
@@ -164,16 +168,43 @@ inline bool rhs_jac(const double *y, const Parameters &p, double *ydot, Matrix &
   $$JAFF REPEAT idx, rhs IN rhses { USE system  CSE { GROUP -> rhs_jac } }
   ydot[$idx$] = $rhs$;
   $$JAFF END
-  $$JAFF REPEAT idx, jac IN jacobian { USE system  CSE { GROUP -> rhs_jac } }
-  jac[$idx$][$idx$] = $jac$;
+  $$JAFF REPEAT idx, jac IN jacobian_fixed_t { USE system  CSE { GROUP -> rhs_jac } }
+  A[$idx$][$idx$] = $jac$;
+  $$JAFF END
+  $$JAFF REPEAT idx, rhs_dt IN rhs_dt { USE system  CSE { GROUP -> rhs_jac } }
+  a[$idx$] = $rhs_dt$;
+  $$JAFF END
+  $$JAFF REPEAT idx, dtdy IN temperature_gradient { USE system  CSE { GROUP -> rhs_jac } }
+  c[$idx$] = $dtdy$;
   $$JAFF END
 
   return true;
 }
 
-// The Jacobian's structurally nonzero entries {row, column}, as rhs_jac writes them
+// dy/dt and the full Jacobian J = A + a c^T at state y. Returns false if the
+// temperature cannot be recovered from e.
+inline bool rhs_jac(const double *y, const Parameters &p, double *ydot, Matrix &jac) {
+  double a[neq] = {}, c[neq] = {};
+  for (auto &row : jac) {
+    row.fill(0.0);
+  }
+  if (!rhs_jac_split(y, p, ydot, jac, a, c)) {
+    return false;
+  }
+  for (int i = 0; i < neq; ++i) {
+    if (a[i] != 0.0) {
+      for (int j = 0; j < neq; ++j) {
+        jac[i][j] += a[i] * c[j];
+      }
+    }
+  }
+
+  return true;
+}
+
+// The structurally nonzero entries {row, column} of A, as rhs_jac_split writes them
 inline constexpr int jacobian_pattern[][2] = {
-    $$JAFF REPEAT idx, jac IN jacobian { USE system  CSE { GROUP -> rhs_jac } }
+    $$JAFF REPEAT idx, jac IN jacobian_fixed_t { USE system  CSE { GROUP -> rhs_jac } }
     {$idx$, $idx$},
     $$JAFF END
 };
