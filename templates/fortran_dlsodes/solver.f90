@@ -10,6 +10,7 @@ module solver
 
     real*8, parameter :: default_rtol = 1d-12  ! relative tolerance
     real*8, parameter :: default_atol = 1d-20  ! absolute tolerance [cm^-3, K]
+    integer, parameter :: default_max_steps = 1000000  ! steps per output interval
     integer, parameter :: neq = nspecs + 1     ! number of equations
 
     ! The full Jacobian at (cached_t, cached_y); DLSODES asks for it column by
@@ -50,14 +51,16 @@ contains
 
     ! Integrate from t = 0 to t_end, writing the state at t = 0 and at noutput
     ! log-spaced times from 1 s to t_end to the file output. On return n and
-    ! temperature hold the final state.
-    subroutine solve(n, temperature, t_end, output, noutput, rtol, atol)
+    ! temperature hold the final state. max_steps bounds the DLSODES steps between
+    ! two output times (its own default, 500, is too few for long intervals).
+    subroutine solve(n, temperature, t_end, output, noutput, rtol, atol, max_steps)
         real*8, intent(inout) :: n(nspecs), temperature
         real*8, intent(in) :: t_end
         character(len=*), intent(in) :: output
         integer, intent(in), optional :: noutput
         real*8, intent(in), optional :: rtol, atol
-        integer, parameter :: mf = 121, itol = 1, itask = 1, iopt = 0
+        integer, intent(in), optional :: max_steps
+        integer, parameter :: mf = 121, itol = 1, itask = 1, iopt = 1
         integer, parameter :: lrw = 100 + 20*neq + 6*neq**2, liw = 31 + neq
         real*8 :: rwork(lrw), y(neq), t, t_out, rtol_, atol_
         integer :: iwork(liw), istate, nout, k, unit
@@ -76,6 +79,8 @@ contains
         t = 0d0
         rwork = 0d0
         iwork = 0
+        iwork(6) = default_max_steps  ! optional inputs (iopt = 1): only MXSTEP set
+        if (present(max_steps)) iwork(6) = max_steps
         istate = 1
 
         open (newunit=unit, file=output, status="replace", action="write")
