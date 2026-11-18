@@ -304,6 +304,83 @@ class OdeSystem:
         that is cheaper than writing it out
         (:func:`~jaff.common.derivative.derivative`).
         """
+        entries, df_dT = self._jacobian_parts
+        entries = dict(entries)
+        t = self.network.species.count  # the thermal slot follows the species
+        if self.thermal == "dtdt":
+            for i, d in enumerate(df_dT):
+                entries[i, t] = d
+        elif self.thermal == "dedt":
+            # J = A + a c^T (see jacobian_split): merged into one sparse matrix
+            _, _, c = self.jacobian_split
+            for i, d in enumerate(df_dT):
+                if d == 0:
+                    continue
+                for j, c_j in enumerate(c):
+                    if c_j != 0:
+                        entries[i, j] = entries.get((i, j), 0) + d * c_j
+
+        n = len(self.state)
+        return ImmutableSparseMatrix(
+            n, n, {key: expr for key, expr in entries.items() if expr != 0}
+        )
+
+    @cached_property
+    def jacobian_split(
+        self,
+    ) -> tuple[ImmutableSparseMatrix, tuple[Expr, ...], tuple[Expr, ...]]:
+        """The ``dedt`` Jacobian as ``J = A + a cᵀ``: a sparse part plus a rank-one term.
+
+        With the energy ``e`` in the state the equations are written in ``T(e, n)``,
+        and the chain rule through the EOS adds ``(∂rhs_i/∂T)(∂T/∂y_j)`` to every
+        entry: that rank-one term is what fills the matrix. Kept apart:
+
+        ```
+        A  = ∂rhs/∂y at fixed T        sparse; its energy column is empty
+        a  = ∂rhs/∂T                    one entry per row
+        c  = (∂T/∂n_0, ..., ∂T/∂e)      one entry per state entry
+        ```
+
+        (:meth:`~jaff.physics.Thermodynamics.temperature_derivatives` gives
+        ``∂T/∂n`` and ``∂T/∂e``; radiation entries of ``c`` are 0.) A solver can
+        then factor the sparse ``I/(γh) - A`` and treat ``a cᵀ`` with the
+        Sherman-Morrison formula. :attr:`jacobian` is ``A + a cᵀ`` merged.
+
+        Returns
+        -------
+        tuple
+            ``(A, a, c)``: an n × n sparse matrix and two tuples of n expressions.
+
+        Raises
+        ------
+        ValueError
+            If the thermal mode is not ``"dedt"``.
+        """
+        if self.thermal != "dedt":
+            raise ValueError(
+                f"jacobian_split needs thermal='dedt' (the energy in the state); "
+                f"this system has thermal={self.thermal!r}"
+            )
+        entries, df_dT = self._jacobian_parts
+        n = len(self.state)
+        dT_de, dT_dn = self.network.thermodynamics.temperature_derivatives(self.energy)
+        c: list[Expr] = [cast(Expr, 0)] * n
+        c[: len(dT_dn)] = dT_dn
+        c[self.network.species.count] = dT_de
+        fixed_t = ImmutableSparseMatrix(
+            n, n, {key: expr for key, expr in entries.items() if expr != 0}
+        )
+
+        return fixed_t, tuple(df_dT), tuple(c)
+
+    @cached_property
+    def _jacobian_parts(self) -> tuple[dict[tuple[int, int], Basic], list[Expr]]:
+        """The Jacobian entries at fixed thermal variable, and ``∂rhs/∂T`` per row.
+
+        The entries cover the species and radiation columns (the thermal column is
+        left out); ``∂rhs/∂T`` is empty with ``thermal="none"``.  Each derivative
+        is taken once: :attr:`jacobian` and :attr:`jacobian_split` combine these.
+        """
         rows = cast(list[Expr], self.rhs.flat())
         columns = {
             var.symbol: j
@@ -323,24 +400,10 @@ class OdeSystem:
                 j = columns.get(sym)
                 if j is not None:
                     entries[i, j] = self._total_diff(row, sym, terms)
-        if self.thermal != "none":
-            self._add_thermal_column(rows, row_terms, entries)
+        if self.thermal == "none":
+            return entries, []
 
-        n = len(self.state)
-        return ImmutableSparseMatrix(
-            n, n, {key: expr for key, expr in entries.items() if expr != 0}
-        )
-
-    def _add_thermal_column(
-        self,
-        rows: list[Expr],
-        row_terms: list[list[tuple[dict[Basic, Expr], Expr]]],
-        entries: dict[tuple[int, int], Basic],
-    ) -> None:
-        """Add the thermal column (and the ``dedt`` species corrections) to *entries*."""
-        net = self.network
-        t = net.species.count  # the thermal slot follows the species
-        tgas = net.symbols.tgas
+        tgas = self.network.symbols.tgas
         df_dT = [
             self._total_diff(row, tgas, terms)
             for row, terms in zip(
@@ -349,15 +412,5 @@ class OdeSystem:
                 strict=True,
             )
         ]
-        if self.thermal == "dtdt":
-            for i, d in enumerate(df_dT):
-                entries[i, t] = d
-            return
 
-        dT_de, dT_dn = net.thermodynamics.temperature_derivatives(self.energy)
-        for i, d in enumerate(df_dT):
-            if d == 0:
-                continue
-            entries[i, t] = d * dT_de
-            for j, dT_dn_j in enumerate(dT_dn):
-                entries[i, j] = entries.get((i, j), 0) + d * dT_dn_j
+        return entries, df_dT

@@ -234,6 +234,7 @@ nav = [
         "reference/core/odesystem/rate_coefficients.md",
         "reference/core/odesystem/parameters.md",
         "reference/core/odesystem/jacobian.md",
+        "reference/core/odesystem/jacobian_split.md",
       ] },
       { "core.StateVariable" = [
         "reference/core/statevariable/index.md",

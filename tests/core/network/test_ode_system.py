@@ -370,3 +370,68 @@ class TestParameters:
         ]  # fmt: skip
         # network-wide: gradv, used only by the energy equation, is listed without it
         assert _names(net.ode_system()) == sorted([*thermal, "tgas"])
+
+
+def _assembled(system: OdeSystem) -> sp.Matrix:
+    """A + a c^T from the system's split Jacobian."""
+    a_matrix, a, c = system.jacobian_split
+    return sp.Matrix(a_matrix) + sp.Matrix(a) * sp.Matrix(c).T
+
+
+SPLIT_CASES = [
+    pytest.param("tgas", "specific", "expanded", id="tgas-specific"),
+    pytest.param("tgas", "volumetric", "expanded", id="tgas-volumetric"),
+    pytest.param("tgas", "specific", "reduced", id="tgas-specific-reduced"),
+    pytest.param("rad", "specific", "expanded", id="rad-specific"),
+]
+
+
+class TestJacobianSplit:
+    """``jacobian_split``: J = A + a c^T, A at fixed T, a = drhs/dT, c = dT/dstate."""
+
+    @pytest.mark.parametrize(("which", "energy", "form"), SPLIT_CASES)
+    def test_reassembles_the_jacobian(self, networks, which, energy, form) -> None:
+        radiation = which == "rad"  # its photo rates read the radiation state
+        system = networks[which].ode_system(
+            thermal="dedt", energy=energy, form=form, radiation=radiation
+        )
+        if form == "reduced":
+            definitions = system.rate_coefficients
+            assembled = _assembled(system).xreplace(definitions)
+            jacobian = system.jacobian.xreplace(definitions)
+        else:
+            assembled, jacobian = _assembled(system), system.jacobian
+
+        for seed in range(3):
+            values = _state_values(system, seed)
+            _assert_close(_numbers(assembled, values), _numbers(jacobian, values))
+
+    def test_fixed_temperature_part_has_no_energy_column(self, tgas_network) -> None:
+        system = tgas_network.ode_system(thermal="dedt", energy="specific")
+        a_matrix, _, _ = system.jacobian_split
+        energy = tgas_network.species.count
+
+        assert all(j != energy for _, j in a_matrix.todok())
+
+    def test_vectors_span_the_state(self, rad_network) -> None:
+        system = rad_network.ode_system(thermal="dedt", energy="specific", radiation=True)
+        _, a, c = system.jacobian_split
+        kinds = [var.kind for var in system.state]
+
+        assert len(a) == len(c) == len(system.state)
+        # T depends on the densities and the energy only
+        assert all(
+            c[j] == 0 for j, kind in enumerate(kinds) if kind.startswith("radiation")
+        )
+
+    def test_fixed_temperature_part_is_sparser(self) -> None:
+        net = Network("COthin")
+        system = net.ode_system(thermal="dedt", energy="specific")
+        a_matrix, _, _ = system.jacobian_split
+
+        assert len(a_matrix.todok()) < len(system.jacobian.todok())
+
+    @pytest.mark.parametrize("thermal", ["none", "dtdt"])
+    def test_only_for_an_evolved_energy(self, tgas_network, thermal) -> None:
+        with pytest.raises(ValueError, match="dedt"):
+            tgas_network.ode_system(thermal=thermal).jacobian_split
