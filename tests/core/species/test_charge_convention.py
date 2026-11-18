@@ -8,7 +8,6 @@ from tests._paths import FIXTURES_DIR
 @pytest.mark.parametrize(
     "template,outfile",
     [
-        ("fortran_dlsodes", "commons.f90"),
         ("kokkos_ode", "chemistry_ode.hpp"),
     ],
 )

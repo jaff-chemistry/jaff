@@ -1,5 +1,5 @@
-# ABOUTME: Fortran code printer: user-defined function calls keep integer arguments
-# ABOUTME: (e.g. the photorates index) while every other constant still prints as real
+# ABOUTME: Fortran code printer: user-defined function calls keep integer arguments,
+# ABOUTME: every other constant (Piecewise branch values too) prints as real
 
 import sympy as sp
 from sympy.core.function import UndefinedFunction
@@ -24,3 +24,14 @@ def test_user_function_evaluates_other_arguments_as_reals():
 
 def test_intrinsic_argument_still_printed_as_real():
     assert _fcode(sp.sin(x + 1)) == "sin(x + 1.0d0)"
+
+
+def test_piecewise_integer_branch_prints_as_real():
+    # merge() needs both values of the same type: 0 against a real is an error
+    expr = sp.Piecewise((x**2, x > 700), (0, True))
+    assert _fcode(expr) == "merge(x**2, 0.0d0, x > 700)"
+
+
+def test_nested_piecewise_integer_branches_print_as_reals():
+    expr = sp.Piecewise((1, x < 1), (x, x < 10), (2, True))
+    assert _fcode(expr) == "merge(1.0d0, merge(x, 2.0d0, x < 10), x < 1)"

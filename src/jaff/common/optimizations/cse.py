@@ -1,5 +1,5 @@
 # ABOUTME: shared_cse(): one CSE over expressions and symbol definitions (e.g. krate[r]),
-# ABOUTME: each definition its own temporary, topologically ordered, pruned, no aliases
+# ABOUTME: each definition its own temporary, ordered, pruned, no aliases or conditions
 """Common-subexpression elimination shared between expressions and the symbols they use."""
 
 from __future__ import annotations
@@ -8,6 +8,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 
 from sympy import Basic, Expr, Indexed, Symbol, cse
+from sympy.logic.boolalg import Boolean
 
 Temporaries = list[tuple[Basic, Expr]]
 
@@ -30,6 +31,10 @@ def shared_cse(
       may use another definition's symbol;
     - stripped of aliases: a temporary whose value is a symbol, an indexed symbol
       or a number is substituted where it is used;
+    - without conditions: a temporary whose value is boolean (``tgas > 700``,
+      ``a & b``) is substituted where it is used too, so every temporary is a
+      number; typed languages (Fortran) declare all temporaries alike, and a
+      comparison is cheap to repeat;
     - pruned of temporaries nothing uses.
 
     With no definitions this is :func:`sympy.cse` followed by the pruning.  The
@@ -152,12 +157,12 @@ def _ordered(temporaries: Temporaries) -> Temporaries:
 def _without_aliases(
     temporaries: Temporaries, exprs: list[Expr]
 ) -> tuple[Temporaries, list[Expr]]:
-    """Substitute every temporary whose value is a symbol or a number."""
+    """Substitute every temporary whose value is a symbol, a number or a boolean."""
     alias: dict[Basic, Basic] = {}
     kept: Temporaries = []
     for symbol, value in temporaries:
         value = value.xreplace(alias)
-        if value.is_Atom or isinstance(value, Indexed):
+        if value.is_Atom or isinstance(value, (Indexed, Boolean)):
             alias[symbol] = value
         else:
             kept.append((symbol, value))

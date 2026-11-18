@@ -214,7 +214,14 @@ class _JaffFCodePrinter(FCodePrinter):
     ``photorates(1, ...)`` would print as ``photorates(1.0d0, ...)``.  For
     user-defined (undefined) functions an integer argument is an index and stays
     an integer; other arguments, and every intrinsic's arguments, are unchanged.
+
+    Integer branch values of a ``Piecewise`` print as reals: it becomes
+    ``merge(tsource, fsource, mask)``, whose two values must have the same type.
     """
+
+    def _print_Piecewise(self, expr):
+        pieces = [(sp.Float(e) if e.is_Integer else e, c) for e, c in expr.args]
+        return super()._print_Piecewise(sp.Piecewise(*pieces, evaluate=False))
 
     def _print_Function(self, expr):
         if not isinstance(expr, AppliedUndef):

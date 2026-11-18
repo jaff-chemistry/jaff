@@ -136,3 +136,24 @@ def test_without_definitions_is_plain_cse():
 
 def test_empty():
     assert shared_cse([], {}, sp.numbered_symbols("cse")) == ([], [])
+
+
+def test_conditions_stay_inline():
+    # tgas > 700 guards two expressions; it must not become a temporary of its own
+    # (its type would be boolean, which typed languages must declare differently).
+    guard = T > 700
+    exprs = [
+        sp.Piecewise((K0 * X, guard), (0, True)),
+        sp.Piecewise((K1 * Y, guard), (1, True)),
+        sp.Piecewise((K0 * Y, guard & (T < 1e4)), (0, True)),
+    ]
+    temporaries, reduced = _cse(exprs)
+
+    assert not any(isinstance(value, sp.logic.boolalg.Boolean) for _, value in temporaries)
+    for expr, red in zip(exprs, reduced):
+        expanded = _expand(temporaries, red).xreplace(DEFINITIONS)
+        for t in (300.0, 900.0, 2e4):
+            values = {T: t, X: 1.7, Y: 0.4}
+            assert float(expanded.xreplace(values)) == pytest.approx(
+                float(expr.xreplace(DEFINITIONS).xreplace(values))
+            )

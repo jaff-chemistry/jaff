@@ -254,9 +254,11 @@ def _(mo):
     ## Generating the Fortran solver
 
     Switching language means switching collection; the network stays the same.
-    `fortran_dlsodes` produces Fortran modules for the network's rates, fluxes
-    and ODEs, plus a driver (`main.f90`), a `Makefile` and the ODEPACK sources of the
-    stiff solver DLSODES.
+    `fortran_dlsodes` renders `chemistry.f90` (species, parameters, EOS energy,
+    right-hand side and Jacobian) and `user_functions.f90` (stubs for functions
+    the network calls without defining; `demo2` has none), and copies `solver.f90`
+    (DLSODES with the analytic Jacobian), the driver `main.f90`, a `Makefile` and
+    the ODEPACK sources.
     """)
     return
 
@@ -287,23 +289,17 @@ def _(f90_out, file_table):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    The same `rates` directive now prints Fortran: double-precision `d`
-    exponents, `exp` and `**`, and 1-based indices. Fortran is case-insensitive,
-    so species indices are generated in lower case (`idx_co`, `idx_coj`) and the
-    electron is mapped to `idx_e`:
+    The same directives now print Fortran: double-precision `d` exponents and
+    `merge` for conditions. The parameters are module variables the driver sets,
+    and `implicit double precision (x)` types the common-subexpression
+    temporaries:
     """)
     return
 
 
 @app.cell
 def _(f90_out, mo):
-    mo.md(
-        "```fortran\n"
-        + (f90_out / "commons.f90").read_text()
-        + "\n"
-        + (f90_out / "reactions.f90").read_text()
-        + "\n```"
-    )
+    mo.md("```fortran\n" + (f90_out / "chemistry.f90").read_text() + "\n```")
     return
 
 
@@ -312,16 +308,24 @@ def _(mo):
     mo.md("""
     ### Building and running it
 
-    `make` compiles everything with `gfortran` (or Intel's `ifx` when it is
-    installed) into an executable called `test`. The driver integrates for one
-    second from the same initial state and prints the final time, temperature
-    and densities; it exits with a nonzero code if DLSODES reports a failure.
+    The driver starts from the inputs block at the top of `main.f90`: one line
+    per species (all 0 as generated), the parameters (placeholder 1), the
+    temperature, the end time and whether to evolve the temperature. Here we start
+    from 100 cm⁻³ of CO, as in the Python run, by editing that block. `make`
+    compiles everything with `gfortran` (or Intel's `ifx` when it is installed)
+    into an executable called `test`, which integrates for $10^6$ years, prints
+    the final state and saves the evolution to `solution.dat`; it exits with a
+    nonzero code if DLSODES reports a failure.
     """)
     return
 
 
 @app.cell
-def _(f90_out, run):
+def _(f90_out, re, run):
+    _main = f90_out / "main.f90"
+    _main.write_text(
+        re.sub(r"= 0d0(  ! CO)$", r"= 1d2\1", _main.read_text(), flags=re.MULTILINE)
+    )
     run(["make"], cwd=f90_out)
     return
 
@@ -335,16 +339,14 @@ def _(f90_out, run):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    After one second almost nothing has happened yet: each CO ionisation makes
-    one CO⁺ and one electron, so both equal
-    $k\,n_\mathrm{CO}\,t = 10^{-12}e^{-1.222}\times100\times1 \approx 2.95\times10^{-11}\ \mathrm{cm^{-3}}$,
-    while CO is still at $100\ \mathrm{cm^{-3}}$ and the temperature is fixed at
-    100 K.
+    After $10^6$ years CO⁺ and e⁻ have reached the same equilibrium as in the
+    Python run, with the temperature held at 100 K.
 
-    **A current limitation:** both collections expect rates that can be
-    evaluated directly. Photo-reactions written as `PHOTO` lines (like those in
-    `demo1`) are emitted as `photorates(...)` calls, which neither collection
-    defines yet, so this notebook uses `demo2`.
+    **Functions the network does not define:** photo-reactions written as
+    `PHOTO` lines (like those in `demo1`) are emitted as `photorates(...)` calls,
+    as are table interpolators. Neither collection implements them: the Python
+    `chemistry.py` looks them up at call time, and the Fortran `user_functions.f90`
+    has a stub for each to fill in. This notebook uses `demo2`, which needs none.
 
     **Next:** `05_kokkos_cpp.py` generates a C++ solver for a larger network and
     builds it with CMake.
@@ -357,6 +359,7 @@ def _():
     import importlib
     import logging
     import os
+    import re
     import subprocess
     import sys
     import tempfile
@@ -430,6 +433,7 @@ def _():
         np,
         os,
         plt,
+        re,
         run,
         scratch,
         scratch_dir,

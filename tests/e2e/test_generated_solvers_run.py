@@ -79,9 +79,10 @@ def test_fortran_dlsodes_builds_and_runs(tmp_path):
     assert "DLSODES-" not in output, output
 
     # The driver holds the gas temperature fixed at its initial 100 K.
-    tgas = re.search(r"tgas\s*=\s*(\S+)", output)
+    tgas = re.search(r"T\s*=\s*(\S+)\s*K", output)
     assert tgas, output
-    assert float(tgas.group(1).replace("D", "E")) == pytest.approx(100.0)
+    assert float(tgas.group(1)) == pytest.approx(100.0)
+    assert "evolution saved to solution.dat" in output
 
 
 @pytest.mark.skipif(

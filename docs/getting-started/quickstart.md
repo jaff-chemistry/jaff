@@ -104,16 +104,17 @@ now holds a complete Fortran solver that builds with `make`
 with:
 
 ```text
-commons.f90  fluxes.f90  ode.f90  reactions.f90  main.f90  Makefile
-opkda1.f     opkda2.f    opkdmain.f  config.toml
+chemistry.f90  user_functions.f90  solver.f90  main.f90  Makefile
+opkda1.f       opkda2.f            opkdmain.f  config.toml
 ```
 
 <!-- prettier-ignore -->
 !!! note "Photochemical networks"
     The same command works for `h_photo.jet`, but its photo-ionization rate is
     emitted as a call to `photorates(...)`, which the `fortran_dlsodes`
-    template does not define. That solver does not compile until you supply a
-    `photorates` function yourself.
+    template does not define. It compiles, but `user_functions.f90` holds only
+    a stub that stops the run: replace it (and the stubs of its partial
+    derivatives) with your own `photorates` before running.
 
 Each template names its own language with a `$$JAFF LANG` line or by its file
 extension; see [jaffgen](../user-guide/code-generation/jaffgen.md) for the other
