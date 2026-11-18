@@ -17,6 +17,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <vector>
 
 #include "chemistry.hpp"
 #include "tableau.hpp"
@@ -33,14 +34,16 @@ enum class Status : int {
   bad_tolerances = 6,         // rtol or atol not positive
 };
 
-enum class LinearSolver { dense };
+// sparse: LU on the Jacobian's sparsity pattern with a fixed pivot order (no
+//   pivoting; a zero pivot rejects the step). dense: LU with partial pivoting.
+enum class LinearSolver { sparse, dense };
 
 struct Options {
   double rtol = 1e-12;          // relative tolerance
   double atol = 1e-20;          // absolute tolerance [cm^-3, erg g^-1]
   long max_steps = 1000000;     // accepted + rejected steps per call
   bool evolve_energy = true;    // false: e is held fixed (densities only)
-  LinearSolver lu = LinearSolver::dense;
+  LinearSolver lu = LinearSolver::sparse;
   double h_init = 0.0;          // first step [s]; <= 0: dt
 };
 
@@ -99,6 +102,144 @@ inline void lu_solve(const Matrix &a, const std::array<int, neq> &pivot, Vector 
       b[i] -= a[i][j] * b[j];
     }
     b[i] /= a[i][i];
+  }
+}
+
+// Elimination schedule of the sparse LU, built once from jacobian_pattern and
+// read-only afterwards. The matrix W = I/(gamma h) - J has the Jacobian's pattern
+// plus the diagonal; pivots follow a minimum-degree order of that pattern
+// (symmetrised), and for pivot k the schedule lists the rows below it and the
+// columns right of it that are nonzero once fill-in is included. Factorisation
+// and solves work in the dense Matrix but touch only these entries.
+struct SparseSchedule {
+  std::vector<int> order;                     // pivot k -> state index
+  std::vector<int> lower_start{0}, lower;     // rows i with L(i, order[k]) != 0
+  std::vector<int> upper_start{0}, upper;     // columns j with U(order[k], j) != 0
+};
+
+inline SparseSchedule build_schedule() {
+  std::vector<std::vector<char>> nz(neq, std::vector<char>(neq, 0));
+  for (const auto &entry : jacobian_pattern) {
+    nz[entry[0]][entry[1]] = 1;
+  }
+  for (int i = 0; i < neq; ++i) {
+    nz[i][i] = 1;
+  }
+
+  // Minimum-degree order on the symmetrised pattern (ties: lowest index)
+  auto sym = nz;
+  for (int i = 0; i < neq; ++i) {
+    for (int j = 0; j < neq; ++j) {
+      sym[i][j] = static_cast<char>(nz[i][j] || nz[j][i]);
+    }
+  }
+  SparseSchedule s;
+  std::vector<char> done(neq, 0);
+  for (int step = 0; step < neq; ++step) {
+    int best = -1, best_degree = neq + 1;
+    for (int i = 0; i < neq; ++i) {
+      if (done[i]) {
+        continue;
+      }
+      int degree = 0;
+      for (int j = 0; j < neq; ++j) {
+        degree += (j != i && !done[j] && sym[i][j]) ? 1 : 0;
+      }
+      if (degree < best_degree) {
+        best = i;
+        best_degree = degree;
+      }
+    }
+    s.order.push_back(best);
+    done[best] = 1;
+    std::vector<int> neighbours;
+    for (int j = 0; j < neq; ++j) {
+      if (!done[j] && sym[best][j]) {
+        neighbours.push_back(j);
+      }
+    }
+    for (int a : neighbours) {
+      for (int b : neighbours) {
+        sym[a][b] = 1;
+      }
+    }
+  }
+
+  // Symbolic factorisation in that order, recording the fill
+  std::vector<int> position(neq);
+  for (int k = 0; k < neq; ++k) {
+    position[s.order[k]] = k;
+  }
+  for (int k = 0; k < neq; ++k) {
+    const int p = s.order[k];
+    std::vector<int> rows, cols;
+    for (int i = 0; i < neq; ++i) {
+      if (position[i] > k && nz[i][p]) {
+        rows.push_back(i);
+      }
+      if (position[i] > k && nz[p][i]) {
+        cols.push_back(i);
+      }
+    }
+    for (int i : rows) {
+      for (int j : cols) {
+        nz[i][j] = 1;
+      }
+    }
+    s.lower.insert(s.lower.end(), rows.begin(), rows.end());
+    s.upper.insert(s.upper.end(), cols.begin(), cols.end());
+    s.lower_start.push_back(static_cast<int>(s.lower.size()));
+    s.upper_start.push_back(static_cast<int>(s.upper.size()));
+  }
+
+  return s;
+}
+
+inline const SparseSchedule &schedule() {
+  static const SparseSchedule s = build_schedule();  // thread-safe, built once
+
+  return s;
+}
+
+// Sparse LU of a, in place, without pivoting. Returns false on a zero pivot.
+inline bool sparse_decompose(Matrix &a) {
+  const SparseSchedule &s = schedule();
+  for (int k = 0; k < neq; ++k) {
+    const int p = s.order[k];
+    const double pivot = a[p][p];
+    if (pivot == 0.0 || !std::isfinite(pivot)) {
+      return false;
+    }
+    for (int r = s.lower_start[k]; r < s.lower_start[k + 1]; ++r) {
+      const int i = s.lower[r];
+      const double l = (a[i][p] /= pivot);
+      if (l == 0.0) {
+        continue;
+      }
+      for (int c = s.upper_start[k]; c < s.upper_start[k + 1]; ++c) {
+        const int j = s.upper[c];
+        a[i][j] -= l * a[p][j];
+      }
+    }
+  }
+
+  return true;
+}
+
+inline void sparse_solve(const Matrix &a, Vector &b) {
+  const SparseSchedule &s = schedule();
+  for (int k = 0; k < neq; ++k) {
+    const int p = s.order[k];
+    for (int r = s.lower_start[k]; r < s.lower_start[k + 1]; ++r) {
+      b[s.lower[r]] -= a[s.lower[r]][p] * b[p];
+    }
+  }
+  for (int k = neq - 1; k >= 0; --k) {
+    const int p = s.order[k];
+    for (int c = s.upper_start[k]; c < s.upper_start[k + 1]; ++c) {
+      b[p] -= a[p][s.upper[c]] * b[s.upper[c]];
+    }
+    b[p] /= a[p][p];
   }
 }
 
@@ -176,13 +317,21 @@ inline bool step(Workspace &w, const Parameters &p, const Options &o, double h,
     }
     w.jac[i][i] += fac;
   }
-  if (!lu_decompose(w.jac, w.pivot)) {
+  const bool sparse = o.lu == LinearSolver::sparse;
+  if (!(sparse ? sparse_decompose(w.jac) : lu_decompose(w.jac, w.pivot))) {
     singular = true;
     return false;
   }
+  auto linear_solve = [&](Vector &b) {
+    if (sparse) {
+      sparse_solve(w.jac, b);
+    } else {
+      lu_solve(w.jac, w.pivot, b);
+    }
+  };
 
   w.k[0] = w.f;
-  lu_solve(w.jac, w.pivot, w.k[0]);
+  linear_solve(w.k[0]);
   for (int s = 1; s < C::stages; ++s) {
     Vector stage{};
     for (int i = 0; i < neq; ++i) {
@@ -199,7 +348,7 @@ inline bool step(Workspace &w, const Parameters &p, const Options &o, double h,
     for (int i = 0; i < neq; ++i) {
       w.k[s][i] = stage[i] + w.f[i];
     }
-    lu_solve(w.jac, w.pivot, w.k[s]);
+    linear_solve(w.k[s]);
   }
 
   for (int i = 0; i < neq; ++i) {

@@ -171,6 +171,13 @@ inline bool rhs_jac(const double *y, const Parameters &p, double *ydot, Matrix &
   return true;
 }
 
+// The Jacobian's structurally nonzero entries {row, column}, as rhs_jac writes them
+inline constexpr int jacobian_pattern[][2] = {
+    $$JAFF REPEAT idx, jac IN jacobian { USE system  CSE { GROUP -> rhs_jac } }
+    {$idx$, $idx$},
+    $$JAFF END
+};
+
 }  // namespace chem
 
 #endif

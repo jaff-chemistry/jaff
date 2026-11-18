@@ -261,3 +261,78 @@ def _status(folder: Path, name: str) -> int:
     """Value of ``chem::Status::<name>``."""
     body = f'    std::printf("%d\\n", static_cast<int>(chem::Status::{name}));'
     return int(_run(folder, f"status_{name}", body).stdout)
+
+
+def test_sparse_lu_is_the_default(generated):
+    body = """
+    std::printf("%d\\n", chem::Options{}.lu == chem::LinearSolver::sparse ? 1 : 0);
+"""
+    assert _run(generated.folder, "default_lu", body).stdout.split() == ["1"]
+
+
+def test_pattern_covers_every_jacobian_entry(generated):
+    body = f"""
+    chem::Parameters p;
+{_parameters(generated.net)}
+    double y[chem::neq], f[chem::neq];
+    for (int i = 0; i < chem::nspecs; ++i) y[i] = 1e2 * (1.0 + 0.37 * i);
+    y[chem::nspecs] = chem::energy(y, {TEMPERATURE!r});
+    chem::Matrix jac{{}};
+    chem::rhs_jac(y, p, f, jac);
+    bool in_pattern[chem::neq][chem::neq] = {{}};
+    for (const auto &entry : chem::jacobian_pattern) in_pattern[entry[0]][entry[1]] = true;
+    int missing = 0;
+    for (int i = 0; i < chem::neq; ++i)
+        for (int j = 0; j < chem::neq; ++j)
+            if (jac[i][j] != 0.0 && !in_pattern[i][j]) ++missing;
+    std::printf("%d\\n", missing);
+"""
+    assert _run(generated.folder, "pattern", body).stdout.split() == ["0"]
+
+
+@pytest.mark.parametrize("evolve", [False, True])
+def test_sparse_and_dense_lu_agree(generated, evolve):
+    if evolve and _has_unknown_functions(generated.net):
+        pytest.skip("energy evolution needs the real tables (benchmarks)")
+    flag = "true" if evolve else "false"
+    body = f"""
+    chem::Parameters p;
+{_parameters(generated.net)}
+    for (const chem::LinearSolver lu : {{chem::LinearSolver::sparse,
+                                         chem::LinearSolver::dense}}) {{
+        double n[chem::nspecs];
+{_neutral_start(generated.net)}
+        double e = chem::energy(n, {TEMPERATURE!r});
+        chem::Options options;
+        options.evolve_energy = {flag};
+        options.lu = lu;
+        const chem::Status status = chem::solve(n, e, 1e8, p, options);
+        std::printf("%d %.17e", static_cast<int>(status), e);
+        for (int i = 0; i < chem::nspecs; ++i) std::printf(" %.17e", n[i]);
+        std::printf("\\n");
+    }}
+"""
+    out = _run(generated.folder, "sparse_dense", body).stdout.splitlines()
+    sparse, dense = (_numbers(line) for line in out)
+
+    assert sparse[0] == 0 and dense[0] == 0, out
+    assert sparse[1:] == pytest.approx(dense[1:], rel=1e-8, abs=1e-30)
+
+
+def test_generated_driver_builds_and_runs(generated):
+    if shutil.which("make") is None:
+        pytest.skip("needs make")
+    build = subprocess.run(["make"], cwd=generated.folder, capture_output=True, text=True)
+    assert build.returncode == 0, build.stdout + build.stderr
+    # The driver's placeholder inputs (every parameter 1, 100 K) are not physical:
+    # GOW needs its tables, and COthin overflows below ~200 K (kl11 ~ 1e-321).
+    if generated.net.label != "demo2":
+        pytest.skip("the generated driver's placeholder inputs suit demo2 only")
+
+    proc = subprocess.run(["./test"], cwd=generated.folder, capture_output=True, text=True)
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "evolution saved to solution.dat" in proc.stdout
+    lines = (generated.folder / "solution.dat").read_text().splitlines()
+    assert lines[0].split() == ["#", "t[s]", "T[K]", *generated.net.species.names()]
+    assert len(lines) == 1 + 101
