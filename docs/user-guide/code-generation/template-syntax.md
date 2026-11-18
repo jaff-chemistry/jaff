@@ -140,6 +140,7 @@ $$JAFF END
 | `dedt`     | `str`  | Language-specific total `dE/dt` expression |
 | `dtdt`     | `str`  | Language-specific total `dT/dt` expression |
 | `eos`      | `str`  | Language-specific EOS internal energy `E(T, n)` [erg cm⁻³] |
+| `eos_dt`   | `str`  | Language-specific `∂E/∂T` of that energy [erg cm⁻³ K⁻¹], e.g. to recover `T` from an evolved energy |
 
 Integer tokens accept inline arithmetic with `+`, `-`, `*`, `/` (see
 [Placeholders](#placeholders)):

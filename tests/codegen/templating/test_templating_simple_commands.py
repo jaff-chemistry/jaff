@@ -69,6 +69,12 @@ def test_sub_eos_prints_the_eos_internal_energy(ctx):
     assert "nden[0]" in out
 
 
+def test_sub_eos_dt_prints_the_eos_heat_capacity(ctx):
+    out = Sub(("eos_dt",)).render(["    return $eos_dt$\n"], resolved(), ctx)
+    assert out == f"    return {ctx.cg.get_eos_dt()}\n"
+    assert "nden[0]" in out
+
+
 def test_sub_rejects_unknown_token(ctx):
     with pytest.raises(TemplateError, match="SUB has no token nspecs"):
         Sub(("nspec", "nspecs")).validate([], resolved(), ctx)

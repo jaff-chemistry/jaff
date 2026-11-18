@@ -181,8 +181,13 @@ class Thermodynamics:
         return EosFactory(self.net, self.config.eos).generate()
 
     @cached_property
-    def _dE_dT(self) -> Expr:
-        """``∂E/∂T`` of the EOS volumetric internal energy [erg cm⁻³ K⁻¹]."""
+    def dE_dT(self) -> Expr:
+        """``∂E/∂T`` of the EOS volumetric internal energy [erg cm⁻³ K⁻¹].
+
+        The heat capacity per volume at fixed densities; templates print it with
+        ``$$JAFF SUB eos_dt`` (:meth:`Codegen.get_eos_dt
+        <jaff.codegen.Codegen.get_eos_dt>`).
+        """
         return diff(self.eos.volumetric, self.net.symbols.tgas)
 
     @cached_property
@@ -232,7 +237,7 @@ class Thermodynamics:
             form,
             lambda: (
                 (self.dEdt_chemical(form).volumetric - self._composition_rate(form))
-                / self._dE_dT
+                / self.dE_dT
             ),
         )
 
@@ -243,7 +248,7 @@ class Thermodynamics:
         ``Ė_extra / (∂E/∂T)``: these mechanisms depend on the local densities but
         do not change them, so there is no composition term.
         """
-        return self.dEdt_extra.volumetric / self._dE_dT
+        return self.dEdt_extra.volumetric / self.dE_dT
 
     def dTdt_tot(self, form: str = "expanded") -> Expr:
         """Total temperature rate ``(Ė_tot − Σ_i ∂E/∂n_i · ṅ_i) / (∂E/∂T)`` [K s⁻¹].
@@ -270,7 +275,7 @@ class Thermodynamics:
             form,
             lambda: (
                 (self.dEdt_tot(form).volumetric - self._composition_rate(form))
-                / self._dE_dT
+                / self.dE_dT
             ),
         )
 

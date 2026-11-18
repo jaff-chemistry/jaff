@@ -807,6 +807,32 @@ class Codegen:
         expr = self.net.thermodynamics.eos.volumetric
         return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
 
+    def get_eos_dt(self) -> str:
+        """Target-language code for ``∂E/∂T``, the EOS energy's temperature derivative.
+
+        A thin printer over ``net.thermodynamics.dE_dT``
+        (:attr:`~jaff.physics.thermodynamics.Thermodynamics.dE_dT`): the volumetric
+        heat capacity at fixed densities [erg cm⁻³ K⁻¹] of the EOS chosen in
+        ``[network.thermodynamics.eos]``.  With it a template can recover
+        the temperature from an evolved energy by Newton's method.  Template
+        token ``$eos_dt$`` of ``$$JAFF SUB eos_dt``.
+
+        Returns
+        -------
+        str
+            Single-expression code string (no assignment or line terminator).
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> net = Network("networks/demos/demo2.jet")
+        >>> print(Codegen(net, lang="python").get_eos_dt())
+        2.0709734999999e-16*nden[0] + 2.0709734999999e-16*nden[1] + 2.0709734999999e-16*nden[2]
+        """
+        expr = self.net.thermodynamics.dE_dT
+        return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
+
     def get_indexed_odes(
         self,
         use_cse: bool = True,
