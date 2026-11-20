@@ -1,11 +1,21 @@
 # ABOUTME: CMake build file for JAFF-generated chemistry solver
-# ABOUTME: Links against header-only integrators (VODE)
+# ABOUTME: Links against header-only integrators (VODE); C++20, clang++ by default
 
 cmake_minimum_required(VERSION 3.16)
+
+# header-only-integrators does not compile with GCC: default to clang++ unless a
+# compiler was chosen (-DCMAKE_CXX_COMPILER=... or the CXX environment variable).
+if(NOT DEFINED CMAKE_CXX_COMPILER AND NOT DEFINED ENV{CXX})
+    find_program(JAFF_CLANGXX clang++)
+    if(JAFF_CLANGXX)
+        set(CMAKE_CXX_COMPILER "${JAFF_CLANGXX}")
+    endif()
+endif()
+
 project(ChemistryODE LANGUAGES CXX)
 
-# Set C++ standard
-set(CMAKE_CXX_STANDARD 17)
+# Set C++ standard (header-only-integrators uses C++20)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 

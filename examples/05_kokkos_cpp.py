@@ -17,7 +17,7 @@ def _(mo):
     and 238 reactions of carbon, oxygen, hydrogen, helium and silicon chemistry,
     including reactions given over several temperature ranges.
 
-    The `kokkos_ode` collection writes a C++17 solver that integrates the rate
+    The `kokkos_ode` collection writes a C++20 solver that integrates the rate
     equations with the VODE (variable-order BDF) method from the
     [header-only-integrators](https://github.com/BenWibking/header-only-integrators)
     library. The build steps need `cmake`, `clang++` and network access, because
@@ -74,16 +74,18 @@ def _(COTHIN, JAFFGEN, run, scratch):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    Four files come out:
+    Five files come out:
 
-    - `chemistry_ode.hpp` defines a `ChemistryODE` struct: species indices,
-      `rhs()` (rate coefficients, then $\mathrm{d}n_i/\mathrm{d}t$) and
-      `jacobian()` (the exact derivatives $\partial \dot n_i/\partial n_j$,
-      which stiff solvers need). It is large because every rate and Jacobian
-      entry is written out explicitly, with common subexpressions factored into
-      temporaries;
-    - `chemistry_ode.cpp` is the driver: it sets initial conditions, calls the
-      integrator, prints the result and checks conservation;
+    - `chemistry_ode.hpp` defines a `ChemistryODE` struct: the species names,
+      the network's parameters (`ChemistryODE::params`), `rhs()` (rate
+      coefficients, then $\mathrm{d}n_i/\mathrm{d}t$ and $\mathrm{d}T/\mathrm{d}t$)
+      and `jacobian()` (the exact derivatives, which stiff solvers need). It is
+      large because every rate and Jacobian entry is written out explicitly, with
+      common subexpressions factored into temporaries;
+    - `user_functions.hpp` holds stubs for functions the network calls but does
+      not define (COthin has none, so it is empty);
+    - `chemistry_ode.cpp` is the driver: a block of inputs to edit, then the
+      integration, a `solution.dat` file and a conservation check;
     - `CMakeLists.txt` fetches the integrators library and builds the driver;
     - `config.toml` records the settings `jaffgen` was run with.
     """)
@@ -99,17 +101,63 @@ def _(file_table, out):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    The start of the header shows the generated species indices (C++ identifiers
-    cannot contain `+` or `-`, so ions get a `j` suffix and anions a `k`):
+    The state is the species densities followed by the gas temperature. The
+    network's parameters (here the visual extinction `av`, the cosmic-ray
+    ionisation rate `crate` and the dust temperature `tdust`) are members of
+    `ChemistryParameters`, NaN until set:
     """)
     return
 
 
 @app.cell
 def _(mo, out):
-    _head = (out / "chemistry_ode.hpp").read_text().splitlines()[:40]
-    mo.md("```cpp\n" + "\n".join(_head) + "\n```")
+    _hpp = (out / "chemistry_ode.hpp").read_text()
+    _start = _hpp.index("struct ChemistryParameters")
+    _stop = _hpp.index("// Index of a species")
+    mo.md("```cpp\n" + _hpp[_start:_stop].rstrip() + "\n```")
     return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
+    ## Setting the inputs
+
+    The driver starts with a block of inputs: one line per species (initial
+    density, 0 by default), one per parameter (a placeholder 1.0), the initial
+    temperature, the end time, whether to evolve the temperature, and the
+    tolerances. We fill it in with test values that exercise all reactions rather
+    than a physical cloud: every species at $10^{-10}$ and H at $10^{-6}$
+    cm$^{-3}$, typical parameters, the temperature fixed at 1000 K (some COthin
+    rate fits overflow well below 200 K), and $10^{12}$ s (about 32 000 years) of
+    evolution:
+    """)
+    return
+
+
+@app.cell
+def _(mo, net, np, out):
+    initial = np.full(net.species.count, 1e-10)
+    initial[0] = 1e-6
+    _parameters = {"av": 1.0, "crate": 1.3e-17, "tdust": 20.0}
+
+    _driver = out / "chemistry_ode.cpp"
+    _text = _driver.read_text()
+    for _i, _n in enumerate(initial):
+        _text = _text.replace(f"  y[{_i}] = 0.0;", f"  y[{_i}] = {_n:.1e};", 1)
+    for _name, _value in _parameters.items():
+        _text = _text.replace(
+            f"params.{_name} = 1.0;", f"params.{_name} = {_value:.6g};", 1
+        )
+    _text = _text.replace("temperature = 100.0;", "temperature = 1000.0;", 1)
+    _text = _text.replace("t_end = 3.15576e13;", "t_end = 1e12;", 1)
+    _driver.write_text(_text)
+
+    _lines = _text.splitlines()
+    _start = next(i for i, s in enumerate(_lines) if "inputs: edit here" in s)
+    _stop = next(i for i, s in enumerate(_lines) if "const char *output" in s)
+    mo.md("```cpp\n" + "\n".join(_lines[_start : _stop + 1]) + "\n```")
+    return (initial,)
 
 
 @app.cell(hide_code=True)
@@ -117,16 +165,17 @@ def _(mo):
     mo.md("""
     ## Building
 
-    Configure with CMake, choosing `clang++` as the compiler. The integrators
-    library currently uses a C++ construct that recent GCC versions reject, so
-    clang is the safe choice.
+    Configure with CMake. The integrators library uses a C++ construct that GCC
+    rejects, so the generated `CMakeLists.txt` picks `clang++` unless you name a
+    compiler yourself (`-DCMAKE_CXX_COMPILER=...` or the `CXX` environment
+    variable):
     """)
     return
 
 
 @app.cell
 def _(out, run):
-    run(["cmake", "-S", ".", "-B", "build", "-DCMAKE_CXX_COMPILER=clang++"], cwd=out)
+    run(["cmake", "-S", ".", "-B", "build"], cwd=out)
     return
 
 
@@ -134,7 +183,7 @@ def _(out, run):
 def _(mo):
     mo.md("""
     Then compile. Some rates are evaluated at the edge of their temperature range
-    and underflow to zero, so clang prints `-Wliteral-range` warnings; they are
+    and underflow to zero, so clang may print `-Wliteral-range` warnings; they are
     harmless.
     """)
     return
@@ -151,36 +200,16 @@ def _(mo):
     mo.md("""
     ## Running
 
-    The driver takes up to three positional arguments, `t_end [ic_file]
-    [out_file]`, plus `--analytic-jac` to use the generated Jacobian instead of
-    a finite-difference one. Without an initial-conditions file it starts every
-    species at $10^{-10}$ and the first one (H) at $10^{-6}$, test values that
-    exercise all reactions rather than a physical cloud.
-
-    We write those same initial conditions to a file, so the run is explicit,
-    integrate for $10^{12}$ s (about 32 000 years) with the analytic Jacobian,
-    and ask for the final densities in an output file:
+    The driver takes no arguments: it stops if a parameter is unset, integrates
+    with the analytic Jacobian and prints the final state:
     """)
     return
 
 
 @app.cell
-def _(net, np, out, run):
-    initial = np.full(net.species.count, 1e-10)
-    initial[0] = 1e-6
-    np.savetxt(out / "initial.txt", initial)
-
-    run(
-        [
-            "./build/chemistry_ode",
-            "1e12",
-            "initial.txt",
-            "final.txt",
-            "--analytic-jac",
-        ],
-        cwd=out,
-    )
-    return (initial,)
+def _(out, run):
+    run(["./build/chemistry_ode"], cwd=out)
+    return
 
 
 @app.cell(hide_code=True)
@@ -189,18 +218,19 @@ def _(mo):
     The end of the output is a conservation check. Chemistry moves atoms
     between species but never creates or destroys them, so the total amount of
     each element, and the net charge, must be the same before and after. Here they
-    agree to about $10^{-14}$, which is round-off: the generated equations
-    conserve every element exactly.
+    agree to round-off: the generated equations conserve every element exactly.
 
-    The final densities, read back from `final.txt` and labelled with the
-    network's species names:
+    `solution.dat` holds the state at $t = 0$ and at 100 log-spaced times up to
+    the end, one row each: time, temperature, then every species. Its last row,
+    labelled with the network's species names:
     """)
     return
 
 
 @app.cell
 def _(initial, mo, net, np, out):
-    final = np.loadtxt(out / "final.txt")
+    solution = np.loadtxt(out / "solution.dat")
+    final = solution[-1, 2:]
     mo.ui.table(
         [
             {
@@ -214,31 +244,30 @@ def _(initial, mo, net, np, out):
         selection=None,
         page_size=40,
     )
-    return (final,)
+    return (solution,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    The bar chart compares the two. Species whose final value is far below
-    $10^{-20}$ (the solver's absolute tolerance) are effectively zero, and tiny
-    negative values are solver noise at that level, so both are clipped to
-    $10^{-20}$ for plotting.
+    The evolution of the most abundant species. Values far below $10^{-20}$ (the
+    solver's absolute tolerance) are effectively zero, and tiny negative values
+    are solver noise at that level, so both are clipped to $10^{-20}$ for
+    plotting.
     """)
     return
 
 
 @app.cell
-def _(PLOT_SIZE, final, initial, net, np, plt):
+def _(PLOT_SIZE, net, np, plt, solution):
     _floor = 1e-20
-    _x = np.arange(net.species.count)
-    _fig, _ax = plt.subplots(figsize=(PLOT_SIZE[0] * 1.8, PLOT_SIZE[1]))
-    _ax.bar(_x - 0.2, np.maximum(initial, _floor), width=0.4, label="initial")
-    _ax.bar(_x + 0.2, np.maximum(final, _floor), width=0.4, label="final")
-    _ax.set_yscale("log")
-    _ax.set_xticks(_x, net.species.names(), rotation=90)
-    _ax.set_ylabel("number density")
-    _ax.legend()
+    _t, _n = solution[1:, 0], solution[1:, 2:]
+    _fig, _ax = plt.subplots(figsize=(PLOT_SIZE[0] * 1.4, PLOT_SIZE[1] * 1.2))
+    for _i in np.argsort(_n[-1])[::-1][:8]:
+        _ax.loglog(_t, np.maximum(_n[:, _i], _floor), label=net.species.names()[_i])
+    _ax.set_xlabel("time [s]")
+    _ax.set_ylabel("number density [cm$^{-3}$]")
+    _ax.legend(fontsize="small", ncols=2)
     _fig.tight_layout()
     _fig
     return

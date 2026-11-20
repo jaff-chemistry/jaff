@@ -102,6 +102,6 @@ def test_kokkos_ode_builds_and_runs(tmp_path):
         proc = subprocess.run(cmd, cwd=out, capture_output=True, text=True)
         assert proc.returncode == 0, f"{cmd}:\n{proc.stdout}{proc.stderr}"
 
-    assert "Number of reactions: 2" in proc.stdout, proc.stdout
     # The driver reports element and charge conservation from injected metadata.
     assert "net_charge:" in proc.stdout, proc.stdout
+    assert "evolution saved to solution.dat" in proc.stdout, proc.stdout
