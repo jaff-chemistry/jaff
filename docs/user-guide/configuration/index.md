@@ -210,7 +210,7 @@ raises a `ParserError` with the same message:
 ```text
 Error: Invalid config:
   network.strict: Input should be a valid boolean
-  network.reactions.t_cutoff: Input should be 'clip' or 'extrapolate'
+  network.reactions.t_cutoff: Input should be 'clip', 'extrapolate' or 'zero'
   network.radiation.rsl: unknown key
   network.thermodynamics.eos: unknown EOS type 'polytrope'; choose one of ideal, multi_gamma, fermi_degenerate, relativistic_fermi_degenerate
 ```

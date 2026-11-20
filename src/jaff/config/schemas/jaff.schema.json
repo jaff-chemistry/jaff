@@ -364,10 +364,11 @@
         "t_cutoff": {
           "enum": [
             "clip",
-            "extrapolate"
+            "extrapolate",
+            "zero"
           ],
           "type": "string",
-          "description": "Rate behaviour outside the temperature range: `\"clip\"` or `\"extrapolate\"`.",
+          "description": "Rate outside the temperature range: `\"clip\"` holds the value at the nearest limit, `\"extrapolate\"` extends the outermost formulas and `\"zero\"` makes the rate 0 below the lowest and above the highest limit (KROME's behaviour).  A gap between two ranges is interpolated in every mode.",
           "title": "T Cutoff"
         },
         "photo": {
@@ -395,10 +396,11 @@
         },
         "t_cutoff": {
           "default": "clip",
-          "description": "Rate behaviour outside the temperature range: `\"clip\"` or `\"extrapolate\"`.",
+          "description": "Rate outside the temperature range: `\"clip\"` holds the value at the nearest limit, `\"extrapolate\"` extends the outermost formulas and `\"zero\"` makes the rate 0 below the lowest and above the highest limit (KROME's behaviour).  A gap between two ranges is interpolated in every mode.",
           "enum": [
             "clip",
-            "extrapolate"
+            "extrapolate",
+            "zero"
           ],
           "title": "T Cutoff",
           "type": "string"

@@ -27,7 +27,7 @@ __all__ = [
 ]
 
 
-TCutoff = Annotated[Literal["clip", "extrapolate"], BeforeValidator(lower)]
+TCutoff = Annotated[Literal["clip", "extrapolate", "zero"], BeforeValidator(lower)]
 DuplicatePolicy = Annotated[
     Literal["preserve-first", "preserve-last", "error"], BeforeValidator(lower)
 ]
@@ -90,8 +90,11 @@ class ReactionConfig(ConfigModel):
         How two rate coefficients over the same temperature range are
         resolved: ``"preserve-first"``, ``"preserve-last"`` or ``"error"``.
     t_cutoff : str or None
-        Rate behaviour outside the temperature range: ``"clip"`` or
-        ``"extrapolate"``.
+        Rate outside the temperature range: ``"clip"`` holds the value at the
+        nearest limit, ``"extrapolate"`` extends the outermost formulas and
+        ``"zero"`` makes the rate 0 below the lowest and above the highest limit
+        (KROME's behaviour).  A gap between two ranges is interpolated in every
+        mode.
     photo : PhotoConfig or None
         Photo-reaction settings.
     """

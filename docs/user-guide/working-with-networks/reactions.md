@@ -358,13 +358,13 @@ temperature span — JAFF keeps each range as a `RateSegment` and merges them in
 a single **piecewise** rate expression on `net.reactions[i].rate.coefficient`:
 
 - each range contributes its own rate over that range;
-- the gap between two adjacent ranges is bridged by interpolating between the
-  two boundary rates: **linearly in $\log k$** (geometrically) when both are
-  positive, so rates spanning several decades stay smooth, and linearly in $k$
-  otherwise (e.g. a zero, negative, or symbolic boundary rate);
+- the gap between two adjacent ranges is bridged by interpolating **linearly in
+  $k$** between the two boundary rates;
 - behaviour past the outermost bounds follows the reaction's
   [`t_cutoff`](../configuration/reference.md#networkreactions) (`clip` holds the boundary
-  value; `extrapolate` lets the end segments run on).
+  value; `extrapolate` lets the end segments run on; `zero` makes the rate 0, as
+  KROME does). A range covers `Tmin <= T < Tmax`; under `zero` even a single
+  constant rate is 0 outside its range.
 
 The individual pieces live on `rxn.rate_segments`; `rxn.tmin` / `rxn.tmax` span
 the full merged range. `rate.coefficient`, `tmin` and `tmax` are derived from the

@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, Callable
 
-from sympy import Basic, Expr, Piecewise
+from sympy import Basic, Expr, Piecewise, S
 
 from ....types import Catalogue
 from . import RateSegment
@@ -25,8 +25,8 @@ class RateSegments(Catalogue[RateSegment]):
 
     Out-of-range behaviour follows the owning reaction's ``t_cutoff`` setting
     (``reaction.config.t_cutoff``): ``"clip"`` holds the boundary rate below
-    the first / above the last range; any other value lets the outermost
-    segments extend unbounded.
+    the first / above the last range, ``"zero"`` makes it 0 there and
+    ``"extrapolate"`` lets the outermost segments extend unbounded.
 
     Parameters
     ----------
@@ -116,11 +116,13 @@ class RateSegments(Catalogue[RateSegment]):
         first).  Each range contributes its own rate; the gap between two
         adjacent ranges is bridged by linear interpolation of the two bounding
         rates.  Out-of-range behaviour follows the reaction's ``t_cutoff`` (``"clip"`` holds
-        the boundary value, otherwise the end segments extend unbounded).
+        the boundary value, ``"zero"`` gives 0, ``"extrapolate"`` lets the end segments
+        extend unbounded).  A range covers ``tmin <= tgas < tmax``.
 
-        A lone segment with a temperature-independent rate, or one that is fully
-        unbounded (no ``tmin`` *and* no ``tmax``, i.e. valid at every
-        temperature), is returned as-is without wrapping in a ``Piecewise``.
+        A fully unbounded lone segment (no ``tmin`` *and* no ``tmax``, i.e. valid at
+        every temperature) is returned as-is without wrapping in a ``Piecewise``; so is
+        a lone temperature-independent rate, except under ``"zero"``, where its
+        limits make it 0 outside them.
 
         Under ``"clip"`` each **defined** outer bound is held independently: a
         range open on one side (e.g. ``tmin`` set, ``tmax`` ``None``) clamps its
@@ -143,6 +145,7 @@ class RateSegments(Catalogue[RateSegment]):
         tgas = NetworkSymbols.tgas
         r = self.reaction
         clip = r.config.t_cutoff == "clip"
+        zero = r.config.t_cutoff == "zero"
         ls = self._list
         first = ls[0]
         last = ls[-1]
@@ -150,7 +153,7 @@ class RateSegments(Catalogue[RateSegment]):
         # No piecewise needed only for a lone segment: a single, temperature-
         # independent rate, or one fully unbounded (valid at every temperature).
         # With multiple segments the later pieces may differ, so never shortcut.
-        if len(ls) == 1 and not first.rate.has(tgas):
+        if len(ls) == 1 and not first.rate.has(tgas) and not zero:
             return first.rate
         if len(ls) == 1 and first.tmin is None and first.tmax is None:
             return first.rate
@@ -161,10 +164,12 @@ class RateSegments(Catalogue[RateSegment]):
 
         segs: list[tuple[Expr, Basic | bool]] = []
 
-        # Lower edge: hold the boundary rate below tmin (clip, when a lower
-        # bound exists); an open lower end just extrapolates.
+        # Lower edge: hold the boundary rate (clip) or 0 (zero) below tmin, when a
+        # lower bound exists; an open lower end just extrapolates.
         if clip and first.tmin is not None:
             segs.append((first.rate.xreplace({tgas: first.tmin}), tgas < first.tmin))
+        if zero and first.tmin is not None:
+            segs.append((S.Zero, tgas < first.tmin))
 
         segs.append(_body(first))
 
@@ -189,10 +194,12 @@ class RateSegments(Catalogue[RateSegment]):
             # Always emit this range's own body (touching ranges have no gap).
             segs.append(_body(seg))
 
-        # Upper edge: hold the boundary rate above tmax (clip, when an upper
-        # bound exists); otherwise the last segment extends unbounded.
+        # Upper edge: hold the boundary rate (clip) or 0 (zero) above tmax, when an
+        # upper bound exists; otherwise the last segment extends unbounded.
         if clip and last.tmax is not None:
             segs.append((last.rate.xreplace({tgas: last.tmax}), True))
+        elif zero and last.tmax is not None:
+            segs.append((S.Zero, True))
         else:
             segs[-1] = (segs[-1][0], True)
 

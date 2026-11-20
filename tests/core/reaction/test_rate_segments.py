@@ -1,5 +1,5 @@
 # ABOUTME: Tests for RateSegments.evaluate_equivalent_rate multi-range assembly
-# ABOUTME: Constant/temperature-dependent ranges, adjacent+separated, both clip modes
+# ABOUTME: Constant/temperature-dependent ranges, adjacent+separated, every t_cutoff mode
 
 
 from types import SimpleNamespace
@@ -342,3 +342,55 @@ def test_network_range_error_names_file_lines(tmp_path):
     assert "line 2: 1,H,H,H2,NONE,400,1" in msg
     assert "line 3: 2,H,H,H2,400,NONE,2" in msg
     assert "line 5: 3,H,H,H2,3" in msg
+
+
+# --------------------------------------------------------------------------- #
+# t_cutoff = "zero": the rate is 0 below the first and above the last range   #
+# --------------------------------------------------------------------------- #
+def test_zero_outside_the_outer_limits():
+    segs = [RateSegment(Integer(1), 10, 100), RateSegment(Integer(2), 150, 250)]
+    assert _eval(segs, "zero", 5) == 0
+    assert _eval(segs, "zero", 50) == 1
+    assert _eval(segs, "zero", 200) == 2
+    assert _eval(segs, "zero", 300) == 0
+
+
+def test_zero_still_interpolates_gaps():
+    segs = [RateSegment(Integer(1), 10, 100), RateSegment(Integer(2), 150, 250)]
+    assert _eval(segs, "zero", 125) == Rational(3, 2)
+
+
+def test_zero_limits_include_tmin_and_exclude_tmax():
+    segs = [RateSegment(Integer(1), 10, 100)]
+    assert _eval(segs, "zero", 10) == 1
+    assert _eval(segs, "zero", 100) == 0
+
+
+def test_zero_applies_to_a_lone_constant_rate():
+    # A single temperature-independent range used to skip its limits entirely.
+    segs = [RateSegment(Integer(7), 10, 100)]
+    assert _eval(segs, "zero", 5) == 0
+    assert _eval(segs, "zero", 50) == 7
+    assert _eval(segs, "zero", 1000) == 0
+    assert _eval(segs, "clip", 1000) == 7  # clip holds the constant, as before
+
+
+def test_zero_keeps_an_open_side_open():
+    segs = [RateSegment(Integer(7), None, 100)]
+    assert _eval(segs, "zero", 1) == 7
+    assert _eval(segs, "zero", 1000) == 0
+
+
+def test_zero_leaves_an_unbounded_rate_alone():
+    segs = [RateSegment(TGAS * 2, None, None)]
+    assert _eval(segs, "zero", 1000) == 2000
+
+
+def test_zero_is_a_reactions_setting(tmp_path):
+    path = tmp_path / "net.dat"
+    path.write_text("H + H -> H2 [10,100] 1e-9\n", encoding="utf-8")
+    net = Network(str(path), reactions={"t_cutoff": "zero"})
+    (rate,) = [r.rate.coefficient for r in net.reactions]
+
+    assert float(rate.subs(TGAS, 50)) == pytest.approx(1e-9)
+    assert float(rate.subs(TGAS, 1000)) == 0.0

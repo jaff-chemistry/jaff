@@ -11,8 +11,8 @@ that validate it. A TOML language server that reads the schema gives you, while
 you type a `jaff.toml` or `jaffgen.toml`:
 
 - **completion** of tables (`[network.` → `reactions`, `radiation`, `dust`,
-  `thermodynamics`), keys and allowed values (`t_cutoff = "clip"` or
-  `"extrapolate"`, the EOS `type`s, the dust `rv` values, …);
+  `thermodynamics`), keys and allowed values (`t_cutoff = "clip"`,
+  `"extrapolate"` or `"zero"`, the EOS `type`s, the dust `rv` values, …);
 - **descriptions** of every key on hover and in completion, the same text as the
   [reference](reference.md);
 - **errors** for unknown keys (including old ones such as `rsl`), wrong types,
