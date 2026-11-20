@@ -10,10 +10,14 @@ from .cse import prune, shared_cse
 from .guard import guard
 from .log_derivative import log_derivative
 from .logs import shared_logs
-from .optimize import optimize
+from .optimize import PRE_CSE_RULES, RULES, bottom_up, optimize
 from .powers import exp_power, integer_power
+from .split_log import split_log
 
 __all__ = [
+    "PRE_CSE_RULES",
+    "RULES",
+    "bottom_up",
     "cost",
     "exp_power",
     "guard",
@@ -23,4 +27,5 @@ __all__ = [
     "prune",
     "shared_cse",
     "shared_logs",
+    "split_log",
 ]

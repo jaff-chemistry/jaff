@@ -30,10 +30,11 @@ NETWORKS: Dict[str, Path] = {
 }
 
 # Log-uniform sampling ranges.  Anything not listed uses the defaults.  GOW's
-# rendered code raises below ~90 K: exp(-63590/T) underflows to 0 inside a Jacobian
-# log().  (Above ~3500 K it raised until CSE temporaries were guarded: a 10**(polynomial)
-# fit was hoisted out of its Piecewise branch and overflowed.)
-SCALAR_RANGES: Dict[str, Tuple[float, float]] = {"tgas": (100.0, 1.0e5)}
+# rendered code raises at 10-12 K: its own condition `(T < 10) | (fit < 1e-100)`
+# evaluates a fit that overflows there.  (Below ~90 K it raised until split_log:
+# exp(-63590/T) underflowed to 0 inside a log(); above ~3500 K until CSE temporaries
+# were guarded: a 10**(polynomial) fit was hoisted out of its Piecewise branch.)
+SCALAR_RANGES: Dict[str, Tuple[float, float]] = {"tgas": (15.0, 1.0e5)}
 DEFAULT_SCALAR_RANGE = (0.5, 2.0)
 DEFAULT_VECTOR_RANGE = (1.0e-2, 1.0e4)
 

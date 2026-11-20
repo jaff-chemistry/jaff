@@ -32,7 +32,13 @@ from typing import TYPE_CHECKING, Any, Iterator, Mapping, Sequence, cast
 
 import sympy as sp
 
-from ..common.optimizations import optimize, shared_cse, shared_logs
+from ..common.optimizations import (
+    PRE_CSE_RULES,
+    bottom_up,
+    optimize,
+    shared_cse,
+    shared_logs,
+)
 from ..io._logger import JaffLogger, jaff_progress
 from ..types import IndexedList, IndexedValue
 from ._languages import Language, scoped_tokens
@@ -1948,7 +1954,9 @@ class Codegen:
         shared with the items; ``optimizations="basic"`` when every part asks for
         it.  Before it, :func:`~jaff.common.optimizations.shared_logs` rewrites the
         powers of a base used with several non-integer exponents over one shared
-        ``log``.  String items are printed as they are.  Derivatives of undefined
+        ``log``; before everything (with or without CSE), the
+        :data:`~jaff.common.optimizations.PRE_CSE_RULES` rewrite the items and
+        definitions.  String items are printed as they are.  Derivatives of undefined
         functions become ``<name>_partial_<n>(...)`` calls (see
         :meth:`__convert_unknown_derivatives`).
 
@@ -1957,14 +1965,20 @@ class Codegen:
         tuple
             The temporaries, and one :class:`~jaff.types.IndexedList` per part.
         """
-        symbolic = [i for part in parts for i in part.items if not isinstance(i, str)]
+        # Rewrites that must see inside sub-expressions CSE would make temporaries;
+        # one cache, so subtrees shared between items are rewritten once.
+        pre_cse = bottom_up(PRE_CSE_RULES)
+        symbolic = [
+            pre_cse(i) for part in parts for i in part.items if not isinstance(i, str)
+        ]
+        definitions = {k: pre_cse(v) for k, v in (definitions or {}).items()}
         temporaries = IndexedList()
         cse_defs: dict[str, sp.Basic] | None = None
         if use_cse and symbolic:
             basic = all(part.optimizations == "basic" for part in parts)
             with jaff_progress.indeterminate("Generating cse expressions"):
                 # Powers of a common base over one shared log: new temporaries.
-                symbolic, definitions = shared_logs(symbolic, definitions or {})
+                symbolic, definitions = shared_logs(symbolic, definitions)
                 replacements, symbolic = shared_cse(
                     symbolic,
                     definitions,

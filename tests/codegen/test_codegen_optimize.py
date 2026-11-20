@@ -87,3 +87,21 @@ def test_python_rhs_and_jacobian_keep_their_values(power_network, tgas):
         want.append(float(expr.xreplace({**subs, sp.Symbol("tgas"): tgas})))
 
     assert printed == pytest.approx(want, rel=1e-13)
+
+
+LOG_NETWORK = ["H + H -> H2 [10,1e4] 1e-10/(1 - 0.01*log(3.52e-9*exp(-43900/tgas)))"]
+
+
+@pytest.mark.parametrize("use_cse", [False, True])
+def test_rate_with_log_of_exponential_runs_at_low_temperature(make_network, use_cse):
+    rates = Codegen(make_network(LOG_NETWORK), "python").get_indexed_rates(
+        use_cse=use_cse
+    )
+    namespace = {"math": math, "tgas": 20.0}
+    for idx, code in rates["extras"]["cse"]:
+        exec(f"x{idx[0]} = {code}", namespace)
+    (printed,) = [eval(code, namespace) for _, code in rates["expressions"]]
+
+    assert printed == pytest.approx(
+        1e-10 / (1 - 0.01 * (math.log(3.52e-9) - 43900 / 20.0))
+    )

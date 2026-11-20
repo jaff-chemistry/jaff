@@ -347,7 +347,10 @@ docs/           # Documentation
   (`x**n`, `2 <= |n| <= 8`, symbol bases, as unevaluated products `(x*x)*x` /
   `1.0/(x*x)`: C/C++ `pow(x, 3)` is a library call). A new per-node rewrite is a rule
   added to `RULES`; `bottom_up(rules)` is the memoized pass itself (cache kept across
-  calls). `shared_logs(exprs, definitions)` (a base raised to several non-integer
+  calls). `PRE_CSE_RULES` are per-node rules `Codegen._print_parts` applies to items
+  and definitions before CSE (always, with or without it), for rewrites that must see
+  inside what CSE makes temporaries: `split_log` (`log(c*exp(b)*R)` as
+  `log(c) + b + log(R)`, so an `exp(-E/T)` that underflows at low T is no `log(0)`). `shared_logs(exprs, definitions)` (a base raised to several non-integer
   exponents: one `L = log(b)` and one `exp(f*L)` (or `sqrt`) per fractional part `f`,
   returned as definitions; `Codegen._print_parts` calls it before `shared_cse`).
   Rewrites walk each distinct subtree once (`bottom_up`, a `seen` set): SymPy's
