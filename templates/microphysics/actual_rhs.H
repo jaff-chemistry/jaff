@@ -1,3 +1,5 @@
+// ABOUTME: Right-hand side and analytic Jacobian of the JAFF-generated chemistry for
+// ABOUTME: AMReX Microphysics: number densities plus specific internal energy
 #ifndef actual_rhs_H
 #define actual_rhs_H
 
@@ -9,6 +11,7 @@
 #include <burn_type.H>
 #include <extern_parameters.H>
 #include <jacobian_utilities.H>
+#include <user_functions.H>
 
 using namespace ArrayUtil;
 using namespace network_rp;
@@ -20,8 +23,8 @@ $$JAFF DEFINE microphysics {
         "photden\[\s*(\d+)\s*\]" -> "state.rn[2*\1]"
         "rflux\[\s*(\d+)\s*\]" -> "state.rn[2*\1+1]"
         "nden\[\s*(\d+)\s*\]" -> "state.xn[\1]"
-        "tgas" -> "state.T"
-        "c_hat" -> "state.c_hat"
+        "\btgas\b" -> "state.T"
+        "\bc_hat\b" -> "state.c_hat"
     }
 }
 
@@ -34,7 +37,6 @@ $$JAFF DEFINE microphysics_equations {
 AMREX_GPU_HOST_DEVICE AMREX_INLINE void
 actual_rhs(const burn_t &state, amrex::Array1D<amrex::Real, 1, neqs> &ydot) {
 
-  using namespace Rates;
 
   $$JAFF REPEAT idx, cse IN cses { USE microphysics  GROUP { NAME -> rhs } }
   const amrex::Real cse$idx$ = $cse$;

@@ -1,18 +1,15 @@
-@namespace: eos
-
-eos_gamma_default       real          1.4
-
-# define the specie names, and their masses and gammas
+# ABOUTME: Runtime parameters of the JAFF-generated network: the network's own
+# ABOUTME: parameters, set in the inputs file as network.<name> = <value>
+@namespace: network
 $$JAFF LANG cxx
 $$JAFF COMMENT "#"
-$$JAFF REPEAT idx, specie IN species
-species_$idx+1$_name          string        "$specie$"
-$$JAFF END
 
-$$JAFF REPEAT idx, specie IN species
-species_$idx+1$_gamma         real          5./3.
-$$JAFF END
+# cutoff for species number densities
+small_x                 real          1.e-100
 
-$$JAFF REPEAT idx, specie_mass IN specie_masses
-species_$idx+1$_mass          real          $specie_mass$
+# The network's parameters (actual_rhs reads them as network_rp::<name>). Each
+# starts at -1.e300, which means unset: actual_network_init() stops naming any
+# left unset, so set every one in the inputs file.
+$$JAFF REPEAT idx, parameter IN parameters { THERMAL { MODE -> dedt } }
+$parameter$             real          -1.e300
 $$JAFF END

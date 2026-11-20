@@ -1,0 +1,25 @@
+# ABOUTME: Inputs of the one-zone test: number densities, energy integration and the
+# ABOUTME: tolerances; tests append the network parameters (network.<name> = <value>)
+unit_test.small_temp = 1.0
+unit_test.temperature = 100.0
+unit_test.tmax = 1.0e14
+unit_test.initial_file = "initial.txt"
+
+# chemistry: number densities, no mass-fraction clipping or renormalisation
+integrator.use_number_densities = 1
+integrator.subtract_internal_energy = 0
+integrator.do_species_clip = 0
+integrator.renormalize_abundances = 0
+integrator.SMALL_X_SAFE = 1.0e-100
+integrator.X_reject_buffer = 1.0e100
+integrator.use_jacobian_caching = 0
+integrator.jacobian = 1
+integrator.burner_verbose = 0
+integrator.ode_max_steps = 1000000
+
+integrator.rtol_spec = 1.0e-8
+integrator.atol_spec = 1.0e-20
+integrator.rtol_enuc = 1.0e-8
+integrator.atol_enuc = 1.0e-20
+
+network.small_x = 1.0e-100

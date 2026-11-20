@@ -1,0 +1,10 @@
+# ABOUTME: Species of the JAFF-generated network for Microphysics (network_properties.H):
+# ABOUTME: one line per species: name, short name (a C++ identifier), A, Z
+#
+# name = the species as in the network; short name = its j/k form (+ -> j, - -> k),
+# which Microphysics turns into an enum (C becomes Carbon: C is Microphysics'
+# constants namespace); A = mass in atomic mass units; Z = charge.
+# A and Z only label the species here: the EOS (eos/) uses the masses in grams.
+$$JAFF LANG cxx
+$$JAFF COMMENT "#"
+$$JAFF CALL species_table

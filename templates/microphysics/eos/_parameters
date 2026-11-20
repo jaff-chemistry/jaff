@@ -1,0 +1,3 @@
+# ABOUTME: Runtime parameters of the JAFF-generated multigamma EOS: none (the species'
+# ABOUTME: adiabatic indices and masses come from the network, in actual_eos.H)
+@namespace: eos
