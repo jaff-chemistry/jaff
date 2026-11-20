@@ -255,6 +255,15 @@ Tokens: `idx` (index), `R` (reactant), `P` (product), `tmin`/`tmax` (temperature
 
 Temperature bounds may be written `NONE` (no limit) and may carry Fortran comparison prefixes such as `.LE.` or `>`, which are stripped. Fortran double-precision literals (`1d4`) are accepted in bounds and rates.
 
+### Special species
+
+`E` / `e` is the electron (`e-`); `g` / `G` is the photon (`_PHOTON`); `CR`, `CRP`,
+`CRPHOT` and `PHOTON` become `_CR`, `_CRP`, `_CRPHOT` and `_PHOTON`. A photon carries no
+density, so it does not change the rate equations. It sets the reaction type: a photon
+reactant makes a `photo` reaction (with a radiation field, its rate then comes from the
+cross sections); a photon product makes a `recombination` when an `e-` is a reactant
+(`H+,E,,H,g`) and a `radiative_association` otherwise (`H,H+,,H2+,g`).
+
 ### Conditional rates
 
 A rate may start with a Fortran condition, `if(<condition>): <rate>`; the rate then

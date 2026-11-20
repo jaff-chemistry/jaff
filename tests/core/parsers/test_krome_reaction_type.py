@@ -54,3 +54,37 @@ class TestRateAliases:
 
     def test_alias_inside_a_longer_name_is_kept(self):
         assert _parse("1e-10*user_avg")["rate"] == "1e-10*user_avg"
+
+
+class TestPhotonToken:
+    """KROME's ``g`` (any case) is the photon: ``_PHOTON``, never a grain."""
+
+    @staticmethod
+    def _line(line: str) -> dict:
+        state = {**STATE, "nreact": 3, "nprod": 4, "tmin": True, "tmax": True}
+        return KromeReaction().parse(line, 1, state, "net.jet")
+
+    @pytest.mark.parametrize("token", ["g", "G"])
+    def test_photon_product_of_an_electron_capture_is_a_recombination(self, token):
+        fields = self._line(f"1,H+,E,,H,{token},,,NONE,NONE,3.92d-13*invTe**0.6353d0")
+
+        assert fields["products"] == ["H", "_PHOTON"]
+        assert fields["type"] == "recombination"
+
+    def test_photon_product_without_an_electron_is_a_radiative_association(self):
+        fields = self._line("1,H,H+,,H2+,g,,,NONE,NONE,1d-18")
+
+        assert fields["products"] == ["H2+", "_PHOTON"]
+        assert fields["type"] == "radiative_association"
+
+    @pytest.mark.parametrize("token", ["g", "G"])
+    def test_photon_reactant_is_photo(self, token):
+        fields = self._line(f"1,HE+,{token},,HE++,E,,,NONE,NONE,5d1*user_Trad")
+
+        assert fields["reactants"] == ["He+", "_PHOTON"]
+        assert fields["type"] == "photo"
+
+    def test_no_grain_from_g(self):
+        fields = self._line("1,H+,E,,H,g,,,NONE,NONE,1d-12")
+
+        assert "_GRAIN" not in fields["reactants"] + fields["products"]

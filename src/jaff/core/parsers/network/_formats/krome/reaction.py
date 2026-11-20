@@ -30,7 +30,14 @@ class KromeReaction:
         "PHOTON": "_PHOTON",
     }
 
-    WHOLE_TOKEN_MAP = {"E": "e-", "e": "e-", "g": "_GRAIN", **SPECIAL_MAP}
+    # KROME's ``g`` / ``G`` is the photon (KROME drops it from its rate equations).
+    WHOLE_TOKEN_MAP = {
+        "E": "e-",
+        "e": "e-",
+        "g": "_PHOTON",
+        "G": "_PHOTON",
+        **SPECIAL_MAP,
+    }
 
     SUBSTRING_MAP = {"HE": "He"}
 
@@ -83,7 +90,7 @@ class KromeReaction:
 
         Extracts the index, reactants, products, temperature bounds, and rate
         expression from the comma-delimited KROME format.  Applies species
-        normalisation (``E``/``e`` → ``e-``, ``g`` → ``_GRAIN``,
+        normalisation (``E``/``e`` → ``e-``, ``g``/``G`` (the photon) → ``_PHOTON``,
         ``HE`` → ``He``), normalises exotic pseudo-species
         (``CR``/``CRP``/``CRPHOT``/``PHOTON`` → underscore form), and converts
         ``user_crflux``/``user_crate``/``user_av`` aliases (whole words, any
@@ -171,7 +178,7 @@ class KromeReaction:
             "tmin": t_min,
             "tmax": t_max,
             "rate": rate,
-            "type": self._reaction_type(rate, rr),
+            "type": self._reaction_type(rate, rr, pp),
             "line": line.strip(),
         }
 
@@ -235,13 +242,15 @@ class KromeReaction:
         )
 
     @staticmethod
-    def _reaction_type(rate: str, rr: list[str]) -> str:
-        """Conclude the reaction type from the reactants, falling back to rate.
+    def _reaction_type(rate: str, rr: list[str], pp: list[str]) -> str:
+        """Conclude the reaction type from the species, falling back to rate.
 
         Structural signals are checked first so the result survives custom
         auxiliary-function rates: a ``_PHOTON`` reactant -> ``"photo"``, a
         cosmic-ray pseudo-species (``_CR``/``_CRP``/``_CRPHOT``) ->
-        ``"cosmic_ray"``, three or more real reactants -> ``"3_body"``. Only
+        ``"cosmic_ray"``, a ``_PHOTON`` product -> ``"recombination"`` with an
+        ``e-`` reactant (radiative recombination) or ``"radiative_association"``
+        without one, three or more real reactants -> ``"3_body"``. Only
         then is the rate inspected (``photo``, or ``av`` as a whole word in any
         case, -> ``"photo"``, ``crate`` -> ``"cosmic_ray"``, ``ntot`` ->
         ``"3_body"``); otherwise ``"unknown"``.
@@ -250,6 +259,8 @@ class KromeReaction:
             return "photo"
         if any(c in rr for c in ("_CR", "_CRP", "_CRPHOT")):
             return "cosmic_ray"
+        if "_PHOTON" in pp:
+            return "recombination" if "e-" in rr else "radiative_association"
         if sum(1 for r in rr if not r.startswith("_")) >= 3:
             return "3_body"
 
