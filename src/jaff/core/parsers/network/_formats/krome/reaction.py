@@ -55,6 +55,15 @@ class KromeReaction:
 
     _AV_RE = re.compile(r"\bav\b", flags=re.IGNORECASE)
 
+    _IF_RE = re.compile(r"^\s*if\s*\(", flags=re.IGNORECASE)
+    """A conditional rate, ``if(<Fortran condition>): <rate>``."""
+
+    COMPARISONS = {".ge.": ">=", ".le.": "<=", ".gt.": ">", ".lt.": "<"}
+    """Fortran comparisons in an ``if()`` condition, as Python operators."""
+
+    _UNSUPPORTED_RE = re.compile(r"\.eq\.|\.ne\.|\.not\.|==|/=")
+    """Operators an ``if()`` condition may not use (yet)."""
+
     def local_re(self, state: dict) -> re.Pattern:
         """Build the field-extraction regex for the active KROME column layout."""
         return re.compile(
@@ -147,6 +156,8 @@ class KromeReaction:
         rate = self._RATE_REPS_RE.sub(lambda m: self.RATE_REPS[m[1].lower()], rate)
 
         rate = f90_convert(rate)
+        # ``KromeParser.post_process`` turns krome_if(cond, k) into a Piecewise.
+        rate = self._conditional(rate, line, nline, file)
         # ``KromeParser.post_process`` numbers the placeholder into photorates().
         if "auto" in rate:
             rate = rate.replace("auto", "krome_photo(1e99, 1e99)")
@@ -163,6 +174,65 @@ class KromeReaction:
             "type": self._reaction_type(rate, rr),
             "line": line.strip(),
         }
+
+    @classmethod
+    def _conditional(cls, rate: str, line: str, nline: int, file) -> str:
+        """``if(cond): k`` as the placeholder ``krome_if(cond, k)``; else *rate*.
+
+        KROME computes such a rate only while the Fortran condition holds (the
+        rate stays ~0 otherwise).  Only a rate *starting* with ``if(`` is one, so a
+        ``:`` elsewhere (``n(:)``) is not a condition.  ``KromeParser.post_process``
+        makes the placeholder ``Piecewise((k, cond), (0, True))``.
+
+        Raises
+        ------
+        ParserError
+            If the parentheses do not close, no ``:`` follows them, or the
+            condition uses an unsupported operator.
+        """
+        if not cls._IF_RE.match(rate):
+            return rate
+
+        start = rate.index("(")
+        depth = 0
+        for end in range(start, len(rate)):
+            depth += {"(": 1, ")": -1}.get(rate[end], 0)
+            if depth == 0:
+                break
+        rest = rate[end + 1 :].lstrip()
+        if depth != 0 or not rest.startswith(":"):
+            raise ParserError(
+                "Invalid KROME conditional rate: expected if(<condition>): <rate>",
+                line,
+                nline,
+                file,
+            )
+
+        condition = cls._condition(rate[start + 1 : end], line, nline, file)
+
+        return f"krome_if({condition}, {rest[1:].strip()})"
+
+    @classmethod
+    def _condition(cls, condition: str, line: str, nline: int, file) -> str:
+        """A Fortran ``if()`` condition as a Python one: ``.gt.`` etc. as ``>`` etc.,
+        ``.and.`` / ``.or.`` as ``&`` / ``|`` with every comparison parenthesized
+        (``.and.`` binds tighter than ``.or.``, as ``&`` does than ``|``)."""
+        condition = f90_convert(condition.lower())
+        if cls._UNSUPPORTED_RE.search(condition):
+            raise ParserError(
+                "KROME if() condition uses an unsupported operator "
+                "(.eq., .ne., .not., == or /=)",
+                line,
+                nline,
+                file,
+            )
+        for fortran, python in cls.COMPARISONS.items():
+            condition = condition.replace(fortran, python)
+
+        return " | ".join(
+            "(" + " & ".join(f"({c.strip()})" for c in part.split(".and.")) + ")"
+            for part in condition.split(".or.")
+        )
 
     @staticmethod
     def _reaction_type(rate: str, rr: list[str]) -> str:

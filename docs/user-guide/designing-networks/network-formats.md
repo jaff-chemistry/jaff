@@ -255,6 +255,20 @@ Tokens: `idx` (index), `R` (reactant), `P` (product), `tmin`/`tmax` (temperature
 
 Temperature bounds may be written `NONE` (no limit) and may carry Fortran comparison prefixes such as `.LE.` or `>`, which are stripped. Fortran double-precision literals (`1d4`) are accepted in bounds and rates.
 
+### Conditional rates
+
+A rate may start with a Fortran condition, `if(<condition>): <rate>`; the rate then
+applies only while the condition holds and is 0 otherwise:
+
+```text
+24,HE+,g,,HE++,E,,,NONE,NONE,if(user_Trad.gt.1d3): 5.0d1*user_Trad**(1.63d0)
+```
+
+becomes `Piecewise((50*user_trad**1.63, user_trad > 1000), (0, True))`. The condition
+may compare with `.gt.`, `.ge.`, `.lt.`, `.le.` (or `>`, `>=`, `<`, `<=`) and combine
+comparisons with `.and.` / `.or.`; `.eq.`, `.ne.` and `.not.` are not supported yet. A
+row's `tmin`/`tmax` still apply on top of the condition.
+
 ### Built-in temperature shortcuts
 
 As in KROME, a rate may use these names without defining them (names are

@@ -3,7 +3,7 @@
 
 """KROME parser: ``@format``/``@var`` directives + comma-delimited reactions."""
 
-from sympy import Basic, parse_expr
+from sympy import Basic, Piecewise, parse_expr
 from sympy.core.function import AppliedUndef
 
 from ......errors import ParserError
@@ -97,19 +97,26 @@ class KromeParser(Parser):
         return ParseResult(reactions, globals_)
 
     def post_process(self, network) -> None:
-        """Number photo reactions: ``krome_photo(lo, hi)`` → ``photorates(n, lo, hi)``.
+        """Resolve the placeholders the reaction lines left in their rates.
 
-        ``n`` is the reaction's 1-based position in
-        ``network.reactions.with_type("photo")``, so every format numbers photo
-        reactions the same way.  A photo reaction without the placeholder (e.g.
-        one whose rate comes from a ``.jfunc`` ``chemRateCoeff``) leaves its number
-        unused.
+        - ``krome_if(cond, k)`` (a conditional rate ``if(cond): k``) becomes
+          ``Piecewise((k, cond), (0, True))``: the rate while the condition holds,
+          else 0, as KROME computes it.
+        - Photo reactions are numbered: ``krome_photo(lo, hi)`` →
+          ``photorates(n, lo, hi)``.  ``n`` is the reaction's 1-based position in
+          ``network.reactions.with_type("photo")``, so every format numbers photo
+          reactions the same way.  A photo reaction without the placeholder (e.g.
+          one whose rate comes from a ``.jfunc`` ``chemRateCoeff``) leaves its
+          number unused.
 
         Raises
         ------
         ParserError
             If a placeholder is left in any of this parser's reactions.
         """
+        for rea in network.reactions.with_format(self.name):
+            rea.rate_segments.map_rates(self._resolve_conditions)
+
         for n, rea in enumerate(network.reactions.with_type("photo"), start=1):
             rea.rate_segments.map_rates(lambda rate, n=n: self._number_photo(rate, n))
 
@@ -117,6 +124,17 @@ class KromeParser(Parser):
             exprs = [rea.rate.coefficient, *(seg.rate for seg in rea.rate_segments)]
             if any(self._placeholders(expr) for expr in exprs):
                 raise ParserError(f"Unresolved photo placeholder in {rea}")
+
+    @staticmethod
+    def _resolve_conditions(expr):
+        """Every ``krome_if(cond, k)`` in *expr* as ``Piecewise((k, cond), (0, True))``."""
+        if not isinstance(expr, Basic):
+            return expr
+
+        return expr.replace(
+            lambda e: isinstance(e, AppliedUndef) and e.func.__name__ == "krome_if",
+            lambda e: Piecewise((e.args[1], e.args[0]), (0, True)),
+        )
 
     @staticmethod
     def _placeholders(expr) -> list:
