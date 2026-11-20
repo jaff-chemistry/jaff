@@ -8,6 +8,8 @@ from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 
 from sympy import Basic, Expr, Indexed, Symbol, cse
+
+from .guard import guard
 from sympy.logic.boolalg import Boolean
 
 Temporaries = list[tuple[Basic, Expr]]
@@ -37,9 +39,10 @@ def shared_cse(
       comparison is cheap to repeat;
     - pruned of temporaries nothing uses.
 
-    With no definitions this is :func:`sympy.cse` followed by the pruning.  The
-    result is exact: substituting the temporaries back, last to first, into the
-    reduced expressions gives *exprs* with *definitions* substituted.
+    With no definitions and no ``Piecewise`` this is :func:`sympy.cse` followed by the
+    pruning.  The result is exact: substituting the temporaries back, last to first,
+    into the reduced expressions gives the values of *exprs* with *definitions*
+    substituted.
 
     Parameters
     ----------
@@ -96,7 +99,7 @@ def shared_cse(
 
     defined, outputs = _without_aliases(_ordered(defined), outputs)
 
-    return prune(defined, outputs), outputs
+    return prune(guard(defined, outputs), outputs), outputs
 
 
 def prune(temporaries: Temporaries, exprs: Sequence[Basic]) -> Temporaries:

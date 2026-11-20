@@ -157,3 +157,21 @@ def test_conditions_stay_inline():
             assert float(expanded.xreplace(values)) == pytest.approx(
                 float(expr.xreplace(DEFINITIONS).xreplace(values))
             )
+
+
+def test_temporaries_read_only_in_a_branch_are_guarded():
+    # exp(-50/T) is shared by both branch values, so cse lifts it out of the branch.
+    rate = sp.exp(-50 / T)
+    exprs = [
+        sp.Piecewise((K0 * X, T > 100), (0, True)),
+        sp.Piecewise((K0 * Y, T > 100), (1, True)),
+    ]
+    temporaries, reduced = shared_cse(exprs, {K0: rate}, sp.numbered_symbols("cse"))
+
+    assert temporaries
+    for _, value in temporaries:
+        assert value == sp.Piecewise((value.args[0].expr, T > 100), (sp.Float(0.0), True))
+    for got, want in zip(reduced, exprs, strict=True):
+        assert _value(_expand(temporaries, got)) == pytest.approx(
+            _value(want.xreplace({K0: rate})), rel=1e-12
+        )
