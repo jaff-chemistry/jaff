@@ -337,7 +337,10 @@ docs/           # Documentation
   `pow`/calls 20), `log_derivative` (`value · ∂ln(expr)/∂y` for products of powers and
   `exp`, when its `cost` is no higher than `diff`'s), `shared_cse` (one CSE over expressions and symbol definitions such as
   `krate[r]`, topologically ordered, no aliases, pruned; every `Codegen` getter prints
-  through it). Helpers that only use them live outside it
+  through it), `guard` (a CSE temporary read only inside `Piecewise` branches becomes
+  `Piecewise((value, guard), (0.0, True))`, guard = the input-only conditions it is read
+  under, so a fit is never evaluated out of its range). Helpers that only use them live
+  outside it
 - `codegen/`: `Codegen`, `Language`s, the `$$JAFF` template engine (`templating/`);
   `cse_group([(kind, options), ...])` prints several kinds (rates, odes, radodes, rhs,
   jacobian) with one shared CSE (reduced form with several members; cached); each
