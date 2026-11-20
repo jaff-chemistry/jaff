@@ -7,11 +7,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Literal, cast
 
 from sympy import Basic, Expr, ImmutableMatrix, ImmutableSparseMatrix, Indexed
 
 from ...common.derivative import derivative
+from ...common.optimizations import bottom_up, split_power
 from ...io import jaff_progress
 from ...physics import Radiation
 from ..reaction.rate import check_form
@@ -179,7 +181,9 @@ class OdeSystem:
         Species rows are :meth:`~jaff.core.Kinetics.odes`; the thermal row is
         :meth:`~jaff.physics.Thermodynamics.dTdt_tot` or ``dEdt_tot`` in the
         *energy* form; the radiation rows are :meth:`~jaff.physics.Radiation.odes`
-        in *rad_order*; all in :attr:`form`.
+        in *rad_order*; all in :attr:`form`, with powers of rates split
+        (:func:`~jaff.common.optimizations.split_power`; same values) so the
+        Jacobian holds no overflowing ``exp(+E/T)``.
         """
         net = self.network
         form = self.form
@@ -193,20 +197,36 @@ class OdeSystem:
             assert net.radiation is not None  # checked in __init__
             rows.extend(net.radiation.odes(self.rad_order, form))
 
-        return ImmutableMatrix(rows)
+        return ImmutableMatrix([self._split(row) for row in rows])
 
     @cached_property
     def rate_coefficients(self) -> dict[Indexed, Expr]:
         """Definitions of the ``krate[r]`` symbols of the reduced form.
 
         ``{krate[r]: rate coefficient of reaction r}`` for every reaction, in
-        catalogue order; empty in the expanded form, whose equations hold no
-        ``krate`` symbol.
+        catalogue order, powers of rates split as in :attr:`rhs`; empty in the
+        expanded form, whose equations hold no ``krate`` symbol.
         """
         if self.form == "expanded":
             return {}
 
-        return {r.rate.symbol: r.rate.coefficient for r in self.network.reactions}
+        coefficients = {r.rate.symbol: r.rate.coefficient for r in self.network.reactions}
+
+        return {
+            k: v if isinstance(v, str) else cast(Expr, self._split(v))  # raw code as is
+            for k, v in coefficients.items()
+        }
+
+    @cached_property
+    def _split(self) -> Callable[[Basic], Basic]:
+        """Rewrites rows and coefficients before they are differentiated.
+
+        :func:`~jaff.common.optimizations.split_power`: a rate raised to a
+        state-dependent power, ``(c*exp(-E/T))**e``, becomes ``c**e*exp(-e*E/T)``, as
+        its plain derivative holds an ``exp(+E/T)`` that overflows at low ``T``.  One
+        cache for every row and coefficient; the values are unchanged.
+        """
+        return bottom_up([split_power])
 
     @cached_property
     def parameters(self) -> tuple[Basic, ...]:

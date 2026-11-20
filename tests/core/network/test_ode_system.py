@@ -435,3 +435,64 @@ class TestJacobianSplit:
     def test_only_for_an_evolved_energy(self, tgas_network, thermal) -> None:
         with pytest.raises(ValueError, match="dedt"):
             tgas_network.ode_system(thermal=thermal).jacobian_split
+
+
+class TestPowerOfRate:
+    """A rate raised to a state-dependent power: split before differentiating, the
+    Jacobian holds no exp(+E/T) (which overflows at low T) and keeps its value."""
+
+    RATE = "(1.18e-10*exp(-69500/tgas)*sqrt(tgas))**(1/(1 + tgas/1000))"
+
+    @pytest.fixture
+    def network(self, make_network):
+        return make_network([f"H2 + H2 -> H + H + H2 [10,1e5] {self.RATE}"])
+
+    @staticmethod
+    def _expanded(system, expr):
+        return expr.xreplace(system.rate_coefficients)
+
+    @staticmethod
+    def _growing(expr, tgas=90.0):
+        t = sp.Symbol("tgas")
+        return [
+            a
+            for a in expr.atoms(sp.exp)
+            if a.args[0].free_symbols <= {t} and float(a.args[0].subs(t, tgas)) > 700
+        ]
+
+    @pytest.mark.parametrize("form", ["expanded", "reduced"])
+    def test_jacobian_has_no_growing_exponential(self, network, form) -> None:
+        system = network.ode_system(thermal="dtdt", form=form)
+        entries = [self._expanded(system, e) for e in system.jacobian.values()]
+
+        assert not [e for e in entries if self._growing(e)]
+
+    @pytest.mark.parametrize("form", ["expanded", "reduced"])
+    def test_jacobian_keeps_its_value(self, network, form) -> None:
+        system = network.ode_system(thermal="dtdt", form=form)
+        tgas, nden = sp.Symbol("tgas"), network.symbols.ndens
+        rows = [r.xreplace(system.rate_coefficients) for r in system.rhs]
+        plain = [
+            r.diff(tgas)
+            for r in network.kinetics.odes() + [network.thermodynamics.dTdt_tot()]
+        ]
+        point = {tgas: 400.0, nden[0]: 1e2, nden[1]: 3e1}
+        point.update({x: 1.0 for e in plain for x in e.free_symbols if x not in point})
+        column = len(system.state) - 1
+
+        for i, want in enumerate(plain):
+            got = self._expanded(system, system.jacobian[i, column])
+            assert float(got.xreplace(point)) == pytest.approx(
+                float(want.xreplace(point).evalf(30)), rel=1e-12
+            )
+        assert len(rows) == len(plain)
+
+    def test_rhs_keeps_its_value(self, network) -> None:
+        system = network.ode_system(thermal="dtdt")
+        tgas, nden = sp.Symbol("tgas"), network.symbols.ndens
+        point = {tgas: 400.0, nden[0]: 1e2, nden[1]: 3e1}
+        for got, want in zip(system.rhs, network.kinetics.odes(), strict=False):
+            point.update({x: 1.0 for x in want.free_symbols if x not in point})
+            assert float(got.xreplace(point)) == pytest.approx(
+                float(want.xreplace(point)), rel=1e-12
+            )

@@ -9,7 +9,7 @@ from collections.abc import Callable, Sequence
 from sympy import Basic
 
 from .powers import exp_power, integer_power
-from .split_log import split_log
+from .split import split_log
 
 Rule = Callable[[Basic], Basic]
 """A rewrite of one node: the node itself when it does not apply."""

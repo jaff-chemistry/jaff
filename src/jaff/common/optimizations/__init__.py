@@ -12,7 +12,7 @@ from .log_derivative import log_derivative
 from .logs import shared_logs
 from .optimize import PRE_CSE_RULES, RULES, bottom_up, optimize
 from .powers import exp_power, integer_power
-from .split_log import split_log
+from .split import split_log, split_power
 
 __all__ = [
     "PRE_CSE_RULES",
@@ -28,4 +28,5 @@ __all__ = [
     "shared_cse",
     "shared_logs",
     "split_log",
+    "split_power",
 ]

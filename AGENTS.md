@@ -310,7 +310,8 @@ docs/           # Documentation
 - `core/network/ode_system.py`: `OdeSystem` (`net.ode_system(...)`), the state vector,
   rhs and Jacobian a solver integrates; `Codegen` prints it rather than assembling
   equations. `form="reduced"` puts `krate[r]` in the rows (definitions in
-  `system.rate_coefficients`) and builds the Jacobian by the chain rule over them
+  `system.rate_coefficients`) and builds the Jacobian by the chain rule over them;
+  rows and coefficients have powers of rates split (`split_power`, same values)
 - `core/reaction/`, `core/species/`, `core/elements/`: reactions, species, elements;
   `reaction.rate` is a `Rate`: `.coefficient` (the only way to the rate coefficient),
   `.expanded` (coefficient × reactant densities) and `.reduced`
@@ -350,7 +351,12 @@ docs/           # Documentation
   calls). `PRE_CSE_RULES` are per-node rules `Codegen._print_parts` applies to items
   and definitions before CSE (always, with or without it), for rewrites that must see
   inside what CSE makes temporaries: `split_log` (`log(c*exp(b)*R)` as
-  `log(c) + b + log(R)`, so an `exp(-E/T)` that underflows at low T is no `log(0)`). `shared_logs(exprs, definitions)` (a base raised to several non-integer
+  `log(c) + b + log(R)`, so an `exp(-E/T)` that underflows at low T is no `log(0)`).
+  `split` holds it and `split_power` (`(c*exp(b)*R)**e` as `c**e*exp(e*b)*R**e`);
+  both treat `a**x` (numeric `a > 0`) like `exp(x*ln a)`. `OdeSystem` applies
+  `split_power` to its rhs rows and rate coefficients before differentiating: the
+  plain derivative of a rate raised to a state-dependent power holds an `exp(+E/T)`
+  that overflows at low T. `shared_logs(exprs, definitions)` (a base raised to several non-integer
   exponents: one `L = log(b)` and one `exp(f*L)` (or `sqrt`) per fractional part `f`,
   returned as definitions; `Codegen._print_parts` calls it before `shared_cse`).
   Rewrites walk each distinct subtree once (`bottom_up`, a `seen` set): SymPy's

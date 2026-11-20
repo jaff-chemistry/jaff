@@ -105,3 +105,26 @@ def test_rate_with_log_of_exponential_runs_at_low_temperature(make_network, use_
     assert printed == pytest.approx(
         1e-10 / (1 - 0.01 * (math.log(3.52e-9) - 43900 / 20.0))
     )
+
+
+POWER_OF_RATE = [
+    "H2 + H2 -> H + H + H2 [10,1e5] "
+    "(1.18e-10*exp(-69500/tgas)*sqrt(tgas))**(1/(1 + tgas/1000))",
+    "H + H -> H2 [10,1e5] 1e-17*sqrt(tgas)",
+]
+
+
+@pytest.mark.parametrize("members", [["jacobian"], ["rhs", "jacobian"]])
+@pytest.mark.parametrize("tgas", [50.0, 90.0])
+def test_power_of_rate_jacobian_runs_at_low_temperature(make_network, members, tgas):
+    # One member prints the expanded form, several the reduced (krate) form.
+    network = make_network(POWER_OF_RATE)
+    group = Codegen(network, "python").cse_group(
+        [(kind, {"thermal": "dtdt"}) for kind in members]
+    )
+    namespace = {"math": math, "tgas": tgas, "nden": DENSITIES}
+    for idx, code in group.temporaries:
+        exec(f"cse{idx[0]} = {code}", namespace)
+    printed = [eval(code, namespace) for part in group.expressions for _, code in part]
+
+    assert all(math.isfinite(v) for v in printed)
