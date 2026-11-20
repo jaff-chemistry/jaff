@@ -41,6 +41,7 @@ def test_properties_are_the_old_engine_ones_and_the_new_ones():
         "jacobian_fixed_t",
         "rhs_dt",
         "temperature_gradient",
+        "specie_gammas",
     }
 
 

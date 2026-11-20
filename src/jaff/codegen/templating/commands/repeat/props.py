@@ -104,6 +104,18 @@ def _parameters(ctx: RenderContext, kwargs: Dict[str, Any]) -> list[str]:
     return [ctx.cg.lang.code_gen(p, strict=False) for p in system.parameters]
 
 
+def _specie_gammas(ctx: RenderContext) -> list[float]:
+    """Adiabatic index of every species under the network's EOS (ideal, multi_gamma)."""
+    try:
+        return ctx.net.thermodynamics.eos.gammas
+    except AttributeError as e:
+        eos = ctx.net.config.thermodynamics.eos.type
+        raise TemplateError(
+            f"specie_gammas: the {eos!r} EOS has no per-species adiabatic indices "
+            "(only ideal and multi_gamma have them)"
+        ) from e
+
+
 def _functions(ctx: RenderContext) -> list[str]:
     """Stub signatures of the network's undefined functions and their derivatives.
 
@@ -161,6 +173,7 @@ PROPERTIES: Dict[str, RepeatProp] = {
     ),
     "elements": _items("element", lambda c: c.net.elements.symbols()),
     "specie_masses": _items("specie_mass", lambda c: c.net.species.masses()),
+    "specie_gammas": _items("specie_gamma", _specie_gammas),
     "reactants": _items("reactant", lambda c: c.net.reactions.reactants()),
     "products": _items("product", lambda c: c.net.reactions.products()),
     "photo_reactions": _items(

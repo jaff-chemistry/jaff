@@ -30,7 +30,8 @@ def _stub_net(tag: str) -> SimpleNamespace:
     symbols = SimpleNamespace(
         rho=sp.Symbol(f"rho_{tag}"), ntot=sp.Symbol(f"ntot_{tag}"), tgas=sp.Symbol("tgas")
     )
-    return SimpleNamespace(symbols=symbols)
+    # The ideal EOS gives one adiabatic index per species.
+    return SimpleNamespace(symbols=symbols, species=SimpleNamespace(count=2))
 
 
 def _stub_species_net() -> SimpleNamespace:

@@ -282,6 +282,18 @@ def test_parameters_inline_list(param_net, tmp_path):
     assert render(param_net, tmp_path, text) == 'PARAMETERS = ("av", "crate")\n'
 
 
+def test_specie_gammas_lists_the_eos_adiabatic_index_of_every_species(tmp_path):
+    path = tmp_path / "two.dat"
+    path.write_text("H + H -> H2 [10,1e4] 1e-17\n", encoding="utf-8")
+    eos = {"type": "multi_gamma", "default_gamma": 5 / 3, "gamma_map": {"H2": 1.4}}
+    two = Network(str(path), funcfile=False, thermodynamics={"eos": eos})
+    text = block("REPEAT idx, specie_gamma IN specie_gammas", "g[$idx$] = $specie_gamma$")
+    lines = render(two, tmp_path, text).splitlines()
+    gammas = dict(zip(two.species.names(), (float(s.split("=")[1]) for s in lines)))
+
+    assert gammas == {"H": pytest.approx(5 / 3), "H2": pytest.approx(1.4)}
+
+
 UNKNOWN_NETWORK = [
     "H -> H+ + e- [10,1e4] 1e-17*shield_interp1d(av)*crate",
     "H+ + e- -> H [10,1e4] 2e-10*tgas**(-0.7)*boost(tgas, av)",
