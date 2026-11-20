@@ -255,6 +255,25 @@ Tokens: `idx` (index), `R` (reactant), `P` (product), `tmin`/`tmax` (temperature
 
 Temperature bounds may be written `NONE` (no limit) and may carry Fortran comparison prefixes such as `.LE.` or `>`, which are stripped. Fortran double-precision literals (`1d4`) are accepted in bounds and rates.
 
+### Built-in temperature shortcuts
+
+As in KROME, a rate may use these names without defining them (names are
+case-insensitive; `Tgas` is the gas temperature in K):
+
+| Name | Value | Name | Value |
+| --- | --- | --- | --- |
+| `logT` | `log10(Tgas)` | `sqrTgas` | `sqrt(Tgas)` |
+| `lnT` | `ln(Tgas)` | `invsqrT` | `1 / sqrt(Tgas)` |
+| `Te` | `Tgas * 8.617343e-5` (eV) | `sqrT32` | `sqrt(T32)` |
+| `lnTe` | `ln(Te)` | `invsqrT32` | `1 / sqrt(T32)` |
+| `T32`, `t3` | `Tgas / 300` | `Tgas2`, `Tgas3`, `Tgas4` | `Tgas**2`, `Tgas**3`, `Tgas**4` |
+| `t4` | `Tgas / 1e4` | `T0` | `288` (K) |
+| `invT`, `invTgas` | `1 / Tgas` | `T02`, `T03`, `T04` | `T0**2`, `T0**3`, `T0**4` |
+| `invT32` | `1 / T32` | `T0inv` | `1 / T0` |
+| `invTe` | `1 / Te` | | |
+
+An `@var` of the same name replaces the built-in value.
+
 ### Variable aliases
 
 ```text

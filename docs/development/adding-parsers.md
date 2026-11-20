@@ -327,6 +327,10 @@ After all parsers have run, `__normalize_rates` lowercases every rate string. Ea
 | `n(idx_h2)`    | `n_H2` (KROME-only)    |
 | `n_global(idx_h2)` | `n_H2` (KROME-only) |
 
+`KromeParser.BASE_GLOBALS` also holds the rest of KROME's built-in temperature shortcuts
+(`invt`, `lnte`, `logt`, `tgas2`, `t0`, ...); see the
+[KROME format](../user-guide/designing-networks/network-formats.md#built-in-temperature-shortcuts).
+
 If your format introduces additional shorthand symbols, add them to your parser's own globals dict (e.g. a `BASE_GLOBALS`-style class attribute), following the same pattern. Compound aliases (those that reference simpler ones) must be listed **before** the simpler aliases they depend on so that `resolve_symbolic_dependencies` substitutes correctly.
 
 ---

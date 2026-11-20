@@ -1,5 +1,5 @@
 # ABOUTME: KROME network parser: @format/@var directives and comma-delimited reactions
-# ABOUTME: Seeds KROME shorthand globals (t32, invtgas, ...) for rate expressions
+# ABOUTME: Seeds KROME's built-in temperature shortcuts (invT, lnTe, ...) and shorthand globals
 
 """KROME parser: ``@format``/``@var`` directives + comma-delimited reactions."""
 
@@ -21,18 +21,37 @@ class KromeParser(Parser):
     name = "krome"
     priority = 10
 
-    # Canonical JAFF symbol aliases for common Fortran/KROME shorthand
-    # variables such as ``t32``, ``te``, ``invtgas``, and ``sqrtgas``.  They
-    # seed the parser's globals, which Network substitutes into the rates.
-    # Order does not matter: resolve_symbolic_dependencies resolves aliases
-    # that reference each other (invt32 -> t32) depth-first.
+    # Canonical JAFF symbol aliases for KROME's built-in temperature shortcuts
+    # (``get_Tshortcut`` in KROME's kromelib.py: available in every rate without
+    # an @var) and other common shorthand.  Keys are lower-case, as the rates'
+    # symbols are.  They seed the parser's globals, which Network substitutes
+    # into the rates; an @var of the same name overrides one.  Order does not
+    # matter: resolve_symbolic_dependencies resolves aliases that reference each
+    # other (invt32 -> t32) depth-first.
     BASE_GLOBALS = {
-        "invt32": "1e0 / t32",
-        "invte": "1e0 / te",
-        "t32": "tgas/3e2",
+        "logt": "log(tgas) / log(10)",
+        "lnt": "log(tgas)",
         "te": "tgas*8.617343e-5",
+        "lnte": "log(te)",
+        "t32": "tgas/3e2",
+        "t3": "t32",
+        "t4": "tgas*1e-4",
+        "invt": "1e0 / tgas",
+        "invt32": "1e0 / t32",
         "invtgas": "1e0 / tgas",
+        "invte": "1e0 / te",
         "sqrtgas": "sqrt(tgas)",
+        "invsqrt32": "1e0 / sqrt(t32)",
+        "invsqrt": "1e0 / sqrtgas",
+        "sqrt32": "sqrt(t32)",
+        "tgas2": "tgas**2",
+        "tgas3": "tgas**3",
+        "tgas4": "tgas**4",
+        "t0": "288e0",
+        "t02": "t0**2",
+        "t03": "t0**3",
+        "t04": "t0**4",
+        "t0inv": "1e0 / t0",
         "user_tdust": "tdust",
         "user_av": "av",
         "get_hnuclei(n)": "n_H_nuc",
