@@ -1,4 +1,4 @@
-# ABOUTME: Benchmark: the generated Python, Fortran and C++ solvers evolve the GOW network
+# ABOUTME: Benchmark: the generated Python, Fortran, C++ and Microphysics solvers evolve GOW
 # ABOUTME: to equilibrium at n_H = 100, chi = 0.1, 1, 10 and match the reference to 1e-6
 """GOW one-zone equilibrium against reference runs.
 
@@ -9,13 +9,15 @@ same network) start from the Gong+17 abundances at n_H = 100 cm^-3 and 100 K and
 reach equilibrium by ~2e13 s; their last row (7e20 s) is the equilibrium state.
 
 The RHS and Jacobian are generated from the network by the current code, for
-the ``python_solve_ivp``, ``fortran_dlsodes``, ``rosenbrock_cpp`` and
-``kokkos_ode`` templates; the test supplies only the table functions
+the ``python_solve_ivp``, ``fortran_dlsodes``, ``rosenbrock_cpp``, ``kokkos_ode``
+and ``microphysics`` templates; the test supplies only the table functions
 (:mod:`tests.gow_tables`, and the same tables in
 ``tests/fixtures/GOW_benchmark/user_functions.f90`` and ``.hpp``), the start state
 (the reference's first row) and the parameters below. The Rosenbrock integrator
 evolves the specific internal energy instead of the temperature; VODE
-(``kokkos_ode``) evolves the temperature, at rtol 1e-8 (it stalls below ~1e-10).
+(``kokkos_ode``) evolves the temperature, at rtol 1e-8 (it stalls below ~1e-10);
+Microphysics evolves the specific energy with the generated EOS (rtol 1e-8, one
+burn in the one-zone test, ``tests/fixtures/microphysics_cell``).
 The gas sits at the cloud face: no extinction, all column densities 0, so every
 shielding factor is 1.
 """
@@ -29,7 +31,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from tests import gow_tables, kokkos_build
+from tests import gow_tables, kokkos_build, microphysics_cell
 from tests._paths import FIXTURES_DIR
 from tests.python_solver import generate, load
 
@@ -382,6 +384,51 @@ def test_kokkos_equilibrium_matches_the_reference(kokkos, tag):
     densities = dict(zip(kokkos.species, values))
 
     assert status == 1, proc.stdout  # IntegratorResult::SUCCESS
+    assert temperature == pytest.approx(ref["Tgas"][-1], rel=AGREEMENT)
+    for column, name in SPECIES.items():
+        assert densities[name] == pytest.approx(ref[column][-1], rel=AGREEMENT), name
+
+
+# --------------------------------------------------------------------------- #
+# AMReX Microphysics (microphysics: network + its EOS, one-zone VODE)          #
+# --------------------------------------------------------------------------- #
+
+needs_microphysics = pytest.mark.skipif(
+    not sys.platform.startswith("linux") or not microphysics_cell.available(),
+    reason="needs Linux, make, and MICROPHYSICS_HOME and AMREX_HOME set",
+)
+
+
+@pytest.fixture(scope="module")
+def microphysics(tmp_path_factory):
+    """The one-zone Microphysics test built with the generated network and tables."""
+    network = str(BENCHMARK / "GOW.jet")
+    folder = generate(network, tmp_path_factory.mktemp("gow_mp"), "microphysics")
+    shutil.copy(BENCHMARK / "user_functions.hpp", folder / "user_functions.H")
+    workdir = tmp_path_factory.mktemp("gow_mp_cell")
+    build = microphysics_cell.build(folder, workdir)
+    assert build.returncode == 0, build.stdout[-3000:] + build.stderr[-3000:]
+
+    return workdir
+
+
+@needs_microphysics
+@pytest.mark.parametrize("tag", list(CHI))
+def test_microphysics_equilibrium_matches_the_reference(microphysics, tag):
+    ref = _reference(tag)
+    start = {name: float(ref[column][0]) for column, name in SPECIES.items()}
+
+    proc = microphysics_cell.run(
+        microphysics,
+        start,
+        _parameters(CHI[tag]),
+        f"unit_test.temperature={float(ref['Tgas'][0])!r}",
+        f"unit_test.tmax={T_END!r}",
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    success, temperature, densities = microphysics_cell.final_state(proc.stdout)
+
+    assert success
     assert temperature == pytest.approx(ref["Tgas"][-1], rel=AGREEMENT)
     for column, name in SPECIES.items():
         assert densities[name] == pytest.approx(ref[column][-1], rel=AGREEMENT), name

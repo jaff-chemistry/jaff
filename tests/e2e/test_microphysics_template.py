@@ -149,3 +149,35 @@ def test_gow_builds_with_its_stubs(gow, tmp_path):
     build = microphysics_cell.build(gow.folder, tmp_path)
 
     assert build.returncode == 0, build.stdout[-3000:] + build.stderr[-3000:]
+
+
+@needs_microphysics
+def test_cothin_burns_and_conserves_elements_and_charge(tmp_path_factory):
+    net = Network("COthin")
+    folder = generate("COthin", tmp_path_factory.mktemp("cothin"), "microphysics")
+    workdir = tmp_path_factory.mktemp("cothin_cell")
+    build = microphysics_cell.build(folder, workdir)
+    assert build.returncode == 0, build.stdout[-3000:] + build.stderr[-3000:]
+    # every species at 1 cm^-3, electrons balancing the other charges: neutral
+    charge = sum(s.charge for s in net.species if s.name != "e-")
+    start = {s.name: float(charge) if s.name == "e-" else 1.0 for s in net.species}
+
+    proc = microphysics_cell.run(
+        workdir,
+        start,
+        {"av": 1.0, "crate": 1e-16, "tdust": 20.0},
+        "unit_test.temperature=1000.0",  # COthin rate fits overflow below ~200 K
+        "unit_test.tmax=1e10",
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    success, _, final = microphysics_cell.final_state(proc.stdout)
+
+    assert success
+    names = net.species.names()
+    for row in net.elements.density_matrix():
+        before = sum(c * start[n] for c, n in zip(row, names))
+        after = sum(c * final[n] for c, n in zip(row, names))
+        assert after == pytest.approx(before, rel=1e-6)
+    assert sum(s.charge * start[s.name] for s in net.species) == 0.0
+    net_charge = sum(s.charge * final[s.name] for s in net.species)
+    assert net_charge == pytest.approx(0.0, abs=1e-6 * charge)
