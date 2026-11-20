@@ -5,9 +5,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cached_property
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Literal, cast
 
 from sympy import Basic, Expr, ImmutableMatrix, ImmutableSparseMatrix, Indexed
@@ -189,10 +189,12 @@ class OdeSystem:
         form = self.form
         rows: list[Basic] = net.kinetics.odes(form)
         thermo = net.thermodynamics
+
         if self.thermal == "dedt":
             rows.append(thermo.dEdt_tot(form).normaliser(self.energy))
         elif self.thermal == "dtdt":
             rows.append(thermo.dTdt_tot(form))
+
         if self.radiation:
             assert net.radiation is not None  # checked in __init__
             rows.extend(net.radiation.odes(self.rad_order, form))
@@ -266,12 +268,16 @@ class OdeSystem:
         """
         state = {var.symbol for var in self.state}
 
+        coefficients = self.rate_coefficients.items()
+
         return {
             k: {
                 y: derivative(coefficient, y, value=k)
                 for y in coefficient.free_symbols & state
             }
-            for k, coefficient in self.rate_coefficients.items()
+            for k, coefficient in jaff_progress.track(
+                coefficients, description="Differentiating the rate coefficients"
+            )
         }
 
     def _rate_terms(self, row: Expr) -> list[tuple[dict[Basic, Expr], Expr]]:
@@ -409,6 +415,8 @@ class OdeSystem:
         }
         entries: dict[tuple[int, int], Basic] = {}
         row_terms = []
+        # Before the rows: their own bar, not a stall in the first row's.
+        _ = self._rate_derivatives
         for i, row in enumerate(
             jaff_progress.track(rows, description="Differentiating the rhs")
         ):

@@ -1967,30 +1967,34 @@ class Codegen:
         """
         # Rewrites that must see inside sub-expressions CSE would make temporaries;
         # one cache, so subtrees shared between items are rewritten once.
-        pre_cse = bottom_up(PRE_CSE_RULES)
-        symbolic = [
-            pre_cse(i) for part in parts for i in part.items if not isinstance(i, str)
-        ]
-        definitions = {k: pre_cse(v) for k, v in (definitions or {}).items()}
+        with jaff_progress.indeterminate("Rewriting expressions"):
+            pre_cse = bottom_up(PRE_CSE_RULES)
+            symbolic = [
+                pre_cse(i) for part in parts for i in part.items if not isinstance(i, str)
+            ]
+            definitions = {k: pre_cse(v) for k, v in (definitions or {}).items()}
         temporaries = IndexedList()
         cse_defs: dict[str, sp.Basic] | None = None
         if use_cse and symbolic:
             basic = all(part.optimizations == "basic" for part in parts)
-            with jaff_progress.indeterminate("Generating cse expressions"):
+            with jaff_progress.indeterminate("Sharing logarithms"):
                 # Powers of a common base over one shared log: new temporaries.
                 symbolic, definitions = shared_logs(symbolic, definitions)
+            with jaff_progress.indeterminate("Finding common subexpressions"):
                 replacements, symbolic = shared_cse(
                     symbolic,
                     definitions,
                     self._cse_symbols(cse_var, cse_suffix),
                     "basic" if basic else None,
                 )
-                # str-keyed so __convert_unknown_derivatives can resolve CSE
-                # symbols back to their defining expressions
-                cse_defs = {str(var): expr for var, expr in replacements}
-                for var, expr in replacements:
-                    idx = self._cse_index(var, cse_var, cse_suffix)
-                    temporaries.append(IndexedValue([idx], self._code(expr, cse_defs)))
+            # str-keyed so __convert_unknown_derivatives can resolve CSE
+            # symbols back to their defining expressions
+            cse_defs = {str(var): expr for var, expr in replacements}
+            for var, expr in jaff_progress.track(
+                replacements, description="Generating cse code"
+            ):
+                idx = self._cse_index(var, cse_var, cse_suffix)
+                temporaries.append(IndexedValue([idx], self._code(expr, cse_defs)))
 
         reduced = iter(symbolic)
         printed = []

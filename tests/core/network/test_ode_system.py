@@ -496,3 +496,20 @@ class TestPowerOfRate:
             assert float(got.xreplace(point)) == pytest.approx(
                 float(want.xreplace(point)), rel=1e-12
             )
+
+
+def test_rate_coefficient_derivatives_are_reported_first(make_network, monkeypatch):
+    import jaff.core.network.ode_system as ode_system_module
+
+    descriptions = []
+
+    def track(sequence, *args, description="Working...", **kwargs):
+        descriptions.append(description)
+        yield from sequence
+
+    monkeypatch.setattr(ode_system_module.jaff_progress, "track", track)
+    network = make_network(["H + H -> H2 [10,1e4] 1e-10*tgas**0.7*exp(-5e4/tgas)"])
+    _ = network.ode_system(thermal="dtdt", form="reduced").jacobian
+    rates = descriptions.index("Differentiating the rate coefficients")
+
+    assert rates < descriptions.index("Differentiating the rhs")
