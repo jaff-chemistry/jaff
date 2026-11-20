@@ -152,3 +152,29 @@ def test_unset_parameters_stop_the_run_named(demo2_flash, tmp_path):
 @needs_flash
 def test_the_flash_checkout_is_left_untouched(demo2_flash):
     assert _checkout_status() == demo2_flash.before
+
+
+@needs_flash
+def test_cothin_burns_and_conserves_elements_and_charge(cothin, tmp_path):
+    net, label = cothin.net, cothin.net.label
+    home = flash_overlay.overlay(cothin.folder, tmp_path / "home", label)
+    build = flash_overlay.build(home, label)
+    assert build.returncode == 0, build.stdout[-3000:] + build.stderr[-3000:]
+    # every species at 1 cm^-3, electrons balancing the other charges: neutral
+    charge = sum(s.charge for s in net.species if s.name != "e-")
+    start = {s.name: float(charge) if s.name == "e-" else 1.0 for s in net.species}
+    settings = {"jaff_av": 1.0, "jaff_crate": 1e-16, "jaff_tdust": 20.0}
+    # COthin rate fits overflow below ~200 K
+    settings |= {"sim_initTemp": 1000.0, "tmax": 1.0e10}
+
+    proc = flash_overlay.run(home / "obj", start, settings, tmp_path / "run")
+    assert proc.returncode == 0, proc.stdout[-3000:] + proc.stderr[-3000:]
+    _, _, final = flash_overlay.final_state(tmp_path / "run")
+
+    names = net.species.names()
+    for row in net.elements.density_matrix():
+        before = sum(c * start[n] for c, n in zip(row, names))
+        after = sum(c * final[n] for c, n in zip(row, names))
+        assert after == pytest.approx(before, rel=1e-6)
+    net_charge = sum(s.charge * final[s.name] for s in net.species)
+    assert net_charge == pytest.approx(0.0, abs=1e-6 * charge)

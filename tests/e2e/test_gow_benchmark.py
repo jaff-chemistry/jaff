@@ -1,4 +1,4 @@
-# ABOUTME: Benchmark: the generated Python, Fortran, C++ and Microphysics solvers evolve GOW
+# ABOUTME: Benchmark: the generated Python, Fortran, C++, Microphysics and FLASH solvers: GOW
 # ABOUTME: to equilibrium at n_H = 100, chi = 0.1, 1, 10 and match the reference to 1e-6
 """GOW one-zone equilibrium against reference runs.
 
@@ -9,15 +9,17 @@ same network) start from the Gong+17 abundances at n_H = 100 cm^-3 and 100 K and
 reach equilibrium by ~2e13 s; their last row (7e20 s) is the equilibrium state.
 
 The RHS and Jacobian are generated from the network by the current code, for
-the ``python_solve_ivp``, ``fortran_dlsodes``, ``rosenbrock_cpp``, ``kokkos_ode``
-and ``microphysics`` templates; the test supplies only the table functions
+the ``python_solve_ivp``, ``fortran_dlsodes``, ``rosenbrock_cpp``, ``kokkos_ode``,
+``microphysics`` and ``flash`` templates; the test supplies only the table functions
 (:mod:`tests.gow_tables`, and the same tables in
 ``tests/fixtures/GOW_benchmark/user_functions.f90`` and ``.hpp``), the start state
 (the reference's first row) and the parameters below. The Rosenbrock integrator
 evolves the specific internal energy instead of the temperature; VODE
 (``kokkos_ode``) evolves the temperature, at rtol 1e-8 (it stalls below ~1e-10);
 Microphysics evolves the specific energy with the generated EOS (rtol 1e-8, one
-burn in the one-zone test, ``tests/fixtures/microphysics_cell``).
+burn in the one-zone test, ``tests/fixtures/microphysics_cell``); FLASH burns the
+generated network with its DLSODES once per FLASH step (rtol 1e-8), in a temporary
+overlay of the checkout named by ``FLASH_HOME`` (:mod:`tests.flash_overlay`).
 The gas sits at the cloud face: no extinction, all column densities 0, so every
 shielding factor is 1.
 """
@@ -31,7 +33,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from tests import gow_tables, kokkos_build, microphysics_cell
+from tests import flash_overlay, gow_tables, kokkos_build, microphysics_cell
 from tests._paths import FIXTURES_DIR
 from tests.python_solver import generate, load
 
@@ -429,6 +431,51 @@ def test_microphysics_equilibrium_matches_the_reference(microphysics, tag):
     success, temperature, densities = microphysics_cell.final_state(proc.stdout)
 
     assert success
+    assert temperature == pytest.approx(ref["Tgas"][-1], rel=AGREEMENT)
+    for column, name in SPECIES.items():
+        assert densities[name] == pytest.approx(ref[column][-1], rel=AGREEMENT), name
+
+
+# --------------------------------------------------------------------------- #
+# FLASH (flash: KromeChemistry network + one-zone simulation, in an overlay)   #
+# --------------------------------------------------------------------------- #
+
+needs_flash = pytest.mark.skipif(
+    not sys.platform.startswith("linux") or not flash_overlay.available(),
+    reason="needs Linux, make, mpif90 and FLASH_HOME naming a FLASH checkout",
+)
+
+
+@pytest.fixture(scope="module")
+def flash(tmp_path_factory):
+    """FLASH's one-zone simulation built with the generated network and tables."""
+    folder = generate(
+        str(BENCHMARK / "GOW.jet"), tmp_path_factory.mktemp("gow_fl"), "flash"
+    )
+    unit = folder / "source/physics/sourceTerms/KromeChemistry/KromeChemistryMain/GOW"
+    shutil.copy(BENCHMARK / "user_functions.f90", unit / "user_functions.f90")
+    home = flash_overlay.overlay(
+        folder, tmp_path_factory.mktemp("gow_fl_home") / "f", "GOW"
+    )
+    build = flash_overlay.build(home, "GOW")
+    assert build.returncode == 0, build.stdout[-3000:] + build.stderr[-3000:]
+
+    return home / "obj"
+
+
+@needs_flash
+@pytest.mark.parametrize("tag", list(CHI))
+def test_flash_equilibrium_matches_the_reference(flash, tag, tmp_path):
+    ref = _reference(tag)
+    start = {name: float(ref[column][0]) for column, name in SPECIES.items()}
+    settings = {f"jaff_{k}": v for k, v in _parameters(CHI[tag]).items()}
+    settings |= {"sim_initTemp": float(ref["Tgas"][0]), "tmax": T_END}
+
+    proc = flash_overlay.run(flash, start, settings, tmp_path)
+    assert proc.returncode == 0, proc.stdout[-3000:] + proc.stderr[-3000:]
+    t, temperature, densities = flash_overlay.final_state(tmp_path)
+
+    assert t == pytest.approx(T_END)
     assert temperature == pytest.approx(ref["Tgas"][-1], rel=AGREEMENT)
     for column, name in SPECIES.items():
         assert densities[name] == pytest.approx(ref[column][-1], rel=AGREEMENT), name

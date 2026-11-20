@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 
 import numpy as np
@@ -96,7 +97,7 @@ def build(home: Path, label: str) -> subprocess.CompletedProcess:
 def run(
     obj: Path,
     densities: dict[str, float],
-    settings: dict[str, object],
+    settings: Mapping[str, object],
     workdir: Path,
 ) -> subprocess.CompletedProcess:
     """Run ``flash4`` in *workdir* from *densities* with flash.par *settings* changed.
