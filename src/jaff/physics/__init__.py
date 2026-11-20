@@ -7,7 +7,9 @@ exposes them as attributes; they are rarely constructed directly:
 
 * ``net.thermodynamics`` -- a :class:`Thermodynamics`: the equation of state
   (built by :class:`EosFactory` from ``[network.thermodynamics.eos]``), the
-  heating/cooling rates ``dE/dt`` and the temperature rates ``dT/dt``.
+  heating/cooling rates ``dE/dt`` and the temperature rates ``dT/dt``. It gives
+  every species a :class:`SpecieThermodynamics` (``specie.thermodynamics``: its
+  adiabatic index under that EOS).
 * ``net.radiation`` -- a :class:`Radiation` of :class:`RadiationGroup` bands,
   present when a radiation field is configured (``[network.radiation]``); its
   :meth:`Radiation.odes` are the radiation-moment equations.
@@ -46,7 +48,7 @@ from .dust import Dust
 from .photo_reactions._photo_band import PhotoBand
 from .photo_reactions._photochemistry import Photochemistry, XsecProps
 from .photo_reactions._radiation import Radiation, RadiationGroup
-from .thermodynamics import Thermodynamics
+from .thermodynamics import SpecieThermodynamics, Thermodynamics
 from .thermodynamics.eos import EosFactory
 
 __all__ = [
@@ -59,5 +61,6 @@ __all__ = [
     "PhotoBand",
     "Dust",
     "EosFactory",
+    "SpecieThermodynamics",
     "Thermodynamics",
 ]

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING, Callable, ClassVar, Sequence
+from typing import TYPE_CHECKING, Callable, ClassVar
 
 from sympy import Expr
 
@@ -31,9 +31,7 @@ class InternalEnergy:
         "molar": lambda e: e.molar,
     }
 
-    def __init__(
-        self, expr: Expr, net: Network, gammas: Sequence[float] | None = None
-    ) -> None:
+    def __init__(self, expr: Expr, net: Network) -> None:
         """Wrap a volumetric internal energy.
 
         Parameters
@@ -42,13 +40,9 @@ class InternalEnergy:
             Volumetric internal energy [erg cm⁻³].
         net : Network
             Network whose ``rho`` and ``ntot`` normalise *expr*.
-        gammas : Sequence[float] or None, optional
-            Adiabatic index of every species, in species order, when the EOS has
-            them (``ideal`` and ``multi_gamma``); by default none.
         """
         self._net: Network = net
         self._vol_expr: Expr = expr
-        self._gammas: tuple[float, ...] | None = None if gammas is None else tuple(gammas)
 
     def __add__(self, other: object) -> InternalEnergy:
         return self._combine(other, "+")
@@ -133,29 +127,6 @@ class InternalEnergy:
             )
 
         return self._NORMALISED[form](self)
-
-    @property
-    def gammas(self) -> list[float]:
-        """Adiabatic index of every species, in species order (``ideal``, ``multi_gamma``).
-
-        ``ideal`` gives its ``gamma`` to every species; ``multi_gamma`` takes each
-        from ``gamma_map`` by species name, else ``default_gamma``. Host codes with
-        their own EOS (templates print them with ``REPEAT specie_gammas``) use them
-        to stay consistent with this energy.
-
-        Raises
-        ------
-        AttributeError
-            If the energy has no per-species adiabatic indices (other EOS types,
-            sums and differences of energies).
-        """
-        if self._gammas is None:
-            raise AttributeError(
-                "this internal energy has no per-species adiabatic indices "
-                "(only the ideal and multi_gamma EOS have them)"
-            )
-
-        return list(self._gammas)
 
     @cached_property
     def volumetric(self) -> Expr:

@@ -282,16 +282,28 @@ def test_parameters_inline_list(param_net, tmp_path):
     assert render(param_net, tmp_path, text) == 'PARAMETERS = ("av", "crate")\n'
 
 
-def test_specie_gammas_lists_the_eos_adiabatic_index_of_every_species(tmp_path):
+def _two_species(tmp_path, eos) -> Network:
     path = tmp_path / "two.dat"
     path.write_text("H + H -> H2 [10,1e4] 1e-17\n", encoding="utf-8")
+    return Network(str(path), funcfile=False, thermodynamics={"eos": eos})
+
+
+def test_specie_gammas_lists_every_species_adiabatic_index(tmp_path):
     eos = {"type": "multi_gamma", "default_gamma": 5 / 3, "gamma_map": {"H2": 1.4}}
-    two = Network(str(path), funcfile=False, thermodynamics={"eos": eos})
+    two = _two_species(tmp_path, eos)
     text = block("REPEAT idx, specie_gamma IN specie_gammas", "g[$idx$] = $specie_gamma$")
     lines = render(two, tmp_path, text).splitlines()
     gammas = dict(zip(two.species.names(), (float(s.split("=")[1]) for s in lines)))
 
     assert gammas == {"H": pytest.approx(5 / 3), "H2": pytest.approx(1.4)}
+
+
+def test_specie_gammas_without_species_thermodynamics_is_an_error(tmp_path):
+    two = _two_species(tmp_path, {"type": "fermi_degenerate"})
+    text = block("REPEAT idx, specie_gamma IN specie_gammas", "$specie_gamma$")
+
+    with pytest.raises(ParserError, match="fermi_degenerate"):
+        render(two, tmp_path, text)
 
 
 UNKNOWN_NETWORK = [

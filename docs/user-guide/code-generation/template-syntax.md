@@ -394,7 +394,7 @@ with `CSE` among their option groups can join a [CSE group](#cse-common-subexpre
 | `species`                      | `idx, specie`                              | —              |
 | `species_with_normalized_sign` | `idx, specie_with_normalized_sign`         | `SIGN` |
 | `specie_masses`                | `idx, specie_mass`                         | —              |
-| `specie_gammas`                | `idx, specie_gamma` (adiabatic index, `eos.gammas`; ideal and multi_gamma EOS only) | —  |
+| `specie_gammas`                | `idx, specie_gamma` (adiabatic index, `specie.thermodynamics.gamma`; ideal and multi_gamma EOS only) | —  |
 | `specie_charges`               | `idx, specie_charge`                       | —              |
 | `specie_masses_ne`             | `idx, specie_mass_ne`                      | —              |
 | `specie_charges_ne`            | `idx, specie_charge_ne`                    | —              |

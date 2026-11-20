@@ -31,6 +31,7 @@ from ..elements import Elements
 if TYPE_CHECKING:
     import logging
 
+    from ...physics.thermodynamics import SpecieThermodynamics
     from ..elements import Element
 
 
@@ -73,6 +74,10 @@ class Specie:
         become ``"+/C/H/O"``).
     elements : Elements
         Lazy-loaded ``Elements`` collection for this single species.
+    thermodynamics : SpecieThermodynamics or None
+        Thermodynamic properties under the network's EOS (adiabatic index),
+        attached by :class:`~jaff.physics.thermodynamics.Thermodynamics`; ``None``
+        for a species outside a network or an EOS without per-species properties.
 
     Raises
     ------
@@ -135,6 +140,7 @@ class Specie:
         self.__latex: str = ""
         self.fidx: str = self.get_fidx()
         self.serialized: str = ""
+        self.thermodynamics: SpecieThermodynamics | None = None
 
         self._parse(periodic_table())
         self.serialize()

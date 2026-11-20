@@ -9,7 +9,7 @@ from sympy import Float
 
 from ...constants import k_B
 from ..internal_energy import InternalEnergy
-from .config import EosConfig, IdealEosConfig, MultiGammaEosConfig
+from .config import EosConfig, IdealEosConfig
 
 if TYPE_CHECKING:
     from ....core import Network
@@ -102,25 +102,27 @@ class EosFactory:
         gamma = cast(IdealEosConfig, self.config).gamma
         e = ntot * k_B.cgs.value * tgas / (gamma - 1.0)
 
-        return InternalEnergy(e, self._net, [gamma] * self._net.species.count)
+        return InternalEnergy(e, self._net)
 
     def multi_gamma(self) -> InternalEnergy:
         """Internal energy summed over species with per-species adiabatic indices.
 
-        Each species uses ``config.gamma_map[name]``, falling back to
-        ``config.default_gamma``.
+        Each species' index is its
+        :attr:`SpecieThermodynamics.gamma
+        <jaff.physics.thermodynamics.SpecieThermodynamics.gamma>`:
+        ``config.gamma_map[name]``, falling back to ``config.default_gamma``.
 
         Returns
         -------
         InternalEnergy
             InternalEnergy wrapping the volumetric internal energy [erg cm⁻³].
         """
+        # Imported here: specie_thermodynamics imports this package's config.
+        from ..specie_thermodynamics import SpecieThermodynamics
+
         e = Float(0.0)
-        config = cast(MultiGammaEosConfig, self.config)
-        gamma_map = config.gamma_map
-        default_gamma = config.default_gamma
-        gammas = [gamma_map.get(sp.name, default_gamma) for sp in self._net.species]
-        for sp, gamma in zip(self._net.species, gammas):
+        for sp in self._net.species:
+            gamma = SpecieThermodynamics(sp, self.config).gamma
             e += (
                 self._net.symbols.ndens[sp.index]
                 * k_B.cgs.value
@@ -128,7 +130,7 @@ class EosFactory:
                 / (gamma - 1.0)
             )
 
-        return InternalEnergy(e, self._net, gammas)
+        return InternalEnergy(e, self._net)
 
     def fermi_degenerate(self) -> InternalEnergy:
         """Non-relativistic degenerate Fermi gas EOS (not implemented).

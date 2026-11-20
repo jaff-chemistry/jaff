@@ -353,6 +353,12 @@ nav = [
         "reference/physics/eosfactory/fermi_degenerate.md",
         "reference/physics/eosfactory/relativistic_fermi_degenerate.md",
       ] },
+      { "physics.SpecieThermodynamics" = [
+        "reference/physics/speciethermodynamics/index.md",
+        "reference/physics/speciethermodynamics/supports.md",
+        "reference/physics/speciethermodynamics/gamma.md",
+        "reference/physics/speciethermodynamics/is_constant.md",
+      ] },
       { "physics.Thermodynamics" = [
         "reference/physics/thermodynamics/index.md",
         "reference/physics/thermodynamics/dEdt_chemical.md",

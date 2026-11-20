@@ -11,6 +11,7 @@ from sympy import Expr, Float, diff
 from .config import ThermodynamicsConfig
 from .eos import EosFactory
 from .internal_energy import DEDt, InternalEnergy
+from .specie_thermodynamics import SpecieThermodynamics
 
 if TYPE_CHECKING:
     from ...core import Network
@@ -106,6 +107,11 @@ class Thermodynamics:
         self.net: Network = net
         self.config: ThermodynamicsConfig = config
         self._by_form: dict[tuple[str, str], Any] = {}
+        supported = SpecieThermodynamics.supports(config.eos)
+        for specie in net.species:
+            specie.thermodynamics = (
+                SpecieThermodynamics(specie, config.eos) if supported else None
+            )
 
     def _cached(self, name: str, form: str, build: Callable[[], Any]) -> Any:
         """*build()* once per (*name*, *form*); *form* is checked first."""

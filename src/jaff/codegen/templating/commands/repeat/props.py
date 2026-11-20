@@ -104,16 +104,23 @@ def _parameters(ctx: RenderContext, kwargs: Dict[str, Any]) -> list[str]:
     return [ctx.cg.lang.code_gen(p, strict=False) for p in system.parameters]
 
 
-def _specie_gammas(ctx: RenderContext) -> list[float]:
-    """Adiabatic index of every species under the network's EOS (ideal, multi_gamma)."""
-    try:
-        return ctx.net.thermodynamics.eos.gammas
-    except AttributeError as e:
+def _specie_gammas(ctx: RenderContext) -> list[str]:
+    """Every species' adiabatic index (``specie.thermodynamics.gamma``), printed."""
+    gammas, missing = [], []
+    for specie in ctx.net.species:
+        if specie.thermodynamics is None:
+            missing.append(specie.name)
+        else:
+            gammas.append(ctx.cg.lang.code_gen(specie.thermodynamics.gamma, strict=False))
+
+    if missing:
         eos = ctx.net.config.thermodynamics.eos.type
         raise TemplateError(
-            f"specie_gammas: the {eos!r} EOS has no per-species adiabatic indices "
-            "(only ideal and multi_gamma have them)"
-        ) from e
+            f"specie_gammas: the {eos!r} EOS gives no adiabatic index to "
+            f"{', '.join(missing)} (only ideal and multi_gamma do)"
+        )
+
+    return gammas
 
 
 def _functions(ctx: RenderContext) -> list[str]:
