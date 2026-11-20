@@ -11,7 +11,6 @@ temperature [K]. Unknown functions (GOW's tables) return 1, their partial
 derivatives 0, by rewriting the generated stubs.
 """
 
-import os
 import re
 import shutil
 import subprocess
@@ -23,6 +22,7 @@ import numpy as np
 import pytest
 
 from jaff import Network
+from tests import kokkos_build
 from tests._paths import FIXTURES_DIR, REPO_ROOT
 from tests.python_solver import generate
 
@@ -52,7 +52,6 @@ VALUES = {
 }
 NCOL = 1e14
 TEMPERATURE = 1000.0
-LOCAL_SOURCE = "FETCHCONTENT_SOURCE_DIR_HEADER_ONLY_INTEGRATORS"
 
 
 def _stub_unknown_functions(folder: Path) -> None:
@@ -65,13 +64,6 @@ def _stub_unknown_functions(folder: Path) -> None:
             line = re.sub(r"\{.*\}\s*$", f"{{ return {value}; }}", line)
         lines.append(line)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def _configure(folder: Path) -> subprocess.CompletedProcess:
-    command = ["cmake", "-S", ".", "-B", "build", "-DCMAKE_BUILD_TYPE=Release"]
-    if os.environ.get(LOCAL_SOURCE):
-        command.append(f"-D{LOCAL_SOURCE}={os.environ[LOCAL_SOURCE]}")
-    return subprocess.run(command, cwd=folder, capture_output=True, text=True)
 
 
 def _value(name: str) -> float:
@@ -126,13 +118,11 @@ def built(request, tmp_path_factory) -> SimpleNamespace:
     net = Network(network)
     folder = generate(network, tmp_path_factory.mktemp(request.param), "kokkos_ode")
     _stub_unknown_functions(folder)
-    configure = _configure(folder)
+    configure = kokkos_build.configure(folder)
     build = subprocess.run(
         ["cmake", "--build", "build", "-j"], cwd=folder, capture_output=True, text=True
     )
-    include = next(folder.glob("build/_deps/header_only_integrators-src/include"), None)
-    if include is None and os.environ.get(LOCAL_SOURCE):
-        include = Path(os.environ[LOCAL_SOURCE]) / "include"
+    include = kokkos_build.include_dir(folder)
 
     return SimpleNamespace(
         net=net, folder=folder, configure=configure, build=build, include=include

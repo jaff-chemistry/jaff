@@ -9,12 +9,15 @@ same network) start from the Gong+17 abundances at n_H = 100 cm^-3 and 100 K and
 reach equilibrium by ~2e13 s; their last row (7e20 s) is the equilibrium state.
 
 The RHS and Jacobian are generated from the network by the current code, for
-the ``python_solve_ivp``, ``fortran_dlsodes`` and ``rosenbrock_cpp`` templates;
-the test supplies only the table functions (:mod:`tests.gow_tables`, and the same
-tables in ``tests/fixtures/GOW_benchmark/user_functions.f90`` and ``.hpp``), the
-start state (the reference's first row) and the parameters below. The C++
-integrator evolves the specific internal energy instead of the temperature. The gas sits at the cloud face:
-no extinction, all column densities 0, so every shielding factor is 1.
+the ``python_solve_ivp``, ``fortran_dlsodes``, ``rosenbrock_cpp`` and
+``kokkos_ode`` templates; the test supplies only the table functions
+(:mod:`tests.gow_tables`, and the same tables in
+``tests/fixtures/GOW_benchmark/user_functions.f90`` and ``.hpp``), the start state
+(the reference's first row) and the parameters below. The Rosenbrock integrator
+evolves the specific internal energy instead of the temperature; VODE
+(``kokkos_ode``) evolves the temperature, at rtol 1e-8 (it stalls below ~1e-10).
+The gas sits at the cloud face: no extinction, all column densities 0, so every
+shielding factor is 1.
 """
 
 import re
@@ -26,7 +29,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from tests import gow_tables
+from tests import gow_tables, kokkos_build
 from tests._paths import FIXTURES_DIR
 from tests.python_solver import generate, load
 
@@ -277,6 +280,108 @@ def test_cpp_equilibrium_matches_the_reference(cpp, tag, lu):
     densities = dict(zip(cpp.species, values))
 
     assert status == 0, proc.stdout
+    assert temperature == pytest.approx(ref["Tgas"][-1], rel=AGREEMENT)
+    for column, name in SPECIES.items():
+        assert densities[name] == pytest.approx(ref[column][-1], rel=AGREEMENT), name
+
+
+# --------------------------------------------------------------------------- #
+# C++ (kokkos_ode: header-only-integrators VODE)                               #
+# --------------------------------------------------------------------------- #
+
+needs_clang = pytest.mark.skipif(
+    not sys.platform.startswith("linux")
+    or shutil.which("cmake") is None
+    or shutil.which("clang++") is None,
+    reason="needs Linux with cmake and clang++ (and network access, or a local "
+    "header-only-integrators in FETCHCONTENT_SOURCE_DIR_HEADER_ONLY_INTEGRATORS)",
+)
+
+#: This VODE stalls at order 1 below rtol ~ 1e-10, so it runs at the template's 1e-8
+KOKKOS_RTOL = 1e-8
+
+
+def _kokkos_driver(tag: str, parameters: list[str]) -> str:
+    """A program solving the benchmark for *tag* with VODE and printing the result
+    code, T, then the densities; *parameters* are the generated ones."""
+    ref = _reference(tag)
+    values = _parameters(CHI[tag])
+    densities = "\n".join(
+        f'    y[ChemistryODE::species_index("{name}")] = {float(ref[column][0])!r};'
+        for column, name in SPECIES.items()
+    )
+    assignments = "\n".join(
+        f"    ChemistryODE::params.{name} = {values[name]!r};" for name in parameters
+    )
+
+    return f"""#include <cstdio>
+#include "chemistry_ode.hpp"
+using namespace integrators;
+
+int main() {{
+{assignments}
+    ChemistryODE::evolve_temperature = true;
+    ChemistryODE::state_type y{{}};
+{densities}
+    y[ChemistryODE::nspecs] = {float(ref["Tgas"][0])!r};
+    VODE<ChemistryODE> integrator{{}};
+    VODEState<ChemistryODE::neqs> state{{}};
+    state.t = 0.0;
+    state.tout = {T_END!r};
+    state.y = y;
+    state.rtol = {KOKKOS_RTOL!r};
+    state.atol = {ATOL!r};
+    state.max_steps = 1000000;
+    state.jacobian_analytic = true;
+    ChemistryODE::state_type problem{{}};
+    const auto result = integrator.integrate(problem, state);
+    std::printf("%d %.17e", static_cast<int>(result), state.y[ChemistryODE::nspecs]);
+    for (int i = 0; i < ChemistryODE::nspecs; ++i) std::printf(" %.17e", state.y[i]);
+    std::printf("\\n");
+}}
+"""
+
+
+@pytest.fixture(scope="module")
+def kokkos(tmp_path_factory) -> SimpleNamespace:
+    """The generated kokkos_ode C++, with the benchmark's table functions."""
+    network = str(BENCHMARK / "GOW.jet")
+    folder = generate(network, tmp_path_factory.mktemp("gow_kokkos"), "kokkos_ode")
+    shutil.copy(BENCHMARK / "user_functions.hpp", folder / "user_functions.hpp")
+    configure = kokkos_build.configure(folder)
+    assert configure.returncode == 0, configure.stdout + configure.stderr
+    source = (folder / "chemistry_ode.hpp").read_text(encoding="utf-8")
+    block = source[source.index("struct ChemistryParameters") : source.index("};")]
+
+    return SimpleNamespace(
+        folder=folder,
+        include=kokkos_build.include_dir(folder),
+        species=re.findall(r'^\s*"([^"]+)",$', source, re.M),
+        parameters=re.findall(r"double (\w+) = std::numeric_limits", block),
+    )
+
+
+@needs_clang
+@pytest.mark.parametrize("tag", list(CHI))
+def test_kokkos_equilibrium_matches_the_reference(kokkos, tag):
+    ref = _reference(tag)
+    source = kokkos.folder / f"benchmark_{tag}.cpp"
+    source.write_text(_kokkos_driver(tag, kokkos.parameters), encoding="utf-8")
+    exe = kokkos.folder / f"benchmark_{tag}"
+    subprocess.run(
+        ["clang++", "-std=c++20", "-O2", f"-I{kokkos.folder}", f"-I{kokkos.include}"]
+        + [str(source), "-o", str(exe)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    proc = subprocess.run([str(exe)], cwd=kokkos.folder, capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    status, temperature, *values = [float(v) for v in proc.stdout.split()]
+    densities = dict(zip(kokkos.species, values))
+
+    assert status == 1, proc.stdout  # IntegratorResult::SUCCESS
     assert temperature == pytest.approx(ref["Tgas"][-1], rel=AGREEMENT)
     for column, name in SPECIES.items():
         assert densities[name] == pytest.approx(ref[column][-1], rel=AGREEMENT), name
