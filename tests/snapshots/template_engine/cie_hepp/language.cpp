@@ -49,8 +49,12 @@ void rhs(double *f, const double *nden, double tgas) {
         // }
         // GROUP { NAME -> rhs }
     // }
-    const amrex::Real cse0 = 4.1207223003988966e-10*std::pow(state.T, -0.80000000000000004)*state.xn[1]*state.xn[2] - 5.8500000000000005e-11*std::sqrt(state.T)*std::exp(-157809.10000000001/state.T)*state.xn[0]*state.xn[1];
-    const amrex::Real cse1 = state.xn[1]*(state.xn[3]*state.xn[3]);
+    const amrex::Real cse0 = 1.0/state.T;
+    const amrex::Real cse3 = std::log(state.T);
+    const amrex::Real cse4 = std::exp(0.19999999999999996*cse3);
+    const amrex::Real cse5 = std::sqrt(state.T);
+    const amrex::Real cse1 = 4.1207223003988966e-10*cse0*cse4*state.xn[1]*state.xn[2] - 5.8500000000000005e-11*cse5*std::exp(-157809.10000000001*cse0)*state.xn[0]*state.xn[1];
+    const amrex::Real cse2 = state.xn[1]*(state.xn[3]*state.xn[3]);
     // $$JAFF END
     // $$JAFF REPEAT idx, rhs IN rhses {
         // REPLACE {
@@ -60,41 +64,47 @@ void rhs(double *f, const double *nden, double tgas) {
         // THERMAL { MODE -> dedt }
         // CSE { GROUP -> rhs }
     // }
-    ydot(1) = cse0;
-    ydot(2) = -cse0 - cse1;
-    ydot(3) = -cse0;
-    ydot(4) = -cse1;
-    ydot(5) = cse1;
+    ydot(1) = cse1;
+    ydot(2) = -cse1 - cse2;
+    ydot(3) = -cse1;
+    ydot(4) = -cse2;
+    ydot(5) = cse2;
     ydot(6) = 0;
     // $$JAFF END
 }
 
 void jacobian(double *J, const double *nden, double tgas) {
     // $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> jacobian } }
-    const double cse0 = 5.8500000000000005e-11*std::sqrt(tgas)*std::exp(-157809.10000000001/tgas);
-    const double cse1 = cse0*nden[1];
-    const double cse2 = 4.1207223003988966e-10*std::pow(tgas, -0.80000000000000004);
-    const double cse3 = -cse0*nden[0] + cse2*nden[2];
-    const double cse4 = cse2*nden[1];
-    const double cse5 = nden[3]*nden[3];
-    const double cse6 = -cse4;
-    const double cse7 = 2*nden[1]*nden[3];
-    const double cse8 = -cse7;
+    const double cse0 = 1.0/tgas;
+    const double cse12 = std::sqrt(tgas);
+    const double cse1 = 5.8500000000000005e-11*cse12*std::exp(-157809.10000000001*cse0);
+    const double cse2 = cse1*nden[1];
+    const double cse13 = std::log(tgas);
+    const double cse14 = std::exp(0.19999999999999996*cse13);
+    const double cse3 = 4.1207223003988966e-10*cse0*cse14;
+    const double cse4 = cse3*nden[2];
+    const double cse5 = cse1*nden[0];
+    const double cse6 = -cse4 + cse5;
+    const double cse7 = cse3*nden[1];
+    const double cse8 = nden[3]*nden[3];
+    const double cse9 = -cse7;
+    const double cse10 = 2*nden[1]*nden[3];
+    const double cse11 = -cse10;
     // $$JAFF END
     // $$JAFF REPEAT idx, jac IN jacobian { CSE { GROUP -> jacobian } }
-    J(1, 1) = -cse1;
-    J(1, 2) = cse3;
-    J(1, 3) = cse4;
-    J(2, 1) = cse1;
-    J(2, 2) = -cse3 - cse5;
-    J(2, 3) = cse6;
-    J(2, 4) = cse8;
-    J(3, 1) = cse1;
-    J(3, 2) = -cse3;
-    J(3, 3) = cse6;
-    J(4, 2) = -cse5;
-    J(4, 4) = cse8;
-    J(5, 2) = cse5;
-    J(5, 4) = cse7;
+    J(1, 1) = -cse2;
+    J(1, 2) = -cse6;
+    J(1, 3) = cse7;
+    J(2, 1) = cse2;
+    J(2, 2) = -cse4 + cse5 - cse8;
+    J(2, 3) = cse9;
+    J(2, 4) = cse11;
+    J(3, 1) = cse2;
+    J(3, 2) = cse6;
+    J(3, 3) = cse9;
+    J(4, 2) = -cse8;
+    J(4, 4) = cse11;
+    J(5, 2) = cse8;
+    J(5, 4) = cse10;
     // $$JAFF END
 }

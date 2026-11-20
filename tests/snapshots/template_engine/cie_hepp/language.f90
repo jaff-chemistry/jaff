@@ -51,16 +51,20 @@ contains
     real(8), intent(out) :: f(:)
     real(8), intent(in) :: nden(nspec), tgas
     ! $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rhs } }
-    cse0 = 4.1207223003989d-10*tgas**(-0.8d0)*nden(1)*nden(2) - 5.85d-11*sqrt(tgas) *exp(-157809.10000000001d0/tgas)*&
-          &nden(0)*nden(1)
-    cse1 = nden(1)*(nden(3)*nden(3))
+    cse0 = 1d0/tgas
+    cse3 = log(tgas)
+    cse4 = exp(0.19999999999999996d0*cse3)
+    cse5 = sqrt(tgas)
+    cse1 = 4.1207223003989d-10*cse0*cse4*nden(1)*nden(2) - 5.85d-11*cse5*exp( -157809.10000000001d0*cse0)*nden(0)*&
+          &nden(1)
+    cse2 = nden(1)*(nden(3)*nden(3))
     ! $$JAFF END
     ! $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt }  CSE { GROUP -> rhs } }
-    f(1) = cse0
-    f(2) = -cse0 - cse1
-    f(3) = -cse0
-    f(4) = -cse1
-    f(5) = cse1
+    f(1) = cse1
+    f(2) = -cse1 - cse2
+    f(3) = -cse1
+    f(4) = -cse2
+    f(5) = cse2
     f(6) = 0
     ! $$JAFF END
   end subroutine rhs

@@ -48,6 +48,15 @@ def optimize(expr: Basic, rules: Sequence[Rule] = RULES) -> Basic:
     >>> sp.cxxcode(optimize(3 * x**3 + 10 ** (x / 2)))
     'std::exp(1.151292546497023*x) + 3*((x*x)*x)'
     """
+    return bottom_up(rules)(expr)
+
+
+def bottom_up(rules: Sequence[Rule]) -> Callable[[Basic], Basic]:
+    """A rewriter applying *rules* at every node, bottom-up, as :func:`optimize`.
+
+    Its cache of rewritten subtrees is kept between calls, so rewriting several
+    expressions that share subtrees visits each distinct subtree once.
+    """
     done: dict[Basic, Basic] = {}
 
     def visit(node: Basic) -> Basic:
@@ -65,4 +74,4 @@ def optimize(expr: Basic, rules: Sequence[Rule] = RULES) -> Basic:
         done[node] = rewritten
         return rewritten
 
-    return visit(expr)
+    return visit

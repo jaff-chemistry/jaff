@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any, Iterator, Mapping, Sequence, cast
 
 import sympy as sp
 
-from ..common.optimizations import optimize, shared_cse
+from ..common.optimizations import optimize, shared_cse, shared_logs
 from ..io._logger import JaffLogger, jaff_progress
 from ..types import IndexedList, IndexedValue
 from ._languages import Language, scoped_tokens
@@ -1946,7 +1946,9 @@ class Codegen:
         *definitions* (symbols used in the items and their values, e.g. the
         ``krate[r]`` of the reduced form) each definition becomes a temporary
         shared with the items; ``optimizations="basic"`` when every part asks for
-        it.  String items are printed as they are.  Derivatives of undefined
+        it.  Before it, :func:`~jaff.common.optimizations.shared_logs` rewrites the
+        powers of a base used with several non-integer exponents over one shared
+        ``log``.  String items are printed as they are.  Derivatives of undefined
         functions become ``<name>_partial_<n>(...)`` calls (see
         :meth:`__convert_unknown_derivatives`).
 
@@ -1961,9 +1963,11 @@ class Codegen:
         if use_cse and symbolic:
             basic = all(part.optimizations == "basic" for part in parts)
             with jaff_progress.indeterminate("Generating cse expressions"):
+                # Powers of a common base over one shared log: new temporaries.
+                symbolic, definitions = shared_logs(symbolic, definitions or {})
                 replacements, symbolic = shared_cse(
                     symbolic,
-                    definitions or {},
+                    definitions,
                     self._cse_symbols(cse_var, cse_suffix),
                     "basic" if basic else None,
                 )

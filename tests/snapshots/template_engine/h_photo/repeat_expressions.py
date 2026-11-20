@@ -79,8 +79,10 @@ def rhs_cse_replace():
         # }
         # GROUP { NAME -> rhs }
     # }
-    x0 = y[1]*y[2]
-    x1 = 1.65941781598291e-10*T**(-0.7)*x0 - 5.05728445450563e-8*y[0]*photden[0]
+    x3 = math.log(T)
+    x4 = math.exp(0.3*x3)
+    x0 = x4*y[1]*y[2]
+    x1 = -5.05728445450563e-8*y[0]*photden[0] + 1.65941781598291e-10*x0/T
     x2 = -x1
     # $$JAFF END
     # $$JAFF REPEAT idx, rhs IN rhses {
@@ -94,7 +96,7 @@ def rhs_cse_replace():
     f[1] = x1
     f[2] = x2
     f[3] = x2
-    f[4] = -2.29107354821899e-26*T**0.3*x0*(0.684 - 0.0416*math.log(0.0001*T)) + 3.2366620508836e-19*y[0]*photden[0]
+    f[4] = -2.29107354821899e-26*x0*(0.684 - 0.0416*math.log(0.0001*T)) + 3.2366620508836e-19*y[0]*photden[0]
     # $$JAFF END
 
 
