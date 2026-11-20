@@ -50,7 +50,7 @@ void rhs(double *f, const double *nden, double tgas) {
         // GROUP { NAME -> rhs }
     // }
     const amrex::Real cse0 = 4.1207223003988966e-10*std::pow(state.T, -0.80000000000000004)*state.xn[1]*state.xn[2] - 5.8500000000000005e-11*std::sqrt(state.T)*std::exp(-157809.10000000001/state.T)*state.xn[0]*state.xn[1];
-    const amrex::Real cse1 = state.xn[1]*std::pow(state.xn[3], 2);
+    const amrex::Real cse1 = state.xn[1]*(state.xn[3]*state.xn[3]);
     // $$JAFF END
     // $$JAFF REPEAT idx, rhs IN rhses {
         // REPLACE {
@@ -76,7 +76,7 @@ void jacobian(double *J, const double *nden, double tgas) {
     const double cse2 = 4.1207223003988966e-10*std::pow(tgas, -0.80000000000000004);
     const double cse3 = -cse0*nden[0] + cse2*nden[2];
     const double cse4 = cse2*nden[1];
-    const double cse5 = std::pow(nden[3], 2);
+    const double cse5 = nden[3]*nden[3];
     const double cse6 = -cse4;
     const double cse7 = 2*nden[1]*nden[3];
     const double cse8 = -cse7;

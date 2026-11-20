@@ -41,15 +41,15 @@ def ode_expressions():
 
 def odes():
     # $$JAFF REPEAT idx, ode IN odes
-    dy[0] = -nden[0]**2*nden[1]
-    dy[1] = -nden[0]**2*nden[1]
-    dy[2] = nden[0]**2*nden[1]
+    dy[0] = -nden[1]*nden[0]*nden[0]
+    dy[1] = -nden[1]*nden[0]*nden[0]
+    dy[2] = nden[1]*(nden[0]*nden[0])
     # $$JAFF END
 
 
 def odes_cse():
     # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> odes } }
-    tmp0_v = nden[0]**2*nden[1]
+    tmp0_v = nden[1]*(nden[0]*nden[0])
     tmp1_v = -tmp0_v
     # $$JAFF END
     # $$JAFF REPEAT idx, ode IN odes { CSE { GROUP -> odes } }
@@ -61,10 +61,10 @@ def odes_cse():
 
 def rhs():
     # $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt } }
-    f[0] = -nden[0]**2*nden[1]
-    f[1] = -nden[0]**2*nden[1]
-    f[2] = nden[0]**2*nden[1]
-    f[3] = nden[0]**3*nden[1]
+    f[0] = -nden[1]*nden[0]*nden[0]
+    f[1] = -nden[1]*nden[0]*nden[0]
+    f[2] = nden[1]*(nden[0]*nden[0])
+    f[3] = nden[1]*((nden[0]*nden[0])*nden[0])
     # $$JAFF END
 
 
@@ -76,7 +76,7 @@ def rhs_cse_replace():
         # }
         # GROUP { NAME -> rhs }
     # }
-    x0 = y[0]**2*y[1]
+    x0 = y[1]*(y[0]*y[0])
     x1 = -x0
     # $$JAFF END
     # $$JAFF REPEAT idx, rhs IN rhses {
@@ -90,18 +90,18 @@ def rhs_cse_replace():
     f[1] = x1
     f[2] = x1
     f[3] = x0
-    f[4] = y[0]**3*y[1]
+    f[4] = y[1]*((y[0]*y[0])*y[0])
     # $$JAFF END
 
 
 def jacobian():
     # $$JAFF REPEAT idx, jac IN jacobian
     J[0][0] = -2*nden[0]*nden[1]
-    J[0][1] = -nden[0]**2
+    J[0][1] = -(nden[0]*nden[0])
     J[1][0] = -2*nden[0]*nden[1]
-    J[1][1] = -nden[0]**2
+    J[1][1] = -(nden[0]*nden[0])
     J[2][0] = 2*nden[0]*nden[1]
-    J[2][1] = nden[0]**2
+    J[2][1] = nden[0]*nden[0]
     # $$JAFF END
 
 
@@ -109,7 +109,7 @@ def jacobian_cse():
     # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> jacobian } }
     c0 = 2*nden[0]*nden[1]
     c1 = -c0
-    c2 = nden[0]**2
+    c2 = nden[0]*nden[0]
     c3 = -c2
     # $$JAFF END
     # $$JAFF REPEAT idx, jac IN jacobian { CSE { GROUP -> jacobian } }

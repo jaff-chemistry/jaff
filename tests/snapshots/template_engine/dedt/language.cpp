@@ -47,7 +47,7 @@ void rhs(double *f, const double *nden, double tgas) {
         // }
         // GROUP { NAME -> rhs }
     // }
-    const amrex::Real cse0 = std::pow(state.xn[0], 2)*state.xn[1];
+    const amrex::Real cse0 = state.xn[1]*(state.xn[0]*state.xn[0]);
     const amrex::Real cse1 = -cse0;
     // $$JAFF END
     // $$JAFF REPEAT idx, rhs IN rhses {
@@ -61,7 +61,7 @@ void rhs(double *f, const double *nden, double tgas) {
     ydot(1) = cse1;
     ydot(2) = cse1;
     ydot(3) = cse0;
-    ydot(4) = std::pow(state.xn[0], 3)*state.xn[1];
+    ydot(4) = state.xn[1]*((state.xn[0]*state.xn[0])*state.xn[0]);
     // $$JAFF END
 }
 
@@ -69,7 +69,7 @@ void jacobian(double *J, const double *nden, double tgas) {
     // $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> jacobian } }
     const double cse0 = 2*nden[0]*nden[1];
     const double cse1 = -cse0;
-    const double cse2 = std::pow(nden[0], 2);
+    const double cse2 = nden[0]*nden[0];
     const double cse3 = -cse2;
     // $$JAFF END
     // $$JAFF REPEAT idx, jac IN jacobian { CSE { GROUP -> jacobian } }

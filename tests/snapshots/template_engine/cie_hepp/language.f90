@@ -53,7 +53,7 @@ contains
     ! $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rhs } }
     cse0 = 4.1207223003989d-10*tgas**(-0.8d0)*nden(1)*nden(2) - 5.85d-11*sqrt(tgas) *exp(-157809.10000000001d0/tgas)*&
           &nden(0)*nden(1)
-    cse1 = nden(1)*nden(3)**2
+    cse1 = nden(1)*(nden(3)*nden(3))
     ! $$JAFF END
     ! $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt }  CSE { GROUP -> rhs } }
     f(1) = cse0
@@ -74,15 +74,15 @@ contains
     J(1, 3) = 4.1207223003989d-10*tgas**(-0.8d0)*nden(1)
     J(2, 1) = 5.85d-11*sqrt(tgas)*exp(-157809.10000000001d0/tgas)*nden(1)
     J(2, 2) = -4.1207223003989d-10*tgas**(-0.8d0)*nden(2) + 5.85d-11*sqrt(tgas)*exp( -157809.10000000001d0/tgas)*&
-          &nden(0) - nden(3)**2
+          &nden(0) - (nden(3)*nden(3))
     J(2, 3) = -4.1207223003989d-10*tgas**(-0.8d0)*nden(1)
     J(2, 4) = -2*nden(1)*nden(3)
     J(3, 1) = 5.85d-11*sqrt(tgas)*exp(-157809.10000000001d0/tgas)*nden(1)
     J(3, 2) = -4.1207223003989d-10*tgas**(-0.8d0)*nden(2) + 5.85d-11*sqrt(tgas)*exp( -157809.10000000001d0/tgas)*nden(0)
     J(3, 3) = -4.1207223003989d-10*tgas**(-0.8d0)*nden(1)
-    J(4, 2) = -nden(3)**2
+    J(4, 2) = -(nden(3)*nden(3))
     J(4, 4) = -2*nden(1)*nden(3)
-    J(5, 2) = nden(3)**2
+    J(5, 2) = nden(3)*nden(3)
     J(5, 4) = 2*nden(1)*nden(3)
     ! $$JAFF END
   end subroutine jacobian

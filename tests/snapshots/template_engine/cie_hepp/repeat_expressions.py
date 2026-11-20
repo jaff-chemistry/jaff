@@ -50,17 +50,17 @@ def ode_expressions():
 def odes():
     # $$JAFF REPEAT idx, ode IN odes
     dy[0] = 4.1207223003989e-10*tgas**(-0.8)*nden[1]*nden[2] - 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]*nden[1]
-    dy[1] = -4.1207223003989e-10*tgas**(-0.8)*nden[1]*nden[2] + 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]*nden[1] - nden[1]*nden[3]**2
+    dy[1] = -4.1207223003989e-10*tgas**(-0.8)*nden[1]*nden[2] + 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]*nden[1] - nden[1]*nden[3]*nden[3]
     dy[2] = -4.1207223003989e-10*tgas**(-0.8)*nden[1]*nden[2] + 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]*nden[1]
-    dy[3] = -nden[1]*nden[3]**2
-    dy[4] = nden[1]*nden[3]**2
+    dy[3] = -nden[1]*nden[3]*nden[3]
+    dy[4] = nden[1]*(nden[3]*nden[3])
     # $$JAFF END
 
 
 def odes_cse():
     # $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> odes } }
     tmp0_v = 4.1207223003989e-10*tgas**(-0.8)*nden[1]*nden[2] - 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]*nden[1]
-    tmp1_v = nden[1]*nden[3]**2
+    tmp1_v = nden[1]*(nden[3]*nden[3])
     # $$JAFF END
     # $$JAFF REPEAT idx, ode IN odes { CSE { GROUP -> odes } }
     dy[0] = tmp0_v
@@ -74,10 +74,10 @@ def odes_cse():
 def rhs():
     # $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt } }
     f[0] = 4.1207223003989e-10*tgas**(-0.8)*nden[1]*nden[2] - 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]*nden[1]
-    f[1] = -4.1207223003989e-10*tgas**(-0.8)*nden[1]*nden[2] + 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]*nden[1] - nden[1]*nden[3]**2
+    f[1] = -4.1207223003989e-10*tgas**(-0.8)*nden[1]*nden[2] + 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]*nden[1] - nden[1]*nden[3]*nden[3]
     f[2] = -4.1207223003989e-10*tgas**(-0.8)*nden[1]*nden[2] + 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]*nden[1]
-    f[3] = -nden[1]*nden[3]**2
-    f[4] = nden[1]*nden[3]**2
+    f[3] = -nden[1]*nden[3]*nden[3]
+    f[4] = nden[1]*(nden[3]*nden[3])
     f[5] = 0
     # $$JAFF END
 
@@ -91,7 +91,7 @@ def rhs_cse_replace():
         # GROUP { NAME -> rhs }
     # }
     x0 = 4.1207223003989e-10*T**(-0.8)*y[1]*y[2] - 5.85e-11*math.sqrt(T)*math.exp(-157809.1/T)*y[0]*y[1]
-    x1 = y[1]*y[3]**2
+    x1 = y[1]*(y[3]*y[3])
     # $$JAFF END
     # $$JAFF REPEAT idx, rhs IN rhses {
         # REPLACE {
@@ -116,15 +116,15 @@ def jacobian():
     J[0][1] = 4.1207223003989e-10*tgas**(-0.8)*nden[2] - 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]
     J[0][2] = 4.1207223003989e-10*tgas**(-0.8)*nden[1]
     J[1][0] = 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[1]
-    J[1][1] = -4.1207223003989e-10*tgas**(-0.8)*nden[2] + 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0] - nden[3]**2
+    J[1][1] = -4.1207223003989e-10*tgas**(-0.8)*nden[2] + 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0] - (nden[3]*nden[3])
     J[1][2] = -4.1207223003989e-10*tgas**(-0.8)*nden[1]
     J[1][3] = -2*nden[1]*nden[3]
     J[2][0] = 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[1]
     J[2][1] = -4.1207223003989e-10*tgas**(-0.8)*nden[2] + 5.85e-11*math.sqrt(tgas)*math.exp(-157809.1/tgas)*nden[0]
     J[2][2] = -4.1207223003989e-10*tgas**(-0.8)*nden[1]
-    J[3][1] = -nden[3]**2
+    J[3][1] = -(nden[3]*nden[3])
     J[3][3] = -2*nden[1]*nden[3]
-    J[4][1] = nden[3]**2
+    J[4][1] = nden[3]*nden[3]
     J[4][3] = 2*nden[1]*nden[3]
     # $$JAFF END
 
@@ -136,7 +136,7 @@ def jacobian_cse():
     c2 = 4.1207223003989e-10*tgas**(-0.8)
     c3 = -c0*nden[0] + c2*nden[2]
     c4 = c2*nden[1]
-    c5 = nden[3]**2
+    c5 = nden[3]*nden[3]
     c6 = -c4
     c7 = 2*nden[1]*nden[3]
     c8 = -c7

@@ -405,17 +405,17 @@ class TestOdeJacobian:
         ode = _rhs_terms(jac_codegen.get_ode_str(use_cse=False))
         jac = _rhs_terms(jac_codegen.get_jacobian_str(use_cse=False))
         assert ode == [
-            "-std::pow(nden[0], 2)*nden[1]",
-            "-std::pow(nden[0], 2)*nden[1]",
-            "std::pow(nden[0], 2)*nden[1]",
+            "-nden[1]*nden[0]*nden[0]",
+            "-nden[1]*nden[0]*nden[0]",
+            "nden[1]*(nden[0]*nden[0])",
         ]
         assert jac == [
             "-2*nden[0]*nden[1]",
-            "-std::pow(nden[0], 2)",
+            "-(nden[0]*nden[0])",
             "-2*nden[0]*nden[1]",
-            "-std::pow(nden[0], 2)",
+            "-(nden[0]*nden[0])",
             "2*nden[0]*nden[1]",
-            "std::pow(nden[0], 2)",
+            "nden[0]*nden[0]",
         ]
 
 
@@ -440,20 +440,20 @@ class TestOdeJacobianWithInternalEnergy:
         rhs = _rhs_terms(dedt_codegen.get_rhs_str(use_cse=False, thermal="dedt"))
         jac = _rhs_terms(dedt_codegen.get_jacobian_str(use_cse=False, thermal="dedt"))
         assert rhs == [
-            "-std::pow(nden[0], 2)*nden[1]",
-            "-std::pow(nden[0], 2)*nden[1]",
-            "std::pow(nden[0], 2)*nden[1]",
-            "std::pow(nden[0], 3)*nden[1]",
+            "-nden[1]*nden[0]*nden[0]",
+            "-nden[1]*nden[0]*nden[0]",
+            "nden[1]*(nden[0]*nden[0])",
+            "nden[1]*((nden[0]*nden[0])*nden[0])",
         ]
         assert jac == [
             "-2*nden[0]*nden[1]",
-            "-std::pow(nden[0], 2)",
+            "-(nden[0]*nden[0])",
             "-2*nden[0]*nden[1]",
-            "-std::pow(nden[0], 2)",
+            "-(nden[0]*nden[0])",
             "2*nden[0]*nden[1]",
-            "std::pow(nden[0], 2)",
-            "3*std::pow(nden[0], 2)*nden[1]",
-            "std::pow(nden[0], 3)",
+            "nden[0]*nden[0]",
+            "3*nden[1]*(nden[0]*nden[0])",
+            "(nden[0]*nden[0])*nden[0]",
         ]
 
 

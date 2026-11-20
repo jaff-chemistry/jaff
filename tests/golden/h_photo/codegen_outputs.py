@@ -143,7 +143,7 @@ def rhs_specific_number():
     out[0] = -cse2
     out[1] = cse2
     out[2] = cse2
-    out[3] = -1.49999999999992*cse2*tgas*(1.380649e-16*nden[0] + 1.380649e-16*nden[1] + 1.380649e-16*nden[2])/cse3**2 + (1.07963424846518e-29*cse0 - 2.29107354821899e-26*tgas**0.3*(0.684 - 0.0416*math.log(0.0001*tgas))*nden[1]*nden[2])/cse3
+    out[3] = -1.49999999999992*cse2*tgas*(1.380649e-16*nden[0] + 1.380649e-16*nden[1] + 1.380649e-16*nden[2])*1/(cse3*cse3) + (1.07963424846518e-29*cse0 - 2.29107354821899e-26*tgas**0.3*(0.684 - 0.0416*math.log(0.0001*tgas))*nden[1]*nden[2])/cse3
     out[4] = -cse1
     out[5] = -1.68692851322685e-18*c_hat*nden[0]*rflux[0]
     # $$JAFF END
@@ -256,7 +256,7 @@ def jacobian_specific_mass():
     cse3 = 1/cse2
     cse4 = 2.0709734999999e-16*cse3*tgas
     cse5 = 1.380649e-16*nden[0] + 1.380649e-16*nden[1] + 1.380649e-16*nden[2]
-    cse6 = cse2**(-2)
+    cse6 = 1/(cse2*cse2)
     cse7 = -cse4 + 2.51065949999987e-24*cse5*cse6*tgas
     cse8 = 1/cse5
     cse9 = nden[1]*nden[2]
@@ -322,7 +322,7 @@ def jacobian_specific_number():
     cse4 = 2.0709734999999e-16*tgas
     cse5 = 1.380649e-16*nden[0] + 1.380649e-16*nden[1] + 1.380649e-16*nden[2]
     cse6 = cse5*tgas
-    cse7 = cse2**(-2)
+    cse7 = 1/(cse2*cse2)
     cse8 = 1.49999999999992*cse7
     cse9 = -cse3*cse4 + cse6*cse8
     cse10 = nden[1]*nden[2]
@@ -344,7 +344,7 @@ def jacobian_specific_number():
     cse26 = cse1*nden[0] - 1.65941781598291e-10*cse16*nden[1]*nden[2]
     cse27 = cse10*cse16
     cse28 = -cse26*cse5*cse8 - 1.74238870678197e-10*cse27*cse5*cse7 + cse3*(9.53086596059098e-28*cse16*nden[1]*nden[2] - 6.87322064465696e-27*cse24*cse27)
-    cse29 = -0.6666666666667*cse11*cse2*cse28*cse9 + cse26*cse4*cse7 + cse7*(-cse10*cse25 + 1.07963424846518e-29*cse21*nden[0]) - 2.99999999999985*cse26*cse5*tgas/cse2**3
+    cse29 = -0.6666666666667*cse11*cse2*cse28*cse9 + cse26*cse4*cse7 - 2.99999999999985*cse26*cse5*tgas*((cse2*cse2)*cse2)**(-1) + cse7*(-cse10*cse25 + 1.07963424846518e-29*cse21*nden[0])
     cse30 = cse25*cse3
     # $$JAFF END
     # $$JAFF REPEAT idx, jac IN jacobian {

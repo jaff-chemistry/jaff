@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any, Iterator, Mapping, Sequence, cast
 
 import sympy as sp
 
-from ..common.optimizations import shared_cse
+from ..common.optimizations import integer_powers, shared_cse
 from ..io._logger import JaffLogger, jaff_progress
 from ..types import IndexedList, IndexedValue
 from ._languages import Language, scoped_tokens
@@ -1991,8 +1991,11 @@ class Codegen:
         return temporaries, printed
 
     def _code(self, expr: sp.Basic, cse_defs: dict[str, sp.Basic] | None = None) -> str:
-        """*expr* printed in the target language, unknown derivatives resolved."""
+        """*expr* printed in the target language, unknown derivatives resolved and
+        small integer powers multiplied out (:func:`~jaff.common.optimizations.integer_powers`)."""
         expr = self.__convert_unknown_derivatives(expr, cse_defs)
+        # Last, right before printing: any later SymPy rewrite would undo it.
+        expr = integer_powers(expr)
         return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
 
     def _cse_declarations(self, printed: IndexedReturn, cse_var: str) -> str:
