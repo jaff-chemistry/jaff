@@ -15,7 +15,9 @@ class UdfaReaction:
     priority = 50
     is_reaction = True
 
-    global_re = re.compile(r"^(?!\s*[!#@]).*:.*$")
+    #: A UDFA line starts with its index and a colon (a ``:`` elsewhere, e.g. in a KROME
+    #: rate's ``n(:)`` or ``if(...):``, is not UDFA).
+    global_re = re.compile(r"^\s*\d+\s*:")
 
     local_re = re.compile(
         r"^\s*\d+\s*:"
@@ -229,3 +231,13 @@ class UdfaReaction:
             return "3_body"
 
         return "unknown"
+
+
+class UdfaReactionFallback(UdfaReaction):
+    """Any other line with ``:``, tried after every format: it is reported as an
+    invalid UDFA reaction (e.g. a missing index) rather than skipped."""
+
+    name = "udfa_fallback"
+    priority = 91
+
+    global_re = re.compile(r"^(?!\s*[!#@]).*:.*$")

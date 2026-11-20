@@ -10,7 +10,7 @@ from ......errors import ParserError
 
 from .._parser import Parser, register
 from .._record import ParsedRecord, ParseResult
-from .reaction import PrizmoReaction
+from .reaction import PrizmoReaction, PrizmoReactionFallback
 from .vars import PrizmoVars
 
 
@@ -35,7 +35,7 @@ class PrizmoParser(Parser):
     }
 
     def __init__(self):
-        self.handlers = [PrizmoVars(), PrizmoReaction()]
+        self.handlers = [PrizmoVars(), PrizmoReaction(), PrizmoReactionFallback()]
 
     def process(self, records) -> ParseResult:
         """Walk the PRIZMO bucket in file order.

@@ -396,6 +396,20 @@ references, and the free symbols each rate expects are documented in the parser'
 
 Since these formats are simple text files, JAFF can read any of these formats irrespective of the file name extension. However, it is recommended to use the `.jet` extension for JAFF networks for the sole purpose of consistency. Network formats in JAFF can also be combined in a single file and JAFF will be able to correctly detect and parse that format.
 
+### How a line's format is recognised
+
+Each line is checked on its own, in this order:
+
+1. **PRIZMO**: the reaction arrow `->` and the `[tmin, tmax]` bracket, before any comma.
+2. **UDFA**: the line starts with its index and a colon (`326:CE:...`).
+3. **KROME**: any other line with a comma (a `,NAN` field makes it UCLCHEM instead).
+4. **UCLCHEM**, then **KIDA** (fixed-width columns).
+
+So a KROME rate may contain `:` (e.g. `get_Hnuclei(n(:))`) and a KROME comment may
+contain `->` without the line being taken for UDFA or PRIZMO. A line no format
+recognises but that has `->` or `:` is reported as an invalid PRIZMO or UDFA
+reaction (e.g. a PRIZMO line missing its `[tmin, tmax]`), not skipped.
+
 ### Example
 
 An example of combined reaction formats can be found at `networks/demos/demo1.jet`

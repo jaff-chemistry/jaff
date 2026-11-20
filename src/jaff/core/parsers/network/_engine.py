@@ -18,13 +18,18 @@ driven by each parser's handler descriptors, ordered by their declared
 ``priority`` (lower is matched first):
 
 1. **PRIZMO** — arrow-notation (``->``) followed by a ``[tmin, tmax]``
-   bracket (the brackets are required; either bound may be left empty).  Variables in a ``VARIABLES { }`` block.
-2. **UDFA** — colon-delimited, fixed-column database from the UMIST project.
+   bracket, both before any comma (the brackets are required; either bound may be
+   left empty).  Variables in a ``VARIABLES { }`` block.
+2. **UDFA** — colon-delimited, fixed-column database from the UMIST project; a
+   line starts with its index and a colon.
 3. **KROME** — comma-separated, declared via ``@format:`` header.
    Variable aliases via ``@var:``.
 4. **UCLCHEM** — comma-separated with a ``NAN`` sentinel, includes grain
    surface reactions.
 5. **KIDA** — fixed-width column format from the KIDA database.
+
+Last, any other line with ``->`` or ``:`` goes to a PRIZMO or UDFA fallback handler,
+which reports it as an invalid reaction of that format instead of skipping it.
 
 Rate normalization
 ------------------

@@ -15,7 +15,9 @@ class PrizmoReaction:
     priority = 40
     is_reaction = True
 
-    global_re = re.compile(r"^(?!\s*[!#]).*->.*$")
+    #: A PRIZMO line: the arrow and the ``[tmin, tmax]`` bracket come before any comma
+    #: (a comma first is a KROME line, e.g. with ``->`` in a trailing comment).
+    global_re = re.compile(r"^(?!\s*[!#])[^,!#]*->[^,!#]*\[")
 
     #: A photo rate: ``photo(lo, hi)``, ``PHOTO, lo[, hi]`` or a bare ``PHOTO``.
     photo_re = re.compile(r"^photo\s*(\(|,|$)", re.IGNORECASE)
@@ -168,3 +170,13 @@ class PrizmoReaction:
             return "3_body"
 
         return "unknown"
+
+
+class PrizmoReactionFallback(PrizmoReaction):
+    """Any other line with ``->``, tried after every format: it is reported as an
+    invalid PRIZMO reaction (e.g. a missing ``[tmin, tmax]``) rather than skipped."""
+
+    name = "prizmo_fallback"
+    priority = 90
+
+    global_re = re.compile(r"^(?!\s*[!#]).*->.*$")

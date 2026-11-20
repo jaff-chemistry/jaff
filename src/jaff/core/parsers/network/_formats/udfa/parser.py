@@ -5,7 +5,7 @@
 
 from .._parser import Parser, register
 from .._record import ParsedRecord, ParseResult
-from .reaction import UdfaReaction
+from .reaction import UdfaReaction, UdfaReactionFallback
 
 
 @register
@@ -16,7 +16,7 @@ class UdfaParser(Parser):
     priority = 50
 
     def __init__(self):
-        self.handlers = [UdfaReaction()]
+        self.handlers = [UdfaReaction(), UdfaReactionFallback()]
 
     def process(self, records) -> ParseResult:
         """Parse each UDFA reaction record into a :class:`ParsedRecord`."""
