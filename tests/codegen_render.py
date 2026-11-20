@@ -30,10 +30,10 @@ NETWORKS: Dict[str, Path] = {
 }
 
 # Log-uniform sampling ranges.  Anything not listed uses the defaults.  GOW's
-# rendered code raises outside ~90-3500 K: below, exp(-63590/T) underflows to 0
-# inside a Jacobian log(); above, CSE hoists a 10**(polynomial) fit out of its
-# Piecewise branch and it overflows.
-SCALAR_RANGES: Dict[str, Tuple[float, float]] = {"tgas": (100.0, 3.0e3)}
+# rendered code raises below ~90 K: exp(-63590/T) underflows to 0 inside a Jacobian
+# log().  (Above ~3500 K it raised until CSE temporaries were guarded: a 10**(polynomial)
+# fit was hoisted out of its Piecewise branch and overflowed.)
+SCALAR_RANGES: Dict[str, Tuple[float, float]] = {"tgas": (100.0, 1.0e5)}
 DEFAULT_SCALAR_RANGE = (0.5, 2.0)
 DEFAULT_VECTOR_RANGE = (1.0e-2, 1.0e4)
 
