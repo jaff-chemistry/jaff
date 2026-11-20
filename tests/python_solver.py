@@ -52,3 +52,30 @@ def load(folder: Path) -> SimpleNamespace:
             sys.modules.pop(name, None)
 
     return SimpleNamespace(chemistry=chemistry, solver=solver)
+
+
+def reference(
+    network: str,
+    outdir: Path,
+    densities: dict[str, float],
+    temperature: float,
+    t_end: float,
+    parameters: dict[str, float],
+) -> tuple[float, dict[str, float]]:
+    """(T, densities) at *t_end* from the Python template (Radau, rtol 1e-12).
+
+    The referee for other templates' runs: the gas temperature evolves.
+    """
+    modules = load(generate(network, outdir))
+    result = modules.solver.solve(
+        densities,
+        temperature,
+        t_end,
+        parameters,
+        evolve_temperature=True,
+        t_eval=[t_end],
+        rtol=1e-12,
+        atol=1e-20,
+    )
+
+    return float(result.temperature[-1]), {k: float(v[-1]) for k, v in result.n.items()}

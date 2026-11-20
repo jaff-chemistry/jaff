@@ -471,13 +471,25 @@ class JaffGen:
                     sep=ct.target_props["delimiter"],
                 )
 
+    def _output_path(self, relpath: Path) -> Path:
+        """*relpath* with ``$label$`` in any file or folder name made the network label.
+
+        The label is sanitized as for the run folder (characters other than
+        letters, digits, ``_``, ``.`` and ``-`` become ``_``), so a template can
+        name folders after the network, e.g. ``units/$label$/rates.f90``.
+        """
+        label = re.sub(r"[^\w.-]", "_", self.net.label)
+
+        return Path(*(part.replace("$label$", label) for part in relpath.parts))
+
     def process_files(self) -> None:
         """
         Render every collected template file to the output directory.
 
         Runs :class:`~jaff.codegen.TemplateParser` on each file and writes the
         result to ``output_dir / <relative_path>``, recreating any source
-        sub-directories under the output directory.  Each template names its
+        sub-directories under the output directory; ``$label$`` in a file or
+        folder name becomes the network label.  Each template names its
         language with ``$$JAFF LANG`` or through its extension; files without
         directives are copied unchanged.  Directives are echoed as comments
         unless ``[jaffgen] echo`` is off.
@@ -497,11 +509,11 @@ class JaffGen:
             )
             lines: str = fparser.parse_file()
 
-            outfile: Path = self.output_dir / file.relpath
+            outfile: Path = self.output_dir / self._output_path(file.relpath)
             outfile.parent.mkdir(parents=True, exist_ok=True)
             outfile.write_text(lines)
 
-            self.logger.info(f"[cyan]{file.relpath.name}[/] created at {self.output_dir}")
+            self.logger.info(f"[cyan]{outfile.name}[/] created at {outfile.parent}")
 
         self.logger.info("[green]Successfully generated files[/]")
         self.logger.info(f"Generated files can be found at {self.output_dir}")

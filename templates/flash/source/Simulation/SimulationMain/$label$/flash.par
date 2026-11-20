@@ -1,0 +1,54 @@
+# ABOUTME: Runtime parameters of the one-zone chemistry test: network parameters, the
+# ABOUTME: initial state (sim_initialFile), integrator tolerances and the time stepping
+$$JAFF LANG fortran
+$$JAFF COMMENT "#"
+
+useKromeChemistry = .true.
+
+# Network parameters: placeholders, set physical values
+$$JAFF REPEAT idx, parameter IN parameters { THERMAL { MODE -> dtdt } }
+jaff_$parameter$ = 1.0
+$$JAFF END
+
+# Initial state: temperature [K] and a file of "name number-density" lines
+sim_initTemp    = 100.0
+sim_initialFile = "initial.txt"
+sim_outputFile  = "solution.dat"
+
+# DLSODES per FLASH step; evolve the gas temperature with the network's EOS
+jaff_rtol = 1.0e-8
+jaff_atol = 1.0e-20
+jaff_evolve_temperature = .true.
+krome_temp_floor = 1.0
+krome_density_threshold = 0.0
+
+# One zone, chemistry only: hydro off (it only declares the mesh variables)
+useHydro = .false.
+geometry = "cartesian"
+xmin = 0.0
+xmax = 1.0
+xl_boundary_type = "reflect"
+xr_boundary_type = "reflect"
+nblockx = 1
+lrefine_min = 1
+lrefine_max = 1
+
+# EOS: initialised from density and temperature; floors below chemistry values
+eosModeInit = "dens_temp"
+smlrho = 1.0e-60
+smallt = 1.0
+smallx = 1.0e-60
+
+# Time stepping: dt grows by tstep_change_factor from dtinit up to dtmax
+tmax   = 3.15576e13
+nend   = 1000000
+dtinit = 1.0e2
+dtmin  = 1.0e-2
+dtmax  = 1.0e12
+tstep_change_factor = 1.3
+# end exactly at tmax
+dr_shortenLastStepBeforeTMax = .true.
+
+basenm = "jaff_"
+plotFileIntervalTime       = 1.0e30
+checkpointFileIntervalTime = 1.0e30

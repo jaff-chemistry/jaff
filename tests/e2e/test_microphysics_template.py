@@ -18,7 +18,7 @@ import pytest
 from jaff import Network
 from tests import microphysics_cell
 from tests._paths import FIXTURES_DIR, REPO_ROOT
-from tests.python_solver import generate
+from tests.python_solver import generate, reference
 
 DEMO2 = str(REPO_ROOT / "networks" / "demos" / "demo2.jet")
 GOW = str(FIXTURES_DIR / "GOW_benchmark" / "GOW.jet")
@@ -120,20 +120,18 @@ def demo2_cell(tmp_path_factory) -> Path:
 
 
 @needs_microphysics
-def test_demo2_burns_and_conserves_charge(demo2_cell):
-    proc = microphysics_cell.run(
-        demo2_cell,
-        {"e-": 1.0, "CO+": 1.0, "CO": 10.0},
-        {"av": 1.0},
-        "unit_test.tmax=1e10",
-    )
+def test_demo2_matches_the_python_template(demo2_cell, tmp_path):
+    start = {"e-": 1.0, "CO+": 1.0, "CO": 10.0}
+    proc = microphysics_cell.run(demo2_cell, start, {"av": 1.0}, "unit_test.tmax=1e10")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     success, temperature, n = microphysics_cell.final_state(proc.stdout)
+    ref_t, ref_n = reference(DEMO2, tmp_path, start, 100.0, 1e10, {"av": 1.0})
 
     assert success
-    assert n["e-"] == pytest.approx(n["CO+"], rel=1e-12)
-    assert n["CO"] + n["CO+"] == pytest.approx(11.0, rel=1e-10)
-    assert temperature > 100.0  # recombination heats the gas
+    # recombination heats the gas by ~0.5 K: T checks the energy bookkeeping
+    assert temperature == pytest.approx(ref_t, rel=1e-8)
+    for name, value in ref_n.items():
+        assert n[name] == pytest.approx(value, rel=1e-6), name
 
 
 @needs_microphysics

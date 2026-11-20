@@ -44,6 +44,9 @@ int main(int argc, char *argv[]) {
     eos(eos_input_rt, state);
 
     burner(state, unit_test_rp::tmax);
+    // the burner returns the final densities and e, but T from its last rhs call
+    // (a trial state): the temperature of the final state comes from the EOS
+    eos(eos_input_re, state);
 
     std::cout << std::setprecision(17) << "success " << state.success << "\n"
               << "T " << state.T << "\n";

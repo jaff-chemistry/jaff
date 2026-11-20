@@ -2,6 +2,10 @@
 # ABOUTME: collects every file there (static solver files too); no preprocessor/Builder
 
 import importlib
+import shutil
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -9,6 +13,7 @@ import jaff
 from jaff.cli.jaffgen._engine import JaffGen
 from jaff.config import JAFF_DIR, TEMPLATES_DIR
 from tests._paths import REPO_ROOT
+from tests.jaffgen_run import run_folder
 
 #: Static solver files each template ships besides its $$JAFF templates.
 STATIC = {
@@ -50,3 +55,32 @@ def test_builder_and_preprocessor_are_gone():
     assert not hasattr(jaff.codegen, "Preprocessor")
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module("jaff.plugins")
+
+
+def _generate_from(indir, outdir, network):
+    """Run the jaffgen CLI on the template folder *indir*; return the run folder."""
+    jaffgen = shutil.which("jaffgen", path=str(Path(sys.executable).parent))
+    assert jaffgen is not None
+    proc = subprocess.run(
+        [jaffgen, "--network", str(network), "--indir", str(indir)]
+        + ["--outdir", str(outdir)],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+    return run_folder(outdir)
+
+
+def test_label_in_a_template_path_becomes_the_network_label(tmp_path):
+    network = REPO_ROOT / "networks" / "demos" / "demo2.jet"
+    indir = tmp_path / "templates"
+    (indir / "units" / "$label$").mkdir(parents=True)
+    (indir / "units" / "$label$" / "notes_$label$.txt").write_text("plain\n")
+    (indir / "top.txt").write_text("top\n")
+
+    out = _generate_from(indir, tmp_path / "out", network)
+
+    assert (out / "units" / "demo2" / "notes_demo2.txt").read_text() == "plain\n"
+    assert (out / "top.txt").is_file()
+    assert not any("$" in str(p) for p in out.rglob("*"))

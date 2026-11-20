@@ -1,0 +1,21 @@
+# ABOUTME: FLASH one-zone test of the JAFF-generated network: chemistry only (hydro off),
+# ABOUTME: multigamma EOS with the network's gammas, output to sim_outputFile
+$$JAFF LANG fortran
+$$JAFF COMMENT "#"
+$$JAFF SUB label
+REQUIRES physics/sourceTerms/KromeChemistry/KromeChemistryMain/$label$
+$$JAFF END
+
+REQUIRES Driver
+REQUIRES Grid
+REQUIRES physics/Hydro
+REQUIRES Multispecies
+REQUIRES physics/Eos/EosMain/Multigamma
+
+# initial gas temperature [K]
+PARAMETER sim_initTemp    REAL   100.0
+# initial number densities [cm^-3]: "name value" per line, names as in the network;
+# unlisted species start at 0. The mass density is sum_i n_i m_i.
+PARAMETER sim_initialFile STRING "initial.txt"
+# the state once per step: time [s], T [K], every species' number density [cm^-3]
+PARAMETER sim_outputFile  STRING "solution.dat"

@@ -58,6 +58,10 @@ For `--template`, every file in the template's folder is rendered, keeping its
 path relative to the folder; files without `$$JAFF` directives (a solver's
 driver, its Makefile, bundled library sources) come out unchanged.
 
+A `$label$` in a file or folder name (of `--indir` or `--template` files) becomes
+the network label, so a template can name folders after the network:
+`units/$label$/rates.f90` is written as `units/GOW/rates.f90` for the GOW network.
+
 ---
 
 ## Template functions
