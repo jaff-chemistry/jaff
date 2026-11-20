@@ -1,5 +1,5 @@
-# ABOUTME: Codegen prints small integer powers as products (no std::pow(x, 3) left) and
-# ABOUTME: the printed Python keeps its values
+# ABOUTME: Codegen prints through optimizations.optimize: no integer or numeric-base
+# ABOUTME: std::pow left in C++, and the printed Python keeps its values
 
 import math
 import re
@@ -11,8 +11,10 @@ from jaff.codegen import Codegen
 NETWORK = [
     "H + H -> H2 [10,1e4] 1e-10*(tgas/300)**3",
     "H2 + H -> H + H + H [10,1e4] 2e-10*(tgas/300)**(-2)*exp(-5e4/tgas)",
+    "H2 + H2 -> H2 + H + H [10,1e4] 10**(-12 - 1.5*log10(tgas))",
 ]
 INTEGER_POW = re.compile(r"pow\([^()]*, -?\d+\)")
+NUMERIC_BASE_POW = re.compile(r"pow\(\d")
 
 
 @pytest.fixture
@@ -27,6 +29,7 @@ def test_cxx_has_no_integer_pow(network):
     ]
 
     assert not [c for c in code if INTEGER_POW.search(c)]
+    assert not [c for c in code if NUMERIC_BASE_POW.search(c)]
 
 
 @pytest.mark.parametrize("tgas", [50.0, 900.0])
@@ -37,6 +40,7 @@ def test_python_rates_keep_their_values(network, tgas):
     want = [
         1e-10 * (tgas / 300) ** 3,
         2e-10 * (tgas / 300) ** -2 * math.exp(-5e4 / tgas),
+        10 ** (-12 - 1.5 * math.log10(tgas)),
     ]
 
     assert printed == pytest.approx(want, rel=1e-12)

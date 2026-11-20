@@ -340,10 +340,13 @@ docs/           # Documentation
   prints through it), `guard` (called by `shared_cse`: a CSE temporary read only inside
   `Piecewise` branches becomes `Piecewise((value, guard), (0.0, True))`, guard = the
   input-only conditions it is read under, so a fit is never evaluated out of its range),
-  `integer_powers` (`x**n`, `2 <= |n| <= 8`, symbol bases, as unevaluated products
-  `(x*x)*x` / `1.0/(x*x)`: C/C++ `pow(x, 3)` is a library call; `Codegen._code` applies
-  it last, right before printing, as any later SymPy rewrite undoes it). Helpers that
-  only use them live outside it
+  `optimize(expr, rules=RULES)` (one bottom-up pass applying the per-node rules, each
+  distinct subtree once; `Codegen._code` calls it last, right before printing, as any
+  later SymPy rewrite undoes them) with the rules in `powers`: `exp_power` (`b**x`,
+  numeric `b`, as `exp(ln(b)*x)`: `pow(10, x)` costs ~2.4 `exp`) and `integer_power`
+  (`x**n`, `2 <= |n| <= 8`, symbol bases, as unevaluated products `(x*x)*x` /
+  `1.0/(x*x)`: C/C++ `pow(x, 3)` is a library call). A new per-node rewrite is a rule
+  added to `RULES`. Helpers that only use them live outside it
 - `codegen/`: `Codegen`, `Language`s, the `$$JAFF` template engine (`templating/`);
   `cse_group([(kind, options), ...])` prints several kinds (rates, odes, radodes, rhs,
   jacobian) with one shared CSE (reduced form with several members; cached); each
