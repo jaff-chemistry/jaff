@@ -324,3 +324,32 @@ def test_flux_expression_rejects_brackets_not_of_two_characters(make_network, br
 
     with pytest.raises(ValueError, match="length 2"):
         net.reactions[0].get_flux_expression(brackets=brackets)
+
+
+class TestGet:
+    """Reactions.get: one reaction, the list for a shared key, or None."""
+
+    @pytest.fixture(scope="class")
+    def reactions(self):
+        from jaff import Network
+
+        return Network("COthin").reactions  # C.C__C2 is both "unknown" and "3_body"
+
+    def test_a_shared_key_without_type_gives_the_list(self, reactions):
+        found = reactions.get("C.C__C2")
+
+        assert isinstance(found, list)
+        assert sorted(r.type for r in found) == ["3_body", "unknown"]
+
+    def test_a_shared_key_with_type_gives_that_reaction(self, reactions):
+        found = reactions.get("C.C__C2", type="3_body")
+
+        assert found is not None and not isinstance(found, list)
+        assert found.type == "3_body"
+
+    def test_a_missing_key_gives_none(self, reactions):
+        assert reactions.get("X.Y__Z") is None
+        assert reactions.get("X.Y__Z", type="3_body") is None
+
+    def test_a_type_that_does_not_match_gives_none(self, reactions):
+        assert reactions.get("C.C__C2", type="photo") is None

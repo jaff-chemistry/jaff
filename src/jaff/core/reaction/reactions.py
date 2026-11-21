@@ -548,7 +548,17 @@ class Reactions(Catalogue[Reaction]):
         """
         return self._list
 
-    def get(self, reaction: str, type: str | None = None) -> Reaction | None:
+    @overload
+    def get(self, reaction: str, type: str) -> Reaction | None: ...
+
+    @overload
+    def get(
+        self, reaction: str, type: None = None
+    ) -> Reaction | list[Reaction] | None: ...
+
+    def get(
+        self, reaction: str, type: str | None = None
+    ) -> Reaction | list[Reaction] | None:
         """Look up a reaction by name or serialized form, with optional type filter.
 
         When *type* is supplied and *reaction* is a serialized form shared by
@@ -576,21 +586,10 @@ class Reactions(Catalogue[Reaction]):
         Without *type*, a key shared by several mechanisms returns the
         ``list`` of them, as ``reactions[key]`` does.
         """
-        if type is not None and (
-            reaction in self._by_serialized or reaction in self._by_prop
-        ):
-            try:
-                return self[reaction, type]
-            except KeyError:
-                return None
-
         try:
-            rea = self[reaction]
+            return self[reaction] if type is None else self[reaction, type]
         except KeyError:
             return None
-
-        if type is None or rea.type == type:
-            return rea
 
     def with_type(self, type: str) -> Vector[Reaction]:
         """Return all reactions matching the given reaction type.
