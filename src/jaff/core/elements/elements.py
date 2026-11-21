@@ -11,13 +11,16 @@ a flyweight: instances built from the same ordered species sequence are reused.
 from __future__ import annotations
 
 from functools import cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable, Union
 
 from ...types import Catalogue, Vector
 from .element import Element
 
 if TYPE_CHECKING:
     from ..species import Specie
+
+SpeciesInput = Union["Specie", str, Iterable[Union["Specie", str]]]
+"""One species or name, or any iterable of them (e.g. a ``Species`` catalogue)."""
 
 
 class Elements(Catalogue):
@@ -61,30 +64,31 @@ class Elements(Catalogue):
     _register: dict = {}
 
     @staticmethod
-    def __get_species_list(
-        species: Specie | list[Specie] | str | list[str],
-    ) -> list[Specie]:
-        """Normalise the *species* argument to a ``list[Specie]``."""
+    def __get_species_list(species: SpeciesInput) -> list[Specie]:
+        """Normalise the *species* argument to a ``list[Specie]``.
+
+        A name or a ``Specie`` is one species; any other iterable (``list``,
+        ``tuple``, a ``Species`` catalogue, a ``Vector``) holds names and/or
+        ``Specie`` objects, names becoming ``Specie`` objects at their position.
+        """
         from ..species import Specie as _Specie
 
-        if isinstance(species, str):
-            return [_Specie(species, 0)]
+        if isinstance(species, (str, _Specie)):
+            species = [species]
 
-        if isinstance(species, list) and species and isinstance(species[0], str):
-            return [_Specie(name, idx) for idx, name in enumerate(species)]  # type: ignore[arg-type]
+        return [
+            _Specie(item, idx) if isinstance(item, str) else item
+            for idx, item in enumerate(species)
+        ]
 
-        if not isinstance(species, list):
-            return [species]  # type: ignore[list-item]
-
-        return species  # type: ignore
-
-    def __new__(cls, species: Specie | list[Specie] | str | list[str]):
+    def __new__(cls, species: SpeciesInput):
         """Return the flyweight ``Elements`` instance for the given species set.
 
         Parameters
         ----------
-        species : Specie | list[Specie] | str | list[str]
-            Species whose atoms define the element set.
+        species : Specie | str | Iterable[Specie | str]
+            Species whose atoms define the element set: one species or name,
+            or any iterable of them (e.g. a ``Species`` catalogue).
 
         Returns
         -------
@@ -102,14 +106,16 @@ class Elements(Catalogue):
 
         return instance
 
-    def __init__(self, species: Specie | list[Specie] | str | list[str]) -> None:
+    def __init__(self, species: SpeciesInput) -> None:
         """Build the element collection from *species*.
 
         Parameters
         ----------
-        species : Specie | list[Specie] | str | list[str]
-            One or more species whose constituent atoms define the element set.
-            Plain strings are converted to ``Specie`` objects on the fly.
+        species : Specie | str | Iterable[Specie | str]
+            One species or name, or any iterable of them (``list``, ``tuple``, a
+            ``Species`` catalogue, ...), whose constituent atoms define the
+            element set.  Plain strings are converted to ``Specie`` objects on
+            the fly.
 
         Raises
         ------

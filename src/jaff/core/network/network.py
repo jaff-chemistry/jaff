@@ -438,7 +438,7 @@ class Network:
             parsers = netp.get_parsers()
 
         special_species = self.__build_species(rows)
-        self.elements: Elements = Elements(self.species._list)
+        self.elements: Elements = Elements(self.species)
         self.__build_reactions(rows, global_vars, special_species)
 
         self.logger.info(f"Loaded {self.reactions.count} reactions")

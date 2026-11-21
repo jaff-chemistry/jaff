@@ -572,7 +572,7 @@ class Reaction:
             Catalogue of every unique chemical element in the reaction's
             reactants and products.
         """
-        return Elements(self.reactants._list + self.products._list)
+        return Elements([*self.reactants, *self.products])
 
     def is_isomer_version(self, other: "Reaction") -> bool:
         """Check whether *other* is an isomer variant of this reaction.
