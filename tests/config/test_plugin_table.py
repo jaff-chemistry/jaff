@@ -146,3 +146,23 @@ def test_schema_without_plugins_accepts_any_typed_table():
     assert branch["properties"]["type"] == {"type": "string"}
     assert branch["required"] == ["type"]
     assert branch["additionalProperties"] is True
+
+
+def test_an_exact_copy_in_a_list_is_rejected():
+    from jaff.config.plugin_table import check_no_copies
+
+    entries = [ModelTable.model_validate({"type": "scale", "factor": 2.0})] * 2
+
+    with pytest.raises(ValueError, match=r"models\.1: repeats entry 0"):
+        check_no_copies(entries, "models")
+
+
+def test_same_type_with_other_settings_is_not_a_copy():
+    from jaff.config.plugin_table import check_no_copies
+
+    entries = [
+        ModelTable.model_validate({"type": "scale", "factor": 2.0}),
+        ModelTable.model_validate({"type": "scale", "factor": 3.0}),
+    ]
+
+    check_no_copies(entries, "models")

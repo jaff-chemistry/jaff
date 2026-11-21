@@ -60,6 +60,8 @@ CONFIG_MODULES: Dict[str, str] = {
     "jaff.physics.photo_reactions.shielding.config": "Shielding",
     "jaff.physics.thermodynamics.energy_change.config": "Energy change",
     "jaff.physics.thermodynamics.heating_cooling_rate.config": "Heating cooling rate",
+    "jaff.physics.photo_reactions.emissivity.config": "Emissivity",
+    "jaff.physics.photo_reactions.absorption_coefficient.config": "Absorption coefficient",
     "jaff.physics.dust.config": "Dust",
     "jaff.physics.thermodynamics.config": "Thermodynamics",
     "jaff.physics.thermodynamics.eos.config": "EOS",

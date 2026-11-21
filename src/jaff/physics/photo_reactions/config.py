@@ -1,5 +1,5 @@
-# ABOUTME: Config model of the radiation field ([network.radiation]): bands,
-# ABOUTME: spectral index, mode, speed of light, background field
+# ABOUTME: Config model of the radiation field ([network.radiation]): bands, spectral
+# ABOUTME: index, mode, speed of light, background field, emissivity / absorption plugins
 """Config of the radiation field (``[network.radiation]``)."""
 
 from __future__ import annotations
@@ -7,9 +7,12 @@ from __future__ import annotations
 from typing import Annotated, List, Literal, Self
 
 import astropy.constants as _ac
-from pydantic import BeforeValidator, field_validator, model_validator
+from pydantic import BeforeValidator, ValidationInfo, field_validator, model_validator
 
 from ...config.base import ConfigModel, lower
+from ...config.plugin_table import check_no_copies
+from .absorption_coefficient.config import AbsorptionCoefficientConfig
+from .emissivity.config import EmissivityConfig
 
 __all__ = [
     "BackgroundField",
@@ -59,6 +62,17 @@ class RadiationConfig(ConfigModel):
     absorption_attenuates_flux : bool
         Whether the ``globalAbsorptionCoefficient`` also attenuates the flux
         equations, not only the density equations.
+    emissivity : list[EmissivityConfig]
+        Emission sources, each ``{ type = "<plugin>", ... }``: a volume emissivity
+        spectrum in ``ph_E`` (erg cm⁻³ s⁻¹ eV⁻¹).  Their spectra are summed with the
+        ``.jfunc`` ``globalEmissivity`` and integrated over each band; an entry
+        repeating another exactly (same type and settings) is rejected.  Empty by
+        default.
+    absorption_coefficient : list[AbsorptionCoefficientConfig]
+        Absorbers, each ``{ type = "<plugin>", ... }``: an absorption coefficient
+        spectrum in ``ph_E`` (cm⁻¹).  Their spectra are summed with the ``.jfunc``
+        ``globalAbsorptionCoefficient`` and averaged over each band; an entry repeating
+        another exactly is rejected.  Empty by default.
     """
 
     bands: List[float | Literal["inf"]]
@@ -67,6 +81,16 @@ class RadiationConfig(ConfigModel):
     c: float | str = float(_ac.c.cgs.value)  # ty: ignore[unresolved-attribute]
     background_field: BackgroundField = "draine"
     absorption_attenuates_flux: bool = True
+    emissivity: list[EmissivityConfig] = []
+    absorption_coefficient: list[AbsorptionCoefficientConfig] = []
+
+    @field_validator("emissivity", "absorption_coefficient", mode="after")
+    @classmethod
+    def _no_copies(cls, entries: list, info: ValidationInfo) -> list:
+        """Reject an entry repeating another exactly (it would be counted twice)."""
+        check_no_copies(entries, str(info.field_name))
+
+        return entries
 
     @field_validator("bands", mode="after")
     @classmethod

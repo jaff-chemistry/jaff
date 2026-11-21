@@ -1,6 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
+    "AbsorptionCoefficientConfig": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Absorption coefficient",
+      "type": "object",
+      "description": "An absorption coefficient spectrum in ph_E (cm⁻¹); `type` selects the model and its keys."
+    },
     "DustConfig": {
       "additionalProperties": false,
       "description": "Dust (`[network.dust]`); the table enables the dust module.",
@@ -53,6 +67,20 @@
       },
       "title": "DustConfig",
       "type": "object"
+    },
+    "EmissivityConfig": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Emissivity",
+      "type": "object",
+      "description": "A volume emission spectrum in ph_E (erg cm⁻³ s⁻¹ eV⁻¹); `type` selects the model and its keys."
     },
     "EnergyChangeConfig": {
       "additionalProperties": true,
@@ -431,6 +459,24 @@
           "description": "Whether the `globalAbsorptionCoefficient` also attenuates the flux equations, not only the density equations.",
           "title": "Absorption Attenuates Flux",
           "type": "boolean"
+        },
+        "emissivity": {
+          "default": [],
+          "description": "Emission sources, each `{ type = \"<plugin>\", ... }`: a volume emissivity spectrum in `ph_E` (erg cm⁻³ s⁻¹ eV⁻¹).  Their spectra are summed with the `.jfunc` `globalEmissivity` and integrated over each band; an entry repeating another exactly (same type and settings) is rejected.  Empty by default.",
+          "items": {
+            "$ref": "#/$defs/EmissivityConfig"
+          },
+          "title": "Emissivity",
+          "type": "array"
+        },
+        "absorption_coefficient": {
+          "default": [],
+          "description": "Absorbers, each `{ type = \"<plugin>\", ... }`: an absorption coefficient spectrum in `ph_E` (cm⁻¹).  Their spectra are summed with the `.jfunc` `globalAbsorptionCoefficient` and averaged over each band; an entry repeating another exactly is rejected.  Empty by default.",
+          "items": {
+            "$ref": "#/$defs/AbsorptionCoefficientConfig"
+          },
+          "title": "Absorption Coefficient",
+          "type": "array"
         }
       },
       "required": [

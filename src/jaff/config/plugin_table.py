@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, ClassVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Sequence
 
 from pydantic import GetJsonSchemaHandler, model_serializer, model_validator
 from pydantic.json_schema import JsonSchemaValue
@@ -16,7 +16,13 @@ from .base import ConfigModel, LowerStr
 if TYPE_CHECKING:
     from ..common.registry import Registry
 
-__all__ = ["PluginParams", "PluginTable", "check_shared_settings", "settings_model"]
+__all__ = [
+    "PluginParams",
+    "PluginTable",
+    "check_no_copies",
+    "check_shared_settings",
+    "settings_model",
+]
 
 
 class PluginParams(ConfigModel):
@@ -78,6 +84,36 @@ def check_shared_settings(registry: Registry[Any], cls: Any) -> None:
                 f"{registry.kind.capitalize()}s named {cls.name} must share one "
                 "config_model()"
             )
+
+
+def check_no_copies(entries: Sequence[PluginTable], key: str) -> None:
+    """Reject an entry of a summed list that repeats an earlier one exactly.
+
+    Every entry of such a list (e.g. ``heating_cooling_rate``) is summed, so an exact
+    copy (same ``type`` and settings) would count one term twice; the same type with
+    other settings (e.g. another species) is a separate term.
+
+    Parameters
+    ----------
+    entries : Sequence[PluginTable]
+        The list's tables, in order.
+    key : str
+        The list's key, for the message.
+
+    Raises
+    ------
+    ValueError
+        As ``"<key>.<index>: <message>"`` for the first copy.
+    """
+    seen: list[dict[str, Any]] = []
+    for index, entry in enumerate(entries):
+        dumped = entry.model_dump()
+        if dumped in seen:
+            raise ValueError(
+                f"{key}.{index}: repeats entry {seen.index(dumped)} ({entry.type!r} "
+                "with the same settings); each entry is summed"
+            )
+        seen.append(dumped)
 
 
 class PluginTable(ConfigModel):

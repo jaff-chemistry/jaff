@@ -12,7 +12,6 @@ from ....config.plugin_table import PluginParams, PluginTable
 __all__ = [
     "HeatingCoolingRateConfig",
     "HeatingCoolingRateParams",
-    "check_heating_cooling_rates",
 ]
 
 
@@ -57,25 +56,3 @@ def _registry():
     from . import _REGISTRY
 
     return _REGISTRY
-
-
-def check_heating_cooling_rates(entries: list[HeatingCoolingRateConfig]) -> None:
-    """Reject an entry that repeats an earlier one exactly (same type and settings).
-
-    Every entry is summed, so an exact copy would count one mechanism twice; the same
-    type with other settings (e.g. another species) is a separate term.
-
-    Raises
-    ------
-    ValueError
-        As ``"heating_cooling_rate.<index>: <message>"`` for the first copy.
-    """
-    seen: list[dict] = []
-    for index, entry in enumerate(entries):
-        dumped = entry.model_dump()
-        if dumped in seen:
-            raise ValueError(
-                f"heating_cooling_rate.{index}: repeats entry {seen.index(dumped)} "
-                f"({entry.type!r} with the same settings); each entry is summed"
-            )
-        seen.append(dumped)

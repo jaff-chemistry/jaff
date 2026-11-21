@@ -4,15 +4,12 @@
 
 from __future__ import annotations
 
-
 from pydantic import field_validator
 
 from ...config.base import ConfigModel
+from ...config.plugin_table import check_no_copies
 from .eos.config import EosConfig, IdealEosConfig
-from .heating_cooling_rate.config import (
-    HeatingCoolingRateConfig,
-    check_heating_cooling_rates,
-)
+from .heating_cooling_rate.config import HeatingCoolingRateConfig
 
 __all__ = [
     "ThermodynamicsConfig",
@@ -42,6 +39,6 @@ class ThermodynamicsConfig(ConfigModel):
         cls, entries: list[HeatingCoolingRateConfig]
     ) -> list[HeatingCoolingRateConfig]:
         """Reject an entry repeating another exactly (it would be counted twice)."""
-        check_heating_cooling_rates(entries)
+        check_no_copies(entries, "heating_cooling_rate")
 
         return entries

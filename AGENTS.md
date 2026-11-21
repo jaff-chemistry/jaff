@@ -397,8 +397,13 @@ docs/           # Documentation
   plugins, `heating_cooling_rate(net, params)` in erg cm⁻³ s⁻¹; own registry, never bound to
   a reaction), listed in `[network.thermodynamics] heating_cooling_rate = [{type = ...}, ...]`;
   `dEdt_extra` = `.jfunc` `heatingCoolingRate` + every entry (summed; an exact copy of an
-  entry is rejected, the same type with other settings is not). Test-only plugins:
-  `tests/heating_cooling_rate_plugins.py`
+  entry is rejected, the same type with other settings is not; `check_no_copies` in
+  `plugin_table`). Test-only plugins: `tests/heating_cooling_rate_plugins.py`. Radiation:
+  `physics/photo_reactions/emissivity/` and `.../absorption_coefficient/` (plugins return a
+  spectrum in `ph_E`: erg cm⁻³ s⁻¹ eV⁻¹ / cm⁻¹), listed in `[network.radiation] emissivity` /
+  `absorption_coefficient`; `Radiation.compute()` sums them with the `.jfunc`
+  `globalEmissivity` / `globalAbsorptionCoefficient`, then integrates / averages the total per
+  group (`radiation.emissivity` etc. are the totals). Test-only: `tests/radiation_plugins.py`
 - `config/`: config base models, loader, JSON schemas, reference generator
 - `cli/`: `jaffgen` and `jaffx`
 - `drivers/`, `io/`: HDF5/SQLite/TOML/CSV access, data downloads, logging

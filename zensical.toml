@@ -590,7 +590,24 @@ nav = [
         { "HeatingCoolingRateParams" = [
           "reference/config/heating cooling rate/heatingcoolingrateparams/index.md",
         ] },
-        "reference/config/heating cooling rate/check_heating_cooling_rates.md",
+      ] },
+      { "Emissivity" = [
+        "reference/config/emissivity/index.md",
+        { "EmissivityConfig" = [
+          "reference/config/emissivity/emissivityconfig/index.md",
+        ] },
+        { "EmissivityParams" = [
+          "reference/config/emissivity/emissivityparams/index.md",
+        ] },
+      ] },
+      { "Absorption coefficient" = [
+        "reference/config/absorption coefficient/index.md",
+        { "AbsorptionCoefficientConfig" = [
+          "reference/config/absorption coefficient/absorptioncoefficientconfig/index.md",
+        ] },
+        { "AbsorptionCoefficientParams" = [
+          "reference/config/absorption coefficient/absorptioncoefficientparams/index.md",
+        ] },
       ] },
       { "Dust" = [
         "reference/config/dust/index.md",

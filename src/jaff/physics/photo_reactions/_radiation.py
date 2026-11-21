@@ -159,15 +159,17 @@ class RadiationGroup:
         terms by it stays CGS-consistent.  Computed on construction and
         shared across all reactions in the band.
     emissivity : sympy.Expr or None
-        The network ``globalEmissivity`` integrated over this band, in the units of
-        the band's density equation (erg cm⁻³ s⁻¹ in ``"u"`` mode, photons
-        cm⁻³ s⁻¹ in ``"nph"`` mode); see :meth:`Radiation.integrate_over_groups`.
-        ``None`` without a ``globalEmissivity`` function.
+        The network emissivity (``globalEmissivity`` plus the ``emissivity``
+        plugins) integrated over this band, in the units of the band's density
+        equation (erg cm⁻³ s⁻¹ in ``"u"`` mode, photons cm⁻³ s⁻¹ in ``"nph"``
+        mode); see :meth:`Radiation.integrate_over_groups`.  ``None`` without
+        either.
     absorption_coefficient : sympy.Expr or None
-        The network ``globalAbsorptionCoefficient`` averaged over this band
-        (cm⁻¹), energy-weighted in ``"u"`` mode and photon-number weighted in
-        ``"nph"`` mode; see :meth:`Radiation.average_over_groups`.  ``None``
-        without a ``globalAbsorptionCoefficient`` function.  It is removed from
+        The network absorption coefficient (``globalAbsorptionCoefficient`` plus
+        the ``absorption_coefficient`` plugins) averaged over this band (cm⁻¹),
+        energy-weighted in ``"u"`` mode and photon-number weighted in ``"nph"``
+        mode; see :meth:`Radiation.average_over_groups`.  ``None`` without
+        either.  It is removed from
         the band's density equation as ``c * <α>_i * den[i]``.
 
     Examples
@@ -348,16 +350,18 @@ class Radiation:
         per-band ``grp.photden``), used to normalise the full-spectrum
         cross section ``reaction.photo.xsec_total``.
     emissivity : sympy.Expr or None
-        The network ``.jfunc`` ``globalEmissivity``: the *volume* emissivity,
-        i.e. radiation energy emitted per unit volume, time and photon energy
-        (erg cm⁻³ s⁻¹ eV⁻¹), integrated over solid angle, as an expression in
-        ``ph_E``.  ``None`` without one.  Its
+        The network's *volume* emissivity: the ``.jfunc`` ``globalEmissivity``
+        plus every ``config.emissivity`` plugin entry, i.e. radiation energy
+        emitted per unit volume, time and photon energy (erg cm⁻³ s⁻¹ eV⁻¹),
+        integrated over solid angle, as an expression in ``ph_E``.  ``None``
+        without either.  Its
         per-group integrals are ``grp.emissivity``; their sum is
         :attr:`total_emissivity`.  Set by :meth:`compute`.
     absorption_coefficient : sympy.Expr or None
-        The network ``.jfunc`` ``globalAbsorptionCoefficient``: the fraction of
-        the radiation absorbed per unit path length (cm⁻¹) as a function of
-        ``ph_E`` (eV).  ``None`` without one.  Its per-group averages are
+        The network's absorption coefficient: the ``.jfunc``
+        ``globalAbsorptionCoefficient`` plus every ``config.absorption_coefficient``
+        plugin entry, the fraction of the radiation absorbed per unit path length
+        (cm⁻¹) as a function of ``ph_E`` (eV).  ``None`` without either.  Its per-group averages are
         ``grp.absorption_coefficient``.  Set by :meth:`compute`.
 
     Notes
@@ -1003,30 +1007,55 @@ class Radiation:
         return smart_integrate(xsec * profile, ph_E, (group.lower, group.upper)) / norm
 
     def compute(self) -> None:
-        """Integrate the network's ``.jfunc`` emissivity and absorption over the bands.
+        """Integrate the network's emissivity and absorption over the bands.
 
-        Sets :attr:`emissivity` (the ``globalEmissivity`` spectrum) and each
-        group's ``emissivity`` (its integral over the band), and
-        :attr:`absorption_coefficient` (the ``globalAbsorptionCoefficient``
-        spectrum) and each group's ``absorption_coefficient`` (its band
-        average).  Each is left ``None`` without its function.  Run by
+        Each spectrum is the ``.jfunc`` function plus every plugin entry of
+        ``config.emissivity`` / ``config.absorption_coefficient`` (summed).  Sets
+        :attr:`emissivity` (the total emissivity spectrum) and each group's
+        ``emissivity`` (its integral over the band), and
+        :attr:`absorption_coefficient` (the total absorption spectrum) and each
+        group's ``absorption_coefficient`` (its band average).  Each is left
+        ``None`` without its function and plugins.  Run by
         :class:`~jaff.core.Network` once its reactions are linked, so an
         ``rc_<N>`` in either function is reaction *N*'s final rate coefficient.
         """
-        functions = self.network.functions
         resolve = self.network.reactions.resolve_rate_references
 
-        if "globalemissivity" in functions:
-            self.emissivity = functions.value("globalemissivity")
+        self.emissivity = self._spectrum("globalemissivity", "emissivity")
+        if self.emissivity is not None:
             values = self.integrate_over_groups(self.emissivity)
             for group, value in zip(self.groups, values, strict=True):
                 group.emissivity = resolve(value)
 
-        if "globalabsorptioncoefficient" in functions:
-            self.absorption_coefficient = functions.value("globalabsorptioncoefficient")
+        self.absorption_coefficient = self._spectrum(
+            "globalabsorptioncoefficient", "absorption_coefficient"
+        )
+        if self.absorption_coefficient is not None:
             values = self.average_over_groups(self.absorption_coefficient)
             for group, value in zip(self.groups, values, strict=True):
                 group.absorption_coefficient = resolve(value)
+
+    def _spectrum(self, function: str, key: str) -> sp.Expr | None:
+        """The ``.jfunc`` *function* plus every plugin entry of ``config.<key>``.
+
+        ``None`` when there is neither.  Each entry's plugin is looked up in the
+        registry of *key* (``emissivity`` or ``absorption_coefficient``).
+        """
+        from .absorption_coefficient import absorption_coefficient_function
+        from .emissivity import emissivity_function
+
+        lookup = {
+            "emissivity": emissivity_function,
+            "absorption_coefficient": absorption_coefficient_function,
+        }[key]
+        terms: list[sp.Expr] = []
+        if function in self.network.functions:
+            terms.append(self.network.functions.value(function))
+        for entry in getattr(self.config, key):
+            plugin = lookup(entry.type)
+            terms.append(getattr(plugin, key)(self.network, entry.params))
+
+        return sp.Add(*terms) if terms else None
 
     def integrate_over_groups(self, spectrum: sp.Expr) -> List[sp.Expr]:
         """Integrate an emitted spectrum over each group, in density-equation units.
