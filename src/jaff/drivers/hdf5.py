@@ -74,7 +74,7 @@ class HDF5:
     | ``f16``, ``f32``, ``f64``, ``f128`` | floats (``f128`` only where ``numpy.float128`` exists, typically Linux/macOS x86-64) |
     | ``c64``, ``c128`` | complex |
     | ``b`` | bool |
-    | ``s`` | variable-length UTF-8 string (read back as ``bytes``) |
+    | ``s`` | variable-length UTF-8 string (read back as ``str``, as is fixed-length text) |
 
     :meth:`~jaff.types.HDF5Dict.flatten` collapses the nested tree into a flat
     ``{absolute_path: leaf}`` mapping, where group and file attributes land

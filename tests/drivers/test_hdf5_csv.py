@@ -1,5 +1,5 @@
-# ABOUTME: Tests for HDF5.to_csv output-path injectivity
-# ABOUTME: Same-named sibling descendants and mixed linear/compound must not collide
+# ABOUTME: Tests for HDF5.to_csv output paths and text columns
+# ABOUTME: Same-named siblings must not collide; text is written as text, not bytes
 
 from pathlib import Path
 
@@ -82,3 +82,18 @@ def test_compound_keyed_as_reserved_stem_collides(tmp_path):
     out = tmp_path / "csv"
     with pytest.raises(ValueError):
         HDF5().to_csv(src, out)
+
+
+def test_text_is_written_as_text_not_bytes_repr(tmp_path):
+    """Text datasets and compound text fields are written as H2, not b'H2'."""
+    src = tmp_path / "in.h5"
+    table = np.array([("H2", 1.0)], dtype=[("sp", h5py.string_dtype()), ("k", "f8")])
+    with h5py.File(src, "w") as f:
+        f.create_dataset("g/names", data=["H2"], dtype=h5py.string_dtype())
+        f["g/tab"] = table
+
+    out = tmp_path / "csv"
+    HDF5().to_csv(src, out, sep=",")
+
+    assert _read(out / "g" / "_group.csv") == "names\nH2\n"
+    assert _read(out / "g" / "tab.csv") == "sp,k\nH2,1.0\n"

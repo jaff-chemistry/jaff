@@ -16,7 +16,9 @@ keys:
     ``"linear"`` for a plain N-D array; ``"compound"`` for a NumPy
     structured-dtype (record) array.
 ``_data``
-    The actual data as a NumPy array (result of ``dataset[()]``).
+    The actual data as a NumPy array (result of ``dataset[()]``).  Text
+    (variable- or fixed-length strings, and the text fields of a compound
+    dataset) is decoded to ``str`` in an ``object`` array, not ``bytes``.
 ``_dtype``
     For ``"linear"``: a JAFF dtype token string (e.g. ``"f64"``).
     For ``"compound"``: a ``{field_name: dtype_token}`` mapping.
@@ -345,7 +347,7 @@ class HDF5Dict(dict):
             ds_name = attrs.pop("_name", None)
             node = {
                 "_kind": "compound" if obj.dtype.fields else "linear",
-                "_data": obj[()],  # Read all data into memory
+                "_data": self.__read_data(obj),  # Read all data into memory
                 "_attrs": attrs,
             }
             if ds_name is not None:
@@ -424,6 +426,54 @@ class HDF5Dict(dict):
             cls.__prune_empty(child)
             if all(k.startswith("_") for k in child):
                 del node[key]
+
+    @staticmethod
+    def __read_data(obj: h5py.Dataset) -> Any:
+        """
+        Read a dataset's values, decoding text to ``str``.
+
+        h5py returns strings (variable- or fixed-length) as ``bytes``; a text
+        dataset is read through :meth:`h5py.Dataset.asstr` instead, and the
+        text fields of a compound dataset are decoded into ``object`` fields.
+
+        Parameters
+        ----------
+        obj : h5py.Dataset
+            Dataset to read.
+
+        Returns
+        -------
+        Any
+            The dataset's values (a NumPy array, or a scalar for a scalar
+            dataset) with text as ``str``.
+        """
+        if h5py.check_string_dtype(obj.dtype) is not None:
+            return obj.asstr()[()]
+
+        data = obj[()]
+        names = obj.dtype.names or ()
+        text = {
+            n: info.encoding
+            for n in names
+            if (info := h5py.check_string_dtype(obj.dtype[n])) is not None
+        }
+        if not text:
+            return data
+
+        decoded = np.empty(
+            np.shape(data),
+            dtype=[(n, object if n in text else obj.dtype[n]) for n in names],
+        )
+        for n in names:
+            values = data[n]
+            if n in text:
+                values = np.vectorize(
+                    lambda v, enc=text[n]: v.decode(enc) if isinstance(v, bytes) else v,
+                    otypes=[object],
+                )(values)
+            decoded[n] = values
+
+        return decoded
 
     def __decode_dtype(self, dtype) -> str:
         """
