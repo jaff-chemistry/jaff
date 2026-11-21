@@ -309,11 +309,11 @@ def get_table(
         Logger instance used for progress/diagnostic messages.  When ``None``
         a default :class:`~jaff.io._logger.JaffLogger` is constructed.
     T_min : float or None, optional
-        Minimum temperature in K.  Inferred from ``reaction.tmin`` values when
-        not supplied.
+        Minimum temperature in K.  The smallest ``reaction.tmin`` when not
+        supplied.
     T_max : float or None, optional
-        Maximum temperature in K.  Inferred from ``reaction.tmax`` values when
-        not supplied.
+        Maximum temperature in K.  The largest ``reaction.tmax`` when not
+        supplied.
     nT : int, optional
         Initial number of temperature grid points (default ``64``).  The
         adaptive refinement may increase this significantly.
@@ -348,10 +348,9 @@ def get_table(
     Raises
     ------
     ValueError
-        If *reactions* is empty and ``T_min`` or ``T_max`` is not supplied
-        (raised by :func:`numpy.nanmin` / :func:`numpy.nanmax`).  When no
-        reaction has a ``tmin`` (``tmax``), the inferred bound is ``NaN``
-        rather than an error.
+        If ``T_min`` (``T_max``) is not supplied and no reaction has a finite
+        ``tmin`` (``tmax``), e.g. *reactions* is empty; or if
+        ``T_min >= T_max``.
 
     Notes
     -----
@@ -367,14 +366,16 @@ def get_table(
         logger = JaffLogger().get_logger()
 
     if T_min is None:
-        T_min = np.nanmin([r.tmin if r.tmin is not None else np.nan for r in reactions])
+        T_min = min((r.tmin for r in reactions if r.tmin is not None), default=None)
     if T_max is None:
-        T_max = np.nanmax([r.tmax if r.tmax is not None else np.nan for r in reactions])
-    if T_min is None or T_max is None:
+        T_max = max((r.tmax for r in reactions if r.tmax is not None), default=None)
+    if T_min is None or T_max is None or not np.isfinite([T_min, T_max]).all():
         raise ValueError(
             "could not determine T_min or T_max from "
             "reaction list; set T_min and T_max manually"
         )
+    if T_min >= T_max:
+        raise ValueError(f"T_min ({T_min}) must be below T_max ({T_max})")
 
     react_sympy = [r.get_sympy() for r in reactions]
 
