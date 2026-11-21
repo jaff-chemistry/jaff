@@ -12,7 +12,11 @@ from typing import TYPE_CHECKING, cast
 
 from jaff.physics.photo_reactions.shielding.config import ShieldingParams
 
-from .. import ShieldingFunction, ShieldingResult, register
+from jaff.physics.photo_reactions.shielding import (
+    ShieldingFunction,
+    ShieldingResult,
+    register,
+)
 from ._utils import shielding
 
 if TYPE_CHECKING:

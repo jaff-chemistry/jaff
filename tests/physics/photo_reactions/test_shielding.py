@@ -10,14 +10,20 @@ from sympy import Float
 from jaff.physics.photo_reactions.shielding.config import ShieldingParams
 from jaff.errors import ParserError
 from jaff.physics.photo_reactions.config import RadiationConfig
-from jaff.physics.photo_reactions.shielding import ShieldingFunction, ShieldingResult
+from jaff.physics.photo_reactions.shielding import (
+    ShieldingFunction,
+    ShieldingResult,
+    shielding_function,
+)
 from jaff.physics.photo_reactions.shielding.global_.leiden import Leiden
-from jaff.physics.photo_reactions.shielding.H2__PHOTON__H_H.db1996 import DB1996
-from jaff.physics.photo_reactions.shielding.H2__PHOTON__H_H.hg2015 import HG2015
 from tests.jaffgen_run import run_folder
 
 H2_PHOTO = "H2 -> H + H  []  PHOTO, 11.2\n"
 H2_KEY = "H2._PHOTON__H.H"
+
+# The H2 plugins (plugins/reactions/H2__PHOTON__H_H/shielding), found as jaff does.
+DB1996 = type(shielding_function("db1996", H2_KEY))
+HG2015 = type(shielding_function("hg2015", H2_KEY))
 
 
 @pytest.fixture

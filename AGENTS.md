@@ -33,7 +33,7 @@ uv run --extra dev pytest --cov=jaff     # Run with coverage
 uv run --extra dev ruff format --check <files>  # Check formatting without modifying
 uv run --extra dev ruff format <files>          # Format the files you changed
 uv run --extra dev ruff check <files>           # Lint code
-uv run --extra dev ty check <files>             # Type check (ruff misses type errors)
+uv run --extra dev ty check <files>             # Type check (ruff misses type errors; src and plugins)
 ```
 
 Only format and fix the files you touched, and only if they were already formatted:

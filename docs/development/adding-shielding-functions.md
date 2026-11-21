@@ -12,15 +12,24 @@ model is a [`ShieldingFunction`](#the-shieldingfunction-contract) subclass that
 registers itself with the `@register` decorator, declares its settings as a
 config model, and returns a `ShieldingResult`: a [SymPy](https://www.sympy.org)
 expression that is multiplied into the photo-rate, plus any data tables it needs. Adding a new model means writing one such class
-in a subpackage of `physics/photo_reactions/shielding/` and importing it from that
-subpackage's `__init__.py`.
+in the repo-root [`plugins/`](#where-models-live) folder and importing it from its
+folder's `__init__.py`.
+
+## Where Models Live
+
+Shielding models are **plugins**: self-contained, opt-in models in the repo-root
+`plugins/` folder, which jaff imports as the package `jaff.plugins`. A model bound
+to one reaction goes in that reaction's folder, a model for any reaction in the
+global radiation folder. The built-in Leiden model, which interpolates jaff's own
+shielding database, is part of jaff's core (`physics/photo_reactions/shielding/global_/`)
+rather than a plugin.
 
 There are two flavours, distinguished by the class's `reaction` attribute:
 
-| Flavour    | Scope                        | `reaction` attr         | Location                                   |
-| ---------- | ---------------------------- | ----------------------- | ------------------------------------------ |
-| **Local**  | A single reaction            | the serialized reaction | `shielding/<sanitized_reaction>/<type>.py` |
-| **Global** | Any reaction that selects it | `None`                  | `shielding/global_/<type>.py`              |
+| Flavour    | Scope                        | `reaction` attr         | Location                                                    |
+| ---------- | ---------------------------- | ----------------------- | ----------------------------------------------------------- |
+| **Local**  | A single reaction            | the serialized reaction | `plugins/reactions/<sanitized_reaction>/shielding/<type>.py` |
+| **Global** | Any reaction that selects it | `None`                  | `plugins/physics/radiation/shielding/<type>.py`             |
 
 In both cases the class's `name` attribute is the keyword a reaction selects
 with the `shielding` table's `type` (matched case-insensitively).
@@ -66,13 +75,13 @@ flowchart TD
     H -.-> I[Network.write_shielding_tables\njaffgen writes them to its output]
 ```
 
-The registry is filled on the first lookup by importing every **subpackage**
-(folder) directly under `shielding/` whose name does not start with `_`
-(`import_subpackages`). Only the folder's `__init__.py` is imported, so a model
-registers — its `@register` decorator runs — only if that `__init__.py` imports
-its module (`from .hg2015 import HG2015`). There is no central list to edit, but a
-module file that nothing imports is never registered, and a new folder needs an
-`__init__.py` that imports its models.
+The registry is filled on the first lookup: it imports the core models, then the
+whole `plugins/` folder (`jaff.common.plugins.load_plugins`), every subpackage
+(folder) at any depth whose name does not start with `_`. Only a folder's
+`__init__.py` is imported, so a model registers — its `@register` decorator runs —
+only if that `__init__.py` imports its module (`from .hg2015 import HG2015`). There
+is no central list to edit, but a module file that nothing imports is never
+registered, and every folder on the way needs an `__init__.py`.
 
 ## The `ShieldingFunction` Contract
 
@@ -174,17 +183,21 @@ filesystem container; the binding comes from the `reaction` class attribute,
 which holds the real (unsanitised) serialized string.
 
 ```text
-physics/photo_reactions/shielding/
-└── H2__PHOTON__H_H/         # sanitized folder for H2._PHOTON__H.H
-    ├── __init__.py          # from .db1996 import DB1996; from .hg2015 import HG2015
-    ├── hg2015.py            # name = "hg2015"
-    ├── db1996.py            # name = "db1996"
-    └── _utils/              # shared helpers (leading "_" → not imported as a model)
-        ├── __init__.py
-        └── db_shielding_function.py
+plugins/reactions/
+└── H2__PHOTON__H_H/             # sanitized folder for H2._PHOTON__H.H
+    ├── __init__.py
+    └── shielding/               # one folder per kind of model
+        ├── __init__.py          # from .db1996 import DB1996; from .hg2015 import HG2015
+        ├── hg2015.py            # name = "hg2015"
+        ├── db1996.py            # name = "db1996"
+        └── _utils/              # shared helpers (leading "_" → not imported as a model)
+            ├── __init__.py
+            └── db_shielding_function.py
 ```
 
-Following `H2__PHOTON__H_H/hg2015.py`:
+Import jaff's shielding API absolutely (`from jaff.physics.photo_reactions.shielding
+import ...`); relative imports work only within the plugin's own folders.
+Following `plugins/reactions/H2__PHOTON__H_H/shielding/hg2015.py`:
 
 ```python
 """
@@ -252,18 +265,16 @@ class HG2015(ShieldingFunction):
 
 ## Writing a Global Shielding Function
 
-A global model sets `reaction = None` and lives in `shielding/global_/`. It is
+A global model sets `reaction = None` and lives in
+`plugins/physics/radiation/shielding/`. It is
 available to **any** reaction whose `type` matches its `name`, including in the
 global `[network.reactions.photo]` table; it derives everything it needs from
 the reaction passed to `get_shielding`.
 
 ```text
-physics/photo_reactions/shielding/
-├── global_/
-│   ├── __init__.py         # from .leiden import Leiden
-│   └── leiden.py           # name = "leiden", reaction = None
-└── H2__PHOTON__H_H/
-    └── ...
+plugins/physics/radiation/shielding/
+├── __init__.py             # from .my_model import MyModel
+└── my_model.py             # name = "my_model", reaction = None
 ```
 
 ```toml
@@ -271,7 +282,9 @@ physics/photo_reactions/shielding/
 shielding = { type = "leiden", radiation = "isrf", shielded_by = ["self", "H2"] }
 ```
 
-See `shielding/global_/leiden.py` for a full example: its `LeidenParams`
+The built-in Leiden model is a full example, though it lives in jaff's core
+because it reads jaff's shielding database
+(`src/jaff/physics/photo_reactions/shielding/global_/leiden.py`): its `LeidenParams`
 restricts `shielded_by` to the species the Leiden tables hold, and
 `get_shielding` builds one interpolation call per shielding species and returns
 the per-reaction table with it.
@@ -282,7 +295,8 @@ the per-reaction table with it.
 - [x] `name` (lower-case) equals the `shielding` table's `type` keyword
 - [x] `reaction` set to the serialized reaction (local) or left `None` (global)
 - [x] Local model placed under the **sanitised** folder
-      (`shielding/<sanitized_reaction>/<type>.py`); global under `shielding/global_/`
+      (`plugins/reactions/<sanitized_reaction>/shielding/<type>.py`); global under
+      `plugins/physics/radiation/shielding/`
 - [x] The folder's `__init__.py` imports the new class (a new folder needs one), and
       the folder name does not start with `_`
 - [x] Its own `ShieldingParams` subclass with numpydoc `Attributes`, returned by
