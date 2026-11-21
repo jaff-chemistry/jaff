@@ -56,6 +56,10 @@ from .themes import (
 HEADROOM: float = 0.25
 #: Autoscale margin of a log y axis (fraction of its span).
 LOG_MARGIN: float = 0.08
+#: Most decades a log y axis spans without an explicit ``ylim``: data further
+#: below its top (e.g. an ``exp(-E/T)`` rate underflowing at low T) runs off
+#: the bottom instead of stretching the axis.
+LOG_MAX_DECADES: float = 30.0
 #: Points between an inside title and the tag under it.
 TAG_GAP_PT: float = 3.0
 #: A title wider than this fraction of the panel goes above it instead.
@@ -129,6 +133,8 @@ def render(spec: FigureSpec) -> tuple[Figure, np.ndarray]:
             entries.append(ent)
         if spec.title:
             fig.suptitle(spec.title)
+        for group in _y_groups(len(used), spec.sharey):
+            _cap_log_range([used[j] for j in group], [spec.axes[j] for j in group])
 
         groups = _x_groups(used, spec.sharex)
         roles = _x_roles(len(used), n, groups)
@@ -398,6 +404,7 @@ def _draw_axes(
     if aspec.xlim is not None:
         ax.set_xlim(aspec.xlim)
     if aspec.ylim is not None:
+        ax.set_autoscaley_on(False)  # skip the pending autoscale (may underflow)
         ax.set_ylim(aspec.ylim)
     ax.set_xlabel(_axis_label(aspec.xscale, aspec.xlabel, style))
     ax.set_ylabel(_axis_label(aspec.yscale, aspec.ylabel, style))
@@ -586,13 +593,49 @@ def _y_groups(n_used: int, sharey: bool) -> list[list[int]]:
 
 
 def _span(ax: Axes, log: bool) -> float | None:
-    """Data span of *ax* in y (decades on a log axis); ``None`` if unusable."""
+    """Data span of *ax* in y; ``None`` if unusable.
+
+    On a log axis the span is in decades, at most :data:`LOG_MAX_DECADES`
+    (the range :func:`_cap_log_range` shows); taking the difference of the
+    logs keeps it finite when ``y1 / y0`` would overflow (subnormal ``y0``).
+    """
     y0, y1 = ax.dataLim.y0, ax.dataLim.y1
     if not (np.isfinite(y0) and np.isfinite(y1)):
         return None
     if log:
-        return np.log10(y1 / y0) if y0 > 0 and y1 > 0 else None
+        if not (y0 > 0 and y1 > 0):
+            return None
+        return min(float(np.log10(y1) - np.log10(y0)), LOG_MAX_DECADES)
     return (y1 - y0) or abs(y1) or 1.0
+
+
+def _cap_log_range(group: list[Axes], specs: list[AxesSpec]) -> None:
+    """Limit a log y range to :data:`LOG_MAX_DECADES` below the data's top.
+
+    Applied once per group of panels sharing a y range, before anything reads
+    the limits.  Without it, data reaching subnormal values (``1e-320``) makes
+    the autoscale margin underflow to 0, which matplotlib rejects, leaving
+    limits that hide every curve.  Panels with an explicit ``ylim`` are left
+    alone, as are ranges within the cap.
+    """
+    if any(s.ylim is not None for s in specs) or group[0].get_yscale() != "log":
+        return
+    lows = [a.dataLim.minposy for a in group]
+    highs = [a.dataLim.y1 for a in group]
+    lo = min((v for v in lows if np.isfinite(v) and v > 0), default=None)
+    hi = max((v for v in highs if np.isfinite(v) and v > 0), default=None)
+    if lo is None or hi is None:
+        return
+    top = float(np.log10(hi))
+    if top - float(np.log10(lo)) <= LOG_MAX_DECADES:
+        return
+    ax = group[0]
+    # Off first: set_ylim would otherwise run the pending autoscale, which is
+    # what underflows.
+    ax.set_autoscaley_on(False)
+    ax.set_ylim(
+        10.0 ** (top - LOG_MAX_DECADES), 10.0 ** (top + LOG_MARGIN * LOG_MAX_DECADES)
+    )
 
 
 def _headroom(group: list[Axes], specs: list[AxesSpec]) -> None:

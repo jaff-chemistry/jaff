@@ -268,7 +268,10 @@ class AxesSpec:
     xscale, yscale : str
         ``"linear"`` (default) or ``"log"``.
     xlim, ylim : tuple[float, float] or None
-        Axis limits; ``None`` autoscales.
+        Axis limits; ``None`` autoscales.  An autoscaled log y axis spans at
+        most 30 decades below the data's top (``render.LOG_MAX_DECADES``);
+        lower values, such as a rate underflowing at low temperature, run off
+        the bottom.
     xlabel, ylabel : str
         Axis labels (``None`` in the dict counts as empty).
     title : str
