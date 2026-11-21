@@ -14,7 +14,7 @@ import math
 from typing import Any
 
 import numpy as np
-from sympy import Basic, lambdify
+from sympy import Basic, Symbol, lambdify
 
 from ...io import JaffLogger
 from ._common import label_of as _label_of
@@ -135,7 +135,7 @@ def rate_series(
         if tmin is None or tmax is None:
             raise ValueError("tmin and tmax are required for bare SymPy expressions.")
         syms = list(item.free_symbols)
-        sym = syms[0].name if len(syms) == 1 else var
+        sym = syms[0].name if len(syms) == 1 and isinstance(syms[0], Symbol) else var
         lab = label if label is not None else str(item)
         return _evaluate(item, sym, tmin, tmax, npoints, lab, quiet)
 

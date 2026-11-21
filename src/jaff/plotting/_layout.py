@@ -25,12 +25,24 @@ from dataclasses import dataclass
 import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import RendererBase
-from matplotlib.figure import Figure
+from matplotlib.figure import Figure, SubFigure
 from matplotlib.legend import Legend
 from matplotlib.text import Text
 
 from ._legend import Placement
 from .themes import Style
+
+
+def renderer(fig: Figure | SubFigure) -> RendererBase:
+    """The renderer that measures *fig*'s text, on any backend.
+
+    ``fig.canvas.get_renderer()`` exists only on Agg canvases (``pdf``,
+    ``svg``, ``ps`` have none); the figure's own renderer works everywhere.
+    ``Figure._get_renderer`` is private (missing from the stubs) but it is what
+    matplotlib itself uses, and :mod:`jaff.plotting._ticks` already relies on it.
+    """
+    return fig._get_renderer()  # ty: ignore[unresolved-attribute]
+
 
 #: Outer figure padding, inches.
 PAD: float = 0.04
@@ -133,10 +145,23 @@ class _Frame:
     host_drop: float
 
 
+def _sup_texts(fig: Figure) -> tuple[Text | None, Text | None, Text | None]:
+    """The figure's sup x label, sup y label and suptitle (``None`` when unset).
+
+    matplotlib has no public getter for these artists (``get_suptitle()`` gives
+    the string); the private attributes are read here only.
+    """
+    return (
+        fig._supxlabel,  # ty: ignore[unresolved-attribute]
+        fig._supylabel,  # ty: ignore[unresolved-attribute]
+        fig._suptitle,  # ty: ignore[unresolved-attribute]
+    )
+
+
 def _extras(fig: Figure, r: RendererBase) -> tuple[float, float, float]:
     """Space taken by the sup y label (left), sup x label (bottom), suptitle (top)."""
     dpi = fig.dpi
-    sup_x, sup_y, title = fig._supxlabel, fig._supylabel, fig._suptitle
+    sup_x, sup_y, title = _sup_texts(fig)
     left = _size(sup_y, r, dpi)[0] + PAD if sup_y is not None else 0.0
     bottom = _size(sup_x, r, dpi)[1] + PAD if sup_x is not None else 0.0
     top = _size(title, r, dpi)[1] + PAD if title is not None else 0.0
@@ -221,16 +246,17 @@ def _place_texts(fig: Figure, f: _Frame, g: _Grid, n_used: int, n: int) -> None:
     W, H = f.width, f.height
     grid_left, grid_right = f.col_x[0], f.col_x[-1] + f.pw + g.right[-1]
     used_right = max((f.col_x[i % n] + f.pw for i in range(n_used)), default=grid_right)
-    if fig._supylabel is not None:
+    sup_x, sup_y, title = _sup_texts(fig)
+    if sup_y is not None:
         y = 1 - (f.row_top[0] + f.grid_h / 2) / H
-        fig._supylabel.set(x=PAD / W, y=y, ha="left", va="center")
-    if fig._supxlabel is not None:
+        sup_y.set(x=PAD / W, y=y, ha="left", va="center")
+    if sup_x is not None:
         x = (grid_left + used_right) / 2 / W
         grid_bottom = f.row_top[-1] + f.ph + g.bottom[-1]
-        fig._supxlabel.set(x=x, y=1 - grid_bottom / H, ha="center", va="top")
-    if fig._suptitle is not None:
+        sup_x.set(x=x, y=1 - grid_bottom / H, ha="center", va="top")
+    if title is not None:
         x = (grid_left + grid_right) / 2 / W
-        fig._suptitle.set(x=x, y=1 - PAD / H, ha="center", va="top")
+        title.set(x=x, y=1 - PAD / H, ha="center", va="top")
 
 
 def _place_legends(
@@ -265,7 +291,7 @@ def _place_legends(
 
 def _height(artist: Legend | Text, fig: Figure) -> float:
     """Legend (or heading) height in inches."""
-    return _size(artist, fig.canvas.get_renderer(), fig.dpi)[1]
+    return _size(artist, renderer(fig), fig.dpi)[1]
 
 
 #: Measure -> solve -> place passes at most; decorations usually settle in two.
@@ -279,7 +305,7 @@ def _measure(
 ) -> tuple[_Grid, list[tuple[float, float]], tuple[float, float] | None, tuple]:
     """One draw; decoration extents, margin sizes, hosted legend size, extras."""
     fig.draw_without_rendering()
-    r = fig.canvas.get_renderer()
+    r = renderer(fig)
     flat = axes.ravel()
     g = _grid(axes, n_used, [_decor(ax, r) for ax in flat[:n_used]])
     sizes = [_size(item, r, fig.dpi) for item in placed.margin()]

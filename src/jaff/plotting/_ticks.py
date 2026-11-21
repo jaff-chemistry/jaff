@@ -37,6 +37,8 @@ from matplotlib.ticker import (
     NullLocator,
 )
 
+from ._layout import renderer
+
 #: Log axes spanning fewer decades than this get fractional-exponent ticks.
 NARROW_DECADES: float = 1.5
 _NICE_STEPS = [1, 2, 2.5, 5, 10]
@@ -94,7 +96,7 @@ def _nice_exponents(lo: float, hi: float) -> np.ndarray:
     tol = 1e-9 * max(1.0, abs(lo), abs(hi))
     ks = np.array([])
     for nbins in (4, 8, 16):
-        ks = MaxNLocator(nbins=nbins, steps=_NICE_STEPS).tick_values(lo, hi)
+        ks = np.asarray(MaxNLocator(nbins=nbins, steps=_NICE_STEPS).tick_values(lo, hi))
         ks = np.round(ks[(ks >= lo - tol) & (ks <= hi + tol)], 10)
         if len(ks) >= 2:
             break
@@ -231,23 +233,23 @@ class EdgeTrim(Formatter):
         """Forward the tick locations to the wrapped formatter."""
         self.inner.set_locs(locs)
 
-    def __call__(self, value: float, pos: int | None = None) -> str:
+    def __call__(self, x: float, pos: int | None = None) -> str:
         """The wrapped label, or ``""`` near an edge or an inside title."""
         to_axes = self.ax.transData + self.ax.transAxes.inverted()
-        frac = to_axes.transform((1.0, value))[1]
+        frac = to_axes.transform((1.0, x))[1]
         h_pt = self.ax.get_window_extent().height * 72 / self.ax.figure.dpi
         half = (0.5 * self.fontsize + 1.0) / max(h_pt, 1e-9)
         if frac < self.bottom + half or frac > 1 - half:
             return ""
-        text = self.inner(value, pos)
-        return "" if text and self._hits_title(text, value) else text
+        text = self.inner(x, pos)
+        return "" if text and self._hits_title(text, x) else text
 
     def _hits_title(self, text: str, value: float) -> bool:
         """Whether *text* at *value* would crowd an inside title."""
         title = self.ax.title
         if not title.get_text():
             return False
-        r = self.ax.figure._get_renderer()  # any backend, also while saving
+        r = renderer(self.ax.figure)  # any backend, also while saving
         box, panel = title.get_window_extent(r), self.ax.get_window_extent(r)
         if box.y1 > panel.y1 + 1:  # title above the panel
             return False
@@ -283,12 +285,12 @@ class XEdgeTrim(Formatter):
         """Forward the tick locations to the wrapped formatter."""
         self.inner.set_locs(locs)
 
-    def __call__(self, value: float, pos: int | None = None) -> str:
+    def __call__(self, x: float, pos: int | None = None) -> str:
         """The wrapped label, or ``""`` when it would reach a trimmed edge."""
-        text = self.inner(value, pos)
+        text = self.inner(x, pos)
         chars = len(re.sub(r"\\mathdefault|[{}$^\\]", "", text))
         to_axes = self.ax.transData + self.ax.transAxes.inverted()
-        frac = to_axes.transform((value, 1.0))[0]
+        frac = to_axes.transform((x, 1.0))[0]
         w_pt = self.ax.get_window_extent().width * 72 / self.ax.figure.dpi
         half = (0.3 * self.fontsize * chars + 1.0) / max(w_pt, 1e-9)
         if "right" in self.sides and frac > 1 - half:

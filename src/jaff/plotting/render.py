@@ -289,6 +289,8 @@ def _clean(s: SeriesSpec, aspec: AxesSpec, path: str) -> SeriesSpec | None:
         return None
     changes: dict[str, Any] = {}
     if s.kind == "bars":
+        # Bars always have edges: the spec rejects kind "bars" without them.
+        assert s.x_lo is not None and s.x_hi is not None
         changes = {"x_lo": s.x_lo[keep], "x_hi": s.x_hi[keep]}
     return replace(s, x=s.x[keep], y=s.y[keep], **changes)
 
@@ -346,6 +348,8 @@ def _draw_series(
     """Draw a line (and/or queue its hollow markers); return queued markers."""
     ls, marker = split_style(look)
     if ls is None:
+        # A style with no line is a marker (split_style), so marker is set.
+        assert marker is not None
         # Invisible line: claims the data limits; markers come after layout.
         ax.plot(s.x, s.y, visible=False)
         return _marks.PendingMarks(ax, s.x, s.y, color, marker, lw, zorder)
@@ -439,11 +443,14 @@ def _draw_bars(bars: list[_PendingBars]) -> None:
     without autoscaling so they never feed back into the limits.
     """
     for ax, s, color, lw in bars:
+        # Bars always have edges: the spec rejects kind "bars" without them.
+        assert s.x_lo is not None and s.x_hi is not None
         lo, hi = ax.get_xlim()
         x_lo = np.where(np.isneginf(s.x_lo), lo, s.x_lo)
         x_hi = np.where(np.isposinf(s.x_hi), hi, s.x_hi)
         segs = [[(a, y), (b, y)] for a, b, y in zip(x_lo, x_hi, s.y)]
-        lc = LineCollection(segs, colors=color, linewidths=2 * lw, zorder=s.zorder)
+        zorder = s.zorder if s.zorder is not None else LineCollection.zorder
+        lc = LineCollection(segs, colors=color, linewidths=2 * lw, zorder=zorder)
         ax.add_collection(lc, autolim=False)
 
 
@@ -580,7 +587,7 @@ def _text_size(ax: Axes, text: str, fontsize: float) -> tuple[float, float]:
     automatic title placement above top-spine labels.
     """
     probe = ax.text(0, 0, text, fontsize=fontsize, transform=ax.transAxes)
-    box = probe.get_window_extent(ax.figure.canvas.get_renderer())
+    box = probe.get_window_extent(_layout.renderer(ax.figure))
     probe.remove()
     return box.width / ax.figure.dpi, box.height / ax.figure.dpi
 
@@ -701,7 +708,7 @@ def _clear_label_strips(
     if not style.inside_ticks:
         return {}
     fig.draw_without_rendering()
-    r = fig.canvas.get_renderer()
+    r = _layout.renderer(fig)
     tick = style.ticks["major_length"]
     cleared: dict[int, float] = {}
     for group in groups:
@@ -738,7 +745,7 @@ def _bottom_strips(
     if not any(inside_x):
         return out
     fig.draw_without_rendering()
-    r = fig.canvas.get_renderer()
+    r = _layout.renderer(fig)
     tick = style.ticks["major_length"]
     for group in _y_groups(len(used), spec.sharey):
         members = [j for j in group if inside_x[j]]
