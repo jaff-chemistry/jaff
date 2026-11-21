@@ -29,6 +29,7 @@ Examples
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Hashable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,44 @@ import pandas as pd
 
 from ..config import DB_DIR
 from .csv import csv_to_df
+
+
+def _ident(name: Hashable) -> str:
+    """
+    Quote a table or column name for SQL.
+
+    The name is wrapped in double quotes with inner double quotes doubled, so
+    spaces, brackets, quotes and reserved words (``order``) are taken as part
+    of the name, never as SQL.
+
+    Parameters
+    ----------
+    name : Hashable
+        Table or column name (a pandas label is converted with ``str``).
+
+    Returns
+    -------
+    str
+        The quoted identifier.
+    """
+    return '"' + str(name).replace('"', '""') + '"'
+
+
+def _columns(cols: Sequence[str] | None) -> str:
+    """
+    Return the quoted column list of a ``SELECT`` (``*`` for all columns).
+
+    Parameters
+    ----------
+    cols : sequence of str or None
+        Column names; ``None`` or empty selects every column.
+
+    Returns
+    -------
+    str
+        Comma-separated quoted names, or ``*``.
+    """
+    return ", ".join(_ident(c) for c in cols) if cols else "*"
 
 
 class Db:
@@ -313,7 +352,7 @@ class Db:
         assert self.connection is not None
 
         # Drop any pre-existing table of the same name.
-        self.cursor.execute(f"DROP TABLE IF EXISTS {name}")
+        self.cursor.execute(f"DROP TABLE IF EXISTS {_ident(name)}")
 
         index_col = df.index.name or "index"
 
@@ -326,13 +365,13 @@ class Db:
                 sql_type = "REAL"
             else:
                 sql_type = "TEXT"
-            col_defs.append(f"{col_name} {sql_type}")
+            col_defs.append(f"{_ident(col_name)} {sql_type}")
 
         columns_str = ", ".join(col_defs)
 
         self.connection.execute(f"""
-            CREATE TABLE {name} (
-                {index_col} TEXT PRIMARY KEY,
+            CREATE TABLE {_ident(name)} (
+                {_ident(index_col)} TEXT PRIMARY KEY,
                 {columns_str}
             )
         """)
@@ -557,8 +596,8 @@ class Table:
                 "Cursor must be an object of sqlite3.Cursor"
             )
         # Verify the table actually exists in the database.
-        comm = f"SELECT * FROM sqlite_master WHERE type='table' and name='{name}'"
-        if not cur.execute(comm).fetchall():
+        comm = "SELECT * FROM sqlite_master WHERE type='table' and name=?"
+        if not cur.execute(comm, [name]).fetchall():
             raise ValueError(f"Invalid table name: {name}")
 
         self.name = name
@@ -569,14 +608,15 @@ class Table:
     # Read operations
     # ------------------------------------------------------------------
 
-    def all_rows(self, cols: list[str] = ["*"]) -> list[Any]:
+    def all_rows(self, cols: Sequence[str] | None = None) -> list[Any]:
         """
         Fetch every row in the table.
 
         Parameters
         ----------
-        cols : list of str, optional
-            Columns to retrieve.  Defaults to all columns (``["*"]``).
+        cols : sequence of str or None, optional
+            Names of the columns to retrieve (any name, quoted for you).
+            ``None`` (default) retrieves all columns.
 
         Returns
         -------
@@ -584,40 +624,42 @@ class Table:
             All rows in the table for the selected columns.  Rows support both
             index and column-name access.
         """
-        comm = f"SELECT {','.join(cols) if len(cols) > 1 else cols[0]} FROM {self.name}"
-        self.cur.execute(comm)
+        self.cur.execute(f"SELECT {_columns(cols)} FROM {_ident(self.name)}")
 
         return self.cur.fetchall()
 
     def rows(
         self,
-        cols: list[str] = ["*"],
+        cols: Sequence[str] | None = None,
         conditions: str = "",
+        params: Sequence[Any] | None = None,
     ) -> list[Any]:
         """
         Fetch rows that match an optional SQL ``WHERE`` clause.
 
         Parameters
         ----------
-        cols : list of str, optional
-            Columns to retrieve.  Defaults to all columns (``["*"]``).
+        cols : sequence of str or None, optional
+            Names of the columns to retrieve (any name, quoted for you).
+            ``None`` (default) retrieves all columns.
         conditions : str, optional
             SQL ``WHERE`` clause body (without the ``WHERE`` keyword), e.g.
-            ``"nion = 1 AND ne < 5"``.  If empty, all rows are returned.
+            ``"nion = 1 AND ne < 5"``.  It is run as SQL, so it must be
+            trusted text: put values in *params* as ``?`` placeholders
+            (``"reaction = ?"``) rather than pasting them in.  If empty, all
+            rows are returned.
+        params : sequence or None, optional
+            Values bound to the ``?`` placeholders of *conditions*, in order.
 
         Returns
         -------
         list[sqlite3.Row]
             Matching rows for the selected columns.
         """
-        columns = ",".join(cols) if len(cols) > 1 else cols[0]
-
-        comm = (
-            f"SELECT {columns} FROM {self.name} WHERE {conditions}"
-            if conditions
-            else f"SELECT {columns} FROM {self.name}"
-        )
-        self.cur.execute(comm)
+        comm = f"SELECT {_columns(cols)} FROM {_ident(self.name)}"
+        if conditions:
+            comm += f" WHERE {conditions}"
+        self.cur.execute(comm, list(params or []))
 
         return self.cur.fetchall()
 
@@ -643,7 +685,7 @@ class Table:
         None
         """
         placeholders = ",".join(["?"] * len(values))
-        comm = f"INSERT INTO {self.name} VALUES ({placeholders})"
+        comm = f"INSERT INTO {_ident(self.name)} VALUES ({placeholders})"
         self.cur.execute(comm, values)
         self.conn.commit()
 
@@ -696,9 +738,14 @@ class Table:
         -------
         None
         """
-        comm = f"ALTER TABLE {self.name} ADD COLUMN {col_name} {col_type}"
+        comm = f"ALTER TABLE {_ident(self.name)} ADD COLUMN {_ident(col_name)} {col_type}"
         if default is not None:
-            literal = f"'{default}'" if isinstance(default, str) else default
+            # DEFAULT cannot be a bound parameter: quote text as an SQL literal.
+            literal = (
+                "'" + default.replace("'", "''") + "'"
+                if isinstance(default, str)
+                else default
+            )
             comm += f" DEFAULT {literal}"
         self.cur.execute(comm)
         self.conn.commit()
@@ -737,13 +784,16 @@ class Table:
         """
         # Validate the target column exists (consistent ValueError on typo).
         self.cur.execute(
-            f"SELECT type FROM pragma_table_info('{self.name}') WHERE name = ?",
-            [col_name],
+            "SELECT type FROM pragma_table_info(?) WHERE name = ?",
+            [self.name, col_name],
         )
         if self.cur.fetchone() is None:
             raise ValueError(f"Invalid column name: {col_name}")
 
-        comm = f"SELECT {col_name} FROM {self.name} WHERE {index_col} = ?"
+        comm = (
+            f"SELECT {_ident(col_name)} FROM {_ident(self.name)} "
+            f"WHERE {_ident(index_col)} = ?"
+        )
         self.cur.execute(comm, [index_value])
         rows = self.cur.fetchall()
 
@@ -804,8 +854,8 @@ class Table:
 
         # Look up the declared type of the target column.
         self.cur.execute(
-            f"SELECT type FROM pragma_table_info('{self.name}') WHERE name = ?",
-            [col_name],
+            "SELECT type FROM pragma_table_info(?) WHERE name = ?",
+            [self.name, col_name],
         )
         col = self.cur.fetchone()
         if col is None:
@@ -823,7 +873,10 @@ class Table:
                 f"column '{col_name}' type {col_type}"
             )
 
-        comm = f"UPDATE {self.name} SET {col_name} = ? WHERE {index_col} = ?"
+        comm = (
+            f"UPDATE {_ident(self.name)} SET {_ident(col_name)} = ? "
+            f"WHERE {_ident(index_col)} = ?"
+        )
         self.cur.execute(comm, [value, index_value])
         self.conn.commit()
 
@@ -838,7 +891,7 @@ class Table:
         -------
         None
         """
-        comm = f"DROP TABLE {self.name}"
+        comm = f"DROP TABLE {_ident(self.name)}"
         self.cur.execute(comm)
         self.conn.commit()
 

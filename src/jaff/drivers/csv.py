@@ -1,5 +1,5 @@
 # ABOUTME: CSV driver: read CSV files into pandas DataFrames and convert them to
-# ABOUTME: HDF5 (per-column datasets, flattened coordinate axes or PyTables tables).
+# ABOUTME: HDF5 (per-column datasets, optionally with flattened coordinate axes).
 """
 CSV file driver utilities.
 
@@ -18,10 +18,7 @@ format:
   stored as a 1-D dataset in the group ``<group_path>/<hdf5_key>``
   (*hdf5_key* defaults to the CSV file stem).  Columns named in
   *flatten_columns* are stored as their sorted unique values instead, which
-  suits coordinate axes that repeat across rows.  ``as_table=True`` instead
-  writes a PyTables-compatible table with :meth:`pandas.DataFrame.to_hdf`
-  (needs the optional ``tables`` package; incompatible with
-  *flatten_columns*).
+  suits coordinate axes that repeat across rows.
 
 Examples
 --------
@@ -132,7 +129,6 @@ def csv_to_hdf5(
     group_path: str = "",
     hdf5_key: str = "",
     flatten_columns: Sequence[str] | None = None,
-    as_table: bool = False,
     *args,
     **kwargs,
 ) -> None:
@@ -142,15 +138,11 @@ def csv_to_hdf5(
     Reads *file* with :func:`csv_to_df` and writes the result to *outfile*
     (adding to the HDF5 file if it already exists; other groups are kept, but
     an existing dataset of the same name is not overwritten, see Raises).
-    Supports three storage
+    Supports two storage
     modes, chosen by the arguments passed:
 
     * **Default** – Each DataFrame column is stored as a 1-D dataset inside
       an HDF5 group at ``<group_path>/<hdf5_key>``.
-    * **Table** (``as_table=True``) – The DataFrame is stored as a
-      PyTables-compatible HDF5 table via :meth:`pandas.DataFrame.to_hdf`,
-      keeping the column metadata so the data can be read back with
-      :func:`pandas.read_hdf`.  Incompatible with *flatten_columns*.
     * **Flatten** (``flatten_columns=[...]``) – Like the default mode, but the
       listed columns are deduplicated with :func:`numpy.unique` (sorted unique
       values) before storage; useful for coordinate axes that repeat across
@@ -174,10 +166,6 @@ def csv_to_hdf5(
         values (via :func:`numpy.unique`) rather than the raw array.  The
         remaining columns are stored in full, after sorting the rows by these
         columns.  ``None`` (default) flattens nothing.
-    as_table : bool, optional
-        If ``True``, write the DataFrame as a PyTables-compatible HDF5 table.
-        Requires the optional ``tables`` (PyTables) package, which is not a
-        JAFF dependency.  Cannot be combined with *flatten_columns*.
     *args
         Additional positional arguments forwarded to :func:`csv_to_df` (and
         on to :func:`pandas.read_csv`).
@@ -194,12 +182,10 @@ def csv_to_hdf5(
     FileNotFoundError
         If *file* does not exist.
     ValueError
-        If both *as_table* and *flatten_columns* are specified, if a name in
-        *flatten_columns* is not a column of the CSV, or (default and flatten
-        modes) if the target group already holds a dataset named after one of
-        the columns, e.g. when converting the same CSV into the same file
-        twice.  These are checked before anything is written: *outfile* is
-        left as it was.
+        If a name in *flatten_columns* is not a column of the CSV, or if the
+        target group already holds a dataset named after one of the columns,
+        e.g. when converting the same CSV into the same file twice.  These are
+        checked before anything is written: *outfile* is left as it was.
 
     Examples
     --------
@@ -228,8 +214,6 @@ def csv_to_hdf5(
         group_path = ""
 
     flatten_columns = list(flatten_columns or [])
-    if as_table and flatten_columns:
-        raise ValueError("Cannot flatten arrays if data is to be saved as table")
 
     # Default the HDF5 key to the CSV file stem.
     if not hdf5_key:
@@ -251,11 +235,6 @@ def csv_to_hdf5(
             f"flatten_columns not in the CSV: {', '.join(missing)} "
             f"(columns: {', '.join(map(str, df.columns))})"
         )
-
-    if as_table:
-        # PyTables table format — lets pandas store with full column metadata.
-        df.to_hdf(outfile, key=f"{group_path}/{hdf5_key}", format="table")
-        return
 
     group = f"{group_path}/{hdf5_key}"
     # Refuse before writing: a clash part-way through the columns would leave

@@ -185,7 +185,7 @@ class Photochemistry:
     def _verner_expr(key: str) -> Expr | None:
         with JaffDb() as jdb:
             table = jdb.table("verner_cross_sections")
-            rows: list = table.rows(conditions=f"reaction = '{key}'")
+            rows: list = table.rows(conditions="reaction = ?", params=[key])
 
         return sympify(rows[0]["xsecs"]) if rows else None
 
@@ -193,7 +193,7 @@ class Photochemistry:
     def _tabulated_row(key: str) -> dict[str, Any] | None:
         with JaffDb() as jdb:
             table = jdb.table("photo_reaction_cross_sections")
-            rows: list = table.rows(conditions=f"reaction = '{key}'")
+            rows: list = table.rows(conditions="reaction = ?", params=[key])
 
         return rows[0] if rows else None
 

@@ -85,3 +85,7 @@ class TestCsvToHdf5:
         default = inspect.signature(csv_to_hdf5).parameters["flatten_columns"].default
 
         assert default is None
+
+    def test_there_is_no_pytables_mode(self):
+        # as_table needed PyTables (not a dependency) and nothing in jaff reads it.
+        assert "as_table" not in inspect.signature(csv_to_hdf5).parameters
