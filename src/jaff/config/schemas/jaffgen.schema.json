@@ -86,6 +86,20 @@
       "title": "FermiDegenerateEosConfig",
       "type": "object"
     },
+    "HeatingCoolingRateConfig": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Heating/cooling rate",
+      "type": "object",
+      "description": "A global heating/cooling mechanism (erg cm⁻³ s⁻¹; negative cools); `type` selects the model and its keys."
+    },
     "IdealEosConfig": {
       "additionalProperties": false,
       "description": "Ideal-gas EOS (`type = \"ideal\"`).",
@@ -271,7 +285,8 @@
             "eos": {
               "gamma": 1.6666666666667,
               "type": "ideal"
-            }
+            },
+            "heating_cooling_rate": []
           },
           "description": "Thermodynamics."
         }
@@ -656,6 +671,15 @@
             }
           ],
           "title": "Eos"
+        },
+        "heating_cooling_rate": {
+          "default": [],
+          "description": "Global heating/cooling mechanisms, each `{ type = \"<plugin>\", ... }` (erg cm⁻³ s⁻¹; negative cools).  Their rates are summed and added to the `.jfunc` `heatingCoolingRate`; an entry repeating another exactly (same type and settings) is rejected.  Empty by default.",
+          "items": {
+            "$ref": "#/$defs/HeatingCoolingRateConfig"
+          },
+          "title": "Heating Cooling Rate",
+          "type": "array"
         }
       },
       "title": "ThermodynamicsConfig",
@@ -690,7 +714,8 @@
           "eos": {
             "gamma": 1.6666666666667,
             "type": "ideal"
-          }
+          },
+          "heating_cooling_rate": []
         }
       }
     },

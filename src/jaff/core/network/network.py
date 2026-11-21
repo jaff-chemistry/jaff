@@ -208,7 +208,8 @@ class Network:
         Equation of state and thermal rates, built lazily: ``eos`` (internal
         energy for the configured EOS, an ideal gas by default),
         ``dEdt_chemical()`` (accumulated over all reactions), ``dEdt_extra``
-        (from the ``heatingcoolingrate`` auxiliary function, if present) and
+        (the ``heatingcoolingrate`` auxiliary function, if present, plus the
+        ``heating_cooling_rate`` plugins) and
         ``dEdt_tot()``, all in erg cm⁻³ s⁻¹, plus the matching temperature rates
         ``dTdt_chemical()``, ``dTdt_extra`` and ``dTdt_tot()`` in K s⁻¹; the
         methods take the ``form`` of the reaction rates.

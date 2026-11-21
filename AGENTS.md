@@ -392,7 +392,13 @@ docs/           # Documentation
   `.jfunc` `deltaE`) gives the `.jfunc` function, else the configured plugin's value, else
   `None`; `reaction.dE` falls back to the file's value, then 0. Test-only plugins live in
   `tests/energy_change_plugins.py` and are installed per test (`install(monkeypatch)`),
-  never into the real registry (they would leak into the committed-schema test)
+  never into the real registry (they would leak into the committed-schema test). Global
+  heating/cooling: `physics/thermodynamics/heating_cooling_rate/` (`HeatingCoolingRateFunction`
+  plugins, `heating_cooling_rate(net, params)` in erg cm⁻³ s⁻¹; own registry, never bound to
+  a reaction), listed in `[network.thermodynamics] heating_cooling_rate = [{type = ...}, ...]`;
+  `dEdt_extra` = `.jfunc` `heatingCoolingRate` + every entry (summed; an exact copy of an
+  entry is rejected, the same type with other settings is not). Test-only plugins:
+  `tests/heating_cooling_rate_plugins.py`
 - `config/`: config base models, loader, JSON schemas, reference generator
 - `cli/`: `jaffgen` and `jaffx`
 - `drivers/`, `io/`: HDF5/SQLite/TOML/CSV access, data downloads, logging

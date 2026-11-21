@@ -32,8 +32,9 @@ class Thermodynamics:
         Internal energy for the configured equation of state (``config.eos``;
         an ideal gas with ``gamma = 1.6666666666667`` by default).
     dEdt_extra : DEDt
-        Non-reactive heating/cooling rate from the ``heatingcoolingrate``
-        auxiliary function (``0`` when absent) [erg cm⁻³ s⁻¹].
+        Non-reactive heating/cooling rate: the ``heatingcoolingrate`` auxiliary
+        function (``0`` when absent) plus every ``heating_cooling_rate`` plugin entry
+        [erg cm⁻³ s⁻¹].
     dTdt_extra : sympy.Expr
         ``Ė_extra / (∂E/∂T)`` [K s⁻¹].
 
@@ -147,7 +148,11 @@ class Thermodynamics:
 
     @cached_property
     def dEdt_extra(self) -> DEDt:
-        """Non-reactive heating/cooling rate (``heatingcoolingrate``) [erg cm⁻³ s⁻¹]."""
+        """Non-reactive heating/cooling rate [erg cm⁻³ s⁻¹].
+
+        The ``.jfunc`` ``heatingcoolingrate`` plus every ``[network.thermodynamics]
+        heating_cooling_rate`` plugin entry (summed).
+        """
         return self._get_dEdt_extra()
 
     def dEdt_tot(self, form: str = "expanded") -> DEDt:
@@ -340,17 +345,24 @@ class Thermodynamics:
         return DEDt(dEdt, self.net, form)
 
     def _get_dEdt_extra(self) -> DEDt:
-        """Build the non-reactive heating rate from ``heatingcoolingrate``.
+        """Build the non-reactive heating rate: ``heatingcoolingrate`` plus the plugins.
 
         Returns
         -------
         DEDt
-            The standardised auxiliary-function definition, or zero if absent.
+            The standardised auxiliary-function definition (zero if absent) plus the
+            rate of every ``heating_cooling_rate`` entry.
         """
+        from .heating_cooling_rate import heating_cooling_rate_function
+
         dEdt = Float(0.0)
         if "heatingcoolingrate" in self.net.functions:
             dEdt = self.net.reactions.resolve_rate_references(
                 self.net.functions.value("heatingcoolingrate")
             )
+
+        for entry in self.config.heating_cooling_rate:
+            plugin = heating_cooling_rate_function(entry.type)
+            dEdt += plugin.heating_cooling_rate(self.net, entry.params)
 
         return DEDt(dEdt, self.net)

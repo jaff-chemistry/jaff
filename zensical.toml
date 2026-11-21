@@ -582,6 +582,16 @@ nav = [
         ] },
         "reference/config/energy change/check_energy_change.md",
       ] },
+      { "Heating cooling rate" = [
+        "reference/config/heating cooling rate/index.md",
+        { "HeatingCoolingRateConfig" = [
+          "reference/config/heating cooling rate/heatingcoolingrateconfig/index.md",
+        ] },
+        { "HeatingCoolingRateParams" = [
+          "reference/config/heating cooling rate/heatingcoolingrateparams/index.md",
+        ] },
+        "reference/config/heating cooling rate/check_heating_cooling_rates.md",
+      ] },
       { "Dust" = [
         "reference/config/dust/index.md",
         { "DustConfig" = [
