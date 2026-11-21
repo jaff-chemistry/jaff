@@ -17,7 +17,9 @@ A `jaff.toml` lives next to its network file and describes the network itself;
 a `jaffgen.toml` describes one code-generation run. Both accept every
 `[network]` key, so a run can adjust the network it generates code for. Every
 key is listed in the [reference](reference.md); [editor setup](editor-setup.md)
-gives completion, descriptions and error checking while you write the files.
+gives completion, descriptions and error checking while you write the files. Opt-in
+physics models from the repo's `plugins/` folder are selected by name: see
+[Plugins](plugins.md).
 
 ```toml
 # networks/GOW/jaff.toml

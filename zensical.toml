@@ -48,6 +48,7 @@ nav = [
       "user-guide/configuration/index.md",
       "user-guide/configuration/reference.md",
       "user-guide/configuration/editor-setup.md",
+      "user-guide/configuration/plugins.md",
       "user-guide/configuration/data-tables.md"
     ] },
     { "Code Generation" = [
@@ -669,6 +670,7 @@ nav = [
     "development/adding-parsers.md",
     "development/adding-configuration.md",
     "development/adding-shielding-functions.md",
+    "development/writing-plugins.md",
     "development/adding-template-properties.md"
   ] },
   { "About" = ["about/license.md"] }

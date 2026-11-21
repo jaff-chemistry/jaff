@@ -346,6 +346,9 @@ where $R_i$ represents the rate of the $i^{th}$ reaction and $\Delta E_i$ repres
     @return eV_to_erg(0.4 + 8 * 2 * f)
 ```
 
+A reaction's `energy_change` [plugin](../configuration/plugins.md) gives the same quantity from the config;
+a `deltaE<N>` takes preference over it.
+
 ### Custom cross sections — `photoCrossSection<N>`
 
 A `photoCrossSection<N>` function replaces the database cross section of photo reaction number _N_ (see [Reaction numbers](#reaction-numbers)). Its body is the photodecay cross section in cm² as a function of the photon-energy symbol `ph_E` in eV (a bare `E` is Euler's number to SymPy):
@@ -396,6 +399,9 @@ The heating cooling function is used to add any non-chemical heating and cooling
         - cooling_dust_rec(chi, av, d2g, tgas, n_e)
 ```
 
+Mechanisms listed in `[network.thermodynamics] heating_cooling_rate` ([plugins](../configuration/plugins.md))
+are **added** to this rate.
+
 ### Global emissivity — `globalEmissivity`
 
 The `globalEmissivity` function is the network-wide counterpart of `spectralYield<N>`: radiation emitted by processes that are not one reaction (e.g. free-free or dust emission). Its body is the **volume emissivity**: the energy emitted per unit volume, per unit time, per unit photon energy, as a function of the photon-energy symbol `ph_E` (eV), in erg cm⁻³ s⁻¹ eV⁻¹, already **integrated over solid angle** (isotropic emission). There is one per network, with no `<N>`:
@@ -423,7 +429,7 @@ The `globalEmissivity` function is the network-wide counterpart of `spectralYiel
     @return 6.8e-38 * 2.418e14 * n_e * n_Hj * tgas**-0.5 * exp(-ph_E / (8.617e-5 * tgas))
 ```
 
-With radiation transport enabled, JAFF integrates it over each radiation group, with the same units rule as the spectral yield (erg cm⁻³ s⁻¹ in `"u"` mode, photons cm⁻³ s⁻¹ in `"nph"` mode), and adds each group's value to that group's **density** equation only. The spectrum is stored on `net.radiation.emissivity`, the group values on `group.emissivity` (with `n_X` symbols resolved to the species densities), and their sum on `net.radiation.total_emissivity`. Other symbols such as `tgas` stay symbolic, which needs a closed-form integral over every group (else `ValueError`). Without radiation it has no effect.
+With radiation transport enabled, JAFF integrates it over each radiation group, with the same units rule as the spectral yield (erg cm⁻³ s⁻¹ in `"u"` mode, photons cm⁻³ s⁻¹ in `"nph"` mode), and adds each group's value to that group's **density** equation only. The spectrum is stored on `net.radiation.emissivity`, the group values on `group.emissivity` (with `n_X` symbols resolved to the species densities), and their sum on `net.radiation.total_emissivity`. Other symbols such as `tgas` stay symbolic, which needs a closed-form integral over every group (else `ValueError`). Without radiation it has no effect. Spectra listed in `[network.radiation] emissivity` ([plugins](../configuration/plugins.md)) are **added** to it before the integration; `net.radiation.emissivity` holds the total.
 
 ### Global absorption coefficient — `globalAbsorptionCoefficient`
 
@@ -453,7 +459,7 @@ $$
 \langle\alpha\rangle_i = \frac{\int_\text{group} \alpha(E)\, w(E)\, dE}{\int_\text{group} w(E)\, dE}
 $$
 
-with $w(E) = E\,n(E)$ in `"u"` mode (the energy density loses each photon's energy) and $w(E) = n(E)$ in `"nph"` mode (the photon density loses photons). The averages are stored on `group.absorption_coefficient` (with `n_X` symbols resolved to the species densities) and the spectrum on `net.radiation.absorption_coefficient`. Absorption removes radiation from every direction in proportion to the intensity, so it also attenuates the flux $F_i$ (`rflux[i]`), with the same $\langle\alpha\rangle_i$. Set `absorption_attenuates_flux = false` (in [`[network.radiation]`](../configuration/reference.md#networkradiation), or `radiation={..., "absorption_attenuates_flux": False}` from Python) to apply it to the density equations only. Other symbols such as `tgas` stay symbolic, which needs a closed-form integral over every group (else `ValueError`). Without radiation it has no effect.
+with $w(E) = E\,n(E)$ in `"u"` mode (the energy density loses each photon's energy) and $w(E) = n(E)$ in `"nph"` mode (the photon density loses photons). The averages are stored on `group.absorption_coefficient` (with `n_X` symbols resolved to the species densities) and the spectrum on `net.radiation.absorption_coefficient`. Absorption removes radiation from every direction in proportion to the intensity, so it also attenuates the flux $F_i$ (`rflux[i]`), with the same $\langle\alpha\rangle_i$. Set `absorption_attenuates_flux = false` (in [`[network.radiation]`](../configuration/reference.md#networkradiation), or `radiation={..., "absorption_attenuates_flux": False}` from Python) to apply it to the density equations only. Other symbols such as `tgas` stay symbolic, which needs a closed-form integral over every group (else `ValueError`). Without radiation it has no effect. Spectra listed in `[network.radiation] absorption_coefficient` ([plugins](../configuration/plugins.md)) are **added** to it before the averaging; `net.radiation.absorption_coefficient` holds the total.
 
 <!-- prettier-ignore -->
 !!! warning "Dust module"

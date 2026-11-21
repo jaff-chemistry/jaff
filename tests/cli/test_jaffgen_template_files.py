@@ -1,7 +1,6 @@
 # ABOUTME: A built-in template is one folder, <repo>/templates/<name>: jaffgen
 # ABOUTME: collects every file there (static solver files too); no preprocessor/Builder
 
-import importlib
 import shutil
 import subprocess
 import sys
@@ -53,8 +52,6 @@ def test_builder_and_preprocessor_are_gone():
     assert not hasattr(jaff, "Builder") and not hasattr(jaff, "Preprocessor")
     assert not hasattr(jaff.codegen, "Builder")
     assert not hasattr(jaff.codegen, "Preprocessor")
-    with pytest.raises(ModuleNotFoundError):
-        importlib.import_module("jaff.plugins")
 
 
 def _generate_from(indir, outdir, network):

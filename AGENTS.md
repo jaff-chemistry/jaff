@@ -403,7 +403,10 @@ docs/           # Documentation
   spectrum in `ph_E`: erg cm⁻³ s⁻¹ eV⁻¹ / cm⁻¹), listed in `[network.radiation] emissivity` /
   `absorption_coefficient`; `Radiation.compute()` sums them with the `.jfunc`
   `globalEmissivity` / `globalAbsorptionCoefficient`, then integrates / averages the total per
-  group (`radiation.emissivity` etc. are the totals). Test-only: `tests/radiation_plugins.py`
+  group (`radiation.emissivity` etc. are the totals). Test-only: `tests/radiation_plugins.py`. Docs:
+  `docs/user-guide/configuration/plugins.md` (selecting plugins, `.jfunc` precedence / summing,
+  lists) and `docs/development/writing-plugins.md` (writing each kind; keep its examples
+  runnable)
 - `config/`: config base models, loader, JSON schemas, reference generator
 - `cli/`: `jaffgen` and `jaffx`
 - `drivers/`, `io/`: HDF5/SQLite/TOML/CSV access, data downloads, logging

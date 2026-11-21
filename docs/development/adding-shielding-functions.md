@@ -313,6 +313,7 @@ the per-reaction table with it.
 
 ## See Also
 
+- [Writing plugins](writing-plugins.md): the other plugin kinds
 - [Adding configuration](adding-configuration.md)
 - [Contributing Guide](contributing.md)
 - [Code Style Guide](code-style.md)
