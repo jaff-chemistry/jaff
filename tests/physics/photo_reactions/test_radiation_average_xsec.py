@@ -140,3 +140,51 @@ def test_photon_mode_band_loss_is_photon_weighted():
 
     losses = [float(g.k / rad.den[i]) for i, g in enumerate(grouped)]
     assert losses == pytest.approx(PHOTON_AVG, rel=1e-6, abs=0)
+
+
+def _absorbing_reaction():
+    """Decay σ_d = 1e-18 (flat), absorption σ_a = 3e-18·E (a separate table)."""
+    decay, energy = _tabulated(lambda e: np.full_like(e, 1e-18))
+    absorption, _ = _tabulated(lambda e: 3e-18 * e)
+    xsec = make_xsec_props(
+        absorption=True,
+        photon_energy=energy,
+        photo_absorption=absorption,
+        photodecay=decay,
+    )
+
+    return SimpleNamespace(photo=stub_photo(xsec=xsec))
+
+
+def test_xsec_frac_compares_the_absorption_table_with_itself():
+    # Flat spectrum (α=2): absorption band averages 4.5e-18, 7.5e-18; its spectrum
+    # average 6e-18 -> 0.75, 1.25 (not over the decay average 1e-18: 4.5, 7.5).
+    _, _, bands = _absorbing_reaction().photo.band_rates(_radiation())
+
+    assert [float(b.xsec) for b in bands] == pytest.approx(
+        [4.5e-18, 7.5e-18], rel=1e-6, abs=0
+    )
+    assert [float(b.xsec_frac) for b in bands] == pytest.approx(
+        [0.75, 1.25], rel=1e-6, abs=0
+    )
+
+
+def test_absorption_leaves_the_rate_and_total_on_the_decay_table():
+    rad = _radiation()
+    band_rate, xsec_total, _ = _absorbing_reaction().photo.band_rates(rad)
+
+    # c = 1: the rate follows the decay band averages, 1e-18 in both bands.
+    expected = sum(1e-18 * rad.photon_density(g) for g in rad.groups)
+    assert float(xsec_total) == pytest.approx(1e-18, rel=1e-6, abs=0)
+    assert float(
+        sp.simplify(band_rate - expected).subs({rad.den[0]: 1.0, rad.den[1]: 1.0})
+    ) == pytest.approx(0.0, abs=1e-24)
+
+
+def test_xsec_frac_without_absorption_uses_the_decay_table():
+    _, _, bands = _linear_reaction().photo.band_rates(_radiation())
+
+    # σ = 1e-18·E: band averages 1.5e-18, 2.5e-18 over the spectrum average 2e-18.
+    assert [float(b.xsec_frac) for b in bands] == pytest.approx(
+        [0.75, 1.25], rel=1e-6, abs=0
+    )

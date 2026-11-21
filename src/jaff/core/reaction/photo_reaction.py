@@ -267,8 +267,8 @@ class PhotoReaction:
            (:meth:`~jaff.physics.Radiation.loss_cross_section`: energy-weighted
            in ``"u"`` mode, as each absorbed photon takes its own energy);
         4. one :class:`~jaff.physics.PhotoBand` with the loss coefficient (as
-           ``k``), ``<σ>_i`` and its ratio to the spectrum average
-           (``xsec_frac``).
+           ``k``), ``<σ>_i`` and its ratio to the same table's spectrum
+           average (``xsec_frac``).
 
         Both coefficients carry :attr:`shielding_factor`, if any.
         Nothing is stored; :meth:`compute` stores the result.
@@ -300,8 +300,9 @@ class PhotoReaction:
         (``xsec.process.absorption``) uses the absorption cross section for the
         band data (``k`` and ``xsec``) and rescales each band's rate term by
         the decay-to-absorption ratio of the band averages, so the rate still
-        follows the photodecay cross section.  The spectrum average is always
-        that of the photodecay cross section.
+        follows the photodecay cross section.  ``xsec_total`` is always the
+        photodecay spectrum average; ``xsec_frac`` divides each band's ``xsec``
+        by the spectrum average of the same table (absorption or photodecay).
 
         Examples
         --------
@@ -328,6 +329,13 @@ class PhotoReaction:
             else None
         )
         xsec_total = radiation.get_total_average_cross_section(decay, energy, profile)
+        # xsec_frac compares a band average with the spectrum average of the same
+        # table: the absorption one when the band data come from it.
+        band_total = (
+            radiation.get_total_average_cross_section(absorption, energy, profile)
+            if absorption is not None
+            else xsec_total
+        )
         shielding = self.shielding_factor
 
         band_rate: Expr = Float(0.0)
@@ -362,7 +370,7 @@ class PhotoReaction:
                     group=group,
                     k=k,
                     xsec=band_avg,
-                    xsec_frac=band_avg / xsec_total if xsec_total != 0.0 else 0.0,
+                    xsec_frac=band_avg / band_total if band_total != 0.0 else 0.0,
                 )
             )
             # With an absorption table, the rate follows the decay cross section.
@@ -465,8 +473,9 @@ class PhotoReaction:
               cm² (``NaN`` when it is not a number, e.g. a
               ``photoCrossSection<N>`` that depends on ``tgas``).
             - ``xsec_frac`` : the band-average cross section divided by the
-              spectrum-averaged one (:attr:`xsec_total`); ``0`` when that is zero.
-              Not normalised to sum to 1 over the bands.
+              spectrum average of the same table (photo-absorption when the cross
+              section has one, else photodecay, i.e. :attr:`xsec_total`); ``0``
+              when that is zero.  Not normalised to sum to 1 over the bands.
 
             Empty (with the columns above) when the reaction contributes to no
             band, e.g. no radiation field is configured.
