@@ -55,6 +55,7 @@ Convert it to HDF5, storing the ``T`` and ``n`` axes once each:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from os import PathLike
 from pathlib import Path
 
@@ -130,7 +131,7 @@ def csv_to_hdf5(
     outfile: str | Path,
     group_path: str = "",
     hdf5_key: str = "",
-    flatten_columns: list[str] = [],
+    flatten_columns: Sequence[str] | None = None,
     as_table: bool = False,
     *args,
     **kwargs,
@@ -168,11 +169,11 @@ def csv_to_hdf5(
         Defaults to ``""`` (the root group).
     hdf5_key : str, optional
         Name of the HDF5 group/dataset key.  Defaults to the stem of *file*.
-    flatten_columns : list of str, optional
+    flatten_columns : sequence of str or None, optional
         Column names whose values should be stored as the unique-sorted set of
         values (via :func:`numpy.unique`) rather than the raw array.  The
         remaining columns are stored in full, after sorting the rows by these
-        columns.
+        columns.  ``None`` (default) flattens nothing.
     as_table : bool, optional
         If ``True``, write the DataFrame as a PyTables-compatible HDF5 table.
         Requires the optional ``tables`` (PyTables) package, which is not a
@@ -193,15 +194,12 @@ def csv_to_hdf5(
     FileNotFoundError
         If *file* does not exist.
     ValueError
-        If both *as_table* and *flatten_columns* are specified, or (default
-        and flatten modes) if the target group already holds a dataset named
-        after one of the columns, e.g. when converting the same CSV into the
-        same file twice.
-    RuntimeError
-        If any name in *flatten_columns* is not a column in the DataFrame.
-        The message lists every name in *flatten_columns*, not only the
-        missing ones, and the target group has already been created in
-        *outfile* (left empty if it was new) when this is raised.
+        If both *as_table* and *flatten_columns* are specified, if a name in
+        *flatten_columns* is not a column of the CSV, or (default and flatten
+        modes) if the target group already holds a dataset named after one of
+        the columns, e.g. when converting the same CSV into the same file
+        twice.  These are checked before anything is written: *outfile* is
+        left as it was.
 
     Examples
     --------
@@ -229,6 +227,7 @@ def csv_to_hdf5(
     if not group_path:
         group_path = ""
 
+    flatten_columns = list(flatten_columns or [])
     if as_table and flatten_columns:
         raise ValueError("Cannot flatten arrays if data is to be saved as table")
 
@@ -246,20 +245,36 @@ def csv_to_hdf5(
 
     df = csv_to_df(file, *args, **kwargs)
 
+    missing = [col for col in flatten_columns if col not in df.columns]
+    if missing:
+        raise ValueError(
+            f"flatten_columns not in the CSV: {', '.join(missing)} "
+            f"(columns: {', '.join(map(str, df.columns))})"
+        )
+
     if as_table:
         # PyTables table format — lets pandas store with full column metadata.
         df.to_hdf(outfile, key=f"{group_path}/{hdf5_key}", format="table")
         return
 
+    group = f"{group_path}/{hdf5_key}"
+    # Refuse before writing: a clash part-way through the columns would leave
+    # the group half-written.
+    if outfile.exists():
+        with h5py.File(outfile, "r") as f:
+            existing = f.get(group)
+            clashes = [
+                str(col)
+                for col in df.columns
+                if isinstance(existing, h5py.Group) and col in existing
+            ]
+        if clashes:
+            raise ValueError(f"{outfile}:{group} already holds: {', '.join(clashes)}")
+
     # Open in append mode so existing groups/datasets are preserved.
     with h5py.File(outfile, "a") as f:
-        grp = f.require_group(f"{group_path}/{hdf5_key}")
+        grp = f.require_group(group)
         if flatten_columns:
-            # Validate that every requested flatten column actually exists.
-            if any(col not in df.columns for col in flatten_columns):
-                raise RuntimeError(
-                    f"Invalid columns found in flatten_columns argument: {', '.join(flatten_columns)}"
-                )
             # Sort the DataFrame by the flattened coordinate columns so that
             # numpy.unique returns a contiguous, ordered coordinate axis.
             df = df.sort_values(by=flatten_columns)
