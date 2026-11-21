@@ -2,14 +2,16 @@
 # ABOUTME: discovers the plugin subpackages on first lookup
 from __future__ import annotations
 
-from jaff.common._helper import import_subpackages
+from jaff.common.registry import Registry
 from jaff.errors import ParserError, RegistrationError
 
 from ._base import ShieldingFunction, ShieldingResult
 from .config import ShieldingParams
 
-_REGISTER: dict[tuple[str, str | None], ShieldingFunction] = {}
-_DISCOVERED: bool = False
+_REGISTRY: Registry[ShieldingFunction] = Registry(
+    "shielding function", packages=[__name__]
+)
+"""The shielding plugins, keyed by ``(name, reaction)``; this package's subpackages."""
 
 
 def register(cls: type[ShieldingFunction]) -> type[ShieldingFunction]:
@@ -31,31 +33,15 @@ def register(cls: type[ShieldingFunction]) -> type[ShieldingFunction]:
         If a plugin with the same ``(name, reaction)`` is already registered, or
         one with the same name has another ``config_model()``.
     """
-    key = (cls.name, cls.reaction)
-    if key in _REGISTER:
-        raise RegistrationError(
-            f"Key already exists for shielding function: {cls.name}, {cls.reaction}"
-        )
-
     # A shielding type's settings model is chosen by its name alone (the
     # reaction is not known when a config table is read).
-    for (name, _), plugin in _REGISTER.items():
-        if name == cls.name and plugin.config_model() is not cls.config_model():
+    for (name, _), plugin in _REGISTRY.registered().items():
+        if name == cls.name.lower() and plugin.config_model() is not cls.config_model():
             raise RegistrationError(
                 f"Shielding functions named {cls.name} must share one config_model()"
             )
 
-    _REGISTER[key] = cls()
-
-    return cls
-
-
-def _discover() -> None:
-    """Import the plugin subpackages once, so their ``register`` calls run."""
-    global _DISCOVERED
-    if not _DISCOVERED:
-        import_subpackages(__name__)
-        _DISCOVERED = True
+    return _REGISTRY.register(cls)
 
 
 def shielding_functions() -> dict[tuple[str, str | None], ShieldingFunction]:
@@ -68,9 +54,7 @@ def shielding_functions() -> dict[tuple[str, str | None], ShieldingFunction]:
     dict[tuple[str, str or None], ShieldingFunction]
         A copy of the registry.
     """
-    _discover()
-
-    return dict(_REGISTER)
+    return _REGISTRY.items()
 
 
 def settings_model(name: str) -> type[ShieldingParams]:
@@ -92,8 +76,7 @@ def settings_model(name: str) -> type[ShieldingParams]:
     ParserError
         If no plugin has that name.
     """
-    _discover()
-    for (plugin_name, _), plugin in _REGISTER.items():
+    for (plugin_name, _), plugin in _REGISTRY.items().items():
         if plugin_name == name.lower():
             return plugin.config_model()
 
@@ -121,18 +104,13 @@ def shielding_function(name: str, reaction: str | None) -> ShieldingFunction:
     ParserError
         If no plugin of that type applies to *reaction*.
     """
-    _discover()
-    key = (name.lower(), reaction)
-    if key not in _REGISTER:
-        # Fall back to a global function registered with reaction=None.
-        key = (name.lower(), None)
-
-    if key not in _REGISTER:
+    plugin = _REGISTRY.find(name, reaction)
+    if plugin is None:
         raise ParserError(
             f"Invalid shielding function type {name} or reaction {reaction} is not supported"
         )
 
-    return _REGISTER[key]
+    return plugin
 
 
 __all__ = [
