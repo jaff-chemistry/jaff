@@ -62,6 +62,12 @@ class KromeReaction:
 
     _AV_RE = re.compile(r"\bav\b", flags=re.IGNORECASE)
 
+    _COMMENT_RE = re.compile(r"[!#]")
+    """Where an end-of-line comment starts (``!`` or ``#``; no rate contains either)."""
+
+    _GRAIN_RE = re.compile(r"\bgrains?\b", flags=re.IGNORECASE)
+    """A comment marking a grain reaction (``# grain``, ``! H2 on grains``)."""
+
     _IF_RE = re.compile(r"^\s*if\s*\(", flags=re.IGNORECASE)
     """A conditional rate, ``if(<Fortran condition>): <rate>``."""
 
@@ -96,6 +102,8 @@ class KromeReaction:
         ``user_crflux``/``user_crate``/``user_av`` aliases (whole words, any
         case).  Fortran exponent
         notation is converted to Python notation via :func:`~jaff.common.f90_convert`.
+        An end-of-line ``!`` / ``#`` comment is dropped from the rate; one mentioning
+        ``grain`` or ``grains`` makes the reaction a ``"grain"`` reaction.
 
         Raises
         ------
@@ -110,7 +118,7 @@ class KromeReaction:
         products: str = local.group("products")
         tmin: str = local.groupdict().get("tmin", "").strip().lower()
         tmax: str = local.groupdict().get("tmax", "").strip().lower()
-        rate: str = local.groupdict().get("rate", "").strip()
+        rate, comment = self._split_comment(local.groupdict().get("rate", ""))
 
         rr: list[str] = [r.strip() for r in reactants.split(",")[:-1]]
         pp: list[str] = [p.strip() for p in products.split(",")[:-1]]
@@ -178,9 +186,24 @@ class KromeReaction:
             "tmin": t_min,
             "tmax": t_max,
             "rate": rate,
-            "type": self._reaction_type(rate, rr, pp),
+            "type": "grain"
+            if self._GRAIN_RE.search(comment)
+            else self._reaction_type(rate, rr, pp),
             "line": line.strip(),
         }
+
+    @classmethod
+    def _split_comment(cls, field: str) -> tuple[str, str]:
+        """The rate field without its end-of-line comment, and the comment.
+
+        KROME strips a ``!`` or ``#`` comment from a reaction line's last field; it
+        may mark a grain reaction (``# grain``).  The comment is ``""`` without one.
+        """
+        match = cls._COMMENT_RE.search(field)
+        if match is None:
+            return field.strip(), ""
+
+        return field[: match.start()].strip(), field[match.start() + 1 :].strip()
 
     @classmethod
     def _conditional(cls, rate: str, line: str, nline: int, file) -> str:

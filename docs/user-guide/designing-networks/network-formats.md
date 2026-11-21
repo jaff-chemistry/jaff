@@ -243,7 +243,11 @@ H -> H+ + E        []           PHOTO, 13.60
 
 **Source:** [kromepackage.org](https://kromepackage.org/)
 
-KROME files are comma-separated reaction lines whose column semantics are set by an optional `@format:` header. Global Fortran-style variable aliases can be defined with `@var:`. Other KROME declaratives (e.g. `@common:`, `@noTabNext`) are ignored. Comment lines start with `#` or `!`.
+KROME files are comma-separated reaction lines whose column semantics are set by an optional `@format:` header. Global Fortran-style variable aliases can be defined with `@var:`. Other KROME declaratives (e.g. `@common:`, `@noTabNext`) are ignored. Comment lines start with `#` or `!`, and a reaction line may end with a `#` or `!` comment. A comment mentioning `grain` or `grains` marks the reaction as a grain reaction (type `grain`):
+
+```text
+223,H,H,H2,3d-18*sqrt(Tgas)*fA # H2 formation on grains
+```
 
 ### `@format:` header
 
