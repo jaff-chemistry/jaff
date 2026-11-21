@@ -91,6 +91,63 @@ class TestDivergence:
             warn.assert_called_once()
 
 
+def _warnings(**config):
+    """The warnings logged while building a Radiation from RadiationConfig(**config)."""
+    logger = logging.getLogger()
+    with (
+        patch.object(logger, "warning") as warn,
+        patch("jaff.physics.photo_reactions._radiation.JaffLogger") as jl,
+    ):
+        jl.return_value.get_logger.return_value = logger
+        _radiation(**config)
+
+    return [call.args[0] for call in warn.call_args_list]
+
+
+class TestDivergenceWarnings:
+    """Divergent band integrals warn (never raise) unless "u" mode needs <E>."""
+
+    def test_nph_open_band_with_divergent_mean_energy_warns(self):
+        # α = 0: ∫E·n dE ∝ ∫E^-1 dE diverges at E→∞; ∫n dE converges.
+        (message,) = _warnings(bands=[13.6, "inf"], profile_index=0.0)
+
+        assert "average photon energy" in message
+        assert "inf" in message
+
+    def test_nph_open_band_converging_does_not_warn(self):
+        assert _warnings(bands=[13.6, "inf"], profile_index=-1.0) == []
+
+    def test_open_band_with_divergent_photon_count_warns(self):
+        # α = 1: ∫n dE ∝ ∫E^-1 dE diverges at E→∞ (and so does ∫E·n dE).
+        messages = _warnings(bands=[13.6, "inf"], profile_index=1.0)
+
+        assert any("photon number" in m for m in messages)
+        assert any("average photon energy" in m for m in messages)
+
+    def test_zero_edge_with_divergent_photon_count_warns(self):
+        # α = 0.5 > 0: ∫E·n dE converges at E→0, ∫n dE ∝ ∫E^-1.5 dE does not.
+        (message,) = _warnings(bands=[0.0, 2.0], profile_index=0.5, mode="u")
+
+        assert "photon number" in message
+        assert "bands[0]" in message
+
+    def test_nph_zero_edge_with_divergent_mean_energy_warns(self):
+        messages = _warnings(bands=[0.0, 2.0], profile_index=0.0)
+
+        assert any("photon number" in m for m in messages)
+        assert any("average photon energy" in m for m in messages)
+
+    def test_zero_edge_converging_does_not_warn(self):
+        assert _warnings(bands=[0.0, 2.0], profile_index=2.0) == []
+
+    def test_divergent_values_are_kept(self):
+        # Warn only: the band keeps the integrator's (meaningless) value.
+        with patch("jaff.physics.photo_reactions._radiation.JaffLogger"):
+            rad = _radiation(bands=[13.6, "inf"], profile_index=0.0)
+
+        assert rad.groups[0].eavg is not None
+
+
 class TestNetworkRadiation:
     NET = "H + H -> H2 [10,1000] 1e-10\nH2 -> H + H [10,1000] 1e-10\n"
 

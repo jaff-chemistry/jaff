@@ -499,16 +499,20 @@ class Radiation:
         return [float(config.profile_index)] * nbands
 
     def _check_convergence(self, alphas: list[float]) -> None:
-        """Check the band-averaged photon energy converges at the open band edges.
+        """Check the band integrals converge at the open band edges.
 
         Only the first band reaches ``E → 0`` and only the last reaches
-        ``E → ∞``, so each edge is checked against its own band's index.
+        ``E → ∞``, so each edge is checked against its own band's index.  A
+        divergent photon-number integral ``∫ n dE`` (``photden``) or, in
+        ``"nph"`` mode, energy integral ``∫ E·n dE`` (``eden``, hence ``eavg``)
+        is logged as a warning; the band keeps the integrator's value, which is
+        then meaningless.
 
         Raises
         ------
         RuntimeError
             In energy-density mode, if ``<E>`` diverges at a zero lower edge or
-            an infinite upper edge.
+            an infinite upper edge (every rate divides by it).
         """
         bands = self.bands
         alpha_lo, alpha_hi = alphas[0], alphas[-1]
@@ -532,8 +536,30 @@ class Radiation:
                     "Please try a non-infinite value or change the profile_index"
                 )
 
+        first = f"bands[0] = {bands[0]}"
+        last = f'bands[{len(bands) - 1}] = "inf"'
+
+        # ∫ n dE ∝ ∫ E^(α-2) dE converges at E → ∞ for α < 1, at E → 0 for α > 1.
+        if ends_at_inf and alpha_hi >= 1.0:
+            self._warn_divergent("photon number", "∫E^(α-2)dE", last, alpha_hi)
+        if starts_at_zero and alpha_lo <= 1.0:
+            self._warn_divergent("photon number", "∫E^(α-2)dE", first, alpha_lo)
+
+        # ∫ E·n dE ∝ ∫ E^(α-1) dE converges at E → ∞ for α < 0, at E → 0 for
+        # α > 0 ("u" mode raised above).
+        if self.config.mode == "nph":
+            if ends_at_inf and alpha_hi >= 0.0:
+                self._warn_divergent(
+                    "average photon energy", "∫E^(α-1)dE", last, alpha_hi
+                )
+            if starts_at_zero and alpha_lo <= 0.0:
+                self._warn_divergent(
+                    "average photon energy", "∫E^(α-1)dE", first, alpha_lo
+                )
+
         if (
-            alpha_lo <= 1.0
+            not starts_at_zero
+            and alpha_lo <= 1.0
             and isinstance(bands[0], (float, int))
             and float(bands[0]) < 1.0
         ):
@@ -545,6 +571,24 @@ class Radiation:
                 "can yield a negative/garbage photon density. Use a non-zero "
                 "bands[0] ≳ 1 eV or a larger profile_index."
             )
+
+    def _warn_divergent(
+        self, quantity: str, integral: str, edge: str, alpha: float
+    ) -> None:
+        """Warn that the *quantity* integral of the band at *edge* diverges."""
+        affected = {
+            "photon number": "its photon density normalisation and photon-weighted "
+            "cross sections",
+            "average photon energy": "its average photon energy (eavg) and anything "
+            "converting its photon density to an energy density (e.g. chi_pe with "
+            "dust, the band_xsecs eavg)",
+        }[quantity]
+
+        self.logger.warning(
+            f"The {quantity} integral {integral} of the radiation band at {edge} "
+            f"diverges with profile_index={alpha}: {affected} are meaningless. "
+            "Use a finite / non-zero edge or change the profile_index."
+        )
 
     def _piecewise_profile(self, attr: str) -> sp.Expr:
         """Join the per-band profiles ``grp.<attr>`` into one ``sympy.Piecewise``.
