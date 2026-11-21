@@ -380,7 +380,19 @@ docs/           # Documentation
   imports its packages, then `load_plugins()` imports the repo-root `plugins/` folder as
   `jaff.plugins` (every public subpackage, any depth, once; each `__init__.py` imports its
   modules). Repo-root folders (`plugins/`, `templates/`, `networks/`) are used from a git
-  clone; packaging them is deferred
+  clone; packaging them is deferred. `config/plugin_table.py`: `PluginTable`, a flat
+  `{type = "<plugin>", <settings>...}` config table selecting a registered plugin (settings
+  validated by its `config_model()`, a `PluginParams`; one editor-schema branch per plugin);
+  `ShieldingConfig` is one. Per-reaction energy change: `physics/thermodynamics/
+  energy_change/` (`EnergyChangeFunction` plugins, `energy_change(reaction)` in erg per event,
+  + heats, − cools; registry with no core plugins), selected by
+  `[network.reactions.reaction."<s>".thermodynamics] energy_change = {type = ...}` (per
+  reaction only: `ReactionConfig` and `ReactionsConfig` share `_ReactionSettings`, only the
+  former has `thermodynamics`). `reaction.model(kind)` (`MODEL_KINDS`: `energy_change` ->
+  `.jfunc` `deltaE`) gives the `.jfunc` function, else the configured plugin's value, else
+  `None`; `reaction.dE` falls back to the file's value, then 0. Test-only plugins live in
+  `tests/energy_change_plugins.py` and are installed per test (`install(monkeypatch)`),
+  never into the real registry (they would leak into the committed-schema test)
 - `config/`: config base models, loader, JSON schemas, reference generator
 - `cli/`: `jaffgen` and `jaffx`
 - `drivers/`, `io/`: HDF5/SQLite/TOML/CSV access, data downloads, logging

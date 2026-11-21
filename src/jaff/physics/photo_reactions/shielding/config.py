@@ -11,22 +11,10 @@ applies to the reaction is checked once the reaction is known
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Dict, List
+from typing import ClassVar
 
-from pydantic import (
-    GetJsonSchemaHandler,
-    model_serializer,
-    model_validator,
-)
-from pydantic.json_schema import JsonSchemaValue
-from pydantic_core import CoreSchema
-
-from ....config.base import (
-    ConfigModel,
-    dotted,
-    KeyPath,
-    LowerStr,
-)
+from ....config.base import KeyPath, LowerStr, dotted
+from ....config.plugin_table import PluginParams, PluginTable
 from ....errors import ParserError
 
 __all__ = [
@@ -36,7 +24,7 @@ __all__ = [
 ]
 
 
-class ShieldingParams(ConfigModel):
+class ShieldingParams(PluginParams):
     """Base of the settings of one shielding type (every key but ``type``).
 
     Each shielding plugin exposes its subclass through
@@ -45,7 +33,7 @@ class ShieldingParams(ConfigModel):
     """
 
 
-class ShieldingConfig(ConfigModel):
+class ShieldingConfig(PluginTable):
     """Shielding of a photo reaction (a ``shielding`` table).
 
     Written flat in TOML (``{ type = "leiden", shielded_by = ["self"] }``):
@@ -66,83 +54,21 @@ class ShieldingConfig(ConfigModel):
         The plugin's settings, validated by its ``config_model()``.
     """
 
-    _atomic: ClassVar[bool] = True
+    registry: ClassVar = staticmethod(lambda: _registry())
+    label: ClassVar[str] = "shielding"
+    title: ClassVar[str] = "Shielding"
+    summary: ClassVar[str] = "Line shielding of a photo reaction"
+    default_type: ClassVar[str | None] = "leiden"
 
     type: LowerStr = "leiden"
     params: ShieldingParams = ShieldingParams()
 
-    @model_validator(mode="before")
-    @classmethod
-    def _split_type(cls, data: Any) -> Any:
-        """Split a flat table into ``type`` and the plugin's validated ``params``."""
-        if not isinstance(data, dict):
-            return data
 
-        # Imported here: the plugin registry imports this module.
-        from . import settings_model
+def _registry():
+    """The shielding plugins' registry (imported here: it imports this module)."""
+    from . import _REGISTRY
 
-        name = str(data.get("type", "leiden")).lower()
-        settings = {k: v for k, v in data.items() if k != "type"}
-        try:
-            model = settings_model(name)
-        except ParserError as e:
-            raise ValueError(str(e)) from e
-
-        # A ValidationError raised here keeps its key paths (``shielding.<key>``).
-        return {"type": name, "params": model.model_validate(settings)}
-
-    @model_serializer
-    def _flat(self) -> Dict[str, Any]:
-        """Dump as the flat TOML table it is written as."""
-        return {"type": self.type, **self.params.model_dump(exclude_unset=True)}
-
-    @classmethod
-    def __get_pydantic_json_schema__(
-        cls, core_schema: CoreSchema, handler: GetJsonSchemaHandler
-    ) -> JsonSchemaValue:
-        """Describe the flat TOML table: one alternative per shielding plugin.
-
-        Each alternative fixes ``type`` to the plugin's name (required, but for
-        the default type) and holds the plugin's ``config_model()`` keys.
-        Whether a reaction-bound plugin fits the reaction is checked on load.
-        """
-        # Imported here: the plugin registry imports this module.
-        from . import shielding_functions
-
-        default = cls.model_fields["type"].default
-        branches: List[JsonSchemaValue] = []
-        for (name, reaction), plugin in sorted(
-            shielding_functions().items(), key=lambda item: (item[0][0], item[0][1] or "")
-        ):
-            params = plugin.config_model().model_json_schema()
-            if "$defs" in params:
-                raise NotImplementedError(
-                    f"shielding {name}: nested models in its settings are not supported"
-                )
-
-            only = f" (only for {reaction})" if reaction is not None else ""
-            branches.append(
-                {
-                    "type": "object",
-                    "title": f"{name} shielding{only}",
-                    "properties": {
-                        "type": {"const": name},
-                        **params.get("properties", {}),
-                    },
-                    "required": [
-                        *params.get("required", []),
-                        *(["type"] if name != default else []),
-                    ],
-                    "additionalProperties": False,
-                }
-            )
-
-        return {
-            "title": "Shielding",
-            "description": "Line shielding of a photo reaction; `type` selects the "
-            f"model (default {default!r}) and its keys.",
-            "anyOf": branches,
-        }
+    return _REGISTRY
 
 
 def check_shielding(shielding: ShieldingConfig | None, reaction: str | None) -> None:

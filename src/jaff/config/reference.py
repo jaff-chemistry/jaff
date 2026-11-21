@@ -91,6 +91,11 @@ def _document(
         sections.append(_same_keys_section(header, documented[covering], extra))
         return
 
+    sharing = _sharing(model, documented)
+    if sharing is not None:
+        _document_shared(model, path, defaults, sections, documented, *sharing)
+        return
+
     documented[model] = header
     summary, _ = attribute_descriptions(model.__doc__)
     fields = field_descriptions(model)
@@ -100,6 +105,56 @@ def _document(
     )
 
     for name, field in model.model_fields.items():
+        default = getattr(defaults, name) if defaults is not None else field.default
+        _document_child(
+            name, field, fields.get(name, ""), path, default, sections, documented
+        )
+
+
+def _sharing(
+    model: type[BaseModel], documented: Dict[type, str]
+) -> Tuple[type[BaseModel], type[BaseModel]] | None:
+    """A documented table sharing a base of keys with *model*: ``(its class, base)``.
+
+    E.g. a reaction's own table and ``[network.reactions]`` both derive from the
+    settings they share, each adding keys of its own.
+    """
+    for base in model.__mro__[1:]:
+        if not isinstance(base, type) or not issubclass(base, BaseModel):
+            continue
+        if not base.model_fields or base.__module__.startswith("pydantic"):
+            continue
+        for cls in documented:
+            if cls is not model and issubclass(cls, base):
+                return cls, base
+
+    return None
+
+
+def _document_shared(
+    model: type[BaseModel],
+    path: Tuple[str, ...],
+    defaults: BaseModel | None,
+    sections: List[str],
+    documented: Dict[type, str],
+    other: type[BaseModel],
+    base: type[BaseModel],
+) -> None:
+    """Section of *model*'s table pointing to *other*'s for the keys of *base*, with a
+    table of the keys only *model* has (and their sub-tables)."""
+    header = _table(path)
+    documented[model] = header
+    extra = sorted(set(other.model_fields) - set(model.model_fields))
+    fields = field_descriptions(model)
+    shared = tuple(base.model_fields)
+    sections.append(
+        _same_keys_section(header, documented[other], extra)
+        + "\n"
+        + _table_rows(model, fields, path, defaults, skip=shared)
+    )
+    for name, field in model.model_fields.items():
+        if name in shared:
+            continue
         default = getattr(defaults, name) if defaults is not None else field.default
         _document_child(
             name, field, fields.get(name, ""), path, default, sections, documented

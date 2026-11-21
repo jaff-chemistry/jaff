@@ -115,6 +115,7 @@ nav = [
       { "core.Reaction" = [
         "reference/core/reaction/index.md",
         "reference/core/reaction/function.md",
+        "reference/core/reaction/model.md",
         "reference/core/reaction/expressions.md",
         "reference/core/reaction/substitute.md",
         "reference/core/reaction/tmin.md",
@@ -567,6 +568,19 @@ nav = [
           "reference/config/shielding/shieldingparams/index.md",
         ] },
         "reference/config/shielding/check_shielding.md",
+      ] },
+      { "Energy change" = [
+        "reference/config/energy change/index.md",
+        { "EnergyChangeConfig" = [
+          "reference/config/energy change/energychangeconfig/index.md",
+        ] },
+        { "EnergyChangeParams" = [
+          "reference/config/energy change/energychangeparams/index.md",
+        ] },
+        { "ReactionThermodynamicsConfig" = [
+          "reference/config/energy change/reactionthermodynamicsconfig/index.md",
+        ] },
+        "reference/config/energy change/check_energy_change.md",
       ] },
       { "Dust" = [
         "reference/config/dust/index.md",

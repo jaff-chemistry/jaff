@@ -54,6 +54,20 @@
       "title": "DustConfig",
       "type": "object"
     },
+    "EnergyChangeConfig": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Energy change",
+      "type": "object",
+      "description": "Energy one event of the reaction adds to the gas (erg; negative cools); `type` selects the model and its keys."
+    },
     "FermiDegenerateEosConfig": {
       "additionalProperties": false,
       "description": "Non-relativistic degenerate Fermi gas (`type = \"fermi_degenerate\"`).\n\nNot implemented yet: the config is accepted, but building the EOS raises\n`NotImplementedError`.",
@@ -437,9 +451,25 @@
         "photo": {
           "$ref": "#/$defs/PhotoConfig",
           "description": "Photo-reaction settings."
+        },
+        "thermodynamics": {
+          "$ref": "#/$defs/ReactionThermodynamicsConfig",
+          "description": "Thermodynamic settings of this reaction only (`energy_change`); there is no `[network.reactions]` default."
         }
       },
       "title": "ReactionConfig",
+      "type": "object"
+    },
+    "ReactionThermodynamicsConfig": {
+      "additionalProperties": false,
+      "description": "Thermodynamic settings of one reaction (its `thermodynamics` table).",
+      "properties": {
+        "energy_change": {
+          "$ref": "#/$defs/EnergyChangeConfig",
+          "description": "The energy-change plugin of the reaction (`{ type = \"<plugin>\", ... }`): the energy one event adds to the gas (erg; negative cools).  A `.jfunc` `deltaE<N>` takes preference over it."
+        }
+      },
+      "title": "ReactionThermodynamicsConfig",
       "type": "object"
     },
     "ReactionsConfig": {

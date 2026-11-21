@@ -52,7 +52,7 @@ from __future__ import annotations
 
 import sys
 from functools import cache, cached_property
-from typing import TYPE_CHECKING, Any, Mapping, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Mapping, cast
 
 import numpy as np
 from sympy import (
@@ -275,11 +275,9 @@ class Reaction:
         self.rate_segments: RateSegments = RateSegments(
             self, [RateSegment(rate_coefficient, tmin, tmax, source)]
         )
-        function_dE = self.function("deltaE")
+        model_dE = self.model("energy_change")
         self.dE: Expr = (
-            function_dE
-            if function_dE is not None
-            else (dE if dE is not None else Float(0.0))
+            model_dE if model_dE is not None else (dE if dE is not None else Float(0.0))
         )
         self.rad: ReactionRadiation = ReactionRadiation(self)
         # verbatim is the "R1 + R2 -> P1 + P2" form built from the species
@@ -415,6 +413,56 @@ class Reaction:
         functions = self.net.functions
 
         return functions.value(name) if name in functions else None
+
+    MODEL_KINDS: ClassVar[dict[str, str]] = {"energy_change": "deltaE"}
+    """The kinds :meth:`model` resolves, each with its ``.jfunc`` function kind."""
+
+    def model(self, kind: str) -> Expr | None:
+        """The reaction's *kind* model: its ``.jfunc`` function, else its plugin's value.
+
+        The ``.jfunc`` function (e.g. ``deltaE<N>`` for ``"energy_change"``) takes
+        preference; without one, the plugin the reaction's config selects (e.g.
+        ``thermodynamics.energy_change``) gives the value.  ``None`` when neither
+        exists: the caller falls back (for the energy change: the network file's
+        value, else 0).
+
+        Parameters
+        ----------
+        kind : str
+            One of :attr:`MODEL_KINDS` (``"energy_change"``).
+
+        Returns
+        -------
+        sympy.Expr or None
+
+        Raises
+        ------
+        ValueError
+            If *kind* is not one of :attr:`MODEL_KINDS`.
+        """
+        if kind not in self.MODEL_KINDS:
+            raise ValueError(
+                f"Unknown model kind {kind!r}; expected one of: "
+                f"{', '.join(self.MODEL_KINDS)}"
+            )
+
+        function = self.function(self.MODEL_KINDS[kind])
+        if function is not None:
+            return function
+
+        return self.__plugin_energy_change()
+
+    def __plugin_energy_change(self) -> Expr | None:
+        """The energy change of the plugin ``thermodynamics.energy_change`` selects."""
+        thermodynamics = self.config.thermodynamics
+        table = thermodynamics.energy_change if thermodynamics is not None else None
+        if table is None:
+            return None
+
+        # Local import: the plugin registry imports the reaction config.
+        from ...physics.thermodynamics.energy_change import energy_change_function
+
+        return energy_change_function(table.type, self.serialized).energy_change(self)
 
     def expressions(self) -> list[Expr]:
         """Every expression the reaction and its components hold.

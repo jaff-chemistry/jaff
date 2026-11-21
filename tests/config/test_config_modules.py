@@ -12,6 +12,7 @@ CONFIG_MODULES = [
     "jaff.core.network.config",
     "jaff.physics.photo_reactions.config",
     "jaff.physics.photo_reactions.shielding.config",
+    "jaff.physics.thermodynamics.energy_change.config",
     "jaff.physics.dust.config",
     "jaff.physics.thermodynamics.config",
     "jaff.physics.thermodynamics.eos.config",

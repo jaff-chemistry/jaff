@@ -16,6 +16,10 @@ from pydantic import BeforeValidator, field_validator, model_validator
 
 from ...config.base import ConfigModel, lower, overlay
 from ...physics.photo_reactions.shielding.config import ShieldingConfig, check_shielding
+from ...physics.thermodynamics.energy_change.config import (
+    ReactionThermodynamicsConfig,
+    check_energy_change,
+)
 
 __all__ = [
     "DuplicatePolicy",
@@ -79,10 +83,8 @@ _DEFAULT_PHOTO = PhotoConfig(
 )
 
 
-class ReactionConfig(ConfigModel):
-    """Settings of one reaction (``[network.reactions.reaction."<serialized>"]``).
-
-    ``None`` means unset: the value comes from the global settings.
+class _ReactionSettings(ConfigModel):
+    """The settings a reaction's own table and ``[network.reactions]`` both take.
 
     Attributes
     ----------
@@ -104,7 +106,33 @@ class ReactionConfig(ConfigModel):
     photo: PhotoConfig | None = None
 
 
-class ReactionsConfig(ReactionConfig):
+class ReactionConfig(_ReactionSettings):
+    """Settings of one reaction (``[network.reactions.reaction."<serialized>"]``).
+
+    ``None`` means unset: the value comes from the global settings.
+
+    Attributes
+    ----------
+    duplicate_policy : str or None
+        How two rate coefficients over the same temperature range are
+        resolved: ``"preserve-first"``, ``"preserve-last"`` or ``"error"``.
+    t_cutoff : str or None
+        Rate outside the temperature range: ``"clip"`` holds the value at the
+        nearest limit, ``"extrapolate"`` extends the outermost formulas and
+        ``"zero"`` makes the rate 0 below the lowest and above the highest limit
+        (KROME's behaviour).  A gap between two ranges is interpolated in every
+        mode.
+    photo : PhotoConfig or None
+        Photo-reaction settings.
+    thermodynamics : ReactionThermodynamicsConfig or None
+        Thermodynamic settings of this reaction only (``energy_change``); there is
+        no ``[network.reactions]`` default.
+    """
+
+    thermodynamics: ReactionThermodynamicsConfig | None = None
+
+
+class ReactionsConfig(_ReactionSettings):
     """Settings of the reactions (``[network.reactions]``).
 
     Each key applies to every reaction, unless a reaction's own table
@@ -130,11 +158,13 @@ class ReactionsConfig(ReactionConfig):
 
     @model_validator(mode="after")
     def _check_shielding_tables(self) -> Self:
-        """Check every shielding table against its plugin and reaction."""
+        """Check every shielding and energy-change table against its plugin and reaction."""
         check_shielding(self.photo.shielding, None)
         for serialized, entry in self.reaction.items():
             if entry.photo is not None:
                 check_shielding(entry.photo.shielding, serialized)
+            if entry.thermodynamics is not None:
+                check_energy_change(entry.thermodynamics.energy_change, serialized)
 
         return self
 
@@ -175,7 +205,7 @@ class ReactionsConfig(ReactionConfig):
             The reaction's resolved settings.
         """
         base = ReactionConfig(
-            **{name: getattr(self, name) for name in ReactionConfig.model_fields}
+            **{name: getattr(self, name) for name in _ReactionSettings.model_fields}
         )
 
         return overlay(base, self.reaction.get(serialized))

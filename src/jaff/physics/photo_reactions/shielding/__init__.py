@@ -2,8 +2,12 @@
 # ABOUTME: discovers the plugin subpackages on first lookup
 from __future__ import annotations
 
+from typing import cast
+
 from jaff.common.registry import Registry
-from jaff.errors import ParserError, RegistrationError
+from jaff.config.plugin_table import check_shared_settings
+from jaff.config.plugin_table import settings_model as generic_settings_model
+from jaff.errors import ParserError
 
 from ._base import ShieldingFunction, ShieldingResult
 from .config import ShieldingParams
@@ -33,13 +37,7 @@ def register(cls: type[ShieldingFunction]) -> type[ShieldingFunction]:
         If a plugin with the same ``(name, reaction)`` is already registered, or
         one with the same name has another ``config_model()``.
     """
-    # A shielding type's settings model is chosen by its name alone (the
-    # reaction is not known when a config table is read).
-    for (name, _), plugin in _REGISTRY.registered().items():
-        if name == cls.name.lower() and plugin.config_model() is not cls.config_model():
-            raise RegistrationError(
-                f"Shielding functions named {cls.name} must share one config_model()"
-            )
+    check_shared_settings(_REGISTRY, cls)
 
     return _REGISTRY.register(cls)
 
@@ -76,11 +74,9 @@ def settings_model(name: str) -> type[ShieldingParams]:
     ParserError
         If no plugin has that name.
     """
-    for (plugin_name, _), plugin in _REGISTRY.items().items():
-        if plugin_name == name.lower():
-            return plugin.config_model()
-
-    raise ParserError(f"Unknown shielding type {name!r}")
+    return cast(
+        type[ShieldingParams], generic_settings_model(_REGISTRY, name, "shielding")
+    )
 
 
 def shielding_function(name: str, reaction: str | None) -> ShieldingFunction:
