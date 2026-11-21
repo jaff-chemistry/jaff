@@ -481,7 +481,7 @@ def resolve_palette(value: str | list | tuple | dict | Palette | None) -> Palett
 
 
 def register_style(name: str, style: dict) -> None:
-    """Register a named style built from a partial dict (see :func:`resolve_style`).
+    """Register a named style built from a partial dict.
 
     The new name can then be passed as ``style=`` to :func:`~jaff.plotting.plot`,
     :func:`~jaff.plotting.plot_rates` and :func:`~jaff.plotting.plot_xsecs`.  The

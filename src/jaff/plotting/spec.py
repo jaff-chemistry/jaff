@@ -336,9 +336,8 @@ class FigureSpec:
     per-panel legend groups with ``legend="axes"``.
 
     ``style`` / ``palette`` are validated in :meth:`from_dict` but stored
-    unresolved (a deep copy of the name, dict or list); the renderer resolves
-    them with :func:`jaff.plotting.themes.resolve_style` /
-    :func:`~jaff.plotting.themes.resolve_palette`.
+    unresolved (a deep copy of the name, dict or list); :func:`~jaff.plotting.render`
+    resolves them when drawing.
 
     Users normally write the figure as a plain nested dict (keys as the
     attributes below; only ``axes`` is required) and pass it to
