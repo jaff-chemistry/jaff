@@ -53,6 +53,9 @@ Convert it to HDF5, storing the ``T`` and ``n`` axes once each:
 {'T': [10, 20], 'k': [0.1, 0.2, 0.3, 0.4], 'n': [1, 2]}
 """
 
+from __future__ import annotations
+
+from os import PathLike
 from pathlib import Path
 
 import h5py
@@ -62,7 +65,7 @@ import pandas as pd
 from ..common import HDF_EXTENSIONS
 
 
-def csv_to_df(file: Path, *args, **kwargs) -> pd.DataFrame:
+def csv_to_df(file: str | PathLike[str], *args, **kwargs) -> pd.DataFrame:
     """
     Read a CSV file and return it as a :class:`pandas.DataFrame`.
 
@@ -71,9 +74,8 @@ def csv_to_df(file: Path, *args, **kwargs) -> pd.DataFrame:
 
     Parameters
     ----------
-    file : Path
-        Path to the CSV file to read.  Must be a :class:`~pathlib.Path`; a
-        plain ``str`` is not converted.
+    file : str or PathLike
+        Path to the CSV file to read.
     *args
         Positional arguments forwarded to :func:`pandas.read_csv`.
     **kwargs
@@ -116,6 +118,7 @@ def csv_to_df(file: Path, *args, **kwargs) -> pd.DataFrame:
     >>> csv_to_df(Path("grid.csv"), index_col=0).index.tolist()
     [10, 10, 20, 20]
     """
+    file = Path(file)
     if not file.exists():
         raise FileNotFoundError(file)
 
