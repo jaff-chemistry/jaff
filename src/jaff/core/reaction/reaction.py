@@ -50,7 +50,6 @@ stored verbatim.  See the UCLCHEM parser README for that format's mapping.
 
 from __future__ import annotations
 
-import sys
 from functools import cache, cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, Mapping, cast
 
@@ -682,42 +681,6 @@ class Reaction:
 
         return self.serialize(rs, ps)
 
-    def check(self, strict: bool) -> None:
-        """Validate mass and charge conservation for this reaction.
-
-        Compares the summed mass and net charge of the reactants against
-        those of the products (see :meth:`check_mass` and
-        :meth:`check_charge`).  Violations are logged; with *strict* the
-        first one is fatal.  :meth:`~jaff.core.Network.check_conservation` runs
-        it for every reaction of a network.
-
-        Parameters
-        ----------
-        strict : bool
-            When ``True``, terminate the process on any conservation failure;
-            when ``False``, only emit a warning.
-
-        Raises
-        ------
-        SystemExit
-            If *strict* is ``True`` and mass or charge is not conserved.
-        """
-        if not self.check_mass():
-            message = f"Mass not conserved in reaction {self.index}: {self.verbatim}"
-            if strict:
-                self.logger.error(message)
-                sys.exit(1)
-
-            self.logger.warning(message)
-
-        if not self.check_charge():
-            message = f"Charge not conserved in reaction {self.index}: {self.verbatim}"
-            if strict:
-                self.logger.error(message)
-                sys.exit(1)
-
-            self.logger.warning(message)
-
     def check_mass(self) -> bool:
         """Return ``True`` if mass is conserved within one electron mass.
 
@@ -829,12 +792,13 @@ class Reaction:
 
         Raises
         ------
-        SystemExit
+        ValueError
             If *brackets* is not exactly 2 characters.
         """
         if len(brackets) != 2:
-            self.logger.error("Brackets must be a string of length 2, e.g. '[]'")
-            sys.exit(1)
+            raise ValueError(
+                f"brackets must be a string of length 2, e.g. '[]'; got {brackets!r}"
+            )
 
         lb, rb = brackets[0], brackets[1]
         flux = f"{rate_variable}{lb}{idx}{rb} * " + " * ".join(

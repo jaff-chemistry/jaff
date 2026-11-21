@@ -128,7 +128,6 @@ nav = [
         "reference/core/reaction/serialize_exploded.md",
         "reference/core/reaction/serialize.md",
         "reference/core/reaction/normalized_proxy_reaction_str.md",
-        "reference/core/reaction/check.md",
         "reference/core/reaction/check_mass.md",
         "reference/core/reaction/check_charge.md",
         "reference/core/reaction/get_verbatim.md",

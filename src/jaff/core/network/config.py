@@ -38,7 +38,8 @@ class NetworkConfig(ConfigModel):
     label : str or None
         Human-readable network name; without it, the network file stem.
     strict : bool
-        Treat validation problems (conservation, sinks/sources, ...) as fatal.
+        Treat validation problems (conservation, sinks/sources, ...) as fatal: the
+        first one raises ``NetworkCheckError``.
     funcfile : bool or Path
         ``.jfunc`` auxiliary file: ``true`` looks next to the network file,
         ``false`` loads none, a path names it.

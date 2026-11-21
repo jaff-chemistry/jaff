@@ -1,11 +1,12 @@
 # ABOUTME: Conservation (mass/charge) enforcement through Network loading
-# ABOUTME: strict=True must abort; non-strict must warn naming the reaction
+# ABOUTME: strict=True raises NetworkCheckError; non-strict must warn naming the reaction
 
 import logging
 
 import pytest
 
 from jaff.core.network import ConservationReport
+from jaff.errors import NetworkCheckError
 
 
 # H <-> H2 conserves every species (no sink/source), but each reaction breaks
@@ -15,8 +16,8 @@ _MASS_VIOLATION = ["H -> H2 [10,1000] 1", "H2 -> H [10,1000] 1"]
 
 
 class TestStrictTextLoading:
-    def test_mass_violation_exits(self, make_network):
-        with pytest.raises(SystemExit):
+    def test_mass_violation_raises(self, make_network):
+        with pytest.raises(NetworkCheckError, match="mass: H -> H2, H2 -> H"):
             make_network(_MASS_VIOLATION, strict=True)
 
     def test_non_strict_loads(self, make_network):
@@ -25,25 +26,14 @@ class TestStrictTextLoading:
         assert net.reactions.count == 2
 
 
-class TestReactionCheck:
-    def test_strict_check_exits(self, make_network):
-        net = make_network(_MASS_VIOLATION, strict=False)
-
-        with pytest.raises(SystemExit):
-            net.reactions[0].check(strict=True)
-
-    def test_non_strict_check_returns(self, make_network):
-        net = make_network(_MASS_VIOLATION, strict=False)
-
-        assert net.reactions[0].check(strict=False) is None
-
-
 class TestNetworkCheck:
-    def test_strict_check_exits(self, make_network):
+    def test_strict_check_raises_with_the_report(self, make_network):
         net = make_network(_MASS_VIOLATION, strict=False)
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(NetworkCheckError) as info:
             net.check_conservation(strict=True)
+
+        assert info.value.report.mass == ("H -> H2", "H2 -> H")
 
     def test_report_lists_violations(self, make_network):
         net = make_network(_MASS_VIOLATION, strict=False)

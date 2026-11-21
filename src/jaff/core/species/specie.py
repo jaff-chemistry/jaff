@@ -19,12 +19,12 @@ identifier (``"idx_X"`` for most species; ``"idx_e"`` for electrons).
 from __future__ import annotations
 
 import re
-import sys
 from functools import cached_property
 from itertools import product
 from typing import TYPE_CHECKING, Mapping
 
 from ...chemistry import periodic_table
+from ...errors import ParserError
 from ...io import JaffLogger
 from ..elements import Elements
 
@@ -120,7 +120,7 @@ class Specie:
 
         Raises
         ------
-        SystemExit
+        ParserError
             If *name* is one of the electron misspellings listed under *name*
             (the correct form is ``"e-"``).
         """
@@ -129,8 +129,7 @@ class Specie:
             "E",
             "E-",
         ]:
-            self.logger.error(f"Electrons found with name: {name}. Use e- instead")
-            sys.exit(1)
+            raise ParserError(f"Electrons found with name: {name}. Use e- instead")
 
         self.name: str = name
         self.mass: float | None = None

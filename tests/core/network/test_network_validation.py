@@ -13,7 +13,7 @@ from jaff.io import JaffLogger
 # Add src to path for imports
 
 from jaff import Network, Reaction, Specie
-from jaff.errors import ParserError
+from jaff.errors import NetworkCheckError, ParserError
 from tests._paths import FIXTURES_DIR
 
 
@@ -131,7 +131,7 @@ class TestNetworkValidation:
             os.unlink(temp_file)
 
     def test_check_sink_sources_errors_true(self):
-        """Test that errors=True causes sys.exit when sink/source detected."""
+        """strict=True raises NetworkCheckError when a sink/source is detected."""
         # Create a network with both sink and source
         with tempfile.NamedTemporaryFile(mode="w", suffix=".dat", delete=False) as f:
             f.write("# Network with sink and source\n")
@@ -139,10 +139,8 @@ class TestNetworkValidation:
             temp_file = f.name
 
         try:
-            with patch("builtins.print"):
-                with patch("sys.exit") as mock_exit:
-                    network = Network(temp_file, strict=True)
-                    assert mock_exit.called
+            with pytest.raises(NetworkCheckError):
+                Network(temp_file, strict=True)
         finally:
             os.unlink(temp_file)
 
@@ -197,7 +195,7 @@ class TestNetworkValidation:
             os.unlink(temp_file)
 
     def test_check_recombinations_errors_true(self):
-        """Test that errors=True causes sys.exit when recombination missing."""
+        """strict=True raises NetworkCheckError when a recombination is missing."""
         # Create network with missing recombination
         with tempfile.NamedTemporaryFile(mode="w", suffix=".dat", delete=False) as f:
             f.write("# Network missing electron recombination\n")
@@ -205,12 +203,8 @@ class TestNetworkValidation:
             temp_file = f.name
 
         try:
-            with patch("builtins.print"):
-                with patch("sys.exit") as mock_exit:
-                    network = Network(temp_file, strict=True)
-                    # Should call sys.exit due to missing recombination
-                    # May be called multiple times for different validation errors
-                    assert mock_exit.called
+            with pytest.raises(NetworkCheckError):
+                Network(temp_file, strict=True)
         finally:
             os.unlink(temp_file)
 
@@ -264,7 +258,7 @@ class TestNetworkValidation:
             os.unlink(temp_file)
 
     def test_check_isomers_errors_true(self):
-        """Test that errors=True causes sys.exit when isomers detected."""
+        """strict=True raises NetworkCheckError when isomers are detected."""
         # Create network that might have isomers
         with tempfile.NamedTemporaryFile(mode="w", suffix=".dat", delete=False) as f:
             f.write("# Network with potential isomers\n")
@@ -274,12 +268,8 @@ class TestNetworkValidation:
             temp_file = f.name
 
         try:
-            with patch("builtins.print"):
-                with patch("sys.exit") as mock_exit:
-                    network = Network(temp_file, strict=True)
-                    # May or may not call sys.exit depending on isomer detection
-                    # This tests the error handling path exists
-                    assert True
+            with pytest.raises(NetworkCheckError):
+                Network(temp_file, strict=True)
         finally:
             os.unlink(temp_file)
 

@@ -22,7 +22,6 @@ where ``i`` is the integer index of the species within the network.
 from __future__ import annotations
 
 import logging
-import sys
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
 from pathlib import Path
@@ -40,7 +39,7 @@ from ...common import is_jaff_file, print_motd, resolve_dependencies
 from ...config import resolve_network_path
 from ...config.base import as_layer
 from ...drivers import HDF5
-from ...errors import ParserError
+from ...errors import NetworkCheckError, ParserError
 from ...io import JaffLogger, jaff_progress
 from ...io._io import to_jaff_file, write_data_table
 from ...physics import (
@@ -346,7 +345,7 @@ class Network:
             malformed.
         TypeError
             If *config* is not a path, dict or ``NetworkConfig``.
-        SystemExit
+        NetworkCheckError
             If *strict* is enabled and a reaction does not conserve mass or
             charge, or :meth:`check_sink_sources`, :meth:`check_recombinations`
             or :meth:`check_isomers` finds a problem.
@@ -785,12 +784,19 @@ class Network:
         Parameters
         ----------
         strict : bool
-            If ``True``, call ``sys.exit(1)`` when a violation is found.
+            If ``True``, raise :class:`~jaff.errors.NetworkCheckError` when a
+            violation is found.
 
         Returns
         -------
         ConservationReport
             The reactions that violate mass or charge conservation.
+
+        Raises
+        ------
+        NetworkCheckError
+            If *strict* and a reaction violates conservation; ``report`` holds the
+            report.
 
         Examples
         --------
@@ -814,8 +820,12 @@ class Network:
         )
 
         if not report.ok and strict:
-            self.logger.error("Conservation errors found")
-            sys.exit(1)
+            found = "; ".join(
+                f"{kind}: {', '.join(names)}"
+                for kind, names in (("mass", report.mass), ("charge", report.charge))
+                if names
+            )
+            raise NetworkCheckError(f"strict: conservation violated ({found})", report)
 
         return report
 
@@ -832,13 +842,19 @@ class Network:
         Parameters
         ----------
         strict : bool
-            If ``True``, call ``sys.exit()`` (exit status 0) when sinks or
-            sources are found.
+            If ``True``, raise :class:`~jaff.errors.NetworkCheckError` when sinks
+            or sources are found.
 
         Returns
         -------
         SinkSourceReport
             The sinks and sources found (empty when the network is balanced).
+
+        Raises
+        ------
+        NetworkCheckError
+            If *strict* and sinks or sources are found; ``report`` holds the
+            report.
         """
         produced = {p.name for rea in self.reactions for p in rea.products}
         consumed = {r.name for rea in self.reactions for r in rea.reactants}
@@ -862,8 +878,12 @@ class Network:
             self.logger.warning("Source detected")
 
         if not report.ok and strict:
-            self.logger.error("Exiting since strict is enabled")
-            sys.exit()
+            found = "; ".join(
+                f"{kind}: {', '.join(sorted(names))}"
+                for kind, names in (("sinks", report.sinks), ("sources", report.sources))
+                if names
+            )
+            raise NetworkCheckError(f"strict: {found}", report)
 
         return report
 
@@ -878,13 +898,19 @@ class Network:
         Parameters
         ----------
         strict : bool
-            If ``True``, call ``sys.exit(1)`` when recombination reactions
-            are missing.
+            If ``True``, raise :class:`~jaff.errors.NetworkCheckError` when
+            recombination reactions are missing.
 
         Returns
         -------
         RecombinationReport
             The positively charged species with no electron recombination.
+
+        Raises
+        ------
+        NetworkCheckError
+            If *strict* and a cation has no electron recombination; ``report``
+            holds the report.
         """
         electron_recomb_species = set()
 
@@ -908,8 +934,10 @@ class Network:
         report = RecombinationReport(missing=frozenset(missing))
 
         if not report.ok and strict:
-            self.logger.error("Recombination errors found")
-            sys.exit(1)
+            missing = ", ".join(sorted(report.missing))
+            raise NetworkCheckError(
+                f"strict: no electron recombination for {missing}", report
+            )
 
         return report
 
@@ -925,12 +953,18 @@ class Network:
         Parameters
         ----------
         strict : bool
-            If ``True``, call ``sys.exit(1)`` when isomers are found.
+            If ``True``, raise :class:`~jaff.errors.NetworkCheckError` when
+            isomers are found.
 
         Returns
         -------
         IsomerReport
             Groups of two or more species names sharing a composition.
+
+        Raises
+        ------
+        NetworkCheckError
+            If *strict* and isomers are found; ``report`` holds the report.
 
         Examples
         --------
@@ -953,8 +987,8 @@ class Network:
         report = IsomerReport(groups=groups)
 
         if not report.ok and strict:
-            self.logger.error("Isomer errors found")
-            sys.exit(1)
+            groups = "; ".join(", ".join(names) for names in report.groups)
+            raise NetworkCheckError(f"strict: isomers {groups}", report)
 
         return report
 

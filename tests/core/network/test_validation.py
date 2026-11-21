@@ -3,6 +3,8 @@
 
 import pytest
 
+from jaff.errors import NetworkCheckError, ParserError
+
 
 class TestSinkSources:
     """Species never produced (sink) or never consumed (source)."""
@@ -55,10 +57,14 @@ class TestSinkSources:
         flagged = report.sinks | report.sources
         assert not any("dummy" in name.lower() for name in flagged)
 
-    def test_errors_true_exits(self, make_network):
-        # He=sink, Ne=source: with errors=True the loader aborts.
-        with pytest.raises(SystemExit):
-            make_network(["He -> Ne [10,1000] 1e-10"], strict=True)
+    def test_strict_raises_with_the_report(self, make_network):
+        # H=sink, H2=source, mass conserved: with strict the loader raises (it
+        # used to exit with status 0).
+        with pytest.raises(NetworkCheckError, match="sinks: H; sources: H2") as info:
+            make_network(["H + H -> H2 [10,1000] 1e-10"], strict=True)
+
+        assert info.value.report.sinks == frozenset({"H"})
+        assert isinstance(info.value, ParserError)
 
 
 class TestRecombinations:
@@ -90,8 +96,10 @@ class TestRecombinations:
                 "C+ + H2 -> CH+ + H [10,1000] 1e-11",
             ]
         )
-        with pytest.raises(SystemExit):
+        with pytest.raises(NetworkCheckError, match="C\\+") as info:
             net.check_recombinations(strict=True)
+
+        assert info.value.report.missing == frozenset({"C+", "CH+", "H+"})
 
 
 class TestIsomers:
@@ -126,8 +134,10 @@ class TestIsomers:
                 "H + CO -> HOC [10,1000] 1e-11",
             ]
         )
-        with pytest.raises(SystemExit):
+        with pytest.raises(NetworkCheckError, match="HCO, HOC") as info:
             net.check_isomers(strict=True)
+
+        assert info.value.report.groups == (("HCO", "HOC"),)
 
 
 class TestValidationRunsDuringLoad:

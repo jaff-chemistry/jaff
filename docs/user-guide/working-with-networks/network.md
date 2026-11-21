@@ -355,9 +355,10 @@ extrapolate beyond it is the `t_cutoff` setting, for every reaction in
 ## Validation
 
 JAFF validates the network during loading. With `strict=False` (default) each
-problem is logged as a warning; with `strict=True` the process exits at the
-first check that finds a problem. The individual checks can also be re-run by
-hand — each takes a `strict` flag (exit when it finds a problem), logs its
+problem is logged as a warning; with `strict=True` the first check that finds a
+problem raises `jaff.errors.NetworkCheckError` (a `ParserError`; its `.report` holds
+what was found). The individual checks can also be re-run by hand — each takes a
+`strict` flag (raise when it finds a problem), logs its
 findings and returns a report (`ConservationReport`, `SinkSourceReport`,
 `RecombinationReport`, `IsomerReport`) whose `.ok` is `True` when nothing was found:
 

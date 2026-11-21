@@ -316,3 +316,11 @@ class TestEquations:
         for name in ("get_sfluxes", "get_sodes", "get_sradodes"):
             assert not hasattr(jaff.physics, name)
         assert importlib.util.find_spec("jaff.physics._equations") is None
+
+
+@pytest.mark.parametrize("brackets", ["[", "[[]]", ""])
+def test_flux_expression_rejects_brackets_not_of_two_characters(make_network, brackets):
+    net = make_network(["H + H -> H2 [10,1000] 1", "H2 -> H + H [10,1000] 1"])
+
+    with pytest.raises(ValueError, match="length 2"):
+        net.reactions[0].get_flux_expression(brackets=brackets)

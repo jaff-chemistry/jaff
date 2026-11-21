@@ -537,6 +537,29 @@ class TestCliErrors:
         assert "network.reactions.t_cutoff" in result.output
         assert not isinstance(result.exception, ParserError)
 
+    def test_strict_network_check_fails_the_command(self, tmp_path):
+        from typer.testing import CliRunner
+
+        from jaff.cli.jaffx._engine import app
+
+        network = tmp_path / "net.dat"
+        network.write_text("H + H -> H2 [10,1000] 1e-10\n")
+        result = CliRunner().invoke(
+            app,
+            [
+                "get",
+                "num-species",
+                "--network",
+                str(network),
+                "--set",
+                "network.strict=true",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "sinks: H; sources: H2" in result.output
+        assert "Traceback" not in result.output
+
 
 class TestJaffGenEngine:
     """JaffGen(config) prepares a run from a loaded config; run() writes it."""

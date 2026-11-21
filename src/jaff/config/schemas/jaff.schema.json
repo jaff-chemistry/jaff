@@ -196,7 +196,7 @@
         },
         "strict": {
           "default": false,
-          "description": "Treat validation problems (conservation, sinks/sources, ...) as fatal.",
+          "description": "Treat validation problems (conservation, sinks/sources, ...) as fatal: the first one raises `NetworkCheckError`.",
           "title": "Strict",
           "type": "boolean"
         },

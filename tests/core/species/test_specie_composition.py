@@ -24,3 +24,11 @@ def test_exploded_atoms(name, atoms):
 
 def test_an_explicit_count_of_one_keeps_the_mass():
     assert Specie("C1").mass == pytest.approx(Specie("C").mass, rel=1e-12, abs=0)
+
+
+@pytest.mark.parametrize("name", ["e", "E-", "electrons"])
+def test_a_misspelled_electron_is_an_error(name):
+    from jaff.errors import ParserError
+
+    with pytest.raises(ParserError, match="e-"):
+        Specie(name)
