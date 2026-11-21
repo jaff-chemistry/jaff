@@ -86,7 +86,7 @@ def test_eos_takes_the_species_gammas_and_masses(gow):
     assert gammas == [
         pytest.approx(float(s.thermodynamics.gamma)) for s in gow.net.species
     ]
-    assert masses == [pytest.approx(s.mass) for s in gow.net.species]
+    assert masses == [pytest.approx(s.mass, rel=1e-6, abs=0) for s in gow.net.species]
 
 
 def test_unknown_functions_get_device_stubs(gow):

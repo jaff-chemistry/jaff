@@ -84,7 +84,7 @@ def test_species_get_the_eos_gammas_and_molar_masses(cothin):
     assert gammas == [
         pytest.approx(float(s.thermodynamics.gamma)) for s in cothin.net.species
     ]
-    assert masses == [pytest.approx(s.mass) for s in cothin.net.species]
+    assert masses == [pytest.approx(s.mass, rel=1e-6, abs=0) for s in cothin.net.species]
     assert "masses(n) * avogadro" in text
 
 

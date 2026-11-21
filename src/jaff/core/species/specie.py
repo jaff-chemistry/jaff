@@ -400,10 +400,9 @@ class Specie:
             else:
                 if p != "x":
                     # Repeat the previous atom (n-1) extra times to account
-                    # for the first copy already appended in the previous step.
-                    # The max(..., 1) floor means an explicit count of 1 (e.g.
-                    # "C1") also appends one extra copy, giving two atoms.
-                    expl += [pold] * max(int(p) - 1, 1)
+                    # for the first copy already appended in the previous step
+                    # (an explicit count of 1, e.g. "C1", adds none).
+                    expl += [pold] * (int(p) - 1)
             pold = p
         self.exploded = sorted([proxy_rev[x] for x in expl])
         self.mass = sum([table[x].mass for x in self.exploded])

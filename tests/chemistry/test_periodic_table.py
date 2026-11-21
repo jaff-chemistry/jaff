@@ -45,7 +45,7 @@ class TestPeriodicTable:
         ],
     )
     def test_masses(self, symbol, mass):
-        assert periodic_table(symbol).mass == pytest.approx(mass)
+        assert periodic_table(symbol).mass == pytest.approx(mass, rel=1e-6, abs=0)
 
 
 class TestElement:
