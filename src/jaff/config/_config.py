@@ -1,4 +1,4 @@
-# ABOUTME: Package paths (data, db, templates, networks, shielding), listings of
+# ABOUTME: Package paths (data, db, templates, networks, plugins, shielding), listings of
 # ABOUTME: the bundled networks and templates, and network-name resolution
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ JAFF_DIR = CONFIG_DIR.parent
 SRC_DIR = JAFF_DIR.parent
 NETWORKS_DIR = SRC_DIR.parent / "networks"
 TEMPLATES_DIR = SRC_DIR.parent / "templates"
+PLUGINS_DIR = SRC_DIR.parent / "plugins"
 DATA_DIR = JAFF_DIR / "data"
 XSECS_DATA_DIR = DATA_DIR / "xsecs"
 SHIELDING_DATA_DIR = DATA_DIR / "shielding"

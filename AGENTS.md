@@ -299,6 +299,8 @@ tests/          # Test files, mirroring src/jaff/ (core/, physics/, codegen/, ..
                 # plus e2e/ and meta/; paths via tests/_paths.py
   fixtures/     # Test data
 examples/       # Example marimo notebooks (run by tests/meta/test_example_notebooks.py)
+plugins/        # Opt-in physics plugins, imported as jaff.plugins (reactions/<serialized>/,
+                # physics/radiation/, physics/thermodynamics/); spec .superpowers/specs/2026-11-21-plugins.md
 docs/           # Documentation
 ```
 
@@ -372,6 +374,13 @@ docs/           # Documentation
   variable; groups per file, checked in `render.py`, built by `Codegen.cse_group`);
   `$$JAFF CALL` inserts text from `@jaffgen_function` functions in a template's
   `jaffgen_template_functions.py` (`templating/functions.py`)
+- `common/registry.py` + `common/plugins.py`: `Registry(kind, packages)` holds opt-in
+  plugins of one kind keyed by `(name, reaction)` (`register` decorator; `find` prefers the
+  reaction's own plugin, else a global one; shielding's registry is one); on first lookup it
+  imports its packages, then `load_plugins()` imports the repo-root `plugins/` folder as
+  `jaff.plugins` (every public subpackage, any depth, once; each `__init__.py` imports its
+  modules). Repo-root folders (`plugins/`, `templates/`, `networks/`) are used from a git
+  clone; packaging them is deferred
 - `config/`: config base models, loader, JSON schemas, reference generator
 - `cli/`: `jaffgen` and `jaffx`
 - `drivers/`, `io/`: HDF5/SQLite/TOML/CSV access, data downloads, logging

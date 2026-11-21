@@ -1,5 +1,5 @@
 # ABOUTME: Registry: named, opt-in plugins of one kind keyed by (name, reaction), a
-# ABOUTME: reaction's own plugin beating a global one; plugin packages imported on first use
+# ABOUTME: reaction's own plugin beating a global one; plugins imported on first lookup
 """A registry of named plugins of one kind (e.g. shielding functions)."""
 
 from __future__ import annotations
@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from typing import Any, Generic, TypeVar
 
 from ..errors import RegistrationError
+from . import plugins
 from ._helper import import_subpackages
 
 T = TypeVar("T")
@@ -24,7 +25,8 @@ class Registry(Generic[T]):
     case-insensitive) and ``reaction``: the serialized reaction it is bound to, or
     ``None`` for a global plugin serving any reaction.  One instance is registered per
     class.  :meth:`find` prefers a reaction's own plugin and falls back to the global
-    one of the same name.  The plugin packages are imported once, on the first
+    one of the same name.  The plugin packages, then the repo-root ``plugins`` folder
+    (:func:`~jaff.common.plugins.load_plugins`), are imported once, on the first
     lookup, so their ``register`` decorators run.
 
     Parameters
@@ -123,3 +125,4 @@ class Registry(Generic[T]):
         self._discovered = True
         for package in self._packages:
             import_subpackages(package)
+        plugins.load_plugins()
