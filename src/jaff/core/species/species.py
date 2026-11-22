@@ -91,7 +91,7 @@ class Species(Catalogue[Specie]):
         self.__frozen = True
 
     def __repr__(self):
-        return f"Catalogue({self.names()!r})"
+        return f"{type(self).__name__}({self.names()!r})"
 
     def add(self, specie: Specie) -> None:
         """Append a new species to the catalogue if not already present.

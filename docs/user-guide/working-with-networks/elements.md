@@ -162,7 +162,7 @@ A single species also has its own element set, reachable via
 [`Specie.elements`](species.md):
 
 ```python
-net1.species["H2O"].elements  # Catalogue(['H', 'O'])
+net1.species["H2O"].elements  # Elements(['H', 'O'])
 ```
 
 ### How many elements

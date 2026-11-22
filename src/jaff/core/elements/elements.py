@@ -131,7 +131,7 @@ class Elements(Catalogue):
         self._initialized = True
 
     def __repr__(self):
-        return f"Catalogue({self.symbols()!r})"
+        return f"{type(self).__name__}({self.symbols()!r})"
 
     def __set_elements(self) -> None:
         """Collect unique alphabetic atoms across all species and build indices."""

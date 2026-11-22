@@ -197,7 +197,7 @@ class Reactions(Catalogue[Reaction]):
         return super().__getitem__(key)
 
     def __repr__(self):
-        return f"Catalogue({self.verbatim()!r})"
+        return f"{type(self).__name__}({self.verbatim()!r})"
 
     def __contains__(self, item) -> bool:
         """Test membership by ``Reaction``, name/serialized string, or
