@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from functools import cached_property
+from typing import Any, Literal, overload
 
 from ...types import Catalogue, Vector
 from ..elements import Elements
@@ -417,7 +418,11 @@ class Species(Catalogue[Specie]):
 
         return out
 
-    def neutral(self, attr: str = "") -> Vector[Specie | int]:
+    @overload
+    def neutral(self, attr: Literal[""] = "") -> Vector[Specie]: ...
+    @overload
+    def neutral(self, attr: str) -> Vector[Any]: ...
+    def neutral(self, attr: str = "") -> Vector[Specie] | Vector[Any]:
         """Return neutral (charge == 0) species or one of their attributes.
 
         Parameters
@@ -431,7 +436,9 @@ class Species(Catalogue[Specie]):
 
         Returns
         -------
-        Vector[Specie | int]
+        Vector
+            The neutral ``Specie`` objects, or with *attr* the value of that
+            attribute for each (e.g. names, masses).
 
         Raises
         ------
@@ -446,7 +453,11 @@ class Species(Catalogue[Specie]):
 
         return Vector([s for s in self if s.charge == 0])
 
-    def charged(self, attr: str = "", ne: bool = False) -> Vector[Specie]:
+    @overload
+    def charged(self, attr: Literal[""] = "", ne: bool = False) -> Vector[Specie]: ...
+    @overload
+    def charged(self, attr: str, ne: bool = False) -> Vector[Any]: ...
+    def charged(self, attr: str = "", ne: bool = False) -> Vector[Specie] | Vector[Any]:
         """Return charged (charge != 0) species or one of their attributes.
 
         Parameters
@@ -461,7 +472,9 @@ class Species(Catalogue[Specie]):
 
         Returns
         -------
-        Vector[Specie]
+        Vector
+            The charged ``Specie`` objects, or with *attr* the value of that
+            attribute for each (e.g. names, charges).
 
         Raises
         ------
