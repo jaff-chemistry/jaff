@@ -553,8 +553,9 @@ def write_data_table(
         Destination path.  The output format is deduced from the file
         extension when ``format="auto"``.
     label : str or None, optional
-        Human-readable network label written into the file header.  Defaults
-        to the file stem when ``None``.
+        Human-readable network label: the text header's ``Network name`` line,
+        or the HDF5 file's ``network_name`` attribute (next to a
+        ``description`` attribute).  Defaults to the file stem when ``None``.
     T_min : float or None, optional
         Minimum temperature in K.  See :func:`get_table`.
     T_max : float or None, optional
@@ -697,6 +698,11 @@ def write_data_table(
 
         hdfdict = HDF5Dict(
             {
+                # File attributes: the text format's header lines.
+                "_attrs": {
+                    "description": "JAFF auto-generated rate coefficient table",
+                    "network_name": label,
+                },
                 "reaction_coeff": {
                     "_attrs": {
                         "input_names": ["temperature"],
@@ -719,7 +725,7 @@ def write_data_table(
                         "_data": coef,
                         "_kind": "linear",
                     },
-                }
+                },
             }
         )
 

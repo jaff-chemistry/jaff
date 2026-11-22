@@ -1140,7 +1140,8 @@ class Network:
             Output file path.  Unless it ends with ``.hdf5`` or ``.hdf``, its
             suffix is replaced by ``.hdf5``.
         label : str | None, optional
-            Network label.  Unused in HDF5 output (see :meth:`to_txt`).
+            Network label, written as the file's ``network_name`` attribute.
+            Defaults to the network's ``label``.
         T_min : float | None, optional
             Minimum temperature of the grid (K).  Defaults to the smallest
             ``reaction.tmin`` of the network.
@@ -1182,6 +1183,8 @@ class Network:
         The file holds one ``reaction_coeff`` group with the attributes
         ``input_names``, ``input_units``, ``xlo``, ``xhi`` and ``spacing``
         and the datasets ``output_names``, ``output_units`` and ``data``.
+        The file itself carries the attributes ``description`` and
+        ``network_name`` (the *label*), as the text format's header does.
         """
         if isinstance(fname, str):
             fname = Path(fname)
@@ -1332,8 +1335,9 @@ class Network:
         fname : str | Path
             Output file path.
         label : str | None, optional
-            Network label written into a text file header.  Defaults to
-            the network's ``label``; unused in HDF5 output.
+            Network label written into a text file header, or as an HDF5
+            file's ``network_name`` attribute.  Defaults to the network's
+            ``label``.
         T_min : float | None, optional
             Minimum temperature of the grid (K).  Defaults to the smallest
             ``reaction.tmin`` of the network.
