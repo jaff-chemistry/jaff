@@ -50,7 +50,9 @@ class NetworkSymbols:
     chi_pe : Symbol
         Photoelectric-band field placeholder, replaced by :meth:`standardize`.
     zd : Symbol
-        Grain charge (``Zd``).
+        Dust abundance relative to the Milky Way (``Zd``, the dust-to-gas
+        ratio over its Milky-Way value): scales the dust attenuation of the
+        radiation (:meth:`~jaff.physics.dust.Dust.attenuation`).
     vdisp : Symbol
         Velocity dispersion [cm s⁻¹].
     ph_E : Symbol

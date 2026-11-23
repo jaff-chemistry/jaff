@@ -48,8 +48,10 @@ class Dust:
     d(rflux[i])/dt -= Zd * c * rflux[i] * n_hnuc * <σ_f>_i
     ```
 
-    with ``<σ_u>_i`` and ``<σ_f>_i`` the per-H-nucleus cross sections of kinds
-    ``config.u_reduction`` and ``config.f_reduction`` averaged over band *i*
+    with ``Zd`` the dust-to-gas ratio relative to the Milky Way (the tabulated
+    cross sections are Milky-Way values), ``<σ_u>_i`` and ``<σ_f>_i`` the
+    per-H-nucleus cross sections of kinds ``config.u_reduction`` and
+    ``config.f_reduction`` averaged over band *i*
     (``tabular.avg_cross_section_per_hnuc``); a kind of ``"none"`` drops the
     term.
 

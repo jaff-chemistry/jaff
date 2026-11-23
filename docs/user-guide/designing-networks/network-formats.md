@@ -38,7 +38,7 @@ All rate expressions are parsed as SymPy expressions. The following physical sym
 | `crate` | Primary cosmic-ray ionisation rate per H nucleus | s⁻¹           |
 | `chi`   | Radiation field strength (Draine 1978 units)     | dimensionless |
 | `chi_pe`| Local field scaled to the photoelectric band (6–13.6 eV), from self-consistent radiation transport + dust. See [Photochemistry](photochemistry.md#self-consistent-photoelectric-field-chi_pe) | dimensionless |
-| `Zd`    | Grain charge                                     | dimensionless |
+| `Zd`    | Dust-to-gas ratio relative to the Milky Way      | dimensionless |
 | `vdisp` | Velocity dispersion                              | cm s⁻¹        |
 | `ph_E`  | Photon energy (variable of cross sections and spectral profiles) | eV |
 
