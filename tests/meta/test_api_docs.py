@@ -266,3 +266,69 @@ class TestModulePage:
 
     def test_constants_page_has_no_functions_table(self, pages):
         assert "## Functions" not in pages["reference/physics/constants/index.md"]
+
+
+def test_set_style_types_keep_their_braces(pages):
+    # numpydoc's "{0, 1, 2, 3}" lists the allowed values; griffe parses it as a tuple.
+    page = pages["reference/physics/radiation/odes.md"]
+
+    assert "**order** : _{0, 1, 2, 3}, optional_" in page
+
+
+@pytest.mark.parametrize(
+    "rest, markdown",
+    [
+        # A reST literal block: "::" ends the lead-in, the indented block is code.
+        (
+            "The form is::\n\n    a + b -> c\n    d\n\nAfter.",
+            "The form is:\n\n```text\na + b -> c\nd\n```\n\nAfter.",
+        ),
+        # A lone "::" paragraph introduces the block and disappears.
+        ("Text.\n\n::\n\n    x = 1\n", "Text.\n\n```text\nx = 1\n```\n"),
+        # A doctest outside Examples becomes a Python block (prompts and output).
+        (
+            "Use it:\n\n>>> f(1)\n2\n>>> g(\n...     3)\n\nDone.",
+            "Use it:\n\n```python\n>>> f(1)\n2\n>>> g(\n...     3)\n```\n\nDone.",
+        ),
+        # Code already fenced is left alone.
+        ("```python\n>>> f(1)\n```", "```python\n>>> f(1)\n```"),
+    ],
+)
+def test_rest_blocks_become_fences(rest, markdown):
+    from jaff._utils.api_docs import _markdown
+
+    assert _markdown(rest) == markdown
+
+
+@pytest.mark.parametrize(
+    "page, text, expected",
+    [
+        ("reference/index.md", "[cfg](/user-guide/a.md)", "[cfg](../user-guide/a.md)"),
+        (
+            "reference/core/network/index.md",
+            "see [cfg](/user-guide/a.md#keys).",
+            "see [cfg](../../../user-guide/a.md#keys).",
+        ),
+        ("reference/core/x.md", "[r](/reference/core/y.md)", "[r](y.md)"),
+        # Relative links, URLs and fenced code are left as written.
+        (
+            "reference/core/x.md",
+            "[r](y.md) [w](https://a.b/c)",
+            "[r](y.md) [w](https://a.b/c)",
+        ),
+        ("reference/core/x.md", "```\n[c](/a.md)\n```", "```\n[c](/a.md)\n```"),
+    ],
+)
+def test_docs_root_links_become_relative(page, text, expected):
+    from jaff._utils.api_docs import _relative_links
+
+    assert _relative_links(text, page) == expected
+
+
+def test_text_only_constructor_docstring_is_shown(pages):
+    # JaffDb.__init__ has no Parameters: its text is the constructor's description.
+    page = pages["reference/drivers/jaffdb/index.md"]
+    constructor = page.split("## Constructor", 1)[1].split("\n## ", 1)[0]
+
+    assert "no arguments are required" in " ".join(constructor.split())
+    assert "\n\n\n" not in constructor

@@ -268,7 +268,7 @@ There are no aliases for old keys: a renamed key is a hard break.
   only), fenced code blocks (never `::` / `.. math::`), and `>>>` only in `Examples`.
 - How docstrings become pages: `docs/development/api-documentation.md`. In short:
   - a class page = description, Constructor (from the `__init__` docstring's
-    `Parameters`), the class `Attributes` table, then `Notes`, `Examples`, and a
+    `Parameters`, or its text when it has none), the class `Attributes` table, then `Notes`, `Examples`, and a
     page per public method/property the class itself defines (inherited ones get none);
   - each member's first docstring line is its row text in the tables, so make it
     stand alone;

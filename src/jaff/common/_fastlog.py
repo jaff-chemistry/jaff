@@ -13,13 +13,17 @@ instead of a transcendental ``log2`` call.
 
 The approximation
 -----------------
-For any positive float *x* decomposed by :func:`numpy.frexp` as::
+For any positive float *x* decomposed by :func:`numpy.frexp` as:
 
-    x = mantissa * 2^exponent,   mantissa ∈ [0.5, 1.0)
+```text
+x = mantissa * 2^exponent,   mantissa ∈ [0.5, 1.0)
+```
 
-the fast log2 is defined as::
+the fast log2 is defined as:
 
-    fast_log2(x) = 2 * (mantissa - 1) + exponent
+```text
+fast_log2(x) = 2 * (mantissa - 1) + exponent
+```
 
 This is a piecewise-linear approximation to the true ``log2`` that is exact
 at every power of 2 and has a maximum absolute error of about 0.086 bits.
@@ -33,9 +37,11 @@ def fast_log2(x):
     """
     Compute a fast piecewise-linear approximation to log2(*x*).
 
-    Uses the :func:`numpy.frexp` mantissa/exponent decomposition to evaluate::
+    Uses the :func:`numpy.frexp` mantissa/exponent decomposition to evaluate:
 
-        fast_log2(x) = 2 * (mantissa - 1) + exponent
+    ```text
+    fast_log2(x) = 2 * (mantissa - 1) + exponent
+    ```
 
     This expression is exact at every power of two and continuous everywhere,
     but deviates from the true log2 by at most ~0.086 in the worst case
@@ -85,9 +91,11 @@ def inverse_fast_log2(y):
     the initial bracket ``[0.5 * 2^y, 2.0 * 2^y]`` (which safely brackets
     the root because :func:`fast_log2` is strictly monotone).  If Brent's
     method leaves a residual above the target tolerance, up to five Newton
-    polishing steps are applied using the derivative::
+    polishing steps are applied using the derivative:
 
-        d(fast_log2)/dx ≈ 1 / (x * ln(2))
+    ```text
+    d(fast_log2)/dx ≈ 1 / (x * ln(2))
+    ```
 
     Parameters
     ----------

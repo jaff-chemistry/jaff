@@ -24,7 +24,10 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import posixpath
+import re
 import shutil
+import textwrap
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -32,7 +35,7 @@ from typing import Any, Dict, List, Tuple
 import griffe
 
 from ..config import SRC_DIR
-from ..config.base import _markdown
+from ..config.base import _markdown as _rest_markdown
 
 DOCS_DIR: Path = SRC_DIR.parent / "docs"
 ZENSICAL_TOML: Path = SRC_DIR.parent / "zensical.toml"
@@ -178,7 +181,111 @@ def api_pages() -> Dict[str, str]:
         for name, path in package.modules:
             pages[f"{package.folder}/{name}/index.md"] = _module_page(name, _griffe(path))
 
-    return pages
+    return {path: _relative_links(text, path) for path, text in pages.items()}
+
+
+# A markdown link written from the docs root: ``[text](/user-guide/page.md#anchor)``.
+_ROOT_LINK = re.compile(r"\]\(/([^)\s]*)\)")
+# A fenced code block, kept by ``re.split`` thanks to the capturing group.
+_CODE = re.compile(r"(^[ \t]*```.*?^[ \t]*```)", re.S | re.M)
+
+
+def _markdown(text: str) -> str:
+    """Docstring text as markdown: fenced blocks for ``::`` and ``>>>``, then markup.
+
+    reST literal blocks and doctest runs outside a fence become fenced blocks
+    (:func:`_blocks`); :func:`jaff.config.base._markdown` then turns the reST
+    markup (roles, ````literals````) into markdown.
+    """
+    parts = _CODE.split(text)
+    for i in range(0, len(parts), 2):
+        parts[i] = _blocks(parts[i])
+
+    return _rest_markdown("".join(parts))
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def _fence(lines: list[str], language: str, indent: str) -> list[str]:
+    """*lines* (dedented) in a fenced block at *indent*."""
+    body = textwrap.dedent("\n".join(lines)).splitlines()
+
+    return [
+        f"{indent}```{language}",
+        *(f"{indent}{x}" if x else "" for x in body),
+        f"{indent}```",
+    ]
+
+
+def _blocks(text: str) -> str:
+    """Fence reST literal blocks (``::``) and doctest runs (``>>>``) in *text*.
+
+    A paragraph ending in ``::`` introduces the indented block after it (a lone
+    ``::`` disappears, otherwise it becomes ``:``); a run of ``>>>`` lines and
+    their output, up to a blank line, is Python.  *text* holds no fences.
+    """
+    lines = text.split("\n")
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        if stripped.endswith("::") and not stripped.startswith(".."):
+            lead, indent = line.rstrip()[:-2], _indent(line)
+            j = i + 1
+            while j < len(lines) and not lines[j].strip():
+                j += 1
+            block_end = j
+            while block_end < len(lines) and (
+                not lines[block_end].strip() or _indent(lines[block_end]) > indent
+            ):
+                block_end += 1
+            block = lines[j:block_end]
+            while block and not block[-1].strip():
+                block.pop()
+            if block:
+                if lead.strip():
+                    out += [f"{lead}:", ""]
+                out += _fence(block, "text", " " * indent)
+                # Keep the blank lines that separated the block from what follows.
+                out += [""] * (block_end - j - len(block))
+                i = block_end
+                continue
+        if stripped.startswith(">>>"):
+            j = i
+            while j < len(lines) and lines[j].strip():
+                j += 1
+            out += _fence(lines[i:j], "python", " " * _indent(line))
+            i = j
+            continue
+        out.append(line)
+        i += 1
+
+    return "\n".join(out)
+
+
+def _relative_links(text: str, page: str) -> str:
+    """Rewrite *text*'s docs-root links (``](/a/b.md)``) relative to *page*.
+
+    Package, class and member pages sit at different depths, so a docstring
+    cannot hold one relative path that works on every page it appears on; it
+    links from the docs root instead.  Code blocks are left as they are.
+    """
+    here = posixpath.dirname(page)
+    parts = _CODE.split(text)
+    for i in range(0, len(parts), 2):
+        parts[i] = _ROOT_LINK.sub(
+            lambda m: (
+                f"]({posixpath.relpath(m.group(1).split('#')[0], here)}"
+                + (f"#{m.group(1).split('#', 1)[1]}" if "#" in m.group(1) else "")
+                + ")"
+            ),
+            parts[i],
+        )
+
+    return "".join(parts)
 
 
 def api_nav() -> str:
@@ -300,10 +407,14 @@ def _class_page(name: str, public_path: str, cls: Any) -> str:
         constructor = [f"## Constructor\n\n`#!python {name}({_signature(init)})`\n"]
         source = init.docstring or cls.docstring
         if source:
-            constructor.append(
-                _sections(source, skip=_CLASS_SECTIONS_BELOW + ("text", "attributes"))
+            details = _sections(
+                source, skip=_CLASS_SECTIONS_BELOW + ("text", "attributes")
             )
-        parts.append("\n".join(c for c in constructor if c))
+            if not details.strip() and init.docstring:
+                # No Parameters etc.: the __init__ text is all there is to say.
+                details = _sections(init.docstring, skip=_CLASS_SECTIONS_BELOW)
+            constructor.append(details)
+        parts.append("\n".join(c for c in constructor if c.strip()))
 
     attributes = _attributes(cls.docstring)
     if attributes:
@@ -410,7 +521,7 @@ def _sections(docstring: Any, skip: Tuple[str, ...]) -> str:
             out.append(_markdown(section.value))
         elif kind in ("parameters", "other parameters"):
             title = "Parameters" if kind == "parameters" else "Other Parameters"
-            items = [_parameter(p) for p in section.value]
+            items = [_parameter(p, docstring.value) for p in section.value]
             out.append(f"**{title}**\n\n" + "\n\n".join(items))
         elif kind in ("returns", "yields", "receives"):
             items = [
@@ -430,7 +541,8 @@ def _sections(docstring: Any, skip: Tuple[str, ...]) -> str:
             )
         elif kind == "attributes":
             rows = "\n".join(
-                f"| `{a.name}` | {_code(a.annotation)} | {_cell(a.description)} |"
+                f"| `{a.name}` | {_code(_annotation(a, docstring.value))} "
+                f"| {_cell(a.description)} |"
                 for a in section.value
             )
             out.append(f"| Attribute | Type | Description |\n| --- | --- | --- |\n{rows}")
@@ -440,8 +552,24 @@ def _sections(docstring: Any, skip: Tuple[str, ...]) -> str:
     return "\n\n".join(part for part in out if part.strip()) + "\n"
 
 
-def _parameter(parameter: Any) -> str:
-    annotation = str(parameter.annotation) if parameter.annotation else ""
+def _annotation(item: Any, raw: str) -> str:
+    """The type of a docstring entry as written.
+
+    griffe parses a numpydoc value set such as ``{0, 1, 2, 3}`` into a tuple
+    expression and loses the braces, so a type written in braces is taken
+    verbatim from the docstring text *raw*.
+    """
+    written = re.search(
+        rf"^[ \t]*{re.escape(item.name)}[ \t]*:[ \t]*(\{{.*?)[ \t]*$", raw, re.MULTILINE
+    )
+    if written:
+        return written.group(1)
+
+    return str(item.annotation) if item.annotation else ""
+
+
+def _parameter(parameter: Any, raw: str = "") -> str:
+    annotation = _annotation(parameter, raw)
     if parameter.default is not None and "optional" not in annotation:
         annotation = f"{annotation}, optional" if annotation else "optional"
 

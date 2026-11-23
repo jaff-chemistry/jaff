@@ -8,9 +8,11 @@ optional temperature bounds for a single astrochemical reaction.
 
 Serialized form
 ---------------
-The serialized form of a reaction is::
+The serialized form of a reaction is:
 
-    "<sorted_reactant_names>__<sorted_product_names>"
+```text
+"<sorted_reactant_names>__<sorted_product_names>"
+```
 
 where species names are sorted alphabetically and joined with ``"."``, and
 the two sides are separated by ``"__"``.  For example

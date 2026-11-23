@@ -93,7 +93,8 @@ Examples → Properties and Methods tables. Each method and property row shows t
 first line (summary) of its docstring, so make that line stand alone.
 
 Write constructor parameters in the `__init__` docstring, and the attributes in
-the class docstring:
+the class docstring (an `__init__` docstring with no `Parameters`, such as one for
+a constructor without arguments, shows its text under Constructor instead):
 
 ```python
 class Radiation:
@@ -155,9 +156,11 @@ Avoid:
 
 Types are shown as written in the docstring (`str or Path, optional`), not taken
 from the annotation; ", optional" is added for a parameter with a default.
-Relative links between pages do not work from a docstring (package and class
-pages sit at different depths): name the page instead, or use a cross-reference
-role.
+To link a page from a docstring, write the path from the `docs/` folder with a
+leading slash, e.g. `[plugins](/user-guide/configuration/plugins.md#lists)`: the
+generator makes it relative to each page the text lands on (package, class and
+member pages sit at different depths, so a plain relative link breaks on some of
+them). For other API objects, use a cross-reference role.
 
 ## Config models
 
