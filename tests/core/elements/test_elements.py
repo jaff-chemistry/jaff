@@ -1,6 +1,8 @@
 # ABOUTME: Tests for the Elements flyweight and its composition matrices
 # ABOUTME: Column order must follow the caller's species order, not a sorted key
 
+import pytest
+
 from jaff import Elements
 
 
@@ -53,3 +55,15 @@ def test_a_single_species_or_name_is_accepted():
 
     assert Elements("CO").symbols() == ["C", "O"]
     assert Elements(Specie("NH3")).symbols() == ["H", "N"]
+
+
+@pytest.mark.parametrize("method", ["truth_matrix", "density_matrix"])
+def test_matrices_are_fresh_copies(method):
+    """Editing a returned matrix must not change what the next call returns."""
+    elements = Elements(["CO", "H2O", "CH4"])
+    first = getattr(elements, method)()
+    expected = [row[:] for row in first]
+    first[0][0] = 99
+    first.append([7])
+
+    assert getattr(elements, method)() == expected

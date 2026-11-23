@@ -10,7 +10,7 @@ a flyweight: instances built from the same ordered species sequence are reused.
 
 from __future__ import annotations
 
-from functools import cache
+from functools import cached_property
 from typing import TYPE_CHECKING, Iterable, Union
 
 from ...types import Catalogue, Vector
@@ -150,7 +150,6 @@ class Elements(Catalogue):
         # _by_serialized is reused here to store the name→Element mapping.
         self._by_serialized = _by_name
 
-    @cache
     def truth_matrix(self) -> list[list[int]]:
         """Binary element-presence matrix.
 
@@ -163,7 +162,8 @@ class Elements(Catalogue):
 
         Notes
         -----
-        The result is cached after the first call (via ``functools.cache``).
+        The matrix is computed once; each call returns a fresh copy, so
+        editing the result never changes later calls.
         Row order matches the sorted element list; column order matches the
         order of *species* passed to ``__init__``.
 
@@ -175,17 +175,16 @@ class Elements(Catalogue):
         >>> elements.truth_matrix()
         [[1, 0, 1], [0, 1, 1], [1, 1, 0]]
         """
-        element_truth_matrix: list[list[int]] = [
-            [0] * len(self.species) for _ in range(self.count)
-        ]
+        return [list(row) for row in self._truth_matrix]
 
-        for i, element in enumerate(self._list):
-            for j, specie in enumerate(self.species):
-                element_truth_matrix[i][j] = int(str(element) in specie.exploded)
+    @cached_property
+    def _truth_matrix(self) -> tuple[tuple[int, ...], ...]:
+        """The element-presence matrix, computed once (see :meth:`truth_matrix`)."""
+        return tuple(
+            tuple(int(str(element) in specie.exploded) for specie in self.species)
+            for element in self._list
+        )
 
-        return element_truth_matrix
-
-    @cache
     def density_matrix(self) -> list[list[int]]:
         """Atom-count matrix (stoichiometric composition matrix).
 
@@ -198,7 +197,8 @@ class Elements(Catalogue):
 
         Notes
         -----
-        The result is cached after the first call (via ``functools.cache``).
+        The matrix is computed once; each call returns a fresh copy, so
+        editing the result never changes later calls.
         Row order matches the sorted element list; column order matches the
         order of *species* passed to ``__init__``.
 
@@ -210,15 +210,15 @@ class Elements(Catalogue):
         >>> elements.density_matrix()
         [[1, 0, 1], [0, 2, 4], [1, 1, 0]]
         """
-        element_density_matrix: list[list[int]] = [
-            [0] * len(self.species) for _ in range(self.count)
-        ]
+        return [list(row) for row in self._density_matrix]
 
-        for i, element in enumerate(self._list):
-            for j, specie in enumerate(self.species):
-                element_density_matrix[i][j] = specie.exploded.count(element.symbol)
-
-        return element_density_matrix
+    @cached_property
+    def _density_matrix(self) -> tuple[tuple[int, ...], ...]:
+        """The atom-count matrix, computed once (see :meth:`density_matrix`)."""
+        return tuple(
+            tuple(specie.exploded.count(element.symbol) for specie in self.species)
+            for element in self._list
+        )
 
     def from_name(self, name: str) -> Element:
         """Return the ``Element`` with the given full name (e.g. ``"Hydrogen"``).
