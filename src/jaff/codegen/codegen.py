@@ -2076,16 +2076,19 @@ class Codegen:
         """One declaration line per CSE temporary of *printed*.
 
         A non-empty *prefix* (e.g. ``"amrex::Real "``) replaces the language's
-        own declaration type (``const double`` for C++), used verbatim.
+        own declaration type (``const double`` for C++), used verbatim.  A
+        declaration always assigns with the language's own operator: an
+        ``assignment_op`` override (``J[i][j] += ...``) is for the output
+        entries, not for initialising a temporary.
         """
+        lang = self.lang.derive(assignment_op=Language(self.lang.name).assignment_op)
         lines = []
         for idx, expr in printed["extras"]["cse"]:
             name = f"{cse_var}{idx[0]}{cse_suffix}"
             if prefix:
-                lang = self.lang
                 lines.append(f"{prefix}{name} {lang.assignment_op} {expr}{lang.line_end}")
             else:
-                lines.append(self.lang.format_cse_declaration(name, expr))
+                lines.append(lang.format_cse_declaration(name, expr))
 
         return "".join(line + "\n" for line in lines)
 

@@ -64,3 +64,17 @@ def test_rates_var_prefix():
 
     assert declared
     assert all(line.startswith("amrex::Real x") for line in declared), declared[:3]
+
+
+@pytest.mark.parametrize("prefix", ["", "amrex::Real "])
+def test_declarations_keep_the_language_assignment(cg, prefix):
+    """An accumulating Jacobian (+=) still declares its temporaries with =."""
+    lines = cg.get_jacobian_str(
+        thermal="dtdt", assignment_op="+=", var_prefix=prefix
+    ).splitlines()
+    entries = [line for line in lines if line.startswith("J[")]
+    declared = [line for line in lines if line and not line.startswith("J[")]
+
+    assert declared and entries
+    assert all(re.search(r"\bcse\d+ = ", line) for line in declared), declared[:2]
+    assert all(" += " in line for line in entries), entries[:2]
