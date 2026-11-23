@@ -317,6 +317,7 @@ class Codegen:
         brac_format: str = "",
         use_cse: bool = True,
         cse_var: str = "x",
+        cse_suffix: str = "",
         var_prefix: str = "",
         assignment_op: str = "",
         line_end: str = "",
@@ -350,6 +351,9 @@ class Codegen:
             Enable CSE.  Default ``True``.
         cse_var : str, optional
             Prefix for CSE temporary variable names.  Default ``"x"``.
+        cse_suffix : str, optional
+            Text appended after the index of each CSE temporary name, as in
+            the ``get_indexed_*`` getters.  Default ``""``.
         var_prefix : str, optional
             Currently ignored: CSE declarations always use the language's
             :meth:`~jaff.codegen._languages.Language.format_cse_declaration`.
@@ -385,11 +389,13 @@ class Codegen:
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
         rates = ""
 
-        rate_expressions = self.get_indexed_rates(use_cse=use_cse, cse_var=cse_var)
+        rate_expressions = self.get_indexed_rates(
+            use_cse=use_cse, cse_var=cse_var, cse_suffix=cse_suffix
+        )
 
         # Emit CSE temporary definitions first so the main rate lines can
         # reference them without forward-declaration issues.
-        rates += self._cse_declarations(rate_expressions, cse_var)
+        rates += self._cse_declarations(rate_expressions, cse_var, cse_suffix)
 
         for idx, expression in rate_expressions["expressions"]:
             _idx = idx[0]
@@ -916,6 +922,7 @@ class Codegen:
         idx_offset: int = 0,
         use_cse: bool = True,
         cse_var: str = "cse",
+        cse_suffix: str = "",
         ode_var: str = "f",
         brac_format: str = "",
         def_prefix: str = "",
@@ -944,6 +951,9 @@ class Codegen:
             Enable CSE.  Default ``True``.
         cse_var : str, optional
             Prefix for CSE temporary variable names.  Default ``"cse"``.
+        cse_suffix : str, optional
+            Text appended after the index of each CSE temporary name, as in
+            the ``get_indexed_*`` getters.  Default ``""``.
         ode_var : str, optional
             Name of the output ODE array.  Default ``"f"``.
         brac_format : str, optional
@@ -983,10 +993,12 @@ class Codegen:
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
 
         ode_code: str = ""
-        ode_expressions = self.get_indexed_odes(use_cse=use_cse, cse_var=cse_var)
+        ode_expressions = self.get_indexed_odes(
+            use_cse=use_cse, cse_var=cse_var, cse_suffix=cse_suffix
+        )
 
         # Emit CSE temporaries before the main ODE assignments
-        ode_code += self._cse_declarations(ode_expressions, cse_var)
+        ode_code += self._cse_declarations(ode_expressions, cse_var, cse_suffix)
 
         for idx, expression in ode_expressions["expressions"]:
             _idx = idx[0]
@@ -1084,6 +1096,7 @@ class Codegen:
         idx_offset: int = 0,
         use_cse: bool = True,
         cse_var: str = "cse",
+        cse_suffix: str = "",
         ode_var: str = "f",
         brac_format: str = "",
         def_prefix: str = "",
@@ -1117,6 +1130,9 @@ class Codegen:
             Enable joint CSE across all RHS equations.  Default ``True``.
         cse_var : str, optional
             Prefix for CSE temporary variable names.  Default ``"cse"``.
+        cse_suffix : str, optional
+            Text appended after the index of each CSE temporary name, as in
+            the ``get_indexed_*`` getters.  Default ``""``.
         ode_var : str, optional
             Name of the output RHS array.  Default ``"f"``.
         brac_format : str, optional
@@ -1183,6 +1199,7 @@ class Codegen:
         rhs_expressions = self.get_indexed_rhs(
             use_cse=use_cse,
             cse_var=cse_var,
+            cse_suffix=cse_suffix,
             thermal=thermal,
             energy=energy,
             radiation=radiation,
@@ -1190,7 +1207,7 @@ class Codegen:
         )
 
         # Emit CSE temporaries before the main assignments
-        rhs_code += self._cse_declarations(rhs_expressions, cse_var)
+        rhs_code += self._cse_declarations(rhs_expressions, cse_var, cse_suffix)
 
         for idx, expression in rhs_expressions["expressions"]:
             _idx = idx[0]
@@ -1277,6 +1294,7 @@ class Codegen:
         idx_offset: int = 0,
         use_cse: bool = True,
         cse_var: str = "rcse",
+        cse_suffix: str = "",
         radode_var: str = "f",
         brac_format: str = "",
         def_prefix: str = "",
@@ -1299,6 +1317,9 @@ class Codegen:
             Enable CSE.  Default ``True``.
         cse_var : str, optional
             Prefix for CSE temporary variable names.  Default ``"rcse"``.
+        cse_suffix : str, optional
+            Text appended after the index of each CSE temporary name, as in
+            the ``get_indexed_*`` getters.  Default ``""``.
         radode_var : str, optional
             Name of the output radiation ODE array.  Default ``"f"``.
         brac_format : str, optional
@@ -1357,8 +1378,10 @@ class Codegen:
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
 
-        radode_expressions = self.get_indexed_radodes(order, use_cse, cse_var)
-        radode_code = self._cse_declarations(radode_expressions, cse_var)
+        radode_expressions = self.get_indexed_radodes(
+            order, use_cse, cse_var, cse_suffix=cse_suffix
+        )
+        radode_code = self._cse_declarations(radode_expressions, cse_var, cse_suffix)
 
         for idx, expression in radode_expressions["expressions"]:
             _idx = idx[0]
@@ -1701,6 +1724,7 @@ class Codegen:
         idx_offset: int = 0,
         use_cse: bool = True,
         cse_var: str = "cse",
+        cse_suffix: str = "",
         jac_var: str = "J",
         matrix_format: str = "",
         var_prefix: str = "",
@@ -1736,6 +1760,9 @@ class Codegen:
             Enable CSE.  Default ``True``.
         cse_var : str, optional
             Prefix for CSE temporary variable names.  Default ``"cse"``.
+        cse_suffix : str, optional
+            Text appended after the index of each CSE temporary name, as in
+            the ``get_indexed_*`` getters.  Default ``""``.
         jac_var : str, optional
             Name of the Jacobian matrix.  Default ``"J"``.
         matrix_format : str, optional
@@ -1812,12 +1839,13 @@ class Codegen:
             thermal=thermal,
             use_cse=use_cse,
             cse_var=cse_var,
+            cse_suffix=cse_suffix,
             energy=energy,
             radiation=radiation,
             rad_order=rad_order,
         )
 
-        jac_code = self._cse_declarations(jac_expressions, cse_var)
+        jac_code = self._cse_declarations(jac_expressions, cse_var, cse_suffix)
 
         # Emit one assignment per Jacobian element (may reference the CSE temps)
         for [i, j], expr in jac_expressions["expressions"]:
@@ -2022,10 +2050,13 @@ class Codegen:
         expr = optimize(expr)
         return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
 
-    def _cse_declarations(self, printed: IndexedReturn, cse_var: str) -> str:
+    def _cse_declarations(
+        self, printed: IndexedReturn, cse_var: str, cse_suffix: str = ""
+    ) -> str:
         """One declaration line per CSE temporary of *printed*."""
         return "".join(
-            self.lang.format_cse_declaration(f"{cse_var}{idx[0]}", expr) + "\n"
+            self.lang.format_cse_declaration(f"{cse_var}{idx[0]}{cse_suffix}", expr)
+            + "\n"
             for idx, expr in printed["extras"]["cse"]
         )
 
