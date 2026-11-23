@@ -336,9 +336,12 @@ class Db:
 
         Examples
         --------
-        With *db* a connected :class:`Db`:
+        With ``demo.db`` from the :class:`Db` examples:
 
         >>> import pandas as pd
+        >>> from jaff.drivers import Db
+        >>> db = Db("demo.db")
+        >>> db.connect()
         >>> df = pd.DataFrame(
         ...     {"mass": [1.008, 4.003], "charge": [0, 0]},
         ...     index=pd.Index(["H", "He"], name="species"),
@@ -346,6 +349,7 @@ class Db:
         >>> table = db.table_from_dataframe("species", df)
         >>> [tuple(row) for row in table.all_rows()]
         [('H', 1.008, 0), ('He', 4.003, 0)]
+        >>> db.close()
         """
         self.__verify_cursor_instance()
         assert self.cursor is not None
@@ -550,9 +554,12 @@ class Table:
 
     Examples
     --------
-    With *db* a connected :class:`Db` holding the ``species`` table built in
-    the :class:`Db` examples:
+    With ``demo.db`` holding the ``species`` table built in the :class:`Db`
+    examples:
 
+    >>> from jaff.drivers import Db
+    >>> db = Db("demo.db")
+    >>> db.connect()
     >>> table = db.table("species")
     >>> table.get_cell("species", "He", "mass")
     4.003
@@ -564,6 +571,7 @@ class Table:
     ...     for row in table.rows(cols=["species", "note"], conditions="mass > 2")
     ... ]
     [('He', 'none'), ('C', 'atom')]
+    >>> db.close()
     """
 
     def __init__(self, name: str, conn: sqlite3.Connection, cur: sqlite3.Cursor):

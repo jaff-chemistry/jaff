@@ -1164,14 +1164,16 @@ class Codegen:
         >>> bands = {"bands": [1, 13.6, 100, "inf"]}
         >>> net = Network("h_photoionization", radiation=bands)
         >>> print(Codegen(net, lang="cxx").get_rhs_str(thermal="dedt"), end="")
-        const double cse0 = nden[1]*nden[2];
+        const double cse4 = std::log(tgas);
+        const double cse5 = std::exp(0.30000000000000004*cse4);
+        const double cse0 = cse5*nden[1]*nden[2];
         const double cse1 = 5.8515408231992116e-8*photden[1] + ...*photden[2];
-        const double cse2 = 1.6594178159829075e-10*cse0*... - cse1*nden[0];
+        const double cse2 = 1.6594178159829075e-10*cse0/tgas - cse1*nden[0];
         const double cse3 = -cse2;
         f[0] = cse2;
         f[1] = cse3;
         f[2] = cse3;
-        f[3] = -2.2910735482189854e-26*cse0*... + 6.4...e-12*cse1*nden[0];
+        f[3] = -2.2910735482189854e-26*cse0*(...) + 6.4...e-12*cse1*nden[0];
 
         ``f[3]`` is the dE/dt row at index ``n_species``.
         """
@@ -1651,15 +1653,15 @@ class Codegen:
         >>> group = cg.cse_group(members)
         >>> for idx, expr in group.temporaries[:2]:
         ...     print(idx, expr)
-        [17] photorates(1, 13.6, 1.0e+99)
-        [0] cse17*nden[0]
+        [16] photorates(1, 13.6, 1.0e+99)
+        [0] cse16*nden[0]
         >>> rhs, jacobian = group.expressions
         >>> for idx, expr in jacobian[:2]:
         ...     print(idx, expr)
-        [0, 0] -cse17
+        [0, 0] -cse16
         [0, 1] cse5
 
-        ``cse17`` is the photo rate coefficient (``krate[0]``): evaluated first, as
+        ``cse16`` is the photo rate coefficient (``krate[0]``): evaluated first, as
         the temporaries after it read it, and once for the rhs and the Jacobian.
         """
         members = [(kind, dict(options)) for kind, options in members]

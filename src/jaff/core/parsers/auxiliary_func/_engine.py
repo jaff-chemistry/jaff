@@ -101,8 +101,13 @@ class AuxiliaryFunctionParser:
 
     Examples
     --------
-    >>> with AuxiliaryFunctionParser("network.jfunc") as afp:
+    Parse the functions of the bundled COthin network (from a clone's root):
+
+    >>> from jaff.core.parsers.auxiliary_func import AuxiliaryFunctionParser
+    >>> with AuxiliaryFunctionParser("networks/COthin/react_COthin.jfunc") as afp:
     ...     funcs = afp.get_dict()
+    >>> sorted(funcs)
+    ['fhnoj', 'fselfh2']
     """
 
     def __init__(self, file: Path | str):

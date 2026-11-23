@@ -86,7 +86,9 @@ class OdeSystem:
     >>> system.rate_coefficients[net.symbols.krates[1]]
     2.63e-13/(tgas/10000.0)**0.7
     >>> system.jacobian[0, 3]
-    -1.16159247118804e-10*nden[1]*nden[2]/tgas**1.7
+    -0.7*krate[1]*nden[1]*nden[2]/tgas
+
+    (``∂k/∂T`` written as ``k · ∂ln k/∂T``, which reuses ``krate[1]``.)
     """
 
     def __init__(

@@ -31,7 +31,7 @@ Generate individual code blocks with :class:`Codegen`:
 >>> odes = cg.get_ode_str(use_cse=True)
 >>> jac = cg.get_jacobian_str(use_cse=True)
 >>> odes.splitlines()[0]
-'const double cse0 = nden[24]*nden[9];'
+'const double cse0 = std::log(tgas);'
 
 Render a ``$$JAFF`` template. Given ``nspec.cpp``:
 

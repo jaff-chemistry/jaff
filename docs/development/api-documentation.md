@@ -170,10 +170,21 @@ when a key has no effect. See [Adding Configuration](adding-configuration.md).
 
 ## Examples
 
-`Examples` are not run by the test suite (loading a network prints a banner and
-log lines into the output), so run each example yourself and paste the real
-output. Load bundled networks by name (`Network("COthin")`) so the example works
-from any directory, and keep the banner out of the expected output.
+`Examples` are run by `tests/meta/test_docstring_examples.py`, one test per
+docstring, so write them as working code and paste the real output. The runner:
+
+- leaves the banner and log lines out (keep them out of the expected output);
+- runs a module's examples in source order in one scratch folder, so an example
+  may read a file an earlier one in the same module wrote;
+- provides only the input files an example describes in prose (`grid.csv`) and a
+  link to the repo's `networks/` folder; anything else (a `Network`, a `db`
+  handle, an array) the example builds or imports itself;
+- compares with `ELLIPSIS` and `NORMALIZE_WHITESPACE`, so `...` can stand for
+  output you do not want to pin.
+
+Load bundled networks by name (`Network("COthin")`) so the example works from any
+directory. Examples known to fail sit in the runner's `XFAIL` list with a reason;
+fix one and the test fails until you remove its entry.
 
 ## Checklist
 

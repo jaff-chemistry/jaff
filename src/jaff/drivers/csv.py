@@ -194,8 +194,8 @@ def csv_to_hdf5(
 
     >>> import h5py
     >>> from jaff.drivers.csv import csv_to_hdf5
-    >>> csv_to_hdf5("grid.csv", "grid.h5", flatten_columns=["T", "n"])
-    >>> with h5py.File("grid.h5") as f:
+    >>> csv_to_hdf5("grid.csv", "axes.h5", flatten_columns=["T", "n"])
+    >>> with h5py.File("axes.h5") as f:
     ...     {name: f["grid"][name][()].tolist() for name in f["grid"]}
     {'T': [10, 20], 'k': [0.1, 0.2, 0.3, 0.4], 'n': [1, 2]}
 

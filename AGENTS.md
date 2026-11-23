@@ -276,7 +276,9 @@ There are no aliases for old keys: a renamed key is a hard break.
   - a constant's description is the string literal right after its assignment;
   - config models' `Attributes` also become the JSON-schema descriptions and the
     configuration reference: write them for TOML users.
-- `Examples` are not run in CI (Network prints a banner): run them and paste real output.
+- `Examples` are run by `tests/meta/test_docstring_examples.py` (banner and logs left out,
+  a module's examples in order in one scratch folder): paste real output, and have each
+  example import or build what it uses.
 
 ## Special Project Rules
 

@@ -486,6 +486,7 @@ class PhotoReaction:
 
         Examples
         --------
+        >>> from jaff import Network
         >>> net = Network(
         ...     "h_photoionization",
         ...     radiation={"bands": [1, 13.6, 100, "inf"]},
@@ -534,10 +535,12 @@ class PhotoReaction:
 
         Examples
         --------
+        >>> from jaff import Network
+        >>> net = Network("h_photoionization")
         >>> photo = net.reactions.photo_reactions()[0].photo
-        >>> photo.plot_xsecs()  # all processes, eV vs Mb
-        >>> photo.plot_xsecs(processes="photodecay", yscale="linear")
-        >>> photo.plot_xsecs(energy_unit="nm", xsec_unit="cm^2", bands=True)
+        >>> fig, axes = photo.plot_xsecs()  # all processes, eV vs Mb
+        >>> fig, axes = photo.plot_xsecs(processes="photodecay", yscale="linear")
+        >>> fig, axes = photo.plot_xsecs(energy_unit="nm", xsec_unit="cm^2", bands=True)
         """
         from ...plotting import plot_xsecs
 

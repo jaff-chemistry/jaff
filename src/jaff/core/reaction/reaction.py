@@ -401,6 +401,7 @@ class Reaction:
 
         Examples
         --------
+        >>> from jaff import Network
         >>> net = Network("GOW")
         >>> rxn = net.reactions.by_source_index(0)
         >>> rxn.verbatim
@@ -652,6 +653,8 @@ class Reaction:
 
         Examples
         --------
+        >>> from jaff import Network
+        >>> from jaff.core.reaction import Reaction
         >>> net = Network("h_photoionization")
         >>> rxn = net.reactions[0]
         >>> Reaction.serialize(rxn.reactants, rxn.products)
@@ -949,6 +952,8 @@ class Reaction:
 
         Examples
         --------
+        >>> from jaff import Network
+        >>> net = Network("GOW")
         >>> fig, axes = net.reactions["H+.e-__H"].plot_rate_coefficient(
         ...     tmin=10, tmax=1e4, save="rate.pdf", show=False
         ... )

@@ -102,10 +102,18 @@ class HDF5Dict(dict):
 
     Examples
     --------
+    Wrap a plain dict, write it with :class:`~jaff.drivers.HDF5`, then read the
+    file back:
+
+    >>> import numpy as np
+    >>> from jaff.drivers import HDF5
+    >>> from jaff.types import HDF5Dict
     >>> hd = HDF5Dict(
-    ...     {"rates": {"_kind": "linear", "_data": arr, "_dtype": "f64", "_attrs": {}}}
+    ...     {"rates": {"_kind": "linear", "_data": np.array([1.0, 2.0]), "_dtype": "f64"}}
     ... )
-    >>> hd2 = HDF5Dict(Path("output.hdf5"))
+    >>> HDF5().from_dict("output.hdf5", hd, mode="w")
+    >>> HDF5Dict("output.hdf5")["rates"]["_data"]
+    array([1., 2.])
     """
 
     def __init__(

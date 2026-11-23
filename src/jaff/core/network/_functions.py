@@ -51,6 +51,7 @@ class NetworkFunctions:
 
     Examples
     --------
+    >>> from jaff import Network
     >>> net = Network("GOW")
     >>> "heatingCoolingRate" in net.functions
     True
