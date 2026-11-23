@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from jaff.plotting.render import render
+from jaff.plotting import render
 from jaff.plotting.spec import FigureSpec
 
 X = np.logspace(0, 2, 20)

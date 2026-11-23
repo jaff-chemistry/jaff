@@ -137,7 +137,7 @@ Cross sections need a network with photo reactions:
 """
 
 from .api import plot, plot_rates, plot_xsecs
-from .render import render
+from ._render import render
 from .spec import AxesSpec, FigureSpec, SeriesSpec
 from .themes import PALETTES, STYLES, register_palette, register_style
 

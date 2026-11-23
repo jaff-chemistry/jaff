@@ -4,7 +4,7 @@
 import numpy as np
 
 from jaff.plotting._legend import letter
-from jaff.plotting.render import render
+from jaff.plotting import render
 from jaff.plotting.spec import FigureSpec
 
 X = np.linspace(1.0, 2.0, 20)

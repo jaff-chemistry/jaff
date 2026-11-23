@@ -159,7 +159,7 @@ class TestXsecExtras:
         assert bar["x_hi"][1] == np.inf and bar["x_lo"][1] == pytest.approx(13.6)
 
     def test_band_bars_render_nm(self):
-        from jaff.plotting.render import render
+        from jaff.plotting import render
         from jaff.plotting.spec import FigureSpec
 
         bar = xsec_series(_photo(band_xsecs=self._bands()), bands=True, energy_unit="nm")[

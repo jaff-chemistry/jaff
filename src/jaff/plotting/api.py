@@ -25,7 +25,7 @@ from sympy import Basic
 from ..io import JaffLogger
 from . import _units
 from .adapters import rate_series, xsec_series
-from .render import effective_style, min_points, plottable_mask, render
+from ._render import effective_style, min_points, plottable_mask, render
 from .spec import FigureSpec
 from .themes import resolve_style
 

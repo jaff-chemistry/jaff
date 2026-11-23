@@ -75,7 +75,7 @@ src/jaff/
 │   ├── api.py                  # plot / plot_rates / plot_xsecs builders
 │   ├── spec.py                 # FigureSpec / AxesSpec / SeriesSpec (dict validation)
 │   ├── themes.py               # Style + Palette registries, cycling
-│   ├── render.py               # FigureSpec -> (fig, axes)
+│   ├── _render.py              # FigureSpec -> (fig, axes) (`render` is exported)
 │   ├── _layout.py              # hand-made tight grid layout (gaps, margins, legends)
 │   ├── _legend.py              # tags, axes legends, shared figure legend
 │   ├── _marks.py               # hollow markers by arc length

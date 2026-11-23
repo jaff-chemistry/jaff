@@ -6,10 +6,10 @@ import importlib
 import numpy as np
 import pytest
 
-from jaff.plotting.render import render
+from jaff.plotting import render
 from jaff.plotting.spec import FigureSpec
 
-_render_module = importlib.import_module("jaff.plotting.render")
+_render_module = importlib.import_module("jaff.plotting._render")
 LOG_MAX_DECADES = _render_module.LOG_MAX_DECADES
 
 X = np.linspace(1.0, 50.0, 50)

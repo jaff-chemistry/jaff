@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from jaff.plotting import themes
-from jaff.plotting.render import render
+from jaff.plotting import render
 from jaff.plotting.spec import FigureSpec, SeriesSpec
 from jaff.plotting.themes import resolve_style, split_style
 from tests._paths import REPO_ROOT
