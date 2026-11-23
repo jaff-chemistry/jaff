@@ -15,7 +15,7 @@ from __future__ import annotations
 from functools import cached_property, reduce
 from typing import TYPE_CHECKING, ClassVar, Collection
 
-from sympy import Basic, Expr, Float, Function, IndexedBase, Symbol
+from sympy import Basic, Expr, Float, Function, IndexedBase, Symbol, sympify
 from sympy.core.function import AppliedUndef, UndefinedFunction
 
 from ...chemistry import periodic_table
@@ -378,7 +378,10 @@ class NetworkSymbols:
                 raise ParserError(
                     "In order to replace the 'chi_pe' symbol, dust must be enabled"
                 )
-            return net.dust.pe.chi
+            chi = net.dust.pe.chi
+            # chi is None only without radiation, rejected above.
+            assert chi is not None
+            return sympify(chi)
 
         if low_name.startswith("n_"):
             return self._density_replacement(name)

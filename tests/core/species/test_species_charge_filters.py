@@ -1,5 +1,5 @@
-# ABOUTME: Species.neutral / Species.charged: the species themselves, or one attribute of
-# ABOUTME: each (names, masses, ...); ne=True drops the electron; bad attribute names raise
+# ABOUTME: Species.neutral / charged: the species, or one attribute of each (name, mass);
+# ABOUTME: ne=True drops the electron; Species accepts a mix of names and Specie objects
 
 import pytest
 
@@ -33,3 +33,10 @@ def test_ne_drops_the_electron(species):
 def test_unknown_attr_raises(species, method):
     with pytest.raises(ValueError, match="Invalid attribute"):
         getattr(species, method)("nope")
+
+
+def test_a_mixed_list_of_names_and_species_is_accepted():
+    species = Species(["H2", Specie("O"), "e-"])
+
+    assert species.names() == ["H2", "O", "e-"]
+    assert species["O"].name == "O"

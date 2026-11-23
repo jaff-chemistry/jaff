@@ -13,7 +13,8 @@ time.  A secondary ``_by_serialized`` dict allows alternative (e.g.
 serialized/canonical) name aliases to be registered post-construction.
 """
 
-from typing import Any, Generic, Iterator, SupportsIndex, TypeVar, overload
+from collections.abc import Mapping
+from typing import Any, Generic, Iterator, SupportsIndex, TypeVar, cast, overload
 
 T = TypeVar("T")
 
@@ -77,7 +78,7 @@ class Catalogue(Generic[T]):
     def __init__(
         self,
         items: list[T] | None = None,
-        items_dict: dict[Any, T | list[T]] | None = None,
+        items_dict: Mapping[Any, T | list[T]] | None = None,
         check_length: bool = True,
     ):
         """Initialise the catalogue from a parallel list and dictionary.
@@ -86,9 +87,9 @@ class Catalogue(Generic[T]):
         ----------
         items : list[T] or None, optional
             Ordered list of items.  Must be provided together with *items_dict*.
-        items_dict : dict[Any, T | list[T]] or None, optional
+        items_dict : Mapping[Any, T | list[T]] or None, optional
             Name-keyed mapping of the same items (values may be lists in
-            subclasses that permit key collisions).
+            subclasses that permit key collisions).  It is copied.
         check_length : bool, optional
             If ``True`` (default), raise :exc:`ValueError` when the lengths of
             *items* and *items_dict* differ.
@@ -107,7 +108,11 @@ class Catalogue(Generic[T]):
             if len(items) != len(items_dict.keys()):
                 raise ValueError("Length of both list and dict must be same")
 
-        self._by_prop: dict[Any, T] = {} if items_dict is None else items_dict
+        # Typed as single items: list values exist only in subclasses that allow
+        # key collisions (Reactions), which handle them in their own lookups.
+        self._by_prop: dict[Any, T] = (
+            {} if items_dict is None else cast("dict[Any, T]", dict(items_dict))
+        )
         self._list: list[T] = [] if items is None else items
         # Alternative keys (e.g. serialized names) can be added post-init.
         self._by_serialized: dict[str, T] = {}

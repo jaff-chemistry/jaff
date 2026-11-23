@@ -139,7 +139,7 @@ class Reactions(Catalogue[Reaction]):
     @overload
     def __getitem__(self, key: slice) -> list[Reaction]: ...
 
-    def __getitem__(self, key):
+    def __getitem__(self, key):  # ty: ignore[invalid-method-override]
         """Look up a reaction by serialized/verbatim string, ``(id, type)``, or index.
 
         Several reactions may share a serialized form or verbatim string when

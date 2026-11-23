@@ -99,7 +99,7 @@ class Kinetics:
         return odes
 
     def weighted_rate(
-        self, weights: Sequence[Basic | float], rtol: float = 0.0, form: str = "expanded"
+        self, weights: Sequence[Expr | float], rtol: float = 0.0, form: str = "expanded"
     ) -> Expr:
         """Rate of ``Σ_i w_i n_i``: ``Σ_r (Σ_i w_i ν_ri) F_r``.
 
@@ -110,7 +110,7 @@ class Kinetics:
 
         Parameters
         ----------
-        weights : Sequence[Basic | float]
+        weights : Sequence[Expr | float]
             One weight per species, in species-index order.
         rtol : float, optional
             Numeric weights only: a reaction coefficient ``c_r = Σ_i w_i ν_ri`` is

@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from functools import cached_property
+from collections.abc import Sequence
 from typing import Any, Literal, overload
 
 from ...types import Catalogue, Vector
@@ -51,16 +52,16 @@ class Species(Catalogue[Specie]):
 
     def __init__(
         self,
-        species: list[Specie] | list[str] | None = None,
+        species: Sequence[Specie | str] | None = None,
         check_length: bool = True,
     ):
         """Initialise the species catalogue.
 
         Parameters
         ----------
-        species : list[Specie] | list[str] | None, optional
-            Initial species.  Plain strings are converted to ``Specie``
-            objects with indices assigned in list order.  If ``None``, an
+        species : sequence of Specie or str, or None, optional
+            Initial species, ``Specie`` objects and names in any mix.  Names
+            are converted to ``Specie`` objects indexed by their list position.  If ``None``, an
             empty catalogue is created (items can be added with ``add``).
         check_length : bool, optional
             If ``True`` (default), the base ``Catalogue`` verifies that the
@@ -70,14 +71,15 @@ class Species(Catalogue[Specie]):
         """
         _by_name: dict[str, Specie] | None = None
         _by_serialized: dict[str, Specie] = {}
+        _species: list[Specie] | None = None
 
         if species is not None:
-            if species and isinstance(species[0], str):
-                species = [Specie(name, idx) for idx, name in enumerate(species)]  # type: ignore[arg-type]
-            _by_name = {sp.name: sp for sp in species}  # type: ignore
-            _by_serialized = {sp.serialized: sp for sp in species}  # type: ignore
-
-        _species: list[Specie] = species  # type: ignore
+            _species = [
+                Specie(item, idx) if isinstance(item, str) else item
+                for idx, item in enumerate(species)
+            ]
+            _by_name = {sp.name: sp for sp in _species}
+            _by_serialized = {sp.serialized: sp for sp in _species}
 
         super().__init__(_species, _by_name, check_length)
         self._by_serialized = _by_serialized
