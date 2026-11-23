@@ -521,10 +521,10 @@ class Language:
     def derive(
         self,
         *,
-        brac_format: str = "",
-        matrix_format: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
+        brac_format: str | None = None,
+        matrix_format: str | None = None,
+        assignment_op: str | None = None,
+        line_end: str | None = None,
     ) -> "Language":
         """Return a bracket/token-overridden view of this language.
 
@@ -533,18 +533,18 @@ class Language:
         copy with the overridden attributes shadowing the class defaults, so
         the singleton is never mutated and the registry never grows.
 
-        An empty string means "no override" for every argument, so a token
-        cannot be overridden to the empty string (e.g. dropping C++'s ``;``).
+        ``None`` means "no override" for every argument; an empty string is a
+        real value, e.g. ``line_end=""`` drops C++'s ``;``.
 
         Parameters
         ----------
-        brac_format : str, optional
+        brac_format : str or None, optional
             1-D bracket style from :attr:`BRACKET_FORMATS` (e.g. ``"()"``).
-        matrix_format : str, optional
+        matrix_format : str or None, optional
             2-D bracket/separator format key from :attr:`MATRIX_FORMATS`.
-        assignment_op : str, optional
+        assignment_op : str or None, optional
             Assignment operator override.
-        line_end : str, optional
+        line_end : str or None, optional
             Statement terminator override.
 
         Returns
@@ -568,12 +568,13 @@ class Language:
         >>> f"J{cxx.mlb}i{cxx.sep}j{cxx.mrb} {cxx.assignment_op} x{cxx.line_end}"
         'J[i][j] = x;'
         """
-        if not (brac_format or matrix_format or assignment_op or line_end):
+        overrides = (brac_format, matrix_format, assignment_op, line_end)
+        if all(value is None for value in overrides):
             return self
 
         view = copy.copy(self)
 
-        if brac_format:
+        if brac_format is not None:
             if brac_format not in self.BRACKET_FORMATS:
                 raise InvalidLanguageError(
                     f"Unsupported bracket format: '{brac_format}'. "
@@ -581,7 +582,7 @@ class Language:
                 )
             view.lb, view.rb = brac_format[0], brac_format[1]
 
-        if matrix_format:
+        if matrix_format is not None:
             if matrix_format not in self.MATRIX_FORMATS:
                 raise InvalidLanguageError(
                     f"Unsupported matrix format: '{matrix_format}'. "
@@ -591,9 +592,9 @@ class Language:
             view.mlb, view.mrb = fmt["brac"][0], fmt["brac"][1]
             view.sep = fmt["sep"]
 
-        if assignment_op:
+        if assignment_op is not None:
             view.assignment_op = assignment_op
-        if line_end:
+        if line_end is not None:
             view.line_end = line_end
 
         return view
@@ -845,7 +846,7 @@ def scoped_tokens(lang_attr: str = "lang") -> Callable[[Callable], Callable]:
     fallback boilerplate.
 
     Methods that do not declare a given override keyword are unaffected — the
-    harvester falls back to an empty override for absent parameters.
+    harvester falls back to no override (``None``) for absent parameters.
 
     Parameters
     ----------
@@ -874,10 +875,10 @@ def scoped_tokens(lang_attr: str = "lang") -> Callable[[Callable], Callable]:
                 self,
                 lang_attr,
                 lang.derive(
-                    brac_format=supplied.get("brac_format", ""),
-                    matrix_format=supplied.get("matrix_format", ""),
-                    assignment_op=supplied.get("assignment_op", ""),
-                    line_end=supplied.get("line_end", ""),
+                    brac_format=supplied.get("brac_format"),
+                    matrix_format=supplied.get("matrix_format"),
+                    assignment_op=supplied.get("assignment_op"),
+                    line_end=supplied.get("line_end"),
                 ),
             )
             try:

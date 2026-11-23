@@ -183,8 +183,8 @@ class Codegen:
         idx_offset: int = -1,
         idx_prefix: str = "",
         definition_prefix: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
+        assignment_op: str | None = None,
+        line_end: str | None = None,
     ) -> str:
         """Generate species index definitions and network-size constants.
 
@@ -213,10 +213,12 @@ class Codegen:
         definition_prefix : str, optional
             String prepended to each definition line, e.g. ``"const int "``
             for C/C++.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses ``self.lang.assignment_op``.
-        line_end : str, optional
-            Line terminator override.  Empty string uses ``self.lang.line_end``.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses
+            ``self.lang.assignment_op``.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses
+            ``self.lang.line_end``.
 
         Returns
         -------
@@ -314,13 +316,13 @@ class Codegen:
         self,
         idx_offset: int = -1,
         rate_variable: str = "k",
-        brac_format: str = "",
+        brac_format: str | None = None,
         use_cse: bool = True,
         cse_var: str = "x",
         cse_suffix: str = "",
         var_prefix: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
+        assignment_op: str | None = None,
+        line_end: str | None = None,
     ) -> str:
         """Generate rate-coefficient assignment code as a multi-line string.
 
@@ -344,9 +346,9 @@ class Codegen:
             Base index for array subscripts.  ``-1`` uses the language default.
         rate_variable : str, optional
             Name of the rate array.  Default ``"k"``.
-        brac_format : str, optional
+        brac_format : str or None, optional
             Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
-            ``"<>"``.  Empty string uses the language default.
+            ``"<>"``.  ``None`` (default) uses the language default.
         use_cse : bool, optional
             Enable CSE.  Default ``True``.
         cse_var : str, optional
@@ -355,12 +357,14 @@ class Codegen:
             Text appended after the index of each CSE temporary name, as in
             the ``get_indexed_*`` getters.  Default ``""``.
         var_prefix : str, optional
-            Currently ignored: CSE declarations always use the language's
-            :meth:`~jaff.codegen._languages.Language.format_cse_declaration`.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses the language default.
-        line_end : str, optional
-            Line terminator override.  Empty string uses the language default.
+            Declaration type of each CSE temporary, used verbatim in place of the
+            language's own (``const double`` for C++), e.g. ``"amrex::Real "``
+            gives ``amrex::Real cse0 = ...;``.  ``""`` (default) keeps the
+            language's.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses the language default.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses the language default.
 
         Returns
         -------
@@ -395,7 +399,7 @@ class Codegen:
 
         # Emit CSE temporary definitions first so the main rate lines can
         # reference them without forward-declaration issues.
-        rates += self._cse_declarations(rate_expressions, cse_var, cse_suffix)
+        rates += self._cse_declarations(rate_expressions, cse_var, cse_suffix, var_prefix)
 
         for idx, expression in rate_expressions["expressions"]:
             _idx = idx[0]
@@ -455,10 +459,10 @@ class Codegen:
         species_var: str = "y",
         idx_prefix: str = "",
         idx_offset: int = -1,
-        brac_format: str = "",
+        brac_format: str | None = None,
         flux_var: str = "flux",
-        assignment_op: str = "",
-        line_end: str = "",
+        assignment_op: str | None = None,
+        line_end: str | None = None,
     ) -> str:
         """Generate flux-assignment code as a multi-line string.
 
@@ -486,15 +490,15 @@ class Codegen:
         idx_offset : int, optional
             Base index for array subscripts.  ``-1`` uses the language
             default (``0`` for C/C++/Python/Rust, ``1`` for Fortran/Julia/R).
-        brac_format : str, optional
+        brac_format : str or None, optional
             Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
-            ``"<>"``.  Empty string uses the language default.
+            ``"<>"``.  ``None`` (default) uses the language default.
         flux_var : str, optional
             Name of the flux array.  Default ``"flux"``.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses the language default.
-        line_end : str, optional
-            Line terminator override.  Empty string uses the language default.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses the language default.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses the language default.
 
         Returns
         -------
@@ -605,9 +609,9 @@ class Codegen:
         idx_prefix: str = "",
         derivative_prefix: str = "d",
         derivative_var: str | None = None,
-        brac_format: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
+        brac_format: str | None = None,
+        assignment_op: str | None = None,
+        line_end: str | None = None,
     ) -> str:
         """Generate ``dy/dt`` assignment code using a pre-computed flux array.
 
@@ -645,13 +649,13 @@ class Codegen:
         derivative_var : str or None, optional
             Explicit name for the derivative array (overrides
             *derivative_prefix* + *species_var*).  Default ``None``.
-        brac_format : str, optional
+        brac_format : str or None, optional
             Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
-            ``"<>"``.  Empty string uses the language default.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses the language default.
-        line_end : str, optional
-            Line terminator override.  Empty string uses the language default.
+            ``"<>"``.  ``None`` (default) uses the language default.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses the language default.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses the language default.
 
         Returns
         -------
@@ -924,10 +928,10 @@ class Codegen:
         cse_var: str = "cse",
         cse_suffix: str = "",
         ode_var: str = "f",
-        brac_format: str = "",
+        brac_format: str | None = None,
         def_prefix: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
+        assignment_op: str | None = None,
+        line_end: str | None = None,
     ) -> str:
         """Generate ODE right-hand side assignment code as a multi-line string.
 
@@ -956,16 +960,18 @@ class Codegen:
             the ``get_indexed_*`` getters.  Default ``""``.
         ode_var : str, optional
             Name of the output ODE array.  Default ``"f"``.
-        brac_format : str, optional
+        brac_format : str or None, optional
             Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
-            ``"<>"``.  Empty string uses the language default.
+            ``"<>"``.  ``None`` (default) uses the language default.
         def_prefix : str, optional
-            Currently ignored: CSE declarations always use the language's
-            :meth:`~jaff.codegen._languages.Language.format_cse_declaration`.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses the language default.
-        line_end : str, optional
-            Line terminator override.  Empty string uses the language default.
+            Declaration type of each CSE temporary, used verbatim in place of the
+            language's own (``const double`` for C++), e.g. ``"amrex::Real "``
+            gives ``amrex::Real cse0 = ...;``.  ``""`` (default) keeps the
+            language's.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses the language default.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses the language default.
 
         Returns
         -------
@@ -998,7 +1004,9 @@ class Codegen:
         )
 
         # Emit CSE temporaries before the main ODE assignments
-        ode_code += self._cse_declarations(ode_expressions, cse_var, cse_suffix)
+        ode_code += self._cse_declarations(
+            ode_expressions, cse_var, cse_suffix, def_prefix
+        )
 
         for idx, expression in ode_expressions["expressions"]:
             _idx = idx[0]
@@ -1098,10 +1106,10 @@ class Codegen:
         cse_var: str = "cse",
         cse_suffix: str = "",
         ode_var: str = "f",
-        brac_format: str = "",
+        brac_format: str | None = None,
         def_prefix: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
+        assignment_op: str | None = None,
+        line_end: str | None = None,
         thermal: str = "none",
         energy: str = "volumetric",
         radiation: bool = False,
@@ -1135,16 +1143,18 @@ class Codegen:
             the ``get_indexed_*`` getters.  Default ``""``.
         ode_var : str, optional
             Name of the output RHS array.  Default ``"f"``.
-        brac_format : str, optional
+        brac_format : str or None, optional
             Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
-            ``"<>"``.  Empty string uses the language default.
+            ``"<>"``.  ``None`` (default) uses the language default.
         def_prefix : str, optional
-            Currently ignored: CSE declarations always use the language's
-            :meth:`~jaff.codegen._languages.Language.format_cse_declaration`.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses the language default.
-        line_end : str, optional
-            Line terminator override.  Empty string uses the language default.
+            Declaration type of each CSE temporary, used verbatim in place of the
+            language's own (``const double`` for C++), e.g. ``"amrex::Real "``
+            gives ``amrex::Real cse0 = ...;``.  ``""`` (default) keeps the
+            language's.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses the language default.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses the language default.
         thermal : str, optional
             Thermal equation mode: ``"none"``, ``"dedt"`` (total dE/dt, see
             :meth:`get_dedt`) or ``"dtdt"`` (total dT/dt, see
@@ -1207,7 +1217,9 @@ class Codegen:
         )
 
         # Emit CSE temporaries before the main assignments
-        rhs_code += self._cse_declarations(rhs_expressions, cse_var, cse_suffix)
+        rhs_code += self._cse_declarations(
+            rhs_expressions, cse_var, cse_suffix, def_prefix
+        )
 
         for idx, expression in rhs_expressions["expressions"]:
             _idx = idx[0]
@@ -1296,10 +1308,10 @@ class Codegen:
         cse_var: str = "rcse",
         cse_suffix: str = "",
         radode_var: str = "f",
-        brac_format: str = "",
+        brac_format: str | None = None,
         def_prefix: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
+        assignment_op: str | None = None,
+        line_end: str | None = None,
         order: int = 0,
     ) -> str:
         """Generate radiation moment ODE assignment code as a multi-line string.
@@ -1322,16 +1334,18 @@ class Codegen:
             the ``get_indexed_*`` getters.  Default ``""``.
         radode_var : str, optional
             Name of the output radiation ODE array.  Default ``"f"``.
-        brac_format : str, optional
+        brac_format : str or None, optional
             Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
-            ``"<>"``.  Empty string uses the language default.
+            ``"<>"``.  ``None`` (default) uses the language default.
         def_prefix : str, optional
-            Currently ignored: CSE declarations always use the language's
-            :meth:`~jaff.codegen._languages.Language.format_cse_declaration`.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses the language default.
-        line_end : str, optional
-            Line terminator override.  Empty string uses the language default.
+            Declaration type of each CSE temporary, used verbatim in place of the
+            language's own (``const double`` for C++), e.g. ``"amrex::Real "``
+            gives ``amrex::Real cse0 = ...;``.  ``""`` (default) keeps the
+            language's.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses the language default.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses the language default.
         order : int, optional
             Radiation layout order (``0``–``3``) passed to
             :meth:`get_indexed_radodes`, which describes the layouts.
@@ -1381,7 +1395,9 @@ class Codegen:
         radode_expressions = self.get_indexed_radodes(
             order, use_cse, cse_var, cse_suffix=cse_suffix
         )
-        radode_code = self._cse_declarations(radode_expressions, cse_var, cse_suffix)
+        radode_code = self._cse_declarations(
+            radode_expressions, cse_var, cse_suffix, def_prefix
+        )
 
         for idx, expression in radode_expressions["expressions"]:
             _idx = idx[0]
@@ -1726,10 +1742,10 @@ class Codegen:
         cse_var: str = "cse",
         cse_suffix: str = "",
         jac_var: str = "J",
-        matrix_format: str = "",
+        matrix_format: str | None = None,
         var_prefix: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
+        assignment_op: str | None = None,
+        line_end: str | None = None,
         energy: str = "volumetric",
         radiation: bool = False,
         rad_order: int = 0,
@@ -1765,8 +1781,8 @@ class Codegen:
             the ``get_indexed_*`` getters.  Default ``""``.
         jac_var : str, optional
             Name of the Jacobian matrix.  Default ``"J"``.
-        matrix_format : str, optional
-            Override 2-D bracket/separator format.  Empty string uses the
+        matrix_format : str or None, optional
+            Override 2-D bracket/separator format.  ``None`` (default) uses the
             language default (``J[i][j]`` for C/C++/Python/Rust, ``J(i, j)``
             for Fortran, ``J[i, j]`` for Julia/R).  Valid values:
 
@@ -1781,12 +1797,14 @@ class Codegen:
             | ``"<>"`` / ``"<><>"`` | ``J<i><j>`` |
             | ``"<,>"`` | ``J<i, j>`` |
         var_prefix : str, optional
-            Currently ignored: CSE declarations always use the language's
-            :meth:`~jaff.codegen._languages.Language.format_cse_declaration`.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses the language default.
-        line_end : str, optional
-            Line terminator override.  Empty string uses the language default.
+            Declaration type of each CSE temporary, used verbatim in place of the
+            language's own (``const double`` for C++), e.g. ``"amrex::Real "``
+            gives ``amrex::Real cse0 = ...;``.  ``""`` (default) keeps the
+            language's.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses the language default.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses the language default.
         energy : str, optional
             Evolved internal-energy form when *thermal* is ``"dedt"`` (see
             :meth:`get_indexed_jacobian`).  Default ``"volumetric"``.
@@ -1845,7 +1863,9 @@ class Codegen:
             rad_order=rad_order,
         )
 
-        jac_code = self._cse_declarations(jac_expressions, cse_var, cse_suffix)
+        jac_code = self._cse_declarations(
+            jac_expressions, cse_var, cse_suffix, var_prefix
+        )
 
         # Emit one assignment per Jacobian element (may reference the CSE temps)
         for [i, j], expr in jac_expressions["expressions"]:
@@ -2051,14 +2071,23 @@ class Codegen:
         return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
 
     def _cse_declarations(
-        self, printed: IndexedReturn, cse_var: str, cse_suffix: str = ""
+        self, printed: IndexedReturn, cse_var: str, cse_suffix: str = "", prefix: str = ""
     ) -> str:
-        """One declaration line per CSE temporary of *printed*."""
-        return "".join(
-            self.lang.format_cse_declaration(f"{cse_var}{idx[0]}{cse_suffix}", expr)
-            + "\n"
-            for idx, expr in printed["extras"]["cse"]
-        )
+        """One declaration line per CSE temporary of *printed*.
+
+        A non-empty *prefix* (e.g. ``"amrex::Real "``) replaces the language's
+        own declaration type (``const double`` for C++), used verbatim.
+        """
+        lines = []
+        for idx, expr in printed["extras"]["cse"]:
+            name = f"{cse_var}{idx[0]}{cse_suffix}"
+            if prefix:
+                lang = self.lang
+                lines.append(f"{prefix}{name} {lang.assignment_op} {expr}{lang.line_end}")
+            else:
+                lines.append(self.lang.format_cse_declaration(name, expr))
+
+        return "".join(line + "\n" for line in lines)
 
     @staticmethod
     def __convert_unknown_derivatives(
