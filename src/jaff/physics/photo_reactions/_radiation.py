@@ -68,7 +68,7 @@ field is therefore an energy density in erg/cm³.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING, Any, List, Tuple
 
 import numpy as np
 import sympy as sp
@@ -846,6 +846,28 @@ class Radiation:
             )
             for grp in self.groups
         ]
+
+    def group_property(self, name: str) -> List[Any]:
+        """Value of the :class:`RadiationGroup` attribute *name* for every group.
+
+        Parameters
+        ----------
+        name : str
+            Attribute of :class:`RadiationGroup`, e.g. ``"profile_idx"``,
+            ``"lower"`` or ``"upper"``.
+
+        Returns
+        -------
+        list
+            One value per group, in ``self.groups`` order.  The ``upper`` of the
+            last group is ``sympy.oo`` when the last band edge is ``"inf"``.
+
+        Raises
+        ------
+        AttributeError
+            If :class:`RadiationGroup` has no attribute *name*.
+        """
+        return [getattr(grp, name) for grp in self.groups]
 
     @property
     def total_emissivity(self) -> sp.Expr | None:
