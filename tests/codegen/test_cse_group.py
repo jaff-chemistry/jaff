@@ -34,6 +34,15 @@ PAIRS = [
     ),
     pytest.param("photo", {"thermal": "dtdt"}, id="photorates"),
     pytest.param("rad", {"thermal": "dtdt", "radiation": True, "rad_order": 2}, id="rad"),
+    # dE/dt with radiation, as a solver evolving specific energy and photon bands uses.
+    *(
+        pytest.param(
+            "rad",
+            {"thermal": "dedt", "energy": e, "radiation": True, "rad_order": 2},
+            id=f"rad-dedt-{e}",
+        )
+        for e in ("volumetric", "specific")
+    ),
 ]
 
 
