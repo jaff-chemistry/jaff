@@ -1,0 +1,5 @@
+[network.radiation]
+bands = [13.6, 26.0]
+profile_index = 0
+mode = "nph"
+rsl = "c_hat"

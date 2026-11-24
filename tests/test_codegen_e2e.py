@@ -36,7 +36,13 @@ REPO = Path(__file__).resolve().parent.parent
 FIXTURE_CONFIG = Path(__file__).parent / "fixtures" / "jaffgen.toml"
 GOW = REPO / "networks" / "GOW" / "GOW.jet"
 # Built-in template collections; each file names its language ($$JAFF LANG or extension).
-ALL_TEMPLATES = ["python_solve_ivp", "microphysics", "fortran_dlsodes", "kokkos_ode"]
+ALL_TEMPLATES = [
+    "python_solve_ivp",
+    "microphysics",
+    "quokka",
+    "fortran_dlsodes",
+    "kokkos_ode",
+]
 
 
 # --------------------------------------------------------------------------- #
