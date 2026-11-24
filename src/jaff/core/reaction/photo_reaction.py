@@ -322,7 +322,7 @@ class PhotoReaction:
         """
         from ...physics.photo_reactions._photo_band import PhotoBand
 
-        energy, decay, absorption = self._cross_section_data(radiation.ph_E)
+        energy, decay, absorption = self.cross_section_data(radiation.ph_E)
         profile = (
             radiation.get_photden_profile(energy)
             if isinstance(energy, np.ndarray)
@@ -371,23 +371,41 @@ class PhotoReaction:
                     k=k,
                     xsec=band_avg,
                     xsec_frac=band_avg / band_total if band_total != 0.0 else 0.0,
+                    rate=Float(0.0),
                 )
             )
             # With an absorption table, the rate follows the decay cross section.
             if absorption is not None:
                 rate *= decay_avg / band_avg if band_avg != 0.0 else 0.0
             band_rate += rate
+            bands[-1] = replace(bands[-1], rate=rate)
 
         return band_rate, xsec_total, bands
 
-    def _cross_section_data(
+    def cross_section_data(
         self, ph_E: Symbol
     ) -> tuple[np.ndarray | Symbol, np.ndarray | Expr, np.ndarray | None]:
         """``(energy, decay, absorption)`` of :attr:`xsec` for the band integrals.
 
         *energy* is the tabulated grid (eV), or *ph_E* for a symbolic cross
-        section; *absorption* is the photo-absorption table, when the cross
-        section has one.
+        section; *decay* the photodecay cross section on it (cm²); *absorption*
+        the photo-absorption table, when the cross section has one.
+
+        Parameters
+        ----------
+        ph_E : sympy.Symbol
+            The photon-energy symbol, returned as *energy* for a symbolic cross
+            section.
+
+        Returns
+        -------
+        tuple
+            ``(energy, decay, absorption)``.
+
+        Raises
+        ------
+        ValueError
+            If the reaction has no cross section, or no photodecay one.
         """
         xsec = self.xsec
         if xsec is None:
@@ -411,8 +429,9 @@ class PhotoReaction:
     def expressions(self) -> list[Expr]:
         """The expressions the component holds.
 
-        Its :attr:`band_rate`, :attr:`shielding_factor`, each band's rate coefficient ``k`` and symbolic
-        band cross section, and a symbolic :attr:`xsec_total`.
+        Its :attr:`band_rate`, :attr:`shielding_factor`, each band's loss
+        coefficient ``k``, rate term and, when symbolic, cross section, and a
+        symbolic :attr:`xsec_total`.
 
         Returns
         -------
@@ -423,7 +442,7 @@ class PhotoReaction:
         if self.shielding_factor is not None:
             exprs.append(self.shielding_factor)
         for band in self.bands or []:
-            exprs.append(band.k)
+            exprs += [band.k, band.rate]
             if isinstance(band.xsec, Expr):
                 exprs.append(band.xsec)
         if isinstance(self.xsec_total, Expr):
@@ -548,9 +567,9 @@ class PhotoReaction:
 
 
 def _substitute_band(band: PhotoBand, mapping: Mapping[Basic, Basic]) -> PhotoBand:
-    """*band* with *mapping* applied (``xreplace``) to its ``k`` and symbolic ``xsec``."""
-    xsec = band.xsec
-    if isinstance(xsec, Expr):
-        xsec = cast(Expr, xsec.xreplace(mapping))
+    """*band* with *mapping* applied (``xreplace``) to its expressions."""
 
-    return replace(band, k=cast(Expr, band.k.xreplace(mapping)), xsec=xsec)
+    def sub(value: Any) -> Any:
+        return cast(Expr, value.xreplace(mapping)) if isinstance(value, Expr) else value
+
+    return replace(band, k=sub(band.k), xsec=sub(band.xsec), rate=sub(band.rate))

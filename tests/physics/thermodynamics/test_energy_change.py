@@ -44,7 +44,7 @@ def _reaction(net):
 def test_configured_plugin_sets_the_energy_change(tmp_path):
     net = _network(tmp_path, {"type": "constant_test", "value": 2e-12})
 
-    assert _reaction(net).dE == Float(2e-12)
+    assert _reaction(net).energy.per_event == Float(2e-12)
 
 
 def test_the_energy_change_enters_the_chemical_energy_rate(tmp_path):
@@ -54,7 +54,7 @@ def test_the_energy_change_enters_the_chemical_energy_rate(tmp_path):
 
 
 def test_a_plugin_bound_to_the_reaction_applies(tmp_path):
-    assert _reaction(_network(tmp_path, {"type": "bound_test"})).dE == Float(-1e-12)
+    assert _reaction(_network(tmp_path, {"type": "bound_test"})).energy.per_event == Float(-1e-12)
 
 
 def test_the_jfunc_deltaE_wins_over_the_plugin(tmp_path):
@@ -64,11 +64,11 @@ def test_the_jfunc_deltaE_wins_over_the_plugin(tmp_path):
         jfunc="@function deltaE0()\n    @return 3e-12\n",
     )
 
-    assert float(_reaction(net).dE) == pytest.approx(3e-12)
+    assert float(_reaction(net).energy.per_event) == pytest.approx(3e-12)
 
 
 def test_without_a_plugin_or_jfunc_the_energy_change_is_zero(tmp_path):
-    assert float(_reaction(_network(tmp_path)).dE) == pytest.approx(0.0)
+    assert float(_reaction(_network(tmp_path)).energy.per_event) == pytest.approx(0.0)
 
 
 def test_unknown_type_is_rejected(tmp_path):

@@ -70,6 +70,7 @@ from ..species import Specie, Species
 from .config import PhotoConfig, ReactionConfig
 from .photo_reaction import PhotoReaction
 from .rate import Rate
+from .reaction_energy import ReactionEnergy
 from .reaction_radiation import ReactionRadiation
 from .types import RateSegment, RateSegments, ReactionSource
 
@@ -131,10 +132,6 @@ class Reaction:
         segment; reactions merged across disjoint ranges accumulate several,
         collapsed into ``rate.coefficient`` (``rate_segments.equivalent_rate``).
         Change the rates through it (``map_rates``, ``Reactions.add_rate``).
-    dE : Basic
-        SymPy expression for the energy released per reaction event (erg),
-        from a ``.jfunc`` ``deltaE<N>`` function if there is one; zero
-        otherwise.
     verbatim : str
         Human-readable string ``"R1 + R2 -> P1 + P2"``.
     index : int
@@ -181,6 +178,12 @@ class Reaction:
         and its per-group integrals (``rad.group_yields``, set when a
         radiation field is configured).  Any reaction type can emit, not only
         photo reactions.  See :class:`ReactionRadiation`.
+    energy : ReactionEnergy
+        The reaction's energy component: the energy one event adds to the gas
+        (``energy.per_event``, erg: the ``.jfunc`` ``deltaE<N>``, else the
+        energy-change plugin, else the file's value, else 0) and the
+        reaction's term of ``dE/dt`` (``energy.change()``).  See
+        :class:`ReactionEnergy`.
 
     Notes
     -----
@@ -261,7 +264,9 @@ class Reaction:
         ParserError
             For invalid photo-reaction or shielding configuration (e.g. a
             ``pi_database`` set on a reaction whose cross section comes from
-            a ``photoCrossSection<N>`` function).
+            a ``photoCrossSection<N>`` function), or an energy change depending
+            on ``ph_E`` with no band photons to average it over (see
+            :meth:`ReactionEnergy.compute`).
         """
         self.logger = JaffLogger().get_logger()
         self.net: "Network" = net
@@ -277,8 +282,9 @@ class Reaction:
             self, [RateSegment(rate_coefficient, tmin, tmax, source)]
         )
         model_dE = self.model("energy_change")
-        self.dE: Expr = (
-            model_dE if model_dE is not None else (dE if dE is not None else Float(0.0))
+        self.energy: ReactionEnergy = ReactionEnergy(
+            self,
+            model_dE if model_dE is not None else (dE if dE is not None else Float(0.0)),
         )
         self.rad: ReactionRadiation = ReactionRadiation(self)
         # verbatim is the "R1 + R2 -> P1 + P2" form built from the species
@@ -298,6 +304,7 @@ class Reaction:
             self.photo.compute()
 
         self.rad.compute()
+        self.energy.compute()
 
     def __repr__(self):
         """Return detailed string representation of this reaction.
@@ -469,7 +476,7 @@ class Reaction:
     def expressions(self) -> list[Expr]:
         """Every expression the reaction and its components hold.
 
-        Its rate segments, :attr:`dE`, then those of :attr:`rad` and
+        Its rate segments, then those of :attr:`energy`, :attr:`rad` and
         :attr:`photo` (see their ``expressions``).  :meth:`substitute` changes
         exactly these.
 
@@ -478,7 +485,8 @@ class Reaction:
         list[Expr]
             The expressions.
         """
-        exprs = [seg.rate for seg in self.rate_segments] + [self.dE]
+        exprs = [seg.rate for seg in self.rate_segments]
+        exprs += self.energy.expressions()
         exprs += self.rad.expressions()
         if self.photo is not None:
             exprs += self.photo.expressions()
@@ -494,7 +502,7 @@ class Reaction:
             Old symbol or expression to its replacement.
         """
         self.rate_segments.map_rates(lambda rate: cast(Expr, rate.xreplace(mapping)))
-        self.dE = cast(Expr, self.dE.xreplace(mapping))
+        self.energy.substitute(mapping)
         self.rad.substitute(mapping)
         if self.photo is not None:
             self.photo.substitute(mapping)

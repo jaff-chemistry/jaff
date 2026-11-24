@@ -136,7 +136,7 @@ def test_catalogue_rates_take_the_form(net):
 def test_reduced_heating_gives_the_expanded_one(net, name):
     # Set before the reduced form is first built (the expanded one is built on load).
     for r in net.reactions:
-        r.dE = 1e-12
+        r.energy.per_event = sp.Float(1e-12)
     reduced = getattr(net.thermodynamics, name)("reduced").volumetric
     expected = sum(1e-12 * r.rate.expanded for r in net.reactions)
 

@@ -333,6 +333,10 @@ class Thermodynamics:
     def _get_dEdt_chemical(self, form: str) -> DEDt:
         """Build the chemical heating rate from the reactions.
 
+        Each reaction's term is ``reaction.energy.change(form)``: its energy
+        change per event times its rate, averaged over the radiation bands when
+        the energy change depends on the photon energy ``ph_E``.
+
         Returns
         -------
         DEDt
@@ -340,7 +344,7 @@ class Thermodynamics:
         """
         dEdt = Float(0.0)
         for r in self.net.reactions:
-            dEdt += r.dE * r.rate.form(form)
+            dEdt += r.energy.change(form)
 
         return DEDt(dEdt, self.net, form)
 

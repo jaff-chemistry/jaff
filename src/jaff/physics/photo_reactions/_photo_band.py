@@ -49,6 +49,11 @@ class PhotoBand:
         average is zero.  Not a fraction of the rate: the values need not sum
         to 1 over the bands and a band where σ is above its spectrum average
         exceeds 1.
+    rate : Expr
+        The band's term of the reaction's rate coefficient
+        (``reaction.photo.band_rate`` is the sum over the bands):
+        ``c · photden[i] · <σ>_i`` with the photodecay cross section, and any
+        shielding.
 
     Examples
     --------
@@ -68,3 +73,4 @@ class PhotoBand:
     k: Expr
     xsec: float | Expr
     xsec_frac: float | Expr
+    rate: Expr

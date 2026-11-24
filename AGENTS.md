@@ -392,7 +392,12 @@ docs/           # Documentation
   reaction only: `ReactionConfig` and `ReactionsConfig` share `_ReactionSettings`, only the
   former has `thermodynamics`). `reaction.model(kind)` (`MODEL_KINDS`: `energy_change` ->
   `.jfunc` `deltaE`) gives the `.jfunc` function, else the configured plugin's value, else
-  `None`; `reaction.dE` falls back to the file's value, then 0. Test-only plugins live in
+  `None`; `reaction.energy` (`ReactionEnergy`, `core/reaction/reaction_energy.py`) holds the
+  result as `per_event` (falling back to the file's value, then 0) and gives the reaction's
+  `dE/dt` term, `energy.change(form)`; a `per_event` in `ph_E` is averaged over the band photons the
+  reaction absorbs (`Radiation.absorbed_average`, per band, photon-weighted in both modes) or emits
+  (`Radiation.emitted_average`, `Y/E`); both or
+  neither is a `ParserError` (spec .superpowers/specs/2026-11-24-reaction-energy.md). Test-only plugins live in
   `tests/energy_change_plugins.py` and are installed per test (`install(monkeypatch)`),
   never into the real registry (they would leak into the committed-schema test). Global
   heating/cooling: `physics/thermodynamics/heating_cooling_rate/` (`HeatingCoolingRateFunction`

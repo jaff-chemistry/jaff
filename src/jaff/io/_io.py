@@ -201,7 +201,7 @@ def to_jaff_file(filename: str | Path, net: "Network"):
                     }
                     for s in r.rate_segments
                 ],
-                "dE": encode_maybe_sympy(r.dE),
+                "dE": encode_maybe_sympy(r.energy.per_event),
                 "custom_rad_rate": r.photo is not None and r.photo.custom_rad_rate,
                 "original_string": r.source.line,
                 "index": r.index,

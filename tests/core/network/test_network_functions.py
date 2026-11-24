@@ -114,7 +114,7 @@ class TestReactionFunction:
         net = func_network("@function deltaE0(n_e)\n@return 2*n_e\n")
 
         assert net.reactions[0].function("deltaE") == 2 * _std(net, "n_e")
-        assert net.reactions[0].dE == 2 * _std(net, "n_e")
+        assert net.reactions[0].energy.per_event == 2 * _std(net, "n_e")
 
     def test_none_without_one(self, func_network):
         net = func_network("")

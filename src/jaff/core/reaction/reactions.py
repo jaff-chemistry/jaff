@@ -739,17 +739,6 @@ class Reactions(Catalogue[Reaction]):
         """
         return Vector([r.tmax for r in self])
 
-    def dE(self) -> Vector[Basic]:
-        """Return a ``Vector`` of energy-change SymPy expressions (erg).
-
-        Returns
-        -------
-        Vector[Basic]
-            ``Reaction.dE`` of each reaction (energy released per reaction
-            event), in catalogue order.
-        """
-        return Vector([r.dE for r in self])
-
     def serialized(self) -> Vector[str]:
         """Return a ``Vector`` of name-level serialized reaction strings.
 

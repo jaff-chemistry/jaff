@@ -36,13 +36,13 @@ class TestLink:
     def test_dE_may_use_its_own_rate(self, link_network):
         net = link_network(H.format("4.0"), "@function deltaE0()\n@return 2*rc_0\n")
 
-        assert float(net.reactions[0].dE) == pytest.approx(8.0)
+        assert float(net.reactions[0].energy.per_event) == pytest.approx(8.0)
 
     def test_dE_uses_the_final_target_rate(self, link_network):
         jfunc = "@function deltaE0()\n@return rc_1\n"
         net = link_network(H.format("1.0") + C.format("3*rc_2") + OX.format("5.0"), jfunc)
 
-        assert float(net.reactions[0].dE) == pytest.approx(15.0)
+        assert float(net.reactions[0].energy.per_event) == pytest.approx(15.0)
 
     def test_group_yield_uses_the_target_rate(self, link_network):
         jfunc = "@function spectralYield0()\n@return 1e-12*rc_1\n"
@@ -101,4 +101,4 @@ class TestOwnership:
 
         assert all(not e.has(x) for e in rxn.expressions())
         assert float(rxn.rate.coefficient) == pytest.approx(3.0)
-        assert float(rxn.dE) == pytest.approx(2.0)
+        assert float(rxn.energy.per_event) == pytest.approx(2.0)

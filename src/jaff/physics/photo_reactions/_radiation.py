@@ -80,7 +80,7 @@ field is therefore an energy density in erg/cm³.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, List
+from typing import TYPE_CHECKING, ClassVar, List, cast
 
 import numpy as np
 import sympy as sp
@@ -1181,6 +1181,140 @@ class Radiation:
             )
             for grp in self.groups
         ]
+
+    def absorbed_average(
+        self,
+        expr: sp.Expr,
+        xsec: np.ndarray | sp.Expr,
+        energy: np.ndarray | sp.Symbol,
+    ) -> List[sp.Expr]:
+        """*expr* (in :attr:`ph_E`) averaged over the photons absorbed from each group.
+
+        ``<f>_i = ∫_i σ n f dE / ∫_i σ n dE``, with the absorbing cross section
+        ``σ`` and the group's photon spectrum ``n``: the weight of a reaction rate,
+        which counts photons, in either mode.  A group where ``σ`` averages to
+        zero gives 0; an *expr* free of ``ph_E`` is returned for every group.
+
+        Parameters
+        ----------
+        expr : sympy.Expr
+            The quantity per absorbed photon, e.g. an energy change per event.
+        xsec : numpy.ndarray or sympy.Expr
+            The cross section (cm²): tabulated on the *energy* grid, or an
+            expression in *energy*, the :attr:`ph_E` symbol.
+        energy : numpy.ndarray or sympy.Symbol
+            The photon-energy grid (eV) of a tabulated *xsec*, or :attr:`ph_E`.
+
+        Returns
+        -------
+        list[sympy.Expr]
+            One average per group, in ``self.groups`` order.
+
+        Raises
+        ------
+        ValueError
+            If, with a tabulated *xsec*, *expr* mixes ``ph_E`` with other
+            quantities other than as a polynomial in ``ph_E``.
+        """
+        if self.ph_E not in expr.free_symbols:
+            return [expr for _ in self.groups]
+
+        if isinstance(energy, np.ndarray):
+            profile = self.get_photden_profile(energy)
+            # A tabulated energy grid comes with a tabulated cross section.
+            terms = self._tabulated_terms(expr, energy, cast(np.ndarray, xsec))
+        else:
+            profile = None
+            terms = [(sp.Float(1.0), xsec * expr)]
+
+        values: List[sp.Expr] = []
+        for group in self.groups:
+            norm = self.get_group_average_cross_section(xsec, energy, group, profile)
+            if norm == 0.0:
+                values.append(sp.Float(0.0))
+                continue
+            values.append(
+                sum(
+                    (
+                        coeff
+                        * self.get_group_average_cross_section(w, energy, group, profile)
+                        / norm
+                        for coeff, w in terms
+                    ),
+                    sp.Float(0.0),
+                )
+            )
+
+        return values
+
+    def _tabulated_terms(
+        self, expr: sp.Expr, energy: np.ndarray, xsec: np.ndarray
+    ) -> List[tuple[sp.Expr, np.ndarray]]:
+        """``expr · σ`` on the table grid as ``(coefficient, weighted table)`` terms.
+
+        A function of ``ph_E`` alone is one term (coefficient 1); a polynomial in
+        ``ph_E`` one term per power, its (possibly symbolic) coefficient kept
+        outside the average.
+        """
+        if expr.free_symbols == {self.ph_E}:
+            values = sp.lambdify(self.ph_E, expr, "numpy")(energy)
+            return [(sp.Float(1.0), xsec * np.broadcast_to(values, energy.shape))]
+        if expr.is_polynomial(self.ph_E):
+            return [
+                (coeff, xsec * energy**power)
+                for (power,), coeff in sp.Poly(expr, self.ph_E).terms()
+            ]
+
+        raise ValueError(
+            f"{expr} mixes ph_E with other quantities, so it cannot be averaged over a "
+            "tabulated cross section: write it as a polynomial in ph_E, or use a "
+            "cross section in ph_E (photoCrossSection<N>)"
+        )
+
+    def emitted_average(self, expr: sp.Expr, spectral_yield: sp.Expr) -> sp.Expr:
+        """*expr* (in :attr:`ph_E`) averaged over the photons a yield emits into the groups.
+
+        ``<f> = Σ_i ∫_i N f dE / Σ_i ∫_i N dE`` with the emitted photons per eV
+        ``N(E) = Y(E) / E``, over the groups only: photons outside them are not
+        part of the field.
+
+        Parameters
+        ----------
+        expr : sympy.Expr
+            The quantity per emitted photon, e.g. an energy change per event.
+        spectral_yield : sympy.Expr
+            The emitted energy per event per unit photon energy, ``Y`` (erg eV⁻¹),
+            in :attr:`ph_E` (a reaction's ``spectralYield<N>``).
+
+        Returns
+        -------
+        sympy.Expr
+            The average (other symbols, e.g. ``tgas``, stay symbolic).
+
+        Raises
+        ------
+        ValueError
+            If the yield emits no photons inside the groups, or an integral with
+            other symbols has no closed form.
+        """
+        photons = spectral_yield / self.ph_E
+
+        def total(integrand: sp.Expr) -> sp.Expr:
+            return sp.sympify(
+                sum(
+                    smart_integrate(integrand, self.ph_E, (grp.lower, grp.upper))
+                    for grp in self.groups
+                )
+            )
+
+        norm = total(photons)
+        if norm.is_zero:
+            raise ValueError(
+                "the spectral yield emits no photons inside the radiation bands, so a "
+                "quantity per emitted photon (ph_E) cannot be averaged"
+            )
+
+        return total(photons * expr) / norm
 
     @property
     def total_emissivity(self) -> sp.Expr | None:
