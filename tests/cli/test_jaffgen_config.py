@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+import jaff.cli.jaffgen.config as config_module
 from jaff.cli.jaffgen.config import JaffgenConfig, JaffgenTomlConfig, load_jaffgen_config
 from jaff.core.network.config import JaffTomlConfig
 from jaff.errors import ParserError
@@ -229,23 +230,41 @@ class TestLoadJaffgenConfig:
             _network(cfg)
 
 
+BUNDLE = '[network.radiation]\nbands = [13.6, "inf"]\n'
+
+
+@pytest.fixture
+def bundled_template(tmp_path, monkeypatch):
+    """A built-in template "bundled" whose jaffgen.toml sets radiation bands.
+
+    Test-owned, so the tests do not depend on what the real templates bundle.
+    """
+    templates = tmp_path / "templates"
+    (templates / "bundled").mkdir(parents=True)
+    (templates / "bundled" / "jaffgen.toml").write_text(BUNDLE)
+    monkeypatch.setattr(config_module, "TEMPLATES_DIR", templates)
+    monkeypatch.setattr(config_module, "predefined_templates", lambda: {"bundled"})
+
+    return "bundled"
+
+
 class TestBundledTemplateConfig:
-    def test_template_bundle_is_the_file_layer(self, project):
+    def test_template_bundle_is_the_file_layer(self, project, bundled_template):
         root, _ = project
         cfg = load_jaffgen_config(
-            None, {"jaffgen": {"template": "microphysics"}}, cwd=root
+            None, {"jaffgen": {"template": bundled_template}}, cwd=root
         )
 
         assert cfg.config_file is not None
         assert cfg.config_file.name == "jaffgen.toml"
         assert cfg.network["radiation"]["bands"] == [13.6, "inf"]
 
-    def test_cli_key_needing_bundle_keys_is_valid(self, project):
+    def test_cli_key_needing_bundle_keys_is_valid(self, project, bundled_template):
         # bugs.md #46: --set network.radiation.c=1e10 with a template whose
         # bundle sets bands used to fail ("bands: required key missing").
         root, _ = project
         cli = {
-            "jaffgen": {"template": "microphysics", "network_file": "net/net.jet"},
+            "jaffgen": {"template": bundled_template, "network_file": "net/net.jet"},
             "network": {"radiation": {"c": 1e10}},
         }
 
@@ -254,12 +273,12 @@ class TestBundledTemplateConfig:
         assert cfg.network["radiation"]["bands"] == [13.6, "inf"]
         assert cfg.network["radiation"]["c"] == pytest.approx(1e10)
 
-    def test_explicit_config_wins_over_bundle(self, project):
+    def test_explicit_config_wins_over_bundle(self, project, bundled_template):
         root, write = project
         cfg_file = write("run/jaffgen.toml", "[jaffgen]\n")
 
         cfg = load_jaffgen_config(
-            cfg_file, {"jaffgen": {"template": "microphysics"}}, cwd=root
+            cfg_file, {"jaffgen": {"template": bundled_template}}, cwd=root
         )
 
         assert cfg.config_file == cfg_file
