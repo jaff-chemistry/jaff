@@ -2,7 +2,7 @@
 site_name = "JAFF Documentation"
 site_description = "Just Another Fancy Format - An astrochemical network parser and code generator"
 site_url = "https://jaff-chemistry.github.io/jaff"
-authors = ["JAFF Team"]
+site_author = "JAFF Team"
 copyright = "Copyright &copy; 2025 JAFF Team"
 docs_dir = "docs"
 site_dir = "site"
@@ -10,7 +10,7 @@ dev_addr = "localhost:8000"
 extra_css = ["stylesheets/extra.css?v=16"]
 repo_url = "https://github.com/jaff-chemistry/jaff"
 repo_name = "jaff-chemistry/jaff"
-repo = "fontawesome/brands/git-alt"
+edit_uri = "edit/main/docs/"
 extra_javascript = [
   "javascripts/mathjax.js",
   "https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js",
@@ -683,11 +683,6 @@ nav = [
   ] },
   { "About" = ["about/license.md"] }
 ]
-
-[project.repository]
-url = "https://github.com/jaff-chemistry/jaff"
-name = "jaff-chemistry/jaff"
-edit_uri = "edit/main/docs/"
 
 # -----------------------------------------------------------------------------
 # THEME CONFIGURATION
