@@ -1,6 +1,9 @@
+# ABOUTME: KROME network parser: @format/@var directives and comma-delimited reactions
+# ABOUTME: Seeds KROME's built-in temperature shortcuts (invT, lnTe, ...) and shorthand globals
+
 """KROME parser: ``@format``/``@var`` directives + comma-delimited reactions."""
 
-from sympy import Basic, parse_expr
+from sympy import Basic, Piecewise, parse_expr
 from sympy.core.function import AppliedUndef
 
 from ......errors import ParserError
@@ -18,19 +21,37 @@ class KromeParser(Parser):
     name = "krome"
     priority = 10
 
-    # Canonical JAFF symbol aliases for common Fortran/KROME shorthand
-    # variables such as ``t32``, ``te``, ``invtgas``, and ``sqrtgas``, so that
-    # they are resolved automatically during rate normalization.  Order
-    # matters: compound aliases (invt32, invte) must be listed before the
-    # simpler ones they depend on so that resolve_symbolic_dependencies can
-    # substitute correctly.
+    # Canonical JAFF symbol aliases for KROME's built-in temperature shortcuts
+    # (``get_Tshortcut`` in KROME's kromelib.py: available in every rate without
+    # an @var) and other common shorthand.  Keys are lower-case, as the rates'
+    # symbols are.  They seed the parser's globals, which Network substitutes
+    # into the rates; an @var of the same name overrides one.  Order does not
+    # matter: resolve_symbolic_dependencies resolves aliases that reference each
+    # other (invt32 -> t32) depth-first.
     BASE_GLOBALS = {
-        "invt32": "1e0 / t32",
-        "invte": "1e0 / te",
-        "t32": "tgas/3e2",
+        "logt": "log(tgas) / log(10)",
+        "lnt": "log(tgas)",
         "te": "tgas*8.617343e-5",
+        "lnte": "log(te)",
+        "t32": "tgas/3e2",
+        "t3": "t32",
+        "t4": "tgas*1e-4",
+        "invt": "1e0 / tgas",
+        "invt32": "1e0 / t32",
         "invtgas": "1e0 / tgas",
+        "invte": "1e0 / te",
         "sqrtgas": "sqrt(tgas)",
+        "invsqrt32": "1e0 / sqrt(t32)",
+        "invsqrt": "1e0 / sqrtgas",
+        "sqrt32": "sqrt(t32)",
+        "tgas2": "tgas**2",
+        "tgas3": "tgas**3",
+        "tgas4": "tgas**4",
+        "t0": "288e0",
+        "t02": "t0**2",
+        "t03": "t0**3",
+        "t04": "t0**4",
+        "t0inv": "1e0 / t0",
         "user_tdust": "tdust",
         "user_av": "av",
         "get_hnuclei(n)": "n_H_nuc",
@@ -64,6 +85,7 @@ class KromeParser(Parser):
                     ParsedRecord(
                         **fields,
                         source_index=rec.source_index,
+                        nline=rec.nline,
                         sub_order=rec.sub_order,
                     )
                 )
@@ -75,29 +97,44 @@ class KromeParser(Parser):
         return ParseResult(reactions, globals_)
 
     def post_process(self, network) -> None:
-        """Number photo reactions: ``krome_photo(lo, hi)`` → ``photorates(n, lo, hi)``.
+        """Resolve the placeholders the reaction lines left in their rates.
 
-        ``n`` is the reaction's 1-based position in
-        ``network.reactions.with_type("photo")``, so every format numbers photo
-        reactions the same way.  A photo reaction without the placeholder (e.g.
-        one whose rate comes from a ``.jfunc`` ``chemRate``) leaves its number
-        unused.
+        - ``krome_if(cond, k)`` (a conditional rate ``if(cond): k``) becomes
+          ``Piecewise((k, cond), (0, True))``: the rate while the condition holds,
+          else 0, as KROME computes it.
+        - Photo reactions are numbered: ``krome_photo(lo, hi)`` →
+          ``photorates(n, lo, hi)``.  ``n`` is the reaction's 1-based position in
+          ``network.reactions.with_type("photo")``, so every format numbers photo
+          reactions the same way.  A photo reaction without the placeholder (e.g.
+          one whose rate comes from a ``.jfunc`` ``chemRateCoeff``) leaves its
+          number unused.
 
         Raises
         ------
         ParserError
             If a placeholder is left in any of this parser's reactions.
         """
-        for n, rea in enumerate(network.reactions.with_type("photo"), start=1):
-            for seg in rea.rate_segments:
-                seg.rate = self._number_photo(seg.rate, n)
+        for rea in network.reactions.with_format(self.name):
+            rea.rate_segments.map_rates(self._resolve_conditions)
 
-            rea.rate_coefficient = self._number_photo(rea.rate_coefficient, n)
+        for n, rea in enumerate(network.reactions.with_type("photo"), start=1):
+            rea.rate_segments.map_rates(lambda rate, n=n: self._number_photo(rate, n))
 
         for rea in network.reactions.with_format(self.name):
-            exprs = [rea.rate_coefficient, *(seg.rate for seg in rea.rate_segments)]
+            exprs = [rea.rate.coefficient, *(seg.rate for seg in rea.rate_segments)]
             if any(self._placeholders(expr) for expr in exprs):
                 raise ParserError(f"Unresolved photo placeholder in {rea}")
+
+    @staticmethod
+    def _resolve_conditions(expr):
+        """Every ``krome_if(cond, k)`` in *expr* as ``Piecewise((k, cond), (0, True))``."""
+        if not isinstance(expr, Basic):
+            return expr
+
+        return expr.replace(
+            lambda e: isinstance(e, AppliedUndef) and e.func.__name__ == "krome_if",
+            lambda e: Piecewise((e.args[1], e.args[0]), (0, True)),
+        )
 
     @staticmethod
     def _placeholders(expr) -> list:

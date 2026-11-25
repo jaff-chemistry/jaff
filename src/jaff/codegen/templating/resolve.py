@@ -16,10 +16,13 @@ class Resolved:
     Attributes:
         options: Layered options of the block.
         replacements: Compiled REPLACE pairs of *options*, in order.
+        indent: Indentation of the directive's first header line, for commands
+            without a body whose output stands in for the directive (``CALL``).
     """
 
     options: Options
     replacements: List[Tuple[Pattern[str], str]]
+    indent: str = ""
 
 
 def _merge(target: Options, source: Options, line: Optional[int]) -> None:

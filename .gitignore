@@ -11,10 +11,12 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+tmp/
 build/
 develop-eggs/
 dist/
 downloads/
+figures/
 eggs/
 .eggs/
 lib/
@@ -35,6 +37,10 @@ MANIFEST
 upload/
 builds/
 site/
+
+# generated docs (python -m jaff._utils.api_docs, python -m jaff.config.reference)
+docs/reference/
+docs/user-guide/configuration/reference.md
 generated*/
 __marimo__/
 

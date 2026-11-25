@@ -1,3 +1,6 @@
+# ABOUTME: UDFA (UMIST) colon-delimited reaction handler
+# ABOUTME: Builds a rate per temperature range from the ka/kb/kc parameters
+
 """UDFA (UMIST) format: colon-delimited fixed-column reaction handler."""
 
 import re
@@ -12,7 +15,9 @@ class UdfaReaction:
     priority = 50
     is_reaction = True
 
-    global_re = re.compile(r"^(?!\s*[!#@]).*:.*$")
+    #: A UDFA line starts with its index and a colon (a ``:`` elsewhere, e.g. in a KROME
+    #: rate's ``n(:)`` or ``if(...):``, is not UDFA).
+    global_re = re.compile(r"^\s*\d+\s*:")
 
     local_re = re.compile(
         r"^\s*\d+\s*:"
@@ -43,8 +48,9 @@ class UdfaReaction:
         ``ka``, ``kb``, ``kc`` and temperature bounds) follows per range; each
         becomes its own segment record with shared participants and provenance.
         A rate expression is built per block based on the reaction type:
-        cosmic-ray (``"CR"``), photo-desorption (``"PH"``), or standard
-        Arrhenius.
+        direct cosmic-ray ionisation (``"CP"``), cosmic-ray-induced
+        photoreaction (``"CR"``), UV photoreaction (``"PH"``), or standard
+        Kooij/Arrhenius.
 
         Returns
         -------
@@ -136,13 +142,13 @@ class UdfaReaction:
 
             segments.append(
                 {
-                    "r": rr,
-                    "p": pp,
+                    "reactants": rr,
+                    "products": pp,
                     "tmin": tmin if tmin > 0 else None,
                     "tmax": tmax if tmax < 41000.0 else None,
                     "rate": self._build_rate(rtype, ka, kb, kc),
                     "type": rtype_str,
-                    "string": string,
+                    "line": string,
                 }
             )
 
@@ -225,3 +231,13 @@ class UdfaReaction:
             return "3_body"
 
         return "unknown"
+
+
+class UdfaReactionFallback(UdfaReaction):
+    """Any other line with ``:``, tried after every format: it is reported as an
+    invalid UDFA reaction (e.g. a missing index) rather than skipped."""
+
+    name = "udfa_fallback"
+    priority = 91
+
+    global_re = re.compile(r"^(?!\s*[!#@]).*:.*$")

@@ -10,17 +10,19 @@ This is the smallest of the three tests: two reactions, three species, and a fix
 
 ## The network
 
-**File:** `networks/cie_h/react_cie_h.jet` (PRIZMO format)
+**Files:** `networks/cie_h/react_cie_h.jet` (PRIZMO format) and `react_cie_h.jfunc`
 
 ```text
 # collisional ionization (Cen 1992)
-H + E -> H+ + E + E   []   5.85e-11*sqrt(Tgas)*exp(-157809.1/Tgas)
+H + E -> H+ + E + E   []   5.85e-11*sqrt(Tgas)*exp(-157809.1/Tgas)/(1+sqrt(Tgas/1e5))
 
-# recombination
-H+ + E -> H           []   2.6e-13*(Tgas/1e4)**(-0.8)
+# radiative recombination, case A (Cen 1992)
+H+ + E -> H           []   8.40e-11/sqrt(Tgas)*(Tgas/1e3)**(-0.2)/(1+(Tgas/1e6)**0.7)
 ```
 
-There are three species: `H`, `H+`, `E`. The generated indices are `idx_h`, `idx_hj`, `idx_e`.
+Both rates are from Cen (1992), ApJS 78, 341, Table 1. There are three species: `H`, `H+`, `E`. The generated indices are `idx_h`, `idx_hj`, `idx_e`.
+
+The `.jfunc` file defines the thermal energy change per reaction (`deltaE0`, `deltaE1`: the Cen 1992 cooling coefficients divided by the matching rate coefficients). This test does not use them; they are there for runs that also evolve the temperature.
 
 ## What it checks
 
@@ -38,10 +40,10 @@ If a host code reaches the right `x_eq`, its rate coefficients, their temperatur
 
 | Quantity       | Value                              | Note                                                              |
 | -------------- | ---------------------------------- | ----------------------------------------------------------------- |
-| Temperature    | `1.5e4 K`, **fixed**               | Do not evolve the temperature. This network has no thermal terms. |
+| Temperature    | `1.5e4 K`, **fixed**               | Do not evolve the temperature, even though the `.jfunc` defines thermal terms. |
 | Total hydrogen | any, e.g. `1.0 cm⁻³`               | Sets the timescale only — see the scaling note below.             |
 | Initial `x`    | `1e-3`                             | `n_H = 0.999 n_tot`, `n_H+ = n_e = 1e-3 n_tot`                    |
-| End time       | `t · n_tot ≳ 1e15 s cm⁻³`          | Roughly two decades past equilibration.                           |
+| End time       | `t · n_tot ≳ 1e15 s cm⁻³`          | About a decade past equilibration (within 1e-3 of `x_eq` by `1e14`). |
 | Output         | log-spaced, ≥ 50 points per decade | Only the final value is compared; the curve is for diagnosis.     |
 
 <!-- prettier-ignore -->
@@ -56,8 +58,12 @@ If a host code reaches the right `x_eq`, its rate coefficients, their temperatur
 
 Ionization fraction `x = n_H+ / (n_H + n_H+)` against `t · n_tot`, both axes logarithmic, with the analytic `x_eq` as a horizontal line.
 
-![Ionization fraction rising from the 1e-3 seed to the analytic equilibrium value 0.5069](../../assets/figures/testing-networks/cie_h_light.png#only-light){ width="720" }
-![Ionization fraction rising from the 1e-3 seed to the analytic equilibrium value 0.5069](../../assets/figures/testing-networks/cie_h_dark.png#only-dark){ width="720" }
+<!-- prettier-ignore -->
+!!! warning "Figure and reference data predate the current rates"
+    The figure below and the reference file `benchmarks/cie_h/cie_h_T1.5e4.txt` were made with an earlier version of this network's rates and settle at `x_eq = 0.5069`; they are being regenerated. With the current rates the run settles at `x_eq = 0.2688` (see below), so compare against the values on this page until then.
+
+![Ionization fraction rising from the 1e-3 seed to an equilibrium value (earlier rates)](../../assets/figures/testing-networks/cie_h_light.png#only-light){ width="720" }
+![Ionization fraction rising from the 1e-3 seed to an equilibrium value (earlier rates)](../../assets/figures/testing-networks/cie_h_dark.png#only-dark){ width="720" }
 
 The curve stays flat at the seed value while the electron pool is still small, then turns over once ionization starts to feed itself, and finally settles onto `x_eq` from below.
 
@@ -66,22 +72,22 @@ The curve stays flat at the seed value while the electron pool is still small, t
 At `T = 1.5e4 K`:
 
 ```text
-    k1 = 1.9333e-13 cm³ s⁻¹
-    k2 = 1.8802e-13 cm³ s⁻¹
-    x_eq = 0.506942
+    k1 = 1.3931e-13 cm³ s⁻¹
+    k2 = 3.7900e-13 cm³ s⁻¹
+    x_eq = 0.268782
 ```
 
 If you would like to run the test at more than one temperature, here are the equilibrium values across a range:
 
 | `T` (K) | `k1` (cm³ s⁻¹) | `k2` (cm³ s⁻¹) | `x_eq`   |
 | ------- | -------------- | -------------- | -------- |
-| 8.0e3   | 1.418e-17      | 3.108e-13      | 0.000046 |
-| 1.0e4   | 8.196e-16      | 2.600e-13      | 0.003142 |
-| 1.5e4   | 1.933e-13      | 1.880e-13      | 0.506942 |
-| 2.0e4   | 3.097e-12      | 1.493e-13      | 0.953995 |
-| 3.0e4   | 5.263e-11      | 1.080e-13      | 0.997953 |
-| 5.0e4   | 5.571e-10      | 7.175e-14      | 0.999871 |
-| 1.0e5   | 3.818e-09      | 4.121e-14      | 0.999989 |
+| 8.0e3   | 1.106e-17      | 5.992e-13      | 0.000018 |
+| 1.0e4   | 6.227e-16      | 5.097e-13      | 0.001220 |
+| 1.5e4   | 1.393e-13      | 3.790e-13      | 0.268782 |
+| 2.0e4   | 2.140e-12      | 3.064e-13      | 0.874727 |
+| 3.0e4   | 3.400e-11      | 2.262e-13      | 0.993391 |
+| 5.0e4   | 3.263e-10      | 1.530e-13      | 0.999531 |
+| 1.0e5   | 1.909e-09      | 8.816e-14      | 0.999954 |
 
 Suggested acceptance:
 
@@ -95,7 +101,7 @@ The last two check conservation of hydrogen nuclei and of charge. These follow f
 
 ## Reference data
 
-`benchmarks/cie_h/cie_h_T1.5e4.txt` — the full trajectory, integrated at `rtol = 1e-12` and agreeing with `x_eq` to 4e-16.
+`benchmarks/cie_h/cie_h_T1.5e4.txt` — the full trajectory, integrated at `rtol = 1e-12`. It was made with the earlier rates (`x_eq = 0.5069`, matched to 4e-16) and is being regenerated for the current network; see the warning above.
 
 | Column | Meaning                   |
 | ------ | ------------------------- |
@@ -113,7 +119,7 @@ Unless you also ran at `n_tot = 1 cm⁻³`, compare against the `tn` column rath
 | Symptom                                | Cause                                                                                                                                                            |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Nothing happens; `x` stays at its seed | `n_e = 0` initially, or the temperature never made it into the rate evaluation (`T ≈ 0`).                                                                        |
-| `x` settles far below `x_eq`           | Running below `1e4 K`. `exp(-157809.1/T)` is `2.7e-5` at 1.5e4 K and `4e-9` at 1e4 K, so the gas really does not ionize. Check the temperature before the rates. |
+| `x` settles far below `x_eq`           | Running below `1e4 K`. `exp(-157809.1/T)` is `2.7e-5` at 1.5e4 K and `1.4e-7` at 1e4 K, so the gas really does not ionize. Check the temperature before the rates. |
 | `x` settles at a wrong constant        | Rate coefficient wrong, or the temperature the network sees differs from the one you set.                                                                        |
 | `x` overshoots 1 or goes negative      | Explicit or under-resolved integration, possibly masked by species clipping.                                                                                     |
 | Nuclei conservation drifts             | Renormalization enabled, or a floor/clip large enough to matter.                                                                                                 |

@@ -180,7 +180,7 @@ def update_registry(path: Path, entries: Dict[str, str]) -> None:
     entries : dict of str to str
         Relpath (posix) to sha256.
     """
-    lines = path.read_text().splitlines() if path.exists() else []
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     pending = dict(entries)
     out: List[str] = []
     for line in lines:
@@ -195,7 +195,7 @@ def update_registry(path: Path, entries: Dict[str, str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.tmp-{os.getpid()}")
     try:
-        tmp.write_text("".join(f"{line}\n" for line in out))
+        tmp.write_text("".join(f"{line}\n" for line in out), encoding="utf-8")
         os.replace(tmp, path)
     except BaseException:
         tmp.unlink(missing_ok=True)

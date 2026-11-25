@@ -72,8 +72,9 @@ def _(mo):
     JAFF matches species and reactions by their **serialized** identity, never by
     position in the file:
 
-    - a species' `serialized` form is its canonical name, so `E` and `e-` are the
-      same species;
+    - a species' `serialized` form is its sorted atomic composition (`CO+`
+      becomes `+/C/O`), so `E` and `e-` are the same species. Isomers such as
+      `HCN` and `HNC` share one serialized form, so they compare as equal;
     - a reaction's `serialized` form sorts the species names on each side, so the
       order the file lists them in does not matter. `demo1` writes
       `CO+ + E -> CO` while `demo2` writes `E + CO+ -> CO`; both serialize to
@@ -99,12 +100,12 @@ def _(mo, net1, net2):
         [
             {
                 "network": net1.label,
-                "original line": _r1.original_string,
+                "original line": _r1.source.line,
                 "serialized": _r1.serialized,
             },
             {
                 "network": net2.label,
-                "original line": _r2.original_string,
+                "original line": _r2.source.line,
                 "serialized": _r2.serialized,
             },
             {"network": "equal?", "original line": "", "serialized": str(_r1 == _r2)},
@@ -206,13 +207,13 @@ def _(mo, net1, net2, reaction_cmp):
             continue
         _r1 = net1.reactions.get(_row["serialized"])
         _r2 = net2.reactions.get(_row["serialized"])
-        _k1 = float(_r1.rate_coefficient.subs(CONDITIONS))
-        _k2 = float(_r2.rate_coefficient.subs(CONDITIONS))
+        _k1 = float(_r1.rate.coefficient.subs(CONDITIONS))
+        _k2 = float(_r2.rate.coefficient.subs(CONDITIONS))
         _rows.append(
             {
                 "reaction": _row["name"],
-                f"rate in {net1.label}": str(_r1.rate_coefficient),
-                f"rate in {net2.label}": str(_r2.rate_coefficient),
+                f"rate in {net1.label}": str(_r1.rate.coefficient),
+                f"rate in {net2.label}": str(_r2.rate.coefficient),
                 f"k ({net1.label})": f"{_k1:.3e}",
                 f"k ({net2.label})": f"{_k2:.3e}",
                 "ratio": f"{_k2 / _k1:.3g}",

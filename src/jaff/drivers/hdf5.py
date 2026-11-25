@@ -1,32 +1,15 @@
+# ABOUTME: HDF5 driver: converts between HDF5Dict nested dictionaries and HDF5
+# ABOUTME: files via h5py, and exports HDF5 data to CSV.
 """
 HDF5 file driver.
 
 This module provides :class:`HDF5`, a high-level wrapper around :mod:`h5py`
 that converts between JAFF's in-memory :class:`~jaff.types.HDF5Dict`
 representation and on-disk HDF5 files, and can also export HDF5 data to CSV.
-
-The :class:`~jaff.types.HDF5Dict` schema
------------------------------------------
-Each leaf in the nested dictionary corresponds to an HDF5 dataset and must
-contain at least the following keys:
-
-``_kind``
-    ``"linear"`` for a plain 1-D/N-D array; ``"compound"`` for a NumPy
-    structured (record) array.
-``_data``
-    The actual data (NumPy array or compatible).
-``_dtype``
-    For ``"linear"``: a JAFF dtype string (e.g. ``"f64"``).
-    For ``"compound"``: a ``{field_name: dtype_string}`` mapping.
-``_attrs``
-    Optional ``{attr_name: attr_value}`` dictionary written as HDF5
-    dataset attributes.
-``_name``
-    Optional human-readable column name stored as the ``_name`` HDF5
-    attribute.
-
-Non-leaf nodes in the dictionary produce HDF5 groups.  The special key
-``_attrs`` at any level writes HDF5 attributes on the parent group/file root.
+The :class:`~jaff.types.HDF5Dict` layout (groups as nested dictionaries,
+datasets as leaf dictionaries with ``_kind``, ``_data``, ``_dtype``,
+``_attrs`` and ``_name`` keys, and ``_attrs`` for group/file attributes) is
+described in the Notes of :class:`HDF5`.
 """
 
 from pathlib import Path
@@ -44,13 +27,108 @@ class HDF5:
     High-level HDF5 read/write driver backed by :mod:`h5py`.
 
     Provides methods to convert between :class:`~jaff.types.HDF5Dict` and
-    HDF5 files, and to export HDF5 data to CSV.
+    HDF5 files, and to export HDF5 data to CSV.  :meth:`to_dict` parses a
+    file into an :class:`~jaff.types.HDF5Dict`, and :meth:`from_dict` walks
+    one (or a plain ``dict`` of the same layout) and writes it out.
 
     Parameters
     ----------
     compression : str or None, optional
         HDF5 compression filter to apply when creating datasets (e.g.
         ``"gzip"``).  ``None`` disables compression.  Defaults to ``None``.
+
+    Attributes
+    ----------
+    compression : str or None
+        Compression filter applied to every dataset written by
+        :meth:`from_dict`.
+
+    Notes
+    -----
+    An :class:`~jaff.types.HDF5Dict` is a nested dictionary that mirrors the
+    layout of an HDF5 file:
+
+    - **Groups** become nested dictionaries: any key whose value is a
+      dictionary without a ``_kind`` key is a group.
+    - **Datasets** become leaf dictionaries holding the ``_``-prefixed keys
+      below.
+    - **Attributes** of a group, or of the file root, go under an ``_attrs``
+      key at that level.
+
+    Each dataset leaf holds these keys:
+
+    | Key | Required | Description |
+    | --- | --- | --- |
+    | ``_kind`` | yes | ``"linear"`` for a plain N-D array, or ``"compound"`` for a structured (record) array with named fields. |
+    | ``_data`` | yes | The values: a NumPy array or anything array-compatible. |
+    | ``_dtype`` | no | The element type.  For ``"linear"``: a dtype token (e.g. ``"f64"``).  For ``"compound"``: a ``{field_name: dtype_token}`` mapping.  Inferred from ``_data`` when absent; always set by :meth:`to_dict`. |
+    | ``_attrs`` | no | ``{attr_name: value}`` written as dataset attributes.  :meth:`to_dict` always sets it, possibly empty. |
+    | ``_name`` | no | Human-readable name, stored as the ``_name`` dataset attribute; :meth:`to_csv` uses it as the column label of a ``"linear"`` dataset. |
+
+    ``_dtype`` values are short tokens rather than NumPy dtypes:
+
+    | Token | NumPy type |
+    | --- | --- |
+    | ``i8``, ``i16``, ``i32``, ``i64`` | signed integers |
+    | ``u8``, ``u16``, ``u32``, ``u64`` | unsigned integers |
+    | ``f16``, ``f32``, ``f64``, ``f128`` | floats (``f128`` only where ``numpy.float128`` exists, typically Linux/macOS x86-64) |
+    | ``c64``, ``c128`` | complex |
+    | ``b`` | bool |
+    | ``s`` | variable-length UTF-8 string (read back as ``str``, as is fixed-length text) |
+
+    :meth:`~jaff.types.HDF5Dict.flatten` collapses the nested tree into a flat
+    ``{absolute_path: leaf}`` mapping, where group and file attributes land
+    under the group's own path (``"/"`` for the file root), and
+    :meth:`~jaff.types.HDF5Dict.nested` is its inverse.  Use them to look up
+    or assign a dataset by its full path instead of walking the nesting.
+
+    Examples
+    --------
+    A file with file-level attributes and a ``rates`` group holding group
+    attributes, two ``"linear"`` datasets and one ``"compound"`` dataset:
+
+    >>> import numpy as np
+    >>> from jaff.drivers import HDF5
+    >>> schema = {
+    ...     "_attrs": {"source": "demo"},  # file attributes
+    ...     "rates": {
+    ...         "_attrs": {"input_units": "K"},  # group attributes
+    ...         "T": {
+    ...             "_kind": "linear",
+    ...             "_data": np.array([100.0, 200.0]),
+    ...             "_dtype": "f64",
+    ...         },
+    ...         "k1": {
+    ...             "_kind": "linear",
+    ...             "_name": "k1",
+    ...             "_data": np.array([1.2e-10, 2.3e-10]),
+    ...             "_dtype": "f64",
+    ...             "_attrs": {"units": "cm3/s"},
+    ...         },
+    ...         "units": {
+    ...             "_kind": "compound",
+    ...             "_data": np.array(
+    ...                 [(1.5, 3), (2.5, 4)], dtype=[("col1", "f4"), ("col2", "i4")]
+    ...             ),
+    ...             "_dtype": {"col1": "f32", "col2": "i32"},
+    ...         },
+    ...     },
+    ... }
+    >>> h5 = HDF5(compression="gzip")
+    >>> h5.from_dict("rates.hdf5", schema, mode="w")
+    >>> hd = h5.to_dict("rates.hdf5")
+    >>> hd["rates"]["k1"]
+    {'_kind': 'linear', '_data': array([1.2e-10, 2.3e-10]), '_attrs': {'units': 'cm3/s'}, '_name': 'k1', '_dtype': 'f64'}
+
+    Address datasets by absolute path:
+
+    >>> flat = hd.flatten()
+    >>> list(flat)
+    ['/', '/rates', '/rates/T', '/rates/k1', '/rates/units']
+    >>> flat["/"]
+    {'_attrs': {'source': 'demo'}}
+    >>> list(hd.nested(flat)["rates"])
+    ['_attrs', 'T', 'k1', 'units']
     """
 
     def __init__(self, compression: str | None = None):
@@ -100,7 +178,28 @@ class HDF5:
         Returns
         -------
         HDF5Dict
-            Nested dictionary representation of the HDF5 contents.
+            Nested dictionary mirroring the HDF5 hierarchy: groups become
+            nested dictionaries and datasets become leaf dictionaries holding
+            their data as NumPy arrays (see the Notes of :class:`HDF5`).
+            Attributes are stored under ``"_attrs"``.
+
+        Raises
+        ------
+        FileNotFoundError
+            If *h5file* is a path that does not exist.
+
+        Examples
+        --------
+        With ``rates.hdf5`` as written in the :class:`HDF5` examples:
+
+        >>> from jaff.drivers import HDF5
+        >>> h5 = HDF5()
+        >>> list(h5.to_dict("rates.hdf5"))
+        ['_attrs', 'rates']
+        >>> list(h5.to_dict("rates.hdf5::/rates"))
+        ['_attrs', 'T', 'k1', 'units']
+        >>> list(h5.to_dict("rates.hdf5", exclude="k1")["rates"])
+        ['_attrs', 'T', 'units']
         """
         return HDF5Dict(h5file, include=include, exclude=exclude)
 
@@ -111,7 +210,10 @@ class HDF5:
         Write an :class:`~jaff.types.HDF5Dict` to an HDF5 file.
 
         Opens (or creates) *h5file* and recursively resolves all datasets and
-        groups from *h5dict*.
+        groups from *h5dict*.  In the default append mode, groups and datasets
+        already in the file are kept; only keys present in *h5dict* are
+        written, and a dataset at an existing path is replaced.  Every
+        dataset is written with the driver's :attr:`compression` filter.
 
         Parameters
         ----------
@@ -119,8 +221,11 @@ class HDF5:
             Path to the target HDF5 file.  Created if it does not exist;
             existing files are updated in-place.
         h5dict : dict or HDF5Dict
-            Data to write.  Plain ``dict`` objects are automatically converted
-            to :class:`~jaff.types.HDF5Dict`.
+            Data to write, laid out as described in the Notes of
+            :class:`HDF5`: nested plain dicts become HDF5 groups, and any
+            dict containing a ``"_kind"`` key is written as a dataset.  Plain
+            ``dict`` objects are automatically converted to
+            :class:`~jaff.types.HDF5Dict`.
         mode : str, optional
             File open mode passed to :class:`h5py.File`.  Defaults to ``"a"``
             (append, keeping existing contents).  Use ``"w"`` to truncate the
@@ -129,6 +234,24 @@ class HDF5:
         Returns
         -------
         None
+
+        Raises
+        ------
+        ValueError
+            If a dataset's ``_kind`` is not ``"linear"`` or ``"compound"``.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from jaff.drivers import HDF5
+        >>> h5 = HDF5()
+        >>> h5.from_dict(
+        ...     "out.h5",
+        ...     {"x": {"_kind": "linear", "_data": np.arange(3)}},
+        ...     mode="w",
+        ... )
+        >>> h5.to_dict("out.h5")["x"]["_dtype"]
+        'i64'
         """
         if not isinstance(h5dict, HDF5Dict):
             h5dict = HDF5Dict(h5dict)
@@ -149,6 +272,11 @@ class HDF5:
         named after its HDF5 key.  The ``_name`` attribute is used only as a
         column label, never as a filesystem path.
 
+        Linear columns fall back to the dataset key when ``_name`` is absent.
+        Sub-groups are traversed recursively, so a nested hierarchy yields one
+        ``_group.csv`` per group with linear datasets plus one file per
+        compound dataset.  ``_attrs`` metadata is not exported.
+
         Parameters
         ----------
         h5file : str or Path
@@ -168,6 +296,37 @@ class HDF5:
         Returns
         -------
         None
+
+        Examples
+        --------
+        Given ``rates.hdf5`` as written in the :class:`HDF5` examples:
+
+        ```text
+        /
+        └── rates/            (group)
+            ├── T      linear
+            ├── k1     linear    _name="k1"
+            └── units  compound  (col1, col2)
+        ```
+
+        >>> from jaff.drivers import HDF5
+        >>> HDF5().to_csv("rates.hdf5", "out", sep=",")
+
+        writes ``out/rates/_group.csv`` with the linear datasets as columns:
+
+        ```text
+        T,k1
+        100.0,1.2e-10
+        200.0,2.3e-10
+        ```
+
+        and ``out/rates/units.csv`` with one column per compound field:
+
+        ```text
+        col1,col2
+        1.5,3
+        2.5,4
+        ```
         """
         outdir = Path(outdir)
         if not outdir.exists():

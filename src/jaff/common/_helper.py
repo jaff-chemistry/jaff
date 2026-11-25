@@ -1,16 +1,21 @@
+# ABOUTME: Shared helpers: file-extension groups, mass table loading, Fortran literal
+# ABOUTME: conversion, symbolic dependency resolution and .jaff path detection.
 """
 Miscellaneous helper utilities shared across JAFF subsystems.
 
 This module provides:
 
 * Extension-list constants for recognizing source/data file types.
-* :func:`load_mass_dict` -- load atomic masses from the embedded SQLite DB.
 * :func:`f90_convert` -- coerce Fortran-style numeric literals to Python/C.
 * :func:`resolve_symbolic_dependencies` -- topological substitution of a
   symbol dependency graph.
+* :func:`float_piecewise_branches` -- float the integer branch values of
+  every ``Piecewise`` in an expression.
 * :func:`resolve_dependencies` -- single-expression dependency resolution
   with special handling for built-in JAFF functions (``merge``, ``log10``).
 * :func:`is_jaff_file` -- quick path-based check for ``.jaff`` files.
+* :func:`load_module_from_path` and :func:`import_subpackages` -- dynamic
+  import helpers (currently not used elsewhere in JAFF).
 """
 
 from __future__ import annotations
@@ -26,8 +31,7 @@ from sympy.core.function import AppliedUndef
 from ..errors import ParserError
 
 if TYPE_CHECKING:
-    from ..core._typing import ElementProps
-    from ..core.parsers.auxiliary_func import AuxiliaryFunctionProps
+    from ..core.network import NetworkFunctions
 
 # ---------------------------------------------------------------------------
 # File-extension groups used by parsers and code generators
@@ -42,40 +46,6 @@ RUST_EXTENSIONS = [".rs"]
 
 # Matches Fortran double-precision exponent notation, e.g. ``1.0d-3`` → ``1.0e-3``
 F90_PATTERN = re.compile(r"([0-9_.])d([0-9_+-])")
-
-
-def load_mass_dict() -> dict:
-    """
-    Load atomic mass data from the JAFF embedded SQLite database.
-
-    Opens the bundled ``atomic_masses`` table via :class:`~jaff.drivers.sqlite.JaffDb`
-    and returns a dict keyed by element symbol.
-
-    Returns
-    -------
-    dict[str, ElementProps]
-        Mapping from element symbol (e.g. ``"H"``) to an
-        :class:`~jaff.core._typing.ElementProps` dict with keys
-        ``name``, ``mass``, ``atomic_mass``, ``protons``, ``neutrons``,
-        and ``electrons``.
-    """
-    from ..drivers.sqlite import JaffDb
-
-    with JaffDb() as jdb:
-        rows = jdb.table("atomic_masses").all_rows()
-
-    mass_dict: dict[str, ElementProps] = {}
-    for row in rows:
-        mass_dict[row["element"]] = {
-            "name": row["name"],
-            "mass": row["mass"],
-            "atomic_mass": row["atomic_mass"],
-            "protons": row["protons"],
-            "neutrons": row["neutrons"],
-            "electrons": row["electrons"],
-        }
-
-    return mass_dict
 
 
 def f90_convert(expr: str) -> str:
@@ -242,20 +212,25 @@ def float_piecewise_branches(expr: Basic) -> Basic:
 def resolve_dependencies(
     expr: Basic,
     subs_dict: dict[Basic, Basic] | None = None,
-    aux_funcs: dict[str, AuxiliaryFunctionProps] | None = None,
+    functions: NetworkFunctions | None = None,
 ) -> Expr:
     """
     Resolve undefined SymPy function calls inside a single expression.
 
     Walks all :class:`~sympy.core.function.AppliedUndef` atoms in *expr* and
-    replaces each with a concrete SymPy expression, drawing from three sources
-    (checked in priority order):
+    replaces each with a concrete SymPy expression, drawing from three sources:
 
-    1. **subs_dict** -- direct substitution table.
-    2. **Built-in shims** -- ``merge(a, b, cond)`` → ``Piecewise((a, cond), (b, True))``
-       and ``log10(x)`` → ``log(x)/log(10)``.
-    3. **aux_funcs** -- user-defined auxiliary functions provided by the
-       parser; arguments are recursively resolved before substitution.
+    * **Built-in shims** -- ``merge(a, b, cond)`` → ``Piecewise((a, cond), (b, True))``
+      and ``log10(x)`` → ``log(x)/log(10)``.
+    * **functions** -- the network's ``.jfunc`` functions, called with the
+      call's arguments (:meth:`~jaff.core.network.NetworkFunctions.call`);
+      arguments are recursively resolved first.
+    * **subs_dict** -- direct substitution table, matched case-insensitively
+      on the call's string form.
+
+    A ``subs_dict`` match is recorded first but is overwritten when the
+    function is also a built-in or one of *functions*, so in effect the
+    built-ins win, then *functions*, then *subs_dict*.
 
     Parameters
     ----------
@@ -264,10 +239,8 @@ def resolve_dependencies(
     subs_dict : dict[sympy.Basic, sympy.Basic] or None, optional
         Pre-populated substitution table.  Modified in-place as new
         substitutions are discovered.  Defaults to an empty dict.
-    aux_funcs : dict[str, AuxiliaryFunctionProps] or None, optional
-        Auxiliary function definitions keyed by lowercase function name.
-        Each entry supplies ``expr`` (the body expression) and ``args``
-        (the ordered parameter list).  Defaults to an empty dict.
+    functions : NetworkFunctions or None, optional
+        The network's ``.jfunc`` functions; ``None`` (default) for none.
 
     Returns
     -------
@@ -277,8 +250,6 @@ def resolve_dependencies(
     """
     if subs_dict is None:
         subs_dict = {}
-    if aux_funcs is None:
-        aux_funcs = {}
 
     for f in sorted(expr.atoms(AppliedUndef), key=srepr):
         name = f.func.__name__.lower()
@@ -305,19 +276,10 @@ def resolve_dependencies(
             subs_dict[f] = sympy.log(f.args[0]) / sympy.log(10)
 
         # User-defined auxiliary function: inline-expand with argument mapping
-        elif name in aux_funcs:
-            func_def = aux_funcs[name].expr
-            func_args = aux_funcs[name].args
-
-            arg_map = dict(
-                zip(
-                    func_args,
-                    [resolve_dependencies(arg, subs_dict, aux_funcs) for arg in f.args],
-                )
-            )
-
+        elif functions is not None and name in functions:
+            args = [resolve_dependencies(arg, subs_dict, functions) for arg in f.args]
             subs_dict[f] = resolve_dependencies(
-                func_def.xreplace(arg_map), subs_dict, aux_funcs
+                functions.call(name, args), subs_dict, functions
             )
 
     return expr.xreplace(subs_dict)
@@ -373,9 +335,11 @@ def import_subpackages(package_name: str) -> None:
     :func:`pkgutil.walk_packages` which calls :func:`__import__` internally
     for every package it encounters.
 
-    Args:
-        package_name: Fully-qualified package name
-                      (e.g. ``"jaff.core.parsers.network._formats"``).
+    Parameters
+    ----------
+    package_name : str
+        Fully-qualified package name
+        (e.g. ``"jaff.core.parsers.network._formats"``).
     """
     from importlib import import_module
 

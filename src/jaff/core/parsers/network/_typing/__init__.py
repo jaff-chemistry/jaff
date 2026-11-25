@@ -1,4 +1,6 @@
-from ._formats import kromeFormatProps, prizmoFormatProps
-from ._parsed import parsedListProps
+# ABOUTME: Typed dicts used by the network-file parsers
+# ABOUTME: Re-exports the format-state typed dicts
 
-__all__ = ["parsedListProps", "kromeFormatProps", "prizmoFormatProps"]
+from ._formats import kromeFormatProps, prizmoFormatProps
+
+__all__ = ["kromeFormatProps", "prizmoFormatProps"]

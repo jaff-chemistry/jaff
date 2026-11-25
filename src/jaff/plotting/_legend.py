@@ -1,7 +1,7 @@
 # ABOUTME: Legend policy: one shared figure legend, or per-panel groups (opt-in)
 # ABOUTME: Creates the legends; the layout module positions the margin ones
 
-"""Legend placement (spec §14.4).
+"""Legend placement.
 
 Figure policy ``"auto"`` (and ``"figure"``): ONE shared, de-duplicated
 legend for the whole figure, in the bottom-right hidden grid cell when the
@@ -22,6 +22,7 @@ the stack of groups.  Margin legends are created here and positioned by
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from matplotlib.artist import Artist
 from matplotlib.axes import Axes
@@ -158,7 +159,7 @@ def _over_cap(seen: dict[str, Artist], where: str, style: Style) -> bool:
     return True
 
 
-def _kw(style: Style) -> dict:
+def _kw(style: Style) -> dict[str, Any]:
     """Legend keywords: the style's, upper-left anchored, left-aligned title."""
     return {
         **style.legend,
@@ -188,7 +189,7 @@ def apply(
     shared = _dedupe([e for e, m in zip(entries, panel_modes) if m == SHARED])
     if shared and not _over_cap(shared, "figure", style):
         handles, labels = list(shared.values()), list(shared)
-        kw = {**_kw(style), "title": title}
+        kw: dict[str, Any] = {**_kw(style), "title": title}
         if free:
             placed.host = len(used) + len(free) - 1
             placed.shared = free[-1].legend(

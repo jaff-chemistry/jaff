@@ -18,7 +18,7 @@ yet still contains a neutral atom, a cation, the electron, and a genuine
 photo-reaction:
 
 ```text
-H -> H+ + e-
+H + _PHOTON -> H+ + e-
 H+ + e- -> H
 ```
 
@@ -77,9 +77,9 @@ from jaff import Network
 
 net = Network("networks/h_photoionization/h_photo.jet")
 
-len(net.species)      # 3   — number of species
-len(net.reactions)    # 2   — number of reactions
-net.label             # 'h_photo'   — network identifier
+len(net.species)  # 3   — number of species
+len(net.reactions)  # 2   — number of reactions
+net.label  # 'h_photo'   — network identifier
 ```
 
 A loaded `Network` carries:
@@ -95,11 +95,12 @@ A loaded `Network` carries:
 
 <!-- prettier-ignore -->
 !!! tip "Validate while you load"
-    Pass `errors=True` to turn on chemistry checks — missing sinks and sources,
-    duplicate reactions, isomer clashes, and element-conservation violations are
-    reported as warnings:
+    Chemistry checks run on every load — missing sinks and sources, isomer
+    clashes, missing recombinations and mass- or charge-conservation violations are
+    reported as warnings. Pass `strict=True` to stop at the first problem
+    instead:
     ```python
-    net = Network("mynetwork.dat", errors=True)
+    net = Network("mynetwork.dat", strict=True)
     ```
 
 ---
@@ -113,11 +114,11 @@ identifiers code generation needs.
 ```python
 H = net.species["H"]
 
-H.name          # 'H'
-H.mass          # 1.673773e-24   ← grams, not amu
-H.charge        # 0
-H.index         # 0
-H.latex()       # '{\\rm H}'      ← latex() is a method, not an attribute
+H.name  # 'H'
+H.mass  # 1.673773e-24   ← grams, not amu
+H.charge  # 0
+H.index  # 0
+H.latex()  # '{\\rm H}'      ← latex() is a method, not an attribute
 ```
 
 The attributes worth knowing up front:
@@ -151,18 +152,20 @@ an energy budget.
 ```python
 rxn = net.reactions[0]
 
-rxn.verbatim      # 'H + _PHOTON -> H+ + e-'   ← verbatim is an attribute
-rxn.type          # 'photo'                     ← type is an attribute
-rxn.rate_coefficient  # a SymPy expression for the rate coefficient
-rxn.rate              # the coefficient times the reactant densities
-rxn.reactants     # species consumed
-rxn.products      # species created
+rxn.verbatim  # 'H + _PHOTON -> H+ + e-'   ← verbatim is an attribute
+rxn.type  # 'photo'                     ← type is an attribute
+rxn.rate.coefficient  # a SymPy expression for the rate coefficient
+rxn.rate.expanded  # the coefficient times the reactant densities
+rxn.reactants  # species consumed
+rxn.products  # species created
 ```
 
 - `reactants` / `products` — the species on each side, as `Species` catalogues;
-- `rate` — the rate coefficient as a **SymPy expression**, not a number; it
-  still contains the temperature symbol so it can be differentiated and emitted
-  as code;
+- `rate.coefficient` — the rate coefficient as a **SymPy expression**, not a
+  number; it still contains the temperature symbol so it can be differentiated
+  and emitted as code;
+- `rate.expanded` — `rate.coefficient` times the number density of each reactant
+  (also a SymPy expression; pseudo-species such as `_PHOTON` carry no density);
 - `type` — the classification (`photo`, `cosmic_ray`, `3_body`, `unknown`, or a
   grain surface-mechanism type such as `freeze`/`desorption_*` in gas-grain
   networks), concluded by the network-format parser as it reads the file;
@@ -242,14 +245,14 @@ const int NREACT = 2;
 
 void compute_rates(double* k, double T) {
     // $$JAFF REPEAT idx, rate IN rates
-    k[0] = photorates(0, …);
+    k[0] = photorates(1, 13.6, 1.0e+99);
     k[1] = …;
     // $$JAFF END
 }
 ```
 
 The directive language is small — `SUB`, `REPEAT`, `REDUCE`, `GET`, `HAS`,
-`END`, plus options such as `REPLACE`. The
+`DEFINE`, `LANG`, `COMMENT` and `END`, plus options such as `REPLACE` and `USE`. The
 [Template Syntax](../user-guide/code-generation/template-syntax.md) page is the
 full reference. Three ideas explain what the collections emit: indexing, CSE,
 and the ODE/Jacobian pair.
@@ -271,8 +274,9 @@ So the same template gives `k[0]` in C++ and `k(1)` in Fortran with no change.
 ### Common Subexpression Elimination (CSE)
 
 The indexed collections (`rates`, `odes`, `jacobian`, …) can factor repeated
-work into temporaries so each sub-expression is computed once. You opt in by
-adding the `cse` variable to a `REPEAT`:
+work into temporaries so each sub-expression is computed once. A
+`REPEAT idx, cse IN cses` block names a CSE group and emits its temporaries; the
+blocks it serves join it with `CSE { GROUP -> name }`:
 
 === "Without CSE"
 
@@ -285,8 +289,10 @@ adding the `cse` variable to a `REPEAT`:
 === "With CSE"
 
     ```cpp
-    $$JAFF REPEAT idx, rate, cse IN rates
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rates } }
     const double x$idx$ = $cse$;
+    $$JAFF END
+    $$JAFF REPEAT idx, rate IN rates { CSE { GROUP -> rates } }
     k[$idx$] = $rate$;
     $$JAFF END
     ```
@@ -309,25 +315,30 @@ $$JAFF REPEAT idx, ode IN odes
 dydt[$idx$] = $ode$;
 $$JAFF END
 
-$$JAFF REPEAT idx, expr IN jacobian
-J[$idx$][$idx$] = $expr$;
+$$JAFF REPEAT idx, jac IN jacobian
+J[$idx$][$idx$] = $jac$;
 $$JAFF END
 ```
 
 ---
 
-## Driving runs with `jaffgen.toml`
+## Configuration files
 
-Spelling out the network, inputs, output, and radiation on every `jaffgen` line
-gets old. A [`jaffgen.toml`](../user-guide/code-generation/jaffgen-toml.md) declares
-the run once, so the command collapses to:
+Settings live in two TOML files with [one schema](../user-guide/configuration/index.md):
+a `jaff.toml` next to a network file describes how that network is built
+(temperature cutoffs, radiation, dust, the equation of state, …) and is picked
+up by every `Network(...)` that loads it; a `jaffgen.toml` declares a
+code-generation run once, so the command collapses to:
 
 ```bash
 jaffgen --config jaffgen.toml
 ```
 
-CLI flags still win over the file when both set the same thing, so a `jaffgen.toml`
-is a baseline you can override per run.
+Command-line options (and `--set key.path=value`) still win over the files, so
+a file is a baseline you can override per run. Each run writes its complete
+config to `config.toml` in the output directory. Editors can
+[complete and check](../user-guide/configuration/editor-setup.md) these files
+as you type.
 
 ---
 
@@ -338,7 +349,7 @@ A first analysis pass touches only the model — no code generation at all:
 ```python
 from jaff import Network
 
-net = Network("networks/h_photoionization/h_photo.jet", errors=True)
+net = Network("networks/h_photoionization/h_photo.jet", strict=True)
 
 for sp in net.species:
     print(f"{sp.name}: {sp.mass:.3e} g  charge {sp.charge:+d}")
@@ -377,4 +388,4 @@ Now that the pieces have names:
 1. [Working with Networks](../user-guide/working-with-networks/index.md) — inspect species, reactions, and elements in depth;
 2. [Code Generation](../user-guide/code-generation/index.md) — run `jaffgen` over your templates;
 3. [Template Syntax](../user-guide/code-generation/template-syntax.md) — write your own `$$JAFF` templates;
-4. [API Reference](../api/index.md) — the complete surface.
+4. [API Reference](../reference/index.md) — the complete surface.

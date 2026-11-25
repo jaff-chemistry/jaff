@@ -1,3 +1,6 @@
+# ABOUTME: Parser ABC for one network-file format, plus the parser registry
+# ABOUTME: all_parsers() discovers the format subpackages and sorts them by priority
+
 """The single ABC for a per-subpackage network parser plus its registry.
 
 Each format subpackage (``kida``, ``krome``, ``prizmo``, ``udfa``,
@@ -78,7 +81,7 @@ class Parser(ABC):
         Handlers that need mutable, file-order state (e.g. the KROME
         ``@format`` column layout, PRIZMO's ``parse_vars`` toggle) expose a
         ``default_state()``; their defaults are merged so a reaction line
-        before any directive uses the same defaults as before the refactor.
+        that precedes any directive is parsed with those defaults.
         """
         state: dict = {}
         for handler in self.handlers:
@@ -98,7 +101,10 @@ class Parser(ABC):
         """Adjust this parser's reactions once the network has been built.
 
         Called once, only for parsers that produced records, after every
-        reaction is loaded and before rates are standardised.  The reaction and
+        reaction is built from its standardised rate and before ``rc_<N>``
+        references are resolved: a hook writing a shorthand symbol (``n_X``,
+        ...) standardises it itself (``network.symbols.standardize``).  The
+        reaction and
         species catalogues are frozen: a hook may change reactions (e.g. their
         rate segments, props or ``_metadata``) but must not add or remove
         reactions or species.  Use ``network.reactions.with_format(self.name)``

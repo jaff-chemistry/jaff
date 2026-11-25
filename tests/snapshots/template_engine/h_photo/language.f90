@@ -47,22 +47,25 @@ contains
   subroutine rhs(f, nden, tgas)
     real(8), intent(out) :: f(:)
     real(8), intent(in) :: nden(nspec), tgas
-    ! $$JAFF REPEAT idx, rhs, cse IN rhses
-    cse0 = nden(1)*nden(2)
-    cse1 = 1.65941781598291d-10*cse0*tgas**(-0.7d0) - 5.05728445450563d-8*nden(0)* photden(0)
+    ! $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rhs } }
+    cse3 = log(tgas)
+    cse4 = exp(0.30000000000000004d0*cse3)
+    cse0 = cse4*nden(1)*nden(2)
+    cse1 = 1.65941781598291d-10*cse0/tgas - 5.05728445450563d-8*nden(0)*photden(0)
     cse2 = -cse1
+    ! $$JAFF END
+    ! $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt }  CSE { GROUP -> rhs } }
     f(1) = cse1
     f(2) = cse2
     f(3) = cse2
-    f(4) = -2.29107354821899d-26*cse0*tgas**0.3d0*(0.684d0 - 0.0416d0*log(0.0001d0* tgas)) + 3.2366620508836d-19*&
-          &nden(0)*photden(0)
+    f(4) = -2.29107354821899d-26*cse0*(0.684d0 - 0.0416d0*log(0.0001d0*tgas)) + 3.2366620508836d-19*nden(0)*photden(0)
     ! $$JAFF END
   end subroutine rhs
 
   subroutine jacobian(J, nden, tgas)
     real(8), intent(out) :: J(:, :)
     real(8), intent(in) :: nden(nspec), tgas
-    ! $$JAFF REPEAT idx, expr IN jacobian
+    ! $$JAFF REPEAT idx, jac IN jacobian
     J(1, 1) = -5.05728445450563d-8*photden(0)
     J(1, 2) = 1.65941781598291d-10*tgas**(-0.7d0)*nden(2)
     J(1, 3) = 1.65941781598291d-10*tgas**(-0.7d0)*nden(1)

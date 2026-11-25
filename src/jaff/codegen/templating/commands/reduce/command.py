@@ -70,7 +70,8 @@ class Reduce(Command):
         """``((s0) + (s1) + ...)`` over the values, or ``0`` without any.
 
         The first property sets the number of terms; extra values in later ones
-        are ignored, as in the old engine.
+        are ignored, and a later property with fewer values raises a
+        :class:`~jaff.codegen.templating.errors.TemplateError`.
         """
         count = len(next(iter(columns.values())))
         terms = []

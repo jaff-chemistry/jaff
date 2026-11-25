@@ -1,3 +1,6 @@
+# ABOUTME: KROME @var: directive handler storing a symbolic global expression
+# ABOUTME: Invalid SymPy expressions are skipped with a warning
+
 """KROME ``@var:`` directive — stores a symbolic global expression."""
 
 import re
@@ -23,7 +26,12 @@ class KromeVar:
         """Parse a KROME ``@var:`` directive and store the symbolic expression.
 
         Logs a warning and skips the variable when the expression is not valid
-        SymPy syntax (rather than raising a hard error).
+        SymPy syntax.
+
+        Raises
+        ------
+        ParserError
+            If the line is not of the form ``@var: <name> = <expr>``.
         """
         local = self.local_re.match(line)
         if not local:

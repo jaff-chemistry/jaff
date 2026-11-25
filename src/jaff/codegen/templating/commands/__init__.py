@@ -4,6 +4,7 @@
 from typing import Dict, Type
 
 from .base import Command, FileSetting
+from .call import Call
 from .comment import Comment
 from .define import Define
 from .end import End
@@ -24,10 +25,12 @@ COMMANDS: Dict[str, Type[Command]] = {
     "end": End,
     "lang": Lang,
     "comment": Comment,
+    "call": Call,
 }
 
 __all__ = [
     "COMMANDS",
+    "Call",
     "Command",
     "Comment",
     "Define",

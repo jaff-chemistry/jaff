@@ -1,3 +1,6 @@
+# ABOUTME: KROME comma-delimited reaction handler
+# ABOUTME: Parses a reaction line against the active @format column layout
+
 """KROME comma-delimited reaction handler."""
 
 import re
@@ -27,7 +30,14 @@ class KromeReaction:
         "PHOTON": "_PHOTON",
     }
 
-    WHOLE_TOKEN_MAP = {"E": "e-", "e": "e-", "g": "_GRAIN", **SPECIAL_MAP}
+    # KROME's ``g`` / ``G`` is the photon (KROME drops it from its rate equations).
+    WHOLE_TOKEN_MAP = {
+        "E": "e-",
+        "e": "e-",
+        "g": "_PHOTON",
+        "G": "_PHOTON",
+        **SPECIAL_MAP,
+    }
 
     SUBSTRING_MAP = {"HE": "He"}
 
@@ -46,6 +56,26 @@ class KromeReaction:
         "user_crate": "crate",
         "user_av": "av",
     }
+    """Rate-variable aliases, matched as whole words in any case."""
+
+    _RATE_REPS_RE = re.compile(r"\b(" + "|".join(RATE_REPS) + r")\b", flags=re.IGNORECASE)
+
+    _AV_RE = re.compile(r"\bav\b", flags=re.IGNORECASE)
+
+    _COMMENT_RE = re.compile(r"[!#]")
+    """Where an end-of-line comment starts (``!`` or ``#``; no rate contains either)."""
+
+    _GRAIN_RE = re.compile(r"\bgrains?\b", flags=re.IGNORECASE)
+    """A comment marking a grain reaction (``# grain``, ``! H2 on grains``)."""
+
+    _IF_RE = re.compile(r"^\s*if\s*\(", flags=re.IGNORECASE)
+    """A conditional rate, ``if(<Fortran condition>): <rate>``."""
+
+    COMPARISONS = {".ge.": ">=", ".le.": "<=", ".gt.": ">", ".lt.": "<"}
+    """Fortran comparisons in an ``if()`` condition, as Python operators."""
+
+    _UNSUPPORTED_RE = re.compile(r"\.eq\.|\.ne\.|\.not\.|==|/=")
+    """Operators an ``if()`` condition may not use (yet)."""
 
     def local_re(self, state: dict) -> re.Pattern:
         """Build the field-extraction regex for the active KROME column layout."""
@@ -66,11 +96,14 @@ class KromeReaction:
 
         Extracts the index, reactants, products, temperature bounds, and rate
         expression from the comma-delimited KROME format.  Applies species
-        normalisation (``E``/``e`` → ``e-``, ``g`` → ``_GRAIN``,
+        normalisation (``E``/``e`` → ``e-``, ``g``/``G`` (the photon) → ``_PHOTON``,
         ``HE`` → ``He``), normalises exotic pseudo-species
         (``CR``/``CRP``/``CRPHOT``/``PHOTON`` → underscore form), and converts
-        ``user_crflux``/``user_av`` aliases.  Fortran exponent
+        ``user_crflux``/``user_crate``/``user_av`` aliases (whole words, any
+        case).  Fortran exponent
         notation is converted to Python notation via :func:`~jaff.common.f90_convert`.
+        An end-of-line ``!`` / ``#`` comment is dropped from the rate; one mentioning
+        ``grain`` or ``grains`` makes the reaction a ``"grain"`` reaction.
 
         Raises
         ------
@@ -85,7 +118,7 @@ class KromeReaction:
         products: str = local.group("products")
         tmin: str = local.groupdict().get("tmin", "").strip().lower()
         tmax: str = local.groupdict().get("tmax", "").strip().lower()
-        rate: str = local.groupdict().get("rate", "").strip()
+        rate, comment = self._split_comment(local.groupdict().get("rate", ""))
 
         rr: list[str] = [r.strip() for r in reactants.split(",")[:-1]]
         pp: list[str] = [p.strip() for p in products.split(",")[:-1]]
@@ -135,10 +168,11 @@ class KromeReaction:
                 tmax = tmax.replace(k, v)
             t_max = float(tmax)
 
-        for k, v in self.RATE_REPS.items():
-            rate = rate.replace(k, v)
+        rate = self._RATE_REPS_RE.sub(lambda m: self.RATE_REPS[m[1].lower()], rate)
 
         rate = f90_convert(rate)
+        # ``KromeParser.post_process`` turns krome_if(cond, k) into a Piecewise.
+        rate = self._conditional(rate, line, nline, file)
         # ``KromeParser.post_process`` numbers the placeholder into photorates().
         if "auto" in rate:
             rate = rate.replace("auto", "krome_photo(1e99, 1e99)")
@@ -147,30 +181,109 @@ class KromeReaction:
             rr.append("_PHOTON")
 
         return {
-            "r": rr,
-            "p": pp,
+            "reactants": rr,
+            "products": pp,
             "tmin": t_min,
             "tmax": t_max,
             "rate": rate,
-            "type": self._reaction_type(rate, rr),
-            "string": line.strip(),
+            "type": "grain"
+            if self._GRAIN_RE.search(comment)
+            else self._reaction_type(rate, rr, pp),
+            "line": line.strip(),
         }
 
+    @classmethod
+    def _split_comment(cls, field: str) -> tuple[str, str]:
+        """The rate field without its end-of-line comment, and the comment.
+
+        KROME strips a ``!`` or ``#`` comment from a reaction line's last field; it
+        may mark a grain reaction (``# grain``).  The comment is ``""`` without one.
+        """
+        match = cls._COMMENT_RE.search(field)
+        if match is None:
+            return field.strip(), ""
+
+        return field[: match.start()].strip(), field[match.start() + 1 :].strip()
+
+    @classmethod
+    def _conditional(cls, rate: str, line: str, nline: int, file) -> str:
+        """``if(cond): k`` as the placeholder ``krome_if(cond, k)``; else *rate*.
+
+        KROME computes such a rate only while the Fortran condition holds (the
+        rate stays ~0 otherwise).  Only a rate *starting* with ``if(`` is one, so a
+        ``:`` elsewhere (``n(:)``) is not a condition.  ``KromeParser.post_process``
+        makes the placeholder ``Piecewise((k, cond), (0, True))``.
+
+        Raises
+        ------
+        ParserError
+            If the parentheses do not close, no ``:`` follows them, or the
+            condition uses an unsupported operator.
+        """
+        if not cls._IF_RE.match(rate):
+            return rate
+
+        start = rate.index("(")
+        depth = 0
+        for end in range(start, len(rate)):
+            depth += {"(": 1, ")": -1}.get(rate[end], 0)
+            if depth == 0:
+                break
+        rest = rate[end + 1 :].lstrip()
+        if depth != 0 or not rest.startswith(":"):
+            raise ParserError(
+                "Invalid KROME conditional rate: expected if(<condition>): <rate>",
+                line,
+                nline,
+                file,
+            )
+
+        condition = cls._condition(rate[start + 1 : end], line, nline, file)
+
+        return f"krome_if({condition}, {rest[1:].strip()})"
+
+    @classmethod
+    def _condition(cls, condition: str, line: str, nline: int, file) -> str:
+        """A Fortran ``if()`` condition as a Python one: ``.gt.`` etc. as ``>`` etc.,
+        ``.and.`` / ``.or.`` as ``&`` / ``|`` with every comparison parenthesized
+        (``.and.`` binds tighter than ``.or.``, as ``&`` does than ``|``)."""
+        condition = f90_convert(condition.lower())
+        if cls._UNSUPPORTED_RE.search(condition):
+            raise ParserError(
+                "KROME if() condition uses an unsupported operator "
+                "(.eq., .ne., .not., == or /=)",
+                line,
+                nline,
+                file,
+            )
+        for fortran, python in cls.COMPARISONS.items():
+            condition = condition.replace(fortran, python)
+
+        return " | ".join(
+            "(" + " & ".join(f"({c.strip()})" for c in part.split(".and.")) + ")"
+            for part in condition.split(".or.")
+        )
+
     @staticmethod
-    def _reaction_type(rate: str, rr: list[str]) -> str:
-        """Conclude the reaction type from the reactants, falling back to rate.
+    def _reaction_type(rate: str, rr: list[str], pp: list[str]) -> str:
+        """Conclude the reaction type from the species, falling back to rate.
 
         Structural signals are checked first so the result survives custom
         auxiliary-function rates: a ``_PHOTON`` reactant -> ``"photo"``, a
         cosmic-ray pseudo-species (``_CR``/``_CRP``/``_CRPHOT``) ->
-        ``"cosmic_ray"``, three or more real reactants -> ``"3_body"``. Only
-        then is the rate inspected (``photo``/``av`` -> ``"photo"``, ``crate``
-        -> ``"cosmic_ray"``, ``ntot`` -> ``"3_body"``); otherwise ``"unknown"``.
+        ``"cosmic_ray"``, a ``_PHOTON`` product -> ``"recombination"`` with an
+        ``e-`` reactant (radiative recombination) or ``"radiative_association"``
+        without one, three or more real reactants -> ``"3_body"``. Only
+        then is the rate inspected (``photo``, or ``av`` as a whole word in any
+        case, -> ``"photo"``, ``crate`` -> ``"cosmic_ray"``, ``ntot`` ->
+        ``"3_body"``); otherwise ``"unknown"``.
         """
         if "_PHOTON" in rr:
             return "photo"
         if any(c in rr for c in ("_CR", "_CRP", "_CRPHOT")):
             return "cosmic_ray"
+        if "_PHOTON" in pp:
+            return "recombination" if "e-" in rr else "radiative_association"
         if sum(1 for r in rr if not r.startswith("_")) >= 3:
             return "3_body"
 
@@ -179,7 +292,7 @@ class KromeReaction:
             return "photo"
         if "crate" in r:
             return "cosmic_ray"
-        if "av" in r:
+        if KromeReaction._AV_RE.search(r):
             return "photo"
         if "ntot" in r:
             return "3_body"

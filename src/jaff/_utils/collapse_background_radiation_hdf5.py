@@ -1,9 +1,13 @@
+# ABOUTME: Collapses the tabulated background-radiation .dat files into one HDF5 file
+# ABOUTME: (one group per field: wavelength + intensity, sorted by wavelength).
 """Collapse the background-radiation ``.dat`` files into one combined HDF5 file.
 
 ``data/background_radiation/*.dat`` holds one tabulated radiation field per file
 (blackbodies, ISRF variants, solar, TW-Hya, ...).  This utility merges them into
 a single ``data/background_radiation.hdf5`` with one group per file (group name =
-the file stem, e.g. ``"bb_10000"``, ``"solar"``, ``"tw_hydra"``).
+the file stem, e.g. ``"bb_10000"``, ``"solar"``, ``"tw_hydra"``).  JAFF reads the
+fields from ``data/background_radiation/radiation.hdf5``, so the output must be
+moved there to take effect.
 
 Source ``.dat`` format
 ----------------------
@@ -79,7 +83,7 @@ def collapse_background_radiation(rad_dir: Path, out_path: Path, logger) -> int:
         h5.attrs["created"] = date.today().isoformat()
 
         for f in files:
-            lines = f.read_text().splitlines()
+            lines = f.read_text(encoding="utf-8").splitlines()
             hdr = _parse_header([ln for ln in lines if ln.startswith("#")])
             # genfromtxt + invalid_raise=False drops malformed rows (e.g. a
             # truncated final line) instead of aborting the whole file.
@@ -105,7 +109,8 @@ def collapse_background_radiation(rad_dir: Path, out_path: Path, logger) -> int:
 
 
 def main() -> None:
-    """Build ``background_radiation.hdf5`` in ``data/``."""
+    """Build ``background_radiation.hdf5`` in ``data/`` (JAFF reads
+    ``data/background_radiation/radiation.hdf5``; see the module docstring)."""
     logger = JaffLogger().get_logger()
     collapse_background_radiation(
         DATA_DIR / "background_radiation",

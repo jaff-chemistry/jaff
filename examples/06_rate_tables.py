@@ -65,7 +65,7 @@ def _(mo, net, sympy, tabulable):
     _tgas = sympy.Symbol("tgas")
     _counts = {"depends only on temperature": 0, "constant": 0, "depends on more": 0}
     for _rxn in net.reactions:
-        _symbols = tabulable(_rxn.rate_coefficient).free_symbols
+        _symbols = tabulable(_rxn.rate.coefficient).free_symbols
         if not _symbols:
             _counts["constant"] += 1
         elif _symbols == {_tgas}:
@@ -92,9 +92,9 @@ def _(mo):
     log-spaced temperatures and repeatedly inserts a point halfway (in
     $\log T$) between every pair. At each new point it compares the exact rate
     with the value interpolated from its neighbours, and stops once the largest
-    relative error over all reactions is below `err_tol`. `nT_max` caps the
-    grid size so a network that cannot reach `err_tol` stops with a warning
-    instead of refining forever.
+    relative error over all reactions is below `err_tol`. Nothing caps the grid
+    size: each pass roughly doubles it, so a network that cannot reach
+    `err_tol` keeps refining until it runs out of time or memory.
 
     We ask for 10 K to 10⁴ K with 5 % accuracy. The file extension picks the
     format: `.hdf5` here, `.txt` for a plain-text table.
@@ -222,7 +222,7 @@ def _(
 ):
     _rxn = reaction_by_name[reaction_picker.value]
     _row = table_data[table_names.index(reaction_picker.value)]
-    _exact = lambdify(sympy.Symbol("tgas"), tabulable(_rxn.rate_coefficient), "numpy")
+    _exact = lambdify(sympy.Symbol("tgas"), tabulable(_rxn.rate.coefficient), "numpy")
 
     _mid = np.sqrt(table_temps[1:] * table_temps[:-1])
     _interp = np.exp(0.5 * (np.log(_row[1:]) + np.log(_row[:-1])))
@@ -294,8 +294,8 @@ def _(mo):
     The default `err_tol=0.01` needs about 16 000 points for this network. For
     the full KIDA network (about 7 600 reactions), several rates jump by more than
     an order of magnitude across the 1 K gaps between their temperature ranges,
-    and reaching 10 % takes roughly 64 000 points; `nT_max` (default 16 385)
-    stops the refinement before that. Improving this is tracked in
+    and reaching 10 % takes roughly 64 000 points, with nothing to stop the
+    refinement earlier. Improving this is tracked in
     [issue #217](https://github.com/jaff-chemistry/jaff/issues/217).
 
     One more caveat: `output_units` currently says `cm^3 s^-1` for every row,

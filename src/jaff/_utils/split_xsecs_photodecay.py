@@ -1,3 +1,5 @@
+# ABOUTME: One-shot migration splitting bundled Leiden/NORAD cross-section HDF5
+# ABOUTME: groups into per-decay-channel groups with a single photodecay dataset.
 """Split the bundled Leiden/NORAD cross-section HDF5 files into per-channel
 groups carrying a single ``photodecay`` dataset.
 
@@ -13,7 +15,10 @@ each bundled group into one reaction per decay channel:
 - ``<R>__<dissoc products>``  -- ``photodecay`` = photodissociation xsec
 - ``<R>._PHOTON__<R+>.e-``    -- ``photodecay`` = photoionisation xsec
 
-emitted only for channels that carry signal.  ``photoabsorption`` (shared
+emitted only for channels that carry signal.  This was a one-shot migration of
+the older bundled layout; the shipped files are already split, and their
+dissociation keys have since gained ``_PHOTON`` too
+(``<R>._PHOTON__<dissoc products>``).  ``photoabsorption`` (shared
 between a species' channels) and ``photon_energy`` are copied into each group.
 
 ``norad.hdf5`` is single-channel already (photoionisation); its

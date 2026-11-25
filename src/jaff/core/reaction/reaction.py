@@ -1,3 +1,6 @@
+# ABOUTME: Reaction class: one reaction's species, rate segments and photo props
+# ABOUTME: Serialization, conservation checks, flux strings and rate plotting
+
 """Single astrochemical :class:`Reaction` for JAFF chemical networks.
 
 A ``Reaction`` holds the symbolic rate expression, reactants, products, and
@@ -5,14 +8,18 @@ optional temperature bounds for a single astrochemical reaction.
 
 Serialized form
 ---------------
-The serialized form of a reaction is::
+The serialized form of a reaction is:
 
-    "<sorted_reactant_names>__<sorted_product_names>"
+```text
+"<sorted_reactant_names>__<sorted_product_names>"
+```
 
 where species names are sorted alphabetically and joined with ``"."``, and
 the two sides are separated by ``"__"``.  For example
 ``H + H2O+ -> H2O + H+`` serializes as ``"H.H2O+__H+.H2O"``.  This canonical
-form is used for equality testing, hashing, and duplicate detection.
+form is used for hashing and duplicate detection.  Equality compares the
+``(serialized, type)`` pair, so the same reaction under two mechanisms is two
+distinct reactions; the hash uses ``serialized`` alone.
 
 The ``"."`` species joiner (rather than ``"_"``) is required because special
 pseudo-species names start with an underscore (e.g. ``_PHOTON``, ``_GRAIN``)
@@ -30,6 +37,10 @@ longer inspects the rate expression).  The generic gas-phase types are:
 - ``"3_body"``      — three-body reaction
 - ``"unknown"``     — unclassified
 
+KIDA networks map their ``itype`` column to ``"cosmic_ray"``, ``"photo"``,
+``"two_body"``, ``"radiative_association"``, ``"associative_detachment"``,
+``"recombination"``, ``"grain"`` and ``"special"``.
+
 Grain/ice networks (e.g. UCLCHEM) additionally classify by surface mechanism:
 ``"freeze"``, ``"desorption_thermal"``, ``"desorption_cr"``,
 ``"desorption_uvcr"``, ``"desorption_h2"``, ``"eley_rideal"``,
@@ -41,12 +52,10 @@ stored verbatim.  See the UCLCHEM parser README for that format's mapping.
 
 from __future__ import annotations
 
-import sys
 from functools import cache, cached_property
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Mapping, cast
 
 import numpy as np
-from astropy import units as u
 from sympy import (
     Basic,
     Expr,
@@ -58,18 +67,15 @@ from ...errors import ParserError
 from ...io import JaffLogger
 from ..elements import Elements
 from ..species import Specie, Species
-from ._helper import to_float_or_none
-from .reaction_props import (
-    AuxFunctions,
-    PhotoReactionProps,
-    ReactionRadiationProps,
-    ShieldingProps,
-)
-from .types import RateSegment, RateSegments
+from .config import PhotoConfig, ReactionConfig
+from .photo_reaction import PhotoReaction
+from .rate import Rate
+from .reaction_energy import ReactionEnergy
+from .reaction_radiation import ReactionRadiation
+from .types import RateSegment, RateSegments, ReactionSource
 
 if TYPE_CHECKING:
     import matplotlib.pyplot as plt
-    import pandas as pd
 
     from ...core import Network
 
@@ -77,69 +83,134 @@ if TYPE_CHECKING:
 class Reaction:
     """A single astrochemical reaction with a symbolic rate expression.
 
+    Holds the reaction's reactants, products, symbolic rate coefficient, valid
+    temperature bounds, energy change and radiation terms.  Reactions are
+    normally built by :class:`~jaff.core.Network` while it parses a network
+    file and are reached through ``net.reactions`` (a :class:`Reactions`
+    catalogue).  Its settings (``t_cutoff``, photo-reaction options,
+    shielding) are :attr:`config`: the global ``[network.reactions]`` table
+    with any ``[network.reactions.reaction."<serialized>"]`` entry applied over
+    it (see :meth:`~jaff.core.reaction.config.ReactionsConfig.resolve`).
+
     Attributes
     ----------
+    net : Network
+        Network the reaction belongs to.  Supplies the ``.jfunc`` auxiliary
+        functions, the radiation field and the cross-section lookup.
+    source : ReactionSource
+        The network-file line that produced this reaction: raw ``line``, its
+        line number ``nline``, ``index`` and the parser ``format``.  A
+        reaction merged from several lines keeps each line on its rate
+        segments (``rate_segments[i].source``); this is the first.
     reactants : Species
         Ordered species catalogue of reactant species.
     products : Species
         Ordered species catalogue of product species.
-    rate_coefficient : Basic
-        SymPy expression for the reaction rate coefficient (units depend on
-        the reaction order; typically cm³ s⁻¹ for two-body reactions).
-        Reassigning it refreshes :attr:`rate`.
-    rate : Expr
-        ``rate_coefficient`` times the core reactants' number densities, the
-        reaction rate per unit volume used by every equation builder.
+    rate : Rate
+        The reaction rate per unit volume and its parts: ``rate.coefficient``,
+        the SymPy rate coefficient (the photo band rate when a radiation field
+        sets it, else the :attr:`rate_segments` collapsed into one expression;
+        units depend on the reaction order, typically cm³ s⁻¹ for two-body
+        reactions); ``rate.expanded``, the coefficient times the core reactants'
+        number densities; ``rate.reduced``, the same with the coefficient as its
+        symbol ``krate[r]``.  Used by every equation builder.
     tmin : float or None
-        Minimum gas temperature at which the rate is valid (Kelvin).
-        ``None`` means no lower bound.
+        Minimum gas temperature at which the rate is valid (Kelvin), from the
+        lowest rate segment.  ``None`` means no lower bound.  Read-only.
     tmax : float or None
-        Maximum gas temperature at which the rate is valid (Kelvin).
-        ``None`` means no upper bound.
-    t_cutoff : str
-        Out-of-range behaviour for a piecewise (multi-segment) rate:
-        ``"clip"`` holds the boundary value, otherwise the outermost segment
-        extends unbounded.  See :class:`~jaff.core.reaction.types.RateSegments`.
+        Maximum gas temperature at which the rate is valid (Kelvin), from the
+        highest rate segment.  ``None`` means no upper bound.  Read-only.
+    config : ReactionConfig
+        The reaction's resolved settings, every key set: ``t_cutoff``
+        (out-of-range behaviour of the rate segments, see
+        :class:`~jaff.core.reaction.types.RateSegments`), ``duplicate_policy``
+        and ``photo`` (``pi_database``, ``override_custom_rate``,
+        ``override_custom_cross_section``, ``use_proxy_photoreaction``,
+        ``shielding``).  Read-only.
     rate_segments : RateSegments
         Per-temperature-range rate pieces.  A single-range reaction holds one
         segment; reactions merged across disjoint ranges accumulate several,
-        collapsed into :attr:`rate_coefficient` via ``evaluate_equivalent_rate``.
-    dE : Basic
-        SymPy expression for the energy released per reaction event (erg).
+        collapsed into ``rate.coefficient`` (``rate_segments.equivalent_rate``).
+        Change the rates through it (``map_rates``, ``Reactions.add_rate``).
     verbatim : str
         Human-readable string ``"R1 + R2 -> P1 + P2"``.
     index : int
         File-side source number (``source_index``) of the reaction, i.e. its
         file-order row number.  Stable per parsed row and gapped when rows
         merge (``duplicate_policy`` or a temperature-range merge), so it is
-        NOT a valid array subscript.  Used for aux lookups (``chemRateN``) and
+        NOT a valid array subscript.  Used for ``.jfunc`` lookups (``chemRateCoeffN``,
+        ``deltaEN``, ...; see :meth:`function`) and
         :meth:`Reactions.by_source_index`.
     catalogue_index : int
         Dense 0..count-1 position of this reaction in the parent ``Reactions``
         catalogue, assigned by :meth:`Reactions.add`.  Safe to use as an array
-        subscript in generated code.  ``-1`` until catalogued.
+        subscript in generated code (what the ``reaction_idx`` template
+        property emits).  ``-1`` until catalogued.
     type : str
         Reaction type concluded by the parser and stored verbatim.  Generic
         gas-phase values are ``"photo"``, ``"cosmic_ray"``, ``"3_body"``,
-        ``"unknown"``; grain/ice networks add surface-mechanism types (see the
-        module docstring for the full list).
+        ``"unknown"``; KIDA networks add ``"two_body"``,
+        ``"radiative_association"``, ``"associative_detachment"``,
+        ``"recombination"``, ``"grain"`` and ``"special"``; grain/ice networks
+        (e.g. UCLCHEM) add surface-mechanism
+        types: ``"freeze"``, ``"desorption_thermal"``, ``"desorption_cr"``,
+        ``"desorption_uvcr"``, ``"desorption_h2"``, ``"eley_rideal"``,
+        ``"eley_rideal_desorption"``, ``"langmuir_hinshelwood"``,
+        ``"langmuir_hinshelwood_desorption"``, ``"h2_formation"``,
+        ``"bulk_swap"``, ``"surface_swap"``.  The set is open-ended.
     serialized : str
-        Canonical form ``"<sorted_reactants>__<sorted_products>"``.
+        Canonical name-level (isomer-sensitive) form
+        ``"<sorted_reactants>__<sorted_products>"``; see :meth:`serialize`.
     serialized_exploded : str
         Like ``serialized`` but built from the atom-level serialized forms of
-        each species (isomer-insensitive comparison).
-    photo : PhotoReactionProps or None
-        Photo-reaction state, ``None`` for non-photo reactions: ``xsec``
-        (cross sections of the single decay channel, an
-        :class:`~jaff.physics.XsecProps`), ``pi_database`` (per-reaction
-        photoionization database override), ``custom_rad_rate`` (rate
-        supplied by a ``.jfunc`` aux function), ``rgrouped`` (per-band data;
-        see :attr:`band_xsecs`) and ``shielding``; the spectrum-averaged cross
-        section is ``xsec.total`` (cm²).
-    rad : ReactionRadiationProps
-        Radiation the reaction emits: ``spectral_yield`` (from a ``.jfunc``
-        ``spectralYield`` function, or ``None``) and its per-group integrals
-        ``group_yields`` (set when a radiation field is configured).
+        each species (isomer-insensitive comparison); see
+        :meth:`serialize_exploded`.
+    photo : PhotoReaction or None
+        The photo-reaction component, ``None`` for non-photo reactions: its
+        resolved photo settings (``photo.config``, the same object as
+        ``config.photo``), cross sections (``photo.xsec``), per-band data
+        (``photo.bands``, ``photo.band_xsecs``), ``custom_rad_rate`` and
+        ``shielding_tables``.  See :class:`PhotoReaction`.
+    rad : ReactionRadiation
+        The reaction's radiation component: the radiation it emits
+        (``rad.spectral_yield``, its ``.jfunc`` ``spectralYield<N>``
+        function, erg eV⁻¹ per event as a function of ``ph_E``, or ``None``)
+        and its per-group integrals (``rad.group_yields``, set when a
+        radiation field is configured).  Any reaction type can emit, not only
+        photo reactions.  See :class:`ReactionRadiation`.
+    energy : ReactionEnergy
+        The reaction's energy component: the energy one event adds to the gas
+        (``energy.per_event``, erg: the ``.jfunc`` ``deltaE<N>``, else the
+        energy-change plugin, else the file's value, else 0) and the
+        reaction's term of ``dE/dt`` (``energy.change()``).  See
+        :class:`ReactionEnergy`.
+
+    Notes
+    -----
+    For a photo reaction the constructor also looks up its cross sections
+    (from a ``.jfunc`` ``photoCrossSection<N>`` function or the
+    cross-section databases) and, when the network has a radiation field,
+    replaces ``rate.coefficient`` with the sum of its per-band rate
+    coefficients.  A photo reaction whose rate comes from a ``.jfunc``
+    ``chemRateCoeff<N>`` keeps that rate (``photo.custom_rad_rate`` is ``True``)
+    and is not coupled to the bands, unless ``override_custom_rate`` is set.
+
+    Two reactions compare equal when both their :attr:`serialized` form and
+    :attr:`type` match; ordering and hashing use :attr:`serialized` alone.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> net = Network("h_photoionization")
+    >>> rxn = net.reactions["H+.e-__H"]
+    >>> rxn.verbatim
+    'H+ + e- -> H'
+    >>> rxn.type, rxn.index, rxn.catalogue_index
+    ('unknown', 1, 1)
+    >>> rxn.rate.coefficient
+    2.63e-13/(tgas/10000.0)**0.7
+    >>> net.reactions[0].type
+    'photo'
     """
 
     def __init__(
@@ -150,23 +221,18 @@ class Reaction:
         rate_coefficient: Expr,
         tmin: float | None,
         tmax: float | None,
-        original_string: str,
-        index: int,
+        source: ReactionSource,
         dE: Expr | None = None,
-        t_cutoff: str = "clip",
         type: str = "unknown",
-        photo: PhotoReactionProps | None = None,
-        rad: ReactionRadiationProps | None = None,
-        format: str | None = None,
         metadata: dict | None = None,
     ):
-        """Construct a ``Reaction`` and validate mass/charge conservation.
+        """Construct a ``Reaction`` from its species and rate.
 
         Parameters
         ----------
         net : Network
             Network the reaction belongs to; supplies the auxiliary functions,
-            radiation field, cross-section lookup and conservation-check mode.
+            radiation field and cross-section lookup.
         reactants : list[Specie]
             Reactant species (may contain duplicates for three-body reactions).
         products : list[Specie]
@@ -177,103 +243,68 @@ class Reaction:
             Lower temperature bound in Kelvin, or ``None``.
         tmax : float or None
             Upper temperature bound in Kelvin, or ``None``.
-        original_string : str
-            The raw network-file line that produced this reaction.
-        index : int
-            File-side source number (``source_index``): the file-order row
-            number of this reaction, gapped when rows merge.  Not an array
-            subscript; see the ``index`` / ``catalogue_index`` attributes.
+        source : ReactionSource
+            The network-file line that produced this reaction.  Its ``index``
+            becomes the reaction's ``index``.
         dE : Expr or None, optional
-            Energy change per event (erg).  A ``.jfunc`` ``deltae`` function
-            takes precedence; ``None`` (default) without one means zero.
-        t_cutoff : str, optional
-            Out-of-range behaviour for the initial rate segment (``"clip"`` by
-            default); see the :attr:`t_cutoff` attribute.
+            Energy change per event (erg).  A ``.jfunc`` ``deltaE<N>``
+            function takes precedence; ``None`` (default) without one means
+            zero.
         type : str, optional
             Reaction type as concluded by the network-format parser (e.g.
             ``"photo"``, ``"cosmic_ray"``, ``"3_body"``, ``"unknown"``, or a
             grain surface-mechanism type).  Stored verbatim on the ``type``
             attribute; defaults to ``"unknown"``.
-        photo : PhotoReactionProps or None, optional
-            Photo-reaction state; pass one for photo reactions, ``None``
-            (default) otherwise.
-        rad : ReactionRadiationProps or None, optional
-            Emitted radiation.  ``None`` (default) builds one from the
-            ``.jfunc`` ``spectralYield`` function, if any.
-        format : str or None, optional
-            Name of the network-format parser that produced the reaction
-            (e.g. ``"prizmo"``); ``None`` (default) when unknown.
         metadata : dict or None, optional
             Parser-private data attached at parse time; ``None`` (default)
             starts empty.
 
         Raises
         ------
-        SystemExit
-            When ``net.spec.errors`` is set and mass or charge is not conserved.
         ParserError
-            For invalid photo-reaction or shielding configuration.
+            For invalid photo-reaction or shielding configuration (e.g. a
+            ``pi_database`` set on a reaction whose cross section comes from
+            a ``photoCrossSection<N>`` function), or an energy change depending
+            on ``ph_E`` with no band photons to average it over (see
+            :meth:`ReactionEnergy.compute`).
         """
         self.logger = JaffLogger().get_logger()
         self.net: "Network" = net
-        self._format: str | None = format
         self._metadata: dict = metadata if metadata is not None else {}
-        self.index: int = index
-        self.aux_funcs: AuxFunctions = self.__get_aux_funcs()
+        self.source: ReactionSource = source
+        self.index: int = source.index
+        self.__check_functions()
         self.reactants: Species = Species(reactants, check_length=False)
         self.products: Species = Species(products, check_length=False)
-        self.rate_coefficient = rate_coefficient
-        self.tmin: float | None = tmin
-        self.tmax: float | None = tmax
-        self.t_cutoff: str = t_cutoff
+        self.serialized: str = self.serialize(self.reactants, self.products)
+        self.config: ReactionConfig = self.net.reactions.config.resolve(self.serialized)
         self.rate_segments: RateSegments = RateSegments(
-            [RateSegment(rate_coefficient, tmin, tmax)], t_cutoff
+            self, [RateSegment(rate_coefficient, tmin, tmax, source)]
         )
-        self.dE: Expr = (
-            cast(Expr, self.aux_funcs.deltae.expr)
-            if self.aux_funcs.deltae is not None
-            else (dE if dE is not None else Float(0.0))
+        model_dE = self.model("energy_change")
+        self.energy: ReactionEnergy = ReactionEnergy(
+            self,
+            model_dE if model_dE is not None else (dE if dE is not None else Float(0.0)),
         )
-        self.photo: PhotoReactionProps | None = photo
-        self.rad: ReactionRadiationProps = (
-            rad
-            if rad is not None
-            else ReactionRadiationProps(
-                spectral_yield=cast(Expr, self.aux_funcs.spectralyield.expr)
-                if self.aux_funcs.spectralyield is not None
-                else None
-            )
-        )
-        self.original_string = original_string
-        # verbatim is kept for backward compatibility alongside original_string
+        self.rad: ReactionRadiation = ReactionRadiation(self)
+        # verbatim is the "R1 + R2 -> P1 + P2" form built from the species
+        # names; source.line keeps the raw source line
         self.verbatim: str = self.get_verbatim()
         self.catalogue_index: int = -1
 
-        self.check(self.net.spec.errors)
         self.serialized_exploded: str = self.serialize_exploded()
-        self.serialized: str = self.serialize(self.reactants, self.products)
         # The reaction type is concluded by the parser and supplied here, not
         # inferred from the rate expression.
         self.type: str = type
 
-        # Looked up for every reaction so a non-photo entry is rejected.
-        shielding = self.__get_shielding()
-        if self.photo is not None and self.photo.shielding is None:
-            self.photo.shielding = shielding
-
+        self.photo: PhotoReaction | None = (
+            PhotoReaction(self, self.__photo_config()) if type == "photo" else None
+        )
         if self.photo is not None:
-            if self.aux_funcs.chemrate is not None:
-                self.photo.custom_rad_rate = not self.__overrides_custom_rate()
+            self.photo.compute()
 
-            self.__set_xsec_props()
-
-            if self.net.radiation is not None:
-                self.__set_photo_reaction_props()
-
-        if self.net.radiation is not None and self.rad.spectral_yield is not None:
-            self.rad.group_yields = self.net.radiation.integrate_over_groups(
-                self.rad.spectral_yield
-            )
+        self.rad.compute()
+        self.energy.compute()
 
     def __repr__(self):
         """Return detailed string representation of this reaction.
@@ -296,7 +327,10 @@ class Reaction:
         return self.verbatim
 
     def __eq__(self, other):
-        """Check equality by comparing serialized (name-level) forms.
+        """Check equality by comparing serialized (name-level) forms and types.
+
+        Two reactions are equal when both :attr:`serialized` and :attr:`type`
+        match.
 
         Parameters
         ----------
@@ -321,6 +355,9 @@ class Reaction:
 
     def __hash__(self):
         """Return hash based on the serialized (name-level) form.
+
+        The type is not hashed, so reactions that differ only in type share a
+        hash (but compare unequal).
 
         Returns
         -------
@@ -352,168 +389,181 @@ class Reaction:
 
         return self.serialized < other.serialized
 
-    def __get_aux_funcs(self) -> AuxFunctions:
-        af = self.net.spec.aux_funcs
+    def function(self, kind: str) -> Expr | None:
+        """The reaction's ``.jfunc`` ``<kind><N>`` function, read as a network input.
 
-        return AuxFunctions(
-            chemrate=af.get(f"chemrate{self.index}", None),
-            deltae=af.get(f"deltae{self.index}", None),
-            photocrosssection=af.get(f"photocrosssection{self.index}", None),
-            spectralyield=af.get(f"spectralyield{self.index}", None),
-        )
+        ``<N>`` is :attr:`index`; e.g. ``function("deltaE")`` is the reaction's
+        ``deltaE<N>``, with its parameters read as network quantities (see
+        :meth:`~jaff.core.network.NetworkFunctions.value`).
 
-    def __overrides_custom_rate(self) -> bool:
-        """Whether radiation recomputes this photo reaction's ``chemRate`` rate.
-
-        The reaction's own ``override_custom_rate`` wins over the global
-        :attr:`RadiationProps.override_custom_rate`; without radiation there is
-        no cross-section rate to use, so the ``chemRate`` is always kept.
-        """
-        assert self.photo is not None
-
-        rad = self.net.radiation
-        if rad is None:
-            return False
-
-        if self.photo.override_custom_rate is not None:
-            return self.photo.override_custom_rate
-
-        return rad.override_custom_rate
-
-    def __overrides_custom_cross_section(self) -> bool:
-        """Whether this photo reaction ignores its ``photoCrossSection``.
-
-        The reaction's own ``override_custom_cross_section`` wins over the
-        global :attr:`RadiationProps.override_custom_cross_section` (``False``
-        without radiation).
-        """
-        assert self.photo is not None
-
-        if self.photo.override_custom_cross_section is not None:
-            return self.photo.override_custom_cross_section
-
-        rad = self.net.radiation
-
-        return rad.override_custom_cross_section if rad is not None else False
-
-    def __get_shielding(self) -> ShieldingProps | None:
-        """Shielding model and settings from the jaffgen ``[reactions]`` table.
+        Parameters
+        ----------
+        kind : str
+            The function kind (case-insensitive): ``"chemRateCoeff"``, ``"deltaE"``,
+            ``"photoCrossSection"``, ``"spectralYield"``, ...
 
         Returns
         -------
-        ShieldingProps or None
-            The model (``type`` defaulting to ``"leiden"``) and its settings,
-            with string values lower-cased, or ``None`` when the reaction has
-            no shielding entry.
+        sympy.Expr or None
+            The standardized function, or ``None`` when the ``.jfunc`` file
+            defines none for this reaction.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> net = Network("GOW")
+        >>> rxn = net.reactions.by_source_index(0)
+        >>> rxn.verbatim
+        'H + _CR -> H+ + e-'
+        >>> rxn.function("deltaE") is None, rxn.function("photoCrossSection") is None
+        (False, True)
+        """
+        name = f"{kind}{self.index}"
+        functions = self.net.functions
+
+        return functions.value(name) if name in functions else None
+
+    MODEL_KINDS: ClassVar[dict[str, str]] = {"energy_change": "deltaE"}
+    """The kinds :meth:`model` resolves, each with its ``.jfunc`` function kind."""
+
+    def model(self, kind: str) -> Expr | None:
+        """The reaction's *kind* model: its ``.jfunc`` function, else its plugin's value.
+
+        The ``.jfunc`` function (e.g. ``deltaE<N>`` for ``"energy_change"``) takes
+        preference; without one, the plugin the reaction's config selects (e.g.
+        ``thermodynamics.energy_change``) gives the value.  ``None`` when neither
+        exists: the caller falls back (for the energy change: the network file's
+        value, else 0).
+
+        Parameters
+        ----------
+        kind : str
+            One of :attr:`MODEL_KINDS` (``"energy_change"``).
+
+        Returns
+        -------
+        sympy.Expr or None
 
         Raises
         ------
-        ParserError
-            If shielding is configured for a non-photo reaction.
+        ValueError
+            If *kind* is not one of :attr:`MODEL_KINDS`.
         """
-        rprops = self.net.spec._metadata.get("reaction_props", {})
-        shielding = rprops.get(self.serialized, {}).get("shielding")
-        if shielding is None:
+        if kind not in self.MODEL_KINDS:
+            raise ValueError(
+                f"Unknown model kind {kind!r}; expected one of: "
+                f"{', '.join(self.MODEL_KINDS)}"
+            )
+
+        function = self.function(self.MODEL_KINDS[kind])
+        if function is not None:
+            return function
+
+        return self.__plugin_energy_change()
+
+    def __plugin_energy_change(self) -> Expr | None:
+        """The energy change of the plugin ``thermodynamics.energy_change`` selects."""
+        thermodynamics = self.config.thermodynamics
+        table = thermodynamics.energy_change if thermodynamics is not None else None
+        if table is None:
             return None
 
-        if self.type != "photo":
-            raise ParserError(f"{self} is not a photo reaction")
+        # Local import: the plugin registry imports the reaction config.
+        from ...physics.thermodynamics.energy_change import energy_change_function
 
-        props = {
-            k: (v.lower() if isinstance(v, str) else v) for k, v in shielding.items()
-        }
+        return energy_change_function(table.type, self.serialized).energy_change(self)
 
-        return ShieldingProps(type=props.pop("type", "leiden"), props=props)
+    def expressions(self) -> list[Expr]:
+        """Every expression the reaction and its components hold.
 
-    def __set_xsec_props(self):
-        from ...physics import Photochemistry
-
-        assert self.photo is not None
-
-        if self.net._photochemistry is None:
-            self.net._photochemistry = Photochemistry(self.net)
-
-        custom = self.aux_funcs.photocrosssection
-        if custom is not None and not self.__overrides_custom_cross_section():
-            if self.photo.pi_database is not None:
-                raise ParserError(
-                    f"pi_database cannot be set for {self}: its cross section comes "
-                    "from a photoCrossSection function"
-                )
-
-            self.photo.xsec = self.net._photochemistry.get_custom_xsec(
-                self, cast(Expr, custom.expr)
-            )
-            return
-
-        # A .jaff reload has no aux functions but carries the custom cross section.
-        if self.photo.xsec is not None and self.photo.xsec.database == "custom":
-            return
-
-        # A cross section is mandatory only when radiation sets the rate.
-        self.photo.xsec = (
-            self.net._photochemistry.get_xsec(
-                self,
-                required=self.net.radiation is not None
-                and not self.photo.custom_rad_rate,
-            )
-            or self.photo.xsec
-        )
-
-    def __set_photo_reaction_props(self):
-        assert self.net.radiation is not None
-        assert self.photo is not None
-
-        # A custom rate is not driven by the transported field, so the reaction
-        # is not coupled to the bands and gets no band data.
-        if self.photo.custom_rad_rate:
-            self.logger.warning(
-                f"Photo reaction [cyan]{self}[/] (index {self.index}) uses the custom "
-                f"rate chemRate{self.index}: it is not coupled to the radiation bands "
-                "and removes no photons. Supply a photoCrossSection"
-                f"{self.index} instead, or set override_custom_rate = true to "
-                "compute its rate from the database cross sections."
-            )
-            return
-
-        k_tot, xsec_tot, grouped = self.net.radiation.get_reaction_rate_props(self)
-        self.rate_coefficient = k_tot
-
-        assert self.photo.xsec is not None
-        self.photo.xsec.total = xsec_tot
-        self.photo.rgrouped = grouped
-
-    @property
-    def rate_coefficient(self) -> Expr:
-        """SymPy rate coefficient; see the class attributes."""
-        return self._rate_coefficient
-
-    @rate_coefficient.setter
-    def rate_coefficient(self, value: Expr) -> None:
-        self._rate_coefficient: Expr = value
-        # Drop the cached rate so the next read recomputes it from the new value.
-        self.__dict__.pop("rate", None)
-
-    @cached_property
-    def rate(self) -> Expr:
-        """Reaction rate per unit volume, ``rate_coefficient · Π nden[reactants]``.
-
-        Recomputed after :attr:`rate_coefficient` is reassigned.
+        Its rate segments, then those of :attr:`energy`, :attr:`rad` and
+        :attr:`photo` (see their ``expressions``).  :meth:`substitute` changes
+        exactly these.
 
         Returns
         -------
-        Expr
+        list[Expr]
+            The expressions.
         """
-        nden = self.net.symbols.ndens
-        rate = self.rate_coefficient
-        for s in self.reactants.core:
-            rate *= nden[self.net.species[s.name].index]
+        exprs = [seg.rate for seg in self.rate_segments]
+        exprs += self.energy.expressions()
+        exprs += self.rad.expressions()
+        if self.photo is not None:
+            exprs += self.photo.expressions()
 
-        return rate
+        return exprs
+
+    def substitute(self, mapping: Mapping[Basic, Basic]) -> None:
+        """Apply *mapping* (``xreplace``) to every expression in :meth:`expressions`.
+
+        Parameters
+        ----------
+        mapping : Mapping[Basic, Basic]
+            Old symbol or expression to its replacement.
+        """
+        self.rate_segments.map_rates(lambda rate: cast(Expr, rate.xreplace(mapping)))
+        self.energy.substitute(mapping)
+        self.rad.substitute(mapping)
+        if self.photo is not None:
+            self.photo.substitute(mapping)
+
+    def __check_functions(self) -> None:
+        """Reject a reaction with both a custom rate and a custom cross section."""
+        functions = self.net.functions
+        if (
+            f"chemratecoeff{self.index}" in functions
+            and f"photocrosssection{self.index}" in functions
+        ):
+            raise ParserError(
+                "A reaction cannot have both a chemRateCoeff and a photoCrossSection "
+                "auxiliary function"
+            )
+
+    def __photo_config(self) -> PhotoConfig:
+        """The resolved photo settings (always set once resolved)."""
+        photo = self.config.photo
+        assert photo is not None, f"{self}: unresolved config"
+
+        return photo
+
+    @property
+    def tmin(self) -> float | None:
+        """Lower temperature bound of the lowest rate segment (K); see the attributes."""
+        return self.rate_segments.sort()[0].tmin
+
+    @property
+    def tmax(self) -> float | None:
+        """Upper temperature bound of the highest rate segment (K); see the attributes."""
+        return self.rate_segments.sort()[-1].tmax
+
+    @cached_property
+    def rate(self) -> Rate:
+        """Reaction rate per unit volume, ``rate.coefficient · Π nden[reactants]``.
+
+        A :class:`~jaff.core.reaction.Rate`: ``rate.expanded`` writes the rate
+        coefficient out, ``rate.reduced`` uses its symbol ``krate[r]``.  The densities
+        are those (``net.symbols.ndens``) of the core reactants; pseudo-species such as
+        ``_PHOTON`` or ``_CR`` carry no density.
+
+        Returns
+        -------
+        Rate
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> net = Network("h_photoionization")
+        >>> net.reactions["H+.e-__H"].rate.expanded
+        1.65941781598291e-10*nden[1]*nden[2]/tgas**0.7
+        """
+        return Rate(self)
 
     @cached_property
     def species(self) -> Species:
         """All unique species involved in this reaction (reactants ∪ products).
+
+        Merges the reactant and product catalogues without double-counting a
+        species that appears on both sides.  Cached after the first access.
 
         Returns
         -------
@@ -525,11 +575,15 @@ class Reaction:
     def elements(self) -> Elements:
         """All elements present across reactants and products.
 
+        Cached after the first access.
+
         Returns
         -------
         Elements
+            Catalogue of every unique chemical element in the reaction's
+            reactants and products.
         """
-        return Elements(self.reactants._list + self.products._list)
+        return Elements([*self.reactants, *self.products])
 
     def is_isomer_version(self, other: "Reaction") -> bool:
         """Check whether *other* is an isomer variant of this reaction.
@@ -546,6 +600,8 @@ class Reaction:
         Returns
         -------
         bool
+            ``True`` if *other* is an isomeric version of this reaction (e.g.
+            the same reaction with HOC+ in place of HCO+).
         """
         # Atom-level comparison ignores isomer distinctions (e.g. HCO+ ≡ HOC+).
         is_same_serialized = self.serialized_exploded == other.serialized_exploded
@@ -563,10 +619,15 @@ class Reaction:
         Each species is replaced by its ``Specie.serialized`` form (e.g.
         H2O+ → ``"+/H/H/O"``), then species tokens are sorted and joined
         with ``"."``.  Reactants and products are separated by ``"__"``.
+        Two reactions that differ only in isomers (e.g. HCO+ vs HOC+) share
+        this form.
 
         Returns
         -------
         str
+            Atom-level canonical key, e.g. ``"+/H/H/O.H__+/H.H/H/O"`` for
+            ``H + H2O+ -> H2O + H+``; also stored as
+            :attr:`serialized_exploded`.
         """
         sr = ".".join(sorted([x.serialized for x in self.reactants]))
         sp = ".".join(sorted([x.serialized for x in self.products]))
@@ -581,11 +642,33 @@ class Reaction:
         """Build the name-level serialized form (isomer-sensitive).
 
         Species names are sorted alphabetically and joined with ``"."``.
-        Reactants and products are separated by ``"__"``.
+        Reactants and products are separated by ``"__"``.  The ``"."``
+        joiner (not ``"_"``) is used because special pseudo-species names
+        start with ``_`` (e.g. ``_PHOTON``) and grain/ice species end in
+        ``_DUST``-style suffixes.  A static method: the instance's form is
+        stored as :attr:`serialized`.
+
+        Parameters
+        ----------
+        reactants : Species or list[Specie]
+            Reactant species.
+        products : Species or list[Specie]
+            Product species.
 
         Returns
         -------
         str
+            Name-level canonical key, e.g. ``"H.H2O+__H+.H2O"`` for
+            ``H + H2O+ -> H2O + H+``.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.core.reaction import Reaction
+        >>> net = Network("h_photoionization")
+        >>> rxn = net.reactions[0]
+        >>> Reaction.serialize(rxn.reactants, rxn.products)
+        'H._PHOTON__H+.e-'
         """
         sr = ".".join(sorted([r.name for r in reactants]))
         sp = ".".join(sorted([p.name for p in products]))
@@ -611,41 +694,18 @@ class Reaction:
 
         return self.serialize(rs, ps)
 
-    def check(self, errors: bool) -> None:
-        """Validate mass and charge conservation for this reaction.
-
-        Parameters
-        ----------
-        errors : bool
-            When ``True``, terminate the process on any conservation failure;
-            when ``False``, only emit a warning.
-        """
-        if not self.check_mass():
-            message = f"Mass not conserved in reaction {self.index}: {self.verbatim}"
-            if errors:
-                self.logger.error(message)
-                sys.exit(1)
-
-            self.logger.warning(message)
-
-        if not self.check_charge():
-            message = f"Charge not conserved in reaction {self.index}: {self.verbatim}"
-            if errors:
-                self.logger.error(message)
-                sys.exit(1)
-
-            self.logger.warning(message)
-
     def check_mass(self) -> bool:
         """Return ``True`` if mass is conserved within one electron mass.
 
-        The tolerance (9.109e-28 g) is chosen to accommodate reactions that
-        appear to gain or lose a single electron mass due to ionisation (the
-        electron mass is negligible for chemistry purposes).
+        The tolerance (9.1093837e-28 g) is chosen to accommodate reactions
+        that appear to gain or lose a single electron mass due to ionisation
+        (the electron mass is negligible for chemistry purposes).
 
         Returns
         -------
         bool
+            ``True`` if the reactant–product mass difference is below
+            9.1093837e-28 g.
         """
         return (
             abs(
@@ -661,6 +721,8 @@ class Reaction:
         Returns
         -------
         bool
+            ``True`` if the summed reactant charge equals the summed product
+            charge.
         """
         return (
             np.sum([x.charge for x in self.reactants])
@@ -670,9 +732,13 @@ class Reaction:
     def get_verbatim(self) -> str:
         """Return a human-readable reaction string ``"R1 + R2 -> P1 + P2"``.
 
+        Built from the species names (pseudo-species included); the same
+        string is stored as :attr:`verbatim`.
+
         Returns
         -------
         str
+            E.g. ``"H + _PHOTON -> H+ + e-"``.
         """
         return (
             f"{' + '.join([x.name for x in self.reactants])}"
@@ -683,9 +749,16 @@ class Reaction:
     def get_latex(self) -> str:
         """Return a LaTeX-formatted reaction equation wrapped in ``$...$``.
 
+        Reactants and products are joined with ``+`` and separated by
+        ``\\,\\to\\,``; each species is formatted by its own
+        :meth:`Specie.latex`.  Used as the panel title by
+        :meth:`plot_rate_coefficient`.
+
         Returns
         -------
         str
+            Inline-math LaTeX string, e.g.
+            ``"${\\rm H^{+}} + {\\rm e^{-}}\\,\\to\\,{\\rm H}$"``.
         """
         latex = (
             f"{' + '.join([r.latex() for r in self.reactants])}"
@@ -728,15 +801,17 @@ class Reaction:
         Returns
         -------
         str
+            E.g. ``"k[0] * y[idx_hj] * y[idx_e]"`` for ``H+ + e- -> H``.
 
         Raises
         ------
-        SystemExit
+        ValueError
             If *brackets* is not exactly 2 characters.
         """
         if len(brackets) != 2:
-            self.logger.error("Brackets must be a string of length 2, e.g. '[]'")
-            sys.exit(1)
+            raise ValueError(
+                f"brackets must be a string of length 2, e.g. '[]'; got {brackets!r}"
+            )
 
         lb, rb = brackets[0], brackets[1]
         flux = f"{rate_variable}{lb}{idx}{rb} * " + " * ".join(
@@ -754,11 +829,12 @@ class Reaction:
         Parameters
         ----------
         species : list[Specie | str] | str | Specie
-            One or more species to test.
+            One or more species (objects or names) to test.
 
         Returns
         -------
         bool
+            ``True`` if at least one of *species* is in this reaction.
         """
         sp_list: list[str] = []
         if isinstance(species, Specie):
@@ -778,11 +854,12 @@ class Reaction:
         Parameters
         ----------
         species : list[Specie | str] | str | Specie
-            One or more species to test.
+            One or more species (objects or names) to test.
 
         Returns
         -------
         bool
+            ``True`` if every one of *species* is among the reactants.
         """
         sp_list: list[str] = []
         if isinstance(species, Specie):
@@ -800,11 +877,12 @@ class Reaction:
         Parameters
         ----------
         species : list[Specie | str] | str | Specie
-            One or more species to test.
+            One or more species (objects or names) to test.
 
         Returns
         -------
         bool
+            ``True`` if every one of *species* is among the products.
         """
         sp_list: list[str] = []
         if isinstance(species, Specie):
@@ -824,12 +902,14 @@ class Reaction:
         lang : str, optional
             Target programming language, by default ``"cpp"``.
             Supported values: ``"python"``, ``"c"``, ``"cxx"``,
-            ``"fortran"``, ``"rust"``, ``"julia"``, ``"r"``.
+            ``"fortran"``, ``"rust"``, ``"julia"``, ``"r"``, and the aliases
+            ``"py"``, ``"cpp"``, ``"c++"``, ``"f90"``, ``"rs"``, ``"jl"``.
 
         Returns
         -------
         str
-            Source code string for the rate expression.
+            Source code string for the rate expression (of
+            :meth:`get_sympy`).  Unknown functions are printed as calls.
 
         Raises
         ------
@@ -847,66 +927,14 @@ class Reaction:
     def get_sympy(self) -> Basic:
         """Return the rate as a canonical SymPy expression.
 
+        The ``rate.coefficient`` passed through ``sympify``; it can go
+        straight to SymPy's code printers or differentiation routines.
+
         Returns
         -------
         Basic
         """
-        return sympify(self.rate_coefficient)
-
-    @property
-    def band_xsecs(self) -> pd.DataFrame:
-        """Band-averaged cross sections for this reaction, one row per band.
-
-        Pairs each per-band entry of ``photo.rgrouped`` (populated when a
-        radiation field is configured) with the
-        :class:`~jaff.physics.photo_reactions._radiation.RadiationGroup` it was
-        computed for.  Intended as the data source for band bar plots.
-
-        Returns
-        -------
-        pandas.DataFrame
-            One row per radiation band this reaction contributes to, with
-            columns:
-
-            - ``lower`` : lower band edge in eV.
-            - ``upper`` : upper band edge in eV (``inf`` for an open top band).
-            - ``eavg``  : photon-number-weighted band-average energy in eV.
-            - ``xsec``  : photon-number-weighted band-average cross section in
-              cm² (``NaN`` for custom-rate reactions, which carry no tabulated
-              cross section).
-            - ``xsec_frac`` : fraction of the reaction's rate attributed to the
-              band.
-
-            Empty (with the columns above) when the reaction contributes to no
-            band, e.g. no radiation field is configured.
-
-        Notes
-        -----
-        The rows are ordered by ascending band index: ``photo.rgrouped`` is
-        built by iterating ``net.radiation.groups`` in order, so the two are
-        paired by position.
-        """
-        import pandas as pd
-
-        columns = ["lower", "upper", "eavg", "xsec", "xsec_frac"]
-        grouped = self.photo.rgrouped if self.photo is not None else None
-        groups = self.net.radiation.groups if grouped and self.net.radiation else []
-        rows = [
-            {
-                "lower": to_float_or_none(group.lower),
-                "upper": to_float_or_none(group.upper),
-                "eavg": (
-                    None
-                    if group.eavg is None
-                    else to_float_or_none(group.eavg * u.erg.to(u.eV))
-                ),
-                "xsec": to_float_or_none(props.xsec),
-                "xsec_frac": to_float_or_none(props.xsec_frac),
-            }
-            for group, props in zip(groups, grouped or [], strict=True)
-        ]
-
-        return pd.DataFrame(rows, columns=columns)
+        return sympify(self.rate.coefficient)
 
     def plot_rate_coefficient(self, **kwargs: Any) -> tuple[plt.Figure, Any] | None:
         """Plot the rate coefficient as a function of gas temperature.
@@ -914,8 +942,9 @@ class Reaction:
         Forwards to :func:`jaff.plotting.plot_rates` with this reaction as the
         only item; every ``plot_rates`` keyword is accepted (``grid``, ``tmin``,
         ``tmax``, ``xscale``, ``yscale``, ``labels``, ``style``, ``palette``,
-        ``save``, ``show`` ...).
-        The panel is titled with the LaTeX reaction equation.
+        ``save``, ``show``, ``close`` ...).
+        The panel is titled with the LaTeX reaction equation (see
+        :meth:`get_latex`).
 
         Returns
         -------
@@ -927,27 +956,18 @@ class Reaction:
         Notes
         -----
         The temperature axis spans [``tmin``, ``tmax``] on a log scale.
-        When ``tmin`` or ``tmax`` is ``None``, defaults of 2.73 K and 1e6 K
-        are used respectively.
+        When the ``tmin`` or ``tmax`` keyword is not given, the reaction's own
+        bound is used, and when that is ``None``, 2.73 K and 1e6 K
+        respectively.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> net = Network("GOW")
+        >>> fig, axes = net.reactions["H+.e-__H"].plot_rate_coefficient(
+        ...     tmin=10, tmax=1e4, save="rate.pdf", show=False
+        ... )
         """
         from ...plotting import plot_rates
 
         return plot_rates(self, **kwargs)
-
-    def plot_xsecs(self, **kwargs: Any) -> tuple[plt.Figure, Any] | None:
-        """Plot photo cross sections against photon energy or wavelength.
-
-        Forwards to :func:`jaff.plotting.plot_xsecs` with this reaction as the
-        only item; every ``plot_xsecs`` keyword is accepted (``grid``,
-        ``processes``, ``energy_unit``, ``xsec_unit``, ``xscale``, ``yscale``,
-        ``bands``, ``style``, ``palette``, ``save``, ``show`` ...).
-
-        Returns
-        -------
-        tuple[matplotlib.figure.Figure, numpy.ndarray] or None
-            ``(fig, axes)``, or ``None`` (with a log message) if
-            ``self.photo`` or its ``xsec`` is ``None`` or no requested process has data.
-        """
-        from ...plotting import plot_xsecs
-
-        return plot_xsecs(self, **kwargs)

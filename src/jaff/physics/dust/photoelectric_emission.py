@@ -1,9 +1,11 @@
+# ABOUTME: PhotoelectricEmission: the radiation field in the dust photoelectric
+# ABOUTME: band scaled to the reference background field (chi_pe)
 """Photoelectric emission: the scaled radiation field in the photoelectric band.
 
 Photoelectric heating by dust grains is driven by far-UV photons in the
 photoelectric band ``[E_low, E_high]``, which defaults to ``[6, 13.6] eV``
 (from the grain work function up to the hydrogen ionisation edge) but is
-configurable via ``DustProps.pe_threshold_low`` / ``pe_threshold_high``.
+configurable via ``[network.dust.pe]`` ``threshold_low`` / ``threshold_high``.
 Rate expressions parametrise this by ``chi_pe`` -- the local radiation field
 scaled to a reference (Draine/ISRF) field, integrated over that band.
 
@@ -16,9 +18,12 @@ densities in the photoelectric band:
 - **denominator**: the energy density of the reference background field
   (:attr:`Radiation.background_field`) in the same band.
 
-Both are in erg/cm³, so ``chi_pe`` is dimensionless.  The resulting symbol is
+Both are in erg/cm³, so their ratio is dimensionless; it is then multiplied
+by ``Radiation.c / c``, the configured speed of light (``[network.radiation]
+c``, possibly a reduced-speed symbol such as ``c_hat``) over the true one,
+which is 1 for the default ``c``.  The resulting symbol is
 substituted into rate expressions when a network is built with
-``Network(..., dust_props=DustProps(...))`` and radiation enabled.
+``[network.dust]`` and radiation enabled.
 """
 
 from __future__ import annotations
@@ -34,6 +39,7 @@ from ..constants import c, h
 
 if TYPE_CHECKING:
     from ...core.network import Network
+    from .config import PhotoelectricEmissionConfig
 
 
 class PhotoelectricEmission:
@@ -44,37 +50,40 @@ class PhotoelectricEmission:
     network : Network
         The parent network; its :attr:`~jaff.core.network.Network.radiation`
         supplies both the band densities and the reference background field.
+    config : PhotoelectricEmissionConfig
+        The ``[network.dust.pe]`` config: the photoelectric band edges
+        ``threshold_low`` and ``threshold_high``, in eV.
 
     Attributes
     ----------
     net : Network
         Back-reference to the parent network.
+    config : PhotoelectricEmissionConfig
+        The ``[network.dust.pe]`` settings (read-only).
     E_low : astropy.units.Quantity
-        Lower edge of the photoelectric band (grain work function, default
-        6 eV).
+        Lower edge of the photoelectric band, ``threshold_low`` (grain work
+        function, default 6 eV).
     E_high : astropy.units.Quantity
-        Upper edge of the photoelectric band (H ionisation edge, default
-        13.6 eV).
+        Upper edge of the photoelectric band, ``threshold_high`` (H ionisation
+        edge, default 13.6 eV).
     """
 
-    def __init__(self, network: Network, e_low: float = 6, e_high: float = 13.6):
+    def __init__(self, network: Network, config: PhotoelectricEmissionConfig):
         """Initialise the photoelectric-emission model.
 
         Parameters
         ----------
         network : Network
             The parent network.
-        e_low : float, optional
-            Lower edge of the photoelectric band, in eV.  Default ``6``;
-            threaded from ``DustProps.pe_threshold_low``.
-        e_high : float, optional
-            Upper edge of the photoelectric band, in eV.  Default ``13.6``;
-            threaded from ``DustProps.pe_threshold_high``.
+        config : PhotoelectricEmissionConfig
+            The ``[network.dust.pe]`` config: the photoelectric band edges
+            ``threshold_low`` and ``threshold_high``, in eV.
         """
+        self.config: PhotoelectricEmissionConfig = config
         # photoelectric emission activation energy in eV
-        self.E_low: u.Quantity = e_low * u.eV
+        self.E_low: u.Quantity = config.threshold_low * u.eV
         # photoelectric emission cutoff energy in eV
-        self.E_high: u.Quantity = e_high * u.eV
+        self.E_high: u.Quantity = config.threshold_high * u.eV
         self.net: Network = network
 
     @cached_property
@@ -83,14 +92,19 @@ class PhotoelectricEmission:
 
         Computes the dimensionless ratio
 
-        ::
+        ```text
+        chi_pe = u_bands(E_low-E_high) / u_background(E_low-E_high) * c_rad / c
+        ```
 
-            chi_pe = u_bands(6-13.6 eV) / u_background(6-13.6 eV)
-
-        where ``u_bands`` is the energy density summed over the network's
-        radiation bands (each band weighted by the fraction of its energy that
-        falls in the photoelectric band) and ``u_background`` is the energy
-        density of the reference background field in the same band.
+        over the photoelectric band ``[E_low, E_high]`` (``threshold_low`` /
+        ``threshold_high``, default 6-13.6 eV), where ``u_bands`` is the energy
+        density summed over the network's radiation bands (each band weighted
+        by the fraction of its energy that falls in the photoelectric band) and
+        ``u_background`` is the energy density of the reference background
+        field in the same band.  ``c_rad`` is the radiation's speed of light
+        ``Radiation.c`` (``[network.radiation] c``, possibly a symbol such as
+        ``c_hat`` for a reduced speed of light) and ``c`` the true one, so the
+        factor is 1 for the default ``c``.
 
         The background field is tabulated as a photon-flux spectrum
         ``I(lambda)`` (photons s⁻¹ cm⁻² nm⁻¹).  Its energy density follows from
@@ -109,7 +123,8 @@ class PhotoelectricEmission:
         Numerator and denominator are both energy densities in erg/cm³, so the
         result is dimensionless.  In photon-density mode each band's symbol is a
         photon number density, converted to an energy density by multiplying by
-        the band-average photon energy ``eavg`` (erg).
+        the band-average photon energy ``eavg`` (erg); see
+        :meth:`~jaff.physics.Radiation.energy_density`.
         """
         rad = self.net.radiation
         if rad is None:
@@ -148,12 +163,6 @@ class PhotoelectricEmission:
                 (grp.lower, grp.upper),
             )
 
-            num = grp.sym * energy_frac  # type: ignore
-
-            # multiply with average energy in group if number densities are enabled
-            if rad.mode == "nph":
-                num *= grp.eavg or 0.0
-
-            num_tot += num
+            num_tot += rad.energy_density(grp) * energy_frac
 
         return (num_tot / den) * (rad.c / c.cgs.value)  # chi

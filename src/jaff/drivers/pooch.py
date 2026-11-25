@@ -1,3 +1,15 @@
+# ABOUTME: Downloads JAFF data files (cross sections, shielding, radiation, dust)
+# ABOUTME: with pooch into DATA_DIR/.downloads and installs them where readers look.
+"""
+Remote data fetching for JAFF's data directory.
+
+:class:`Pooch` wraps a :class:`pooch.Pooch` fetcher whose file registry is
+downloaded from the mirror.  Downloads are hash-verified and cached under
+``DATA_DIR/.downloads/``; each is then installed at ``DATA_DIR/<filename>`` by
+:func:`~jaff.drivers._install.install_file`.  Each ``download_*`` function
+fetches the files of one data family.
+"""
+
 import logging
 import os
 from pathlib import Path
@@ -18,8 +30,11 @@ class _JaffProgressBar:
 
     pooch's :class:`~pooch.HTTPDownloader` drives any progress object through a
     tqdm-like protocol: it assigns ``.total`` (bytes) before the transfer,
-    calls ``.update(n)`` per chunk, then ``.reset()`` and ``.close()`` at the
-    end.  This maps those calls onto a task on the shared JAFF Rich bar.
+    calls ``.update(n)`` per chunk, then ``.reset()``, ``.update(total)`` and
+    ``.close()`` at the end.  This maps those calls onto a task on the shared
+    JAFF Rich bar.  :meth:`reset` does not zero the byte counter, so the final
+    ``.update(total)`` adds to the running count; the displayed percent is
+    capped at 100 and the task is removed by :meth:`close` straight after.
 
     The shared bar's ``MofNCompleteColumn`` renders task counts as plain
     integers, which would expose raw byte totals.  To keep the bar readable the
@@ -121,6 +136,12 @@ class Pooch:
         ``__new__`` returns cached instances, but Python still re-invokes
         ``__init__`` on each construction. The ``_initialized`` guard makes
         repeat calls a no-op so the fetcher and registry are built only once.
+
+        When ``JAFF_OFFLINE`` is set, the fetcher is created but no registry is
+        downloaded or loaded.  Otherwise a fresh ``registry.txt`` is fetched into
+        ``cache_path/.downloads``; if that fails (network error or empty file),
+        the previously cached ``.downloads/registry.txt`` is used instead, and
+        the error is re-raised only when no cached registry exists.
         """
         if getattr(self, "_initialized", False):
             return
@@ -212,11 +233,12 @@ class Pooch:
 
 
 def download_xsecs() -> None:
-    """Fetch the photochemistry cross-section data files into ``data/xsecs``.
+    """Fetch the photochemistry cross-section data files into ``DATA_DIR/xsecs``.
 
     Downloads the Leiden, NORAD, and Verner cross-section files from the ANU
-    mirror, caching them under the package ``data/xsecs`` directory. Files
-    already present and hash-valid are not re-downloaded.
+    mirror. Compressed downloads are cached under ``DATA_DIR/.downloads/xsecs``
+    (a cached, hash-valid download is not fetched again) and installed in
+    ``DATA_DIR/xsecs`` (HDF5 files uncompressed).
     """
     pooch = Pooch(
         "https://www.mso.anu.edu.au/~anishs",
@@ -227,11 +249,12 @@ def download_xsecs() -> None:
 
 
 def download_shielding() -> None:
-    """Fetch the line-shielding data files into ``data/shielding``.
+    """Fetch the line-shielding data files into ``DATA_DIR/shielding``.
 
     Downloads the collapsed Leiden line-shielding HDF5 file from the ANU
-    mirror, caching it under the package ``data/shielding`` directory. Files
-    already present and hash-valid are not re-downloaded.
+    mirror. The compressed download is cached under
+    ``DATA_DIR/.downloads/shielding`` (a cached, hash-valid download is not
+    fetched again) and installed uncompressed in ``DATA_DIR/shielding``.
     """
     pooch = Pooch(
         "https://www.mso.anu.edu.au/~anishs",
@@ -243,11 +266,13 @@ def download_shielding() -> None:
 
 
 def download_background_radiation() -> None:
-    """Fetch the background-radiation data file into ``data/background_radiation``.
+    """Fetch the background-radiation data file into ``DATA_DIR/background_radiation``.
 
-    Downloads the collapsed background-radiation HDF5 file from the ANU mirror,
-    caching it under the package ``data/background_radiation`` directory. Files
-    already present and hash-valid are not re-downloaded.
+    Downloads the collapsed background-radiation HDF5 file from the ANU mirror.
+    The compressed download is cached under
+    ``DATA_DIR/.downloads/background_radiation`` (a cached, hash-valid download
+    is not fetched again) and installed uncompressed in
+    ``DATA_DIR/background_radiation``.
     """
     pooch = Pooch(
         "https://www.mso.anu.edu.au/~anishs",
@@ -259,11 +284,11 @@ def download_background_radiation() -> None:
 
 
 def download_dust() -> None:
-    """Fetch the line-shielding data files into ``data/shielding``.
+    """Fetch the dust data file into ``DATA_DIR/dust``.
 
-    Downloads the collapsed Leiden line-shielding HDF5 file from the ANU
-    mirror, caching it under the package ``data/shielding`` directory. Files
-    already present and hash-valid are not re-downloaded.
+    Downloads ``dust/dust.hdf5`` from the ANU mirror. The compressed download
+    is cached under ``DATA_DIR/.downloads/dust`` (a cached, hash-valid download
+    is not fetched again) and installed uncompressed in ``DATA_DIR/dust``.
     """
     pooch = Pooch(
         "https://www.mso.anu.edu.au/~anishs",

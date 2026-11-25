@@ -1,19 +1,21 @@
+# ABOUTME: ConfigTable: turns one [[jaffgen.table]] config entry into an HDF5Dict or
+# ABOUTME: DataFrame (path remapping, composite datasets, computed attributes).
 """
 Configuration table engine for the JAFF CLI.
 
 This module implements :class:`ConfigTable`, which reads a single
-``[[table]]`` block from a ``jaffgen.toml`` configuration file and converts the
+``[[jaffgen.table]]`` block from a ``jaffgen.toml`` configuration file and converts the
 described data table into either an :class:`~jaff.types.HDF5Dict` or a
 :class:`pandas.DataFrame`, ready to be written to disk by the caller.
 
-A ``[[table]]`` block has two required/optional sub-sections:
+A ``[[jaffgen.table]]`` block has two sub-sections:
 
-``[source]``
+``source`` (required)
     Describes where to read the input data from.  Supported formats are HDF5
     and CSV.  The special path value ``"default"`` expands to
     ``<network_dir>/<network_stem>.hdf5``.
 
-``[target]`` (optional)
+``target`` (optional)
     Describes the output format and path.  Defaults to the same format and
     filename as the source.  HDF5 targets additionally support per-dataset
     path remapping and attribute injection via a dot-notation syntax
@@ -21,23 +23,28 @@ A ``[[table]]`` block has two required/optional sub-sections:
 
 Attribute notation
 ------------------
-Within a ``[[table]]`` block's ``[target]`` HDF5 dataset entry the ``attrs``
-key accepts mappings of the form::
+Within a ``[[jaffgen.table]]`` block's ``target`` HDF5 dataset entry the
+``attrs`` key accepts mappings of the form:
 
-    [table.target."/some/dataset"]
-    attrs = { "my_attr" = "/other/dataset.max" }
+```toml
+[jaffgen.table.target."/some/dataset"]
+attrs = { "my_attr" = "/other/dataset.max" }
+```
 
 This reads the ``max`` property of ``/other/dataset`` and stores it as the
-HDF5 attribute ``my_attr`` on ``/some/dataset``.  Supported property names
-are: ``max``, ``min``, ``mean``, ``median``, ``length``.
+HDF5 attribute ``my_attr`` on ``/some/dataset``.  Recognised property names
+are: ``max``, ``min``, ``mean``, ``median``, ``length`` (``median`` currently
+raises :class:`AttributeError`; see :attr:`ConfigTable.attr_dict`).
 
 A value may also be a **list**, resolved element-wise, so computed references
-and literals can be mixed::
+and literals can be mixed:
 
-    [table.target."/co".attrs]
-    Ndim = 2                                  # literal
-    Nx   = ["/co/TCO.length", "/co/x.length"] # list of computed references
-    spacing = ["log", "log"]                  # list of literals
+```toml
+[jaffgen.table.target."/co".attrs]
+Ndim = 2                                  # literal
+Nx   = ["/co/TCO.length", "/co/x.length"] # list of computed references
+spacing = ["log", "log"]                  # list of literals
+```
 """
 
 import copy
@@ -54,7 +61,7 @@ from ...types import HDF5Dict
 
 class ConfigTable:
     """
-    Parse a single ``[[table]]`` TOML entry and produce structured output.
+    Parse a single ``[[jaffgen.table]]`` TOML entry and produce structured output.
 
     :class:`ConfigTable` bridges the TOML configuration layer and the JAFF
     data drivers.  It validates source/target paths, loads the source data
@@ -64,7 +71,7 @@ class ConfigTable:
     Parameters
     ----------
     table_dict : dict[str, Any]
-        The parsed ``[[table]]`` dictionary from the TOML config.  Must
+        The parsed ``[[jaffgen.table]]`` dictionary from the TOML config.  Must
         contain at least a ``"source"`` key.
     file : Path
         Path to the ``jaffgen.toml`` file; relative source paths resolve
@@ -85,16 +92,18 @@ class ConfigTable:
         CSV extension.
     """
 
-    def __init__(self, table_dict: dict[str, Any], file: Path, network_file: Path):
+    def __init__(self, table_dict: dict[str, Any], file: Path | None, network_file: Path):
         """Initialise and immediately validate source/target configuration.
 
         Parameters
         ----------
         table_dict : dict[str, Any]
-            Parsed ``[[table]]`` entry from the TOML config.
-        file : Path
-            Path to the ``jaffgen.toml`` file (relative source paths resolve
-            against its directory; also used in error messages).
+            Parsed ``[[jaffgen.table]]`` entry from the TOML config.
+        file : Path or None
+            The ``jaffgen.toml`` file the entry came from: a relative source
+            path resolves against its directory (the working directory without
+            one).  :func:`~jaff.cli.jaffgen.config.load_jaffgen_config` already
+            makes them absolute.
         network_file : Path
             Path to the network file; its parent and stem resolve
             the ``"default"`` source path alias.
@@ -110,7 +119,7 @@ class ConfigTable:
         """
         self.config: dict[str, Any] = table_dict
         # Explicit relative source paths resolve against the config file's dir.
-        self.config_dir = file.parent
+        self.config_dir = file.parent if file is not None else Path.cwd()
         self.network_dir = network_file.parent
         self.default_data: Path = network_file.with_suffix(".hdf5")
         if (
@@ -123,7 +132,9 @@ class ConfigTable:
             )
 
         if "source" not in table_dict:
-            raise KeyError(f"source must be specified in {file}")
+            raise KeyError(
+                f"source must be specified in {file or 'the [[jaffgen.table]] entry'}"
+            )
         self.source_config: dict[str, Any] = self.config["source"]
         self.target_config: dict[str, Any] = self.config.get("target", {})
 
@@ -269,7 +280,7 @@ class ConfigTable:
         """
         Fold several source datasets into one composite HDF5 dataset.
 
-        Triggered when a ``[table.target."/path"]`` heading declares its
+        Triggered when a ``[jaffgen.table.target."/path"]`` heading declares its
         ``h5path`` as a **list** of source paths.  The ``type`` key selects the
         storage layout (default ``"compound"``):
 
@@ -473,8 +484,9 @@ class ConfigTable:
         """
         Mapping of attribute property names to aggregation callables.
 
-        Each callable accepts a pandas Series or numpy array and returns a
-        scalar.
+        Each callable receives a dataset's ``_data`` (a numpy array) and
+        returns a scalar.  ``"median"`` calls ``data.median()``, which numpy
+        arrays do not have, so it currently raises :class:`AttributeError`.
 
         Returns
         -------
@@ -538,13 +550,14 @@ class ConfigTable:
             else self.config_dir / self.source_config["path"]
         }
         if props["path"].suffix.lower() not in HDF_EXTENSIONS + CSV_EXTENSIONS:
-            raise ValueError(f"Unsupported target format found: {props['path']}")
+            raise ValueError(f"Unsupported source format found: {props['path']}")
 
         props["type"] = (
             "csv" if props["path"].suffix.lower() in CSV_EXTENSIONS else "hdf5"
         )
         if props["type"] == "csv":
-            # Read CSV parsing options; defaults match pandas read_csv conventions.
+            # Read CSV parsing options; JAFF defaults are a space delimiter and
+            # "#" comments (not pandas read_csv's "," and no comment character).
             props["delimiter"] = self.source_config.get("delimiter", " ")
             props["comment"] = self.source_config.get("comment", "#")
 
@@ -555,8 +568,9 @@ class ConfigTable:
         Resolve and validate target file properties from the config.
 
         Defaults to the source file's name (and therefore format) when no
-        explicit target path is given.  Reads format-specific options such as
-        delimiter and default HDF5 group.
+        explicit target path is given.  Reads format-specific options: the CSV
+        delimiter/comment, and the HDF5 ``default_group`` (stored in
+        ``target_props`` but not currently used when writing).
 
         Stores the result in ``self.target_props``.
 

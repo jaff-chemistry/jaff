@@ -9,7 +9,7 @@ from matplotlib.collections import LineCollection
 
 from jaff.plotting._marks import mark_indices
 from jaff.plotting._ticks import exp_label
-from jaff.plotting.render import render
+from jaff.plotting import render
 from jaff.plotting.spec import FigureSpec
 
 X = np.logspace(0, 2, 50)
@@ -345,3 +345,19 @@ def test_nearly_constant_log_axis_labels_distinct():
     fig.canvas.draw()
     labels = _tick_texts(axes[0, 0].yaxis)
     assert len(set(labels)) == len(labels)
+
+
+def test_render_function_does_not_shadow_its_module(monkeypatch):
+    """jaff.plotting.render is the function; the module is jaff.plotting._render."""
+    import importlib
+    import types
+
+    import jaff.plotting
+
+    module = importlib.import_module("jaff.plotting._render")
+
+    assert isinstance(module, types.ModuleType)
+    assert jaff.plotting.render is module.render
+    # Dotted-path targets resolve through attributes, which shadowing broke.
+    monkeypatch.setattr("jaff.plotting._render.LOG_MAX_DECADES", 10.0)
+    assert module.LOG_MAX_DECADES == 10.0

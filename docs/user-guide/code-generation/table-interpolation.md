@@ -17,10 +17,10 @@ treats the table lookup as an **interpolation function** that:
 2. JAFF **preserves verbatim** through code generation (it never invents a
    formula for it), and
 3. you **implement** at runtime, backed by a data table that the
-   [`[[table]]`](jaffgen-toml.md#table-section) config emits alongside the generated
+   [`[[jaffgen.table]]`](../configuration/data-tables.md) config emits alongside the generated
    code.
 
-The three pieces — the `.jfunc` call, the generated code, and the `[[table]]`
+The three pieces — the `.jfunc` call, the generated code, and the `[[jaffgen.table]]`
 output — are the whole feature.
 
 ---
@@ -32,10 +32,12 @@ function. You simply call it inside a `.jfunc` heating/cooling or rate
 expression; you never define it. From the GOW network's `.jfunc`:
 
 ```text
-L0    = L0_CO_interp1d(tgas)
-LLTE  = LLTE_CO_interp2d(tgas, LVG_param)
+L0 = L0_CO_interp1d(tgas)
+LLTE = LLTE_CO_interp2d(tgas, LVG_param)
+nHalf = nHalf_CO_interp2d(tgas, LVG_param)
 alpha = alpha_CO_interp2d(tgas, LVG_param)
-psi   = PsiGD_coll_interp2d(n_H, tgas)
+...
+psi_coll = PsiGD_coll_interp2d(n_H_nuc, tgas)
 ```
 
 When the network loads, JAFF separates these from genuine mistakes: instead of
@@ -75,12 +77,12 @@ function**:
 
 ```text
 Derivative( alpha_CO_interp2d(tgas, p), tgas )  →  alpha_co_interp2d_partial_0(tgas, p)
-Derivative( PsiGD_coll_interp2d(n_H, tgas), tgas ) → psigd_coll_interp2d_partial_1(n_H, tgas)
+Derivative( PsiGD_coll_interp2d(n_H_nuc, tgas), tgas ) → psigd_coll_interp2d_partial_1(n_H_nuc, tgas)
 ```
 
 The `_partial_N` suffix names the **zero-based argument** the derivative is taken
 with respect to — `_partial_0` is $\partial/\partial\text{arg1}$, `_partial_1` is
-$\partial/\partial\text{arg1}$. The call keeps the original arguments. So alongside each interpolation function you implement, you must also provide its partials that appear in the
+$\partial/\partial\text{arg2}$. The call keeps the original arguments. So alongside each interpolation function you implement, you must also provide its partials that appear in the
 Jacobian — typically the table's gradient in each direction.
 
 For the GOW network, generating the Jacobian with `THERMAL dedt` (so the
@@ -103,28 +105,29 @@ psigd_coll_interp2d_partial_1(..., tgas)   // ∂ psi  / ∂ tgas
 ## Emitting the table data
 
 The generated code needs the table itself. The
-[`[[table]]`](jaffgen-toml.md#table-section) section of `jaffgen.toml` converts a
+[`[[jaffgen.table]]`](../configuration/data-tables.md) entries of `jaffgen.toml` convert a
 source table (the network's own `.hdf5` rate table, or a CSV) into the HDF5/CSV
 file your interpolation routines read at runtime — produced in the same
 `jaffgen` run that writes the source. For example, turning a CO cooling CSV into
-an HDF5 dataset:
+an HDF5 dataset (`co_1d.csv` is a hypothetical input; it is not shipped with
+the GOW network):
 
 ```toml
-[[table]]
-[table.source]
+[[jaffgen.table]]
+[jaffgen.table.source]
 delimiter = " "
 comment   = "#"
 path      = "networks/GOW/co_1d.csv"
 
-[table.target]
+[jaffgen.table.target]
 path          = "GOW.hdf5"
 default_group = "/"
 
-[table.target."/co/1d/Temp"]
+[jaffgen.table.target."/co/1d/Temp"]
 col = "T0"
 ```
 
-See [`jaffgen.toml` → `[[table]]`](jaffgen-toml.md#table-section) for the full
+See [Data tables](../configuration/data-tables.md) for the full
 conversion syntax.
 
 ---
@@ -185,7 +188,7 @@ double name_interp2d_partial_1(double x, double y) {
 ```
 
 A 1-D table is the same idea with one argument: `name_interp1d(x)` and a single
-`name_interp1d_partial_0(x)`. The `[[table]]` block ships the grid (`xs`, `ys`,
+`name_interp1d_partial_0(x)`. The `[[jaffgen.table]]` entry ships the grid (`xs`, `ys`,
 `z`) into the HDF5 file `name_table()` reads.
 
 ---

@@ -4,7 +4,7 @@
 """Photo cross sections as plotting series.
 
 Duck-typed: a reaction is anything with ``photo.xsec`` (and optionally
-``band_xsecs`` / ``get_latex``).
+``photo.band_xsecs`` / ``get_latex``).
 """
 
 from __future__ import annotations
@@ -67,8 +67,8 @@ def _sampled_xsecs(xsecs: XsecProps, n: int = 2000) -> XsecProps:
 
 
 def _band_series(reaction: Any, energy_unit: str, xsec_unit: str, label: str) -> list:
-    """Band-average bars from ``reaction.band_xsecs`` (empty when no bands)."""
-    df = getattr(reaction, "band_xsecs", None)
+    """Band-average bars from ``reaction.photo.band_xsecs`` (empty when no bands)."""
+    df = getattr(getattr(reaction, "photo", None), "band_xsecs", None)
     if df is None or df.empty:
         return []
     y = df["xsec"].to_numpy(dtype=float)
@@ -124,7 +124,7 @@ def xsec_series(
         Prefix labels with the reaction equation (several reactions share
         the axes).
     bands : bool
-        Add band-average bars from ``band_xsecs``.
+        Add band-average bars from ``photo.band_xsecs``.
 
     Returns
     -------

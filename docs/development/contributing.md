@@ -101,14 +101,28 @@ Commit types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`.
 Before opening a PR, make sure tests pass and the code is formatted and linted:
 
 ```bash
-pytest          # run the test suite
-ruff check .    # lint
-ruff format .   # format
+uv run --extra dev pytest                       # run the test suite
+uv run --extra dev ruff format --check <files>  # formatting
+uv run --extra dev ruff check <files>           # lint
+uv run --extra dev ty check <files>             # type check
+uv run --extra dev ruff format <files>          # format, if needed
 ```
+
+Run the formatter and linter on the files you changed (or on `src/`), not on the
+whole repository: `tests/` is not lint-clean, and a repo-wide `ruff format` or
+`ruff check --fix` rewrites unrelated files. Only reformat a file that was already
+formatted before you touched it. `ty` reports some pre-existing errors; make sure
+your change adds none.
+
+If you add or change a dependency, update `uv.lock` as well (`uv add <package>`, or
+`uv lock` after editing `pyproject.toml`) and commit it: CI installs with
+`uv sync --locked`, which fails on a stale lock file.
 
 - See the [Testing Guide](testing.md) for running, writing, and covering tests.
 - See the [Code Style Guide](code-style.md) for formatting, naming, type hints,
   and docstring conventions.
+- See [Writing API Documentation](api-documentation.md) for how docstrings
+  become the API reference.
 
 ## 4. Open a Pull Request
 
@@ -127,8 +141,9 @@ GitHub will print a link to open the PR. In the PR description:
 ### Pre-submit Checklist
 
 - [x] Branched off `main` with a correct prefix
-- [x] `pytest` passes locally
-- [x] `ruff check .` and `ruff format .` are clean
+- [x] `uv run --extra dev pytest` passes locally
+- [x] `ruff check`, `ruff format --check` and `ty check` are clean on the files you changed
+- [x] `uv.lock` updated if dependencies changed
 - [x] Documentation updated if behavior or interfaces changed
 - [x] PR description explains the change and links related issues
 
@@ -140,10 +155,10 @@ Two workflows run automatically:
 | Workflow                 | What it does                                                                                   |
 | ------------------------ | ---------------------------------------------------------------------------------------------- |
 | **Tests**                | Runs `pytest` (with coverage) across Linux, macOS, and Windows on Python 3.11, 3.12, and 3.13. |
-| **Deploy Documentation** | Builds the docs with `zensical build` to catch broken builds and links.                        |
+| **Deploy Documentation** | Generates the API and configuration reference pages, fails if the committed API nav in `zensical.toml` is out of date, builds the docs with `zensical build --strict` (broken builds and links), and on pushes to `main` publishes the site to GitHub Pages. |
 
 The **Tests** run includes the [example notebooks](../getting-started/examples.md):
-`tests/test_example_notebooks.py` executes each one headless and fails if it does
+`tests/meta/test_example_notebooks.py` executes each one headless and fails if it does
 not exit 0. Tests that build generated code (the Fortran and C++ solvers, and the
 notebooks that compile them) run only on Linux.
 

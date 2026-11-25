@@ -215,6 +215,11 @@ TALK = Style(
 
 #: Registered styles by name (built-ins plus :func:`register_style` entries).
 STYLES: dict[str, Style] = {"paper": PAPER, "talk": TALK}
+"""Registered styles by name (built-ins plus :func:`register_style` entries).
+
+Built-ins: ``"paper"`` (default; print size, inside y tick labels, exponent
+log axes) and ``"talk"`` (large fonts and ticks, thick lines).
+"""
 
 #: Registered palettes by name (built-ins plus :func:`register_palette`).
 PALETTES: dict[str, Palette] = {
@@ -304,6 +309,11 @@ PALETTES: dict[str, Palette] = {
         {},
     ),
 }
+"""Registered palettes by name (built-ins plus :func:`register_palette`).
+
+Built-ins: ``"jaff"`` (default), ``"okabe-ito"``, ``"gow"``, ``"logo"``,
+``"sunset"``, ``"vivid"``, ``"muted"`` and ``"deep"``.
+"""
 
 DEFAULT_STYLE: str = "paper"
 DEFAULT_PALETTE: str = "jaff"
@@ -384,10 +394,12 @@ def scaled(style: Style, k: float) -> Style:
     """A copy of *style* with every visual size multiplied by *k*.
 
     Scales point sizes in ``rc`` (fonts, line widths, pads), ``lw``, tick
-    geometry, marker size and arc gaps, and the panel ``gap``.  Panel titles
-    and tags (``tag``) keep their size, and ``panel_size`` stays, so a wide figure shrunk to the page reads like a
-    ``ref_cols``-column one.  ``k == 1`` returns *style* itself; registered
-    styles are never modified.
+    geometry, marker size and arc gaps, and the panel ``gap``.  Titles and
+    tags drawn inside panels (sized by ``tag``) keep their size, while a title
+    too wide to fit inside goes above the panel at the scaled rc
+    ``axes.titlesize``; ``panel_size`` stays, so a wide figure shrunk to the
+    page reads like a ``ref_cols``-column one.  ``k == 1`` returns *style*
+    itself; registered styles are never modified.
     """
     if k == 1:
         return style
@@ -469,12 +481,86 @@ def resolve_palette(value: str | list | tuple | dict | Palette | None) -> Palett
 
 
 def register_style(name: str, style: dict) -> None:
-    """Register a named style built from a partial dict (see :func:`resolve_style`).
+    """Register a named style built from a partial dict.
+
+    The new name can then be passed as ``style=`` to :func:`~jaff.plotting.plot`,
+    :func:`~jaff.plotting.plot_rates` and :func:`~jaff.plotting.plot_xsecs`.  The
+    same partial dict can also be passed as ``style=`` directly, without
+    registering it.
+
+    Parameters
+    ----------
+    name : str
+        Name of the new style; registering an existing non-built-in name
+        replaces it.
+    style : dict
+        Partial override of a base style.  ``"base"`` names the style to
+        start from (default ``"paper"``).  The nested fields ``rc``,
+        ``ticks``, ``marker``, ``legend``, ``tag`` and ``save`` are merged
+        key-wise into the base's; every other field replaces the base value.
+        Fields:
+
+        - ``rc`` -- rcParams applied (scoped) while rendering and saving.
+        - ``panel_size`` -- inches per panel box ``(width, height)``.
+        - ``gap`` -- inches between panels, rows and columns alike; ``0``
+          makes panels touch.
+        - ``surface``, ``ink`` -- background and spine/tick colour.
+        - ``ticks`` -- ``major_length``, ``minor_length``, ``major_width``,
+          ``minor_width``.
+        - ``exp_ticks`` -- label log axes by exponent, with at most ~4
+          labelled decades, minor ticks on decades (at most 4 between
+          labels, no 2-9 sub-ticks) and fractional exponents (``1.05``,
+          ``1.1``, ``−1.9``) on an axis spanning less than 1.5 decades.
+        - ``inside_ticks`` -- draw y tick labels inside the panel.
+        - ``cycle`` -- line-style / marker sequence (non-empty).
+        - ``lw`` -- default line / marker-edge width.
+        - ``marker`` -- ``size`` (pt), ``gap_pt`` (spacing of a marker-only
+          series) and ``line_gap_pt`` (sparser spacing on a line+marker
+          series such as ``"-o"``).
+        - ``legend`` -- keyword arguments for the matplotlib legends.
+        - ``legend_max`` -- positive int (12 in both built-ins): a legend
+          with more entries is not drawn, and :func:`~jaff.plotting.plot_rates`
+          / :func:`~jaff.plotting.plot_xsecs` without a ``grid`` split more
+          curves than this over an automatic grid.
+        - ``solo_color`` -- colour of an unlabelled series alone on its
+          panel (``"#00798c"``, teal, in both built-ins); when the shared
+          legend already uses it, the next unused palette colour is taken.
+        - ``tag`` -- ``fontsize`` and box ``alpha`` of inside panel titles
+          and tags.
+        - ``save`` -- ``dpi`` (raster formats) and ``pad_inches``.
+        - ``ref_cols`` -- positive int, the column count the style is sized
+          for (``"paper"`` 4, ``"talk"`` 3).  A figure with more used columns
+          (after empty ones collapse) has every visual size (fonts, line
+          widths, ticks, markers, gaps, pads) scaled by
+          ``columns / ref_cols``, except titles and tags drawn inside panels
+          (a title placed above its panel uses the scaled rc
+          ``axes.titlesize``), while ``panel_size`` stays: a 6-column paper
+          figure shrunk to the page reads like a 4-column one.  An explicit
+          ``figsize`` turns the scaling off.
 
     Raises
     ------
     ValueError
-        If *name* is a built-in style.
+        If *name* is a built-in style, or *style* has an unknown field or an
+        invalid value.
+
+    Notes
+    -----
+    Built-in styles (``"paper"``, ``"talk"``) cannot be overwritten, and
+    registered styles are never modified by rendering.
+
+    Examples
+    --------
+    >>> from jaff.plotting import STYLES, register_style
+    >>> register_style("poster", {"base": "talk", "rc": {"font.size": 26}})
+    >>> sorted(STYLES)
+    ['paper', 'poster', 'talk']
+
+    A one-off override needs no registration, e.g. fused panels:
+
+    >>> from jaff.plotting import plot
+    >>> spec = {"axes": [{"series": [{"x": [1, 2, 3], "y": [1, 4, 9]}]}]}
+    >>> fig, axes = plot(spec | {"style": {"base": "talk", "gap": 0}})
     """
     if name in _BUILTIN_STYLES:
         raise ValueError(f"style: cannot overwrite built-in style {name!r}")
@@ -484,10 +570,40 @@ def register_style(name: str, style: dict) -> None:
 def register_palette(name: str, colours: list | tuple | dict) -> None:
     """Register a named palette from a colour list or label -> colour dict.
 
+    The new name can then be passed as ``palette=`` to
+    :func:`~jaff.plotting.plot`, :func:`~jaff.plotting.plot_rates` and
+    :func:`~jaff.plotting.plot_xsecs`.  A list or dict can also be passed as
+    ``palette=`` directly, without registering it.
+
+    Parameters
+    ----------
+    name : str
+        Name of the new palette; registering an existing non-built-in name
+        replaces it.
+    colours : list, tuple or dict
+        A colour cycle, or a dict mapping series **labels** to colours
+        (other labels use the default ``"jaff"`` cycle).
+
     Raises
     ------
     ValueError
-        If *name* is a built-in palette or *colours* is empty.
+        If *name* is a built-in palette, or *colours* is an empty list or
+        tuple (an empty dict is accepted: it maps no labels, so every series
+        uses the default cycle).
+
+    Examples
+    --------
+    >>> from jaff.plotting import register_palette
+    >>> register_palette("sources", {"Gong+2017": "#4d4d4d", "sim": "#d55e00"})
+    >>> register_palette("duo", ["#0072b2", "#d55e00"])
+
+    Use it by name; the label-mapped colour wins over the cycle:
+
+    >>> from jaff.plotting import plot
+    >>> spec = {"axes": [{"series": [{"x": [1, 2], "y": [1, 2], "label": "sim"}]}]}
+    >>> fig, axes = plot(spec | {"palette": "sources"})
+    >>> axes[0, 0].lines[0].get_color()
+    '#d55e00'
     """
     if name in _BUILTIN_PALETTES:
         raise ValueError(f"palette: cannot overwrite built-in palette {name!r}")

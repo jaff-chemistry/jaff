@@ -1,3 +1,6 @@
+# ABOUTME: Registry of network-file format parsers, one subpackage per format
+# ABOUTME: Exposes Parser, register, all_parsers and the Record types
+
 """Registry for network-file parsers.
 
 Each supported format lives in its own subpackage (``krome``, ``prizmo``,

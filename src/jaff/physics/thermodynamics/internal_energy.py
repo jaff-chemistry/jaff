@@ -154,11 +154,52 @@ class DEDt(InternalEnergy):
 
     The normalised forms are time derivatives of the normalised energies, so they use
     the quotient rule with the network's per-cell density rates
-    (:attr:`NetworkSymbols.drho_dt`, :attr:`NetworkSymbols.dntot_dt`): neither ρ nor
-    n_tot is constant in a cell.  ``E`` is read lazily from
-    ``net.thermodynamics.eos`` because ``DEDt`` objects are created while
-    ``Thermodynamics`` itself is being constructed.
+    (:meth:`Kinetics.drho_dt`, :meth:`Kinetics.dntot_dt`, in this rate's
+    :attr:`form`): neither ρ nor n_tot is constant in a cell.  ``E`` is read from
+    ``net.thermodynamics.eos`` only when a normalised form is first requested, so the
+    volumetric form never builds the EOS.
+
+    Attributes
+    ----------
+    form : str
+        ``"expanded"`` or ``"reduced"``: how the reaction rates in it are written
+        (see :class:`~jaff.core.reaction.Rate`).  Only rates of the same form add.
     """
+
+    def __init__(self, expr: Expr, net: Network, form: str = "expanded") -> None:
+        """Wrap a volumetric energy rate.
+
+        Parameters
+        ----------
+        expr : sympy.Expr
+            Volumetric energy rate [erg cm⁻³ s⁻¹].
+        net : Network
+            Network whose ``rho`` and ``ntot`` normalise *expr*.
+        form : {"expanded", "reduced"}, optional
+            How the reaction rates in *expr* are written, by default
+            ``"expanded"``.
+
+        Raises
+        ------
+        ValueError
+            If *form* is unknown.
+        """
+        from ...core.reaction.rate import check_form  # core imports physics
+
+        check_form(form)
+        super().__init__(expr, net)
+        self.form: str = form
+
+    def _combine(self, other: object, op: str) -> InternalEnergy:
+        """Add or subtract another rate of the same network and form."""
+        if isinstance(other, DEDt) and other.form != self.form:
+            raise ValueError(f"Cannot {op} a {self.form} and a {other.form} energy rate")
+
+        result = super()._combine(other, op)
+        assert isinstance(result, DEDt)
+        result.form = self.form
+
+        return result
 
     @cached_property
     def _energy(self) -> Expr:
@@ -170,13 +211,16 @@ class DEDt(InternalEnergy):
         """``d(E/ρ)/dt = Ė/ρ − E·ρ̇/ρ²`` [erg g⁻¹ s⁻¹]."""
         rho = self._net.symbols.rho
 
-        return self._vol_expr / rho - self._energy * self._net.symbols.drho_dt / rho**2
+        return (
+            self._vol_expr / rho
+            - self._energy * self._net.kinetics.drho_dt(self.form) / rho**2
+        )
 
     @cached_property
     def per_particle(self) -> Expr:
         """``d(E/n)/dt = Ė/n − E·ṅ/n²`` [erg s⁻¹]."""
         ntot = self._net.symbols.ntot
-        dntot = self._net.symbols.dntot_dt
+        dntot = self._net.kinetics.dntot_dt(self.form)
 
         return self._vol_expr / ntot - self._energy * dntot / ntot**2
 

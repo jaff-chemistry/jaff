@@ -1,3 +1,5 @@
+# ABOUTME: Numerical integration helpers for SymPy expressions and tabulated data:
+# ABOUTME: fixed-sample, adaptive piecewise-aware (quad) and array trapezoid rules.
 """
 Numerical integration helpers for SymPy expressions and tabulated data.
 
@@ -75,12 +77,16 @@ def integrate(
     sym : sympy.Basic
         The integration variable.
     bounds : tuple of (float or int, float or int)
-        Integration interval ``(lower, upper)``.
+        Integration interval ``(lower, upper)``.  With ``spacing="log"`` the
+        bounds are passed unchanged to :func:`numpy.logspace`, so they are
+        currently treated as base-10 exponents (samples span
+        ``10**lower`` .. ``10**upper``).
     integrator : {"trapezoid", "simpson"}, optional
         Quadrature rule to apply (default ``"trapezoid"``).
     spacing : {"lin", "log"}, optional
-        Sample-point spacing: ``"lin"`` for linear (default) or ``"log"`` for
-        logarithmic.
+        Sample-point spacing: ``"lin"`` for linear (default, via
+        :func:`numpy.linspace`) or ``"log"`` for logarithmic (via
+        :func:`numpy.logspace`; see *bounds*).
 
     Returns
     -------
@@ -383,10 +389,13 @@ def sym_integrate(
 
     Notes
     -----
-    When the interval contains infinities, :func:`scipy.integrate.quad` is
-    called with ``limit=10000`` and no interior ``points`` hint (because
-    ``quad`` does not accept ``points`` with infinite bounds).  For finite
-    intervals ``limit=200`` is used.
+    ``quad`` does not accept ``points`` with infinite bounds.  With a finite
+    lower and an infinite upper bound and a breakpoint above the lower bound,
+    the integral is split at the last breakpoint: the finite part uses
+    ``limit=200`` with the ``points`` hints, the tail ``limit=10000`` without.
+    Any other interval containing an infinity is integrated in one
+    :func:`scipy.integrate.quad` call with ``limit=10000`` and no ``points``.
+    Finite intervals use ``limit=200`` with the ``points`` hints.
     """
     lower, upper = bounds
 

@@ -2,4 +2,4 @@
 bands = [13.6, "inf"]
 profile_index = 0
 mode = "nph"
-rsl = "c_hat"
+c = "c_hat"

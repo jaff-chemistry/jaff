@@ -1,7 +1,7 @@
 # Test fixture (PRIZMO format): CIE hydrogen plus a He++ recombination whose
-# rate is overridden by chemRate2() in the sibling react_cie_hepp.jfunc.
+# rate is overridden by chemRateCoeff2() in the sibling react_cie_hepp.jfunc.
 #
-# chemRate2() returns n_Hejj (the He++ number density).  After the j/k charge
+# chemRateCoeff2() returns n_Hejj (the He++ number density).  After the j/k charge
 # convention migration, that symbol must decode to nden[<He++ index>, 0], so
 # reaction index 2's rate ends up carrying the He++ density MatrixElement.
 
@@ -11,5 +11,5 @@ H + E -> H+ + E + E   []   5.85e-11*sqrt(Tgas)*exp(-157809.1/Tgas)
 # idx 1: hydrogen recombination
 H+ + E -> H   []   2.6e-13*(Tgas/1e4)**(-0.8)
 
-# idx 2: He++ recombination -- rate supplied by chemRate2() in the .jfunc
+# idx 2: He++ recombination -- rate supplied by chemRateCoeff2() in the .jfunc
 He++ + E -> He+   []   1.0

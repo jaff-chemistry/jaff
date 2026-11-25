@@ -62,8 +62,8 @@ export, and `jaffgen` for code generation.
 jaffx get num-species  --network networks/COthin/react_COthin.jet
 jaffx get num-reactions --network networks/COthin/react_COthin.jet
 
-# Export rate coefficients over a temperature range to a text file
-jaffx export txt --network networks/COthin/react_COthin.jet --tmin 10 --tmax 1e4
+# Export a table of rate coefficients over a temperature range to a text file
+jaffx export txt --network networks/GOW/GOW.jet --tmin 10 --tmax 1e4 --file rates.txt
 ```
 
 ### Network Parsing

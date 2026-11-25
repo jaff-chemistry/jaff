@@ -1,3 +1,5 @@
+# ABOUTME: jaffx CLI: typer sub-commands (export hdf5/txt/jaff, get num-species/
+# ABOUTME: num-reactions) and the JaffX handlers that load networks and run them.
 """
 JAFF Quick-analysis CLI Interface.
 
@@ -20,30 +22,37 @@ get num-reactions
 
 Usage
 -----
-::
-
-    jaffx <command> <format> --network <file> [options]
+```bash
+jaffx <command> <format> --network <file> [options]
+```
 
 Examples
 --------
-::
-
-    jaffx export hdf5 --network my_net.jet --file output.h5
-    jaffx export txt  --network my_net.jet --tmin 10 --tmax 1e4 --nT 200
-    jaffx get num-species --network my_net.jet
+```bash
+jaffx export hdf5 --network my_net.jet --file output.hdf5
+jaffx export txt  --network my_net.jet --file rates.txt --tmin 10 --tmax 1e4 --nT 200
+jaffx get num-species --network my_net.jet
+```
 """
 
 import logging
 from inspect import signature
 from types import SimpleNamespace
-from typing import Optional
+from typing import List, Optional
 
 import typer
 
-from ... import Network, NetworkArgs
+from ... import Network
 from ...common import print_motd
+from ...errors import ParserError
 from ...io import JaffLogger
-from .._helper import DuplicatePolicy, funcfile_arg
+from .._helper import (
+    NETWORK_KEYS,
+    DuplicatePolicyChoice,
+    command_line_layer,
+    funcfile_arg,
+    reports_errors,
+)
 
 
 class JaffX:
@@ -61,37 +70,32 @@ class JaffX:
     def get_network(self, args: SimpleNamespace) -> Network:
         """Construct a :class:`~jaff.Network` from parsed CLI args.
 
-        Any argument left at its CLI default (``None``) falls back to the
-        corresponding :class:`~jaff.Network` constructor default.
-        """
-        net_args = NetworkArgs(fname=args.network, _from_cli=True)
-        if args.funcfile is not None:
-            net_args.funcfile = args.funcfile
-        if args.label is not None:
-            net_args.label = args.label
-        if args.expand_nuclei is not None:
-            net_args.expand_nuclei = args.expand_nuclei
-        if args.duplicate_policy is not None:
-            net_args.duplicate_policy = args.duplicate_policy
+        Any argument left at its CLI default (``None``) is not given, so the
+        network's ``jaff.toml`` (or the config default) applies.
 
-        return Network(
-            fname=net_args.fname,
-            config=net_args.config,
-            errors=net_args.errors,
-            label=net_args.label,
-            funcfile=net_args.funcfile,
-            duplicate_policy=net_args.duplicate_policy,
-            expand_nuclei=net_args.expand_nuclei,
-            _from_cli=net_args._from_cli,
-        )
+        Raises
+        ------
+        ParserError
+            If a ``--set`` key is outside ``[network]``.
+        """
+        layer = command_line_layer(args, NETWORK_KEYS)
+        unknown = sorted(set(layer) - {"network"})
+        if unknown:
+            raise ParserError(
+                f"jaffx only takes [network] keys; got {', '.join(unknown)}"
+            )
+
+        return Network(args.network, config=layer.get("network", {}))
 
     def export_table(self, args: SimpleNamespace, fmt: str) -> None:
         """Handle ``jaffx export hdf5`` / ``export txt``.
 
         Loads the network and calls :meth:`~jaff.Network.to_hdf5` or
         :meth:`~jaff.Network.to_txt`, forwarding all tabulation and sampling
-        arguments and filling any unset (``None``) argument with the method's
-        own parameter default.
+        arguments.  A numeric argument is replaced by the method's own
+        parameter default when it is falsy (``args.x or default``), so an
+        explicit ``0`` is replaced too; a boolean argument is replaced only
+        when unset (``None``).
         """
         method = Network.to_hdf5 if fmt == "hdf5" else Network.to_txt
         mparams = signature(method).parameters
@@ -150,13 +154,14 @@ def _make_args(
     fast_log: Optional[bool] = None,
     include_all: Optional[bool] = None,
     verbose: Optional[bool] = None,
+    set_: Optional[List[str]] = None,
 ) -> SimpleNamespace:
     """Bundle Typer option values into the namespace the handlers expect."""
     return SimpleNamespace(
         network=network,
         file=file,
         label=label,
-        # Map "true"/"false" onto booleans, matching the old argparse type.
+        # Map "true"/"false" onto booleans (see funcfile_arg).
         funcfile=funcfile_arg(funcfile) if funcfile is not None else None,
         expand_nuclei=expand_nuclei,
         duplicate_policy=duplicate_policy,
@@ -169,6 +174,7 @@ def _make_args(
         fast_log=fast_log,
         include_all=include_all,
         verbose=verbose,
+        set=set_,
     )
 
 
@@ -203,7 +209,8 @@ _FUNCFILE = typer.Option(
 _EXPAND_NUCLEI = typer.Option(
     None,
     "--expand-nuclei/--no-expand-nuclei",
-    help="Standardize hydrogen density symbols if true",
+    help="Expand n_<element>_nuc into the sum over species bearing that element "
+    "when true (else keep the free symbol n<element>_nuc)",
 )
 _DUP_POLICY = typer.Option(
     None,
@@ -214,6 +221,13 @@ _DUP_POLICY = typer.Option(
     "jaff.toml; defaults to preserve-first",
 )
 _FILE = typer.Option(..., "-f", "--file", metavar="FILE", help="Output file path/name")
+_SET = typer.Option(
+    None,
+    "--set",
+    metavar="KEY=VALUE",
+    help="Set any network config key, e.g. --set network.reactions.t_cutoff=clip "
+    "(repeatable; the value is TOML, a bare word is a string)",
+)
 
 
 def _export_table_command(
@@ -233,6 +247,7 @@ def _export_table_command(
     fast_log: Optional[bool],
     include_all: Optional[bool],
     verbose: Optional[bool],
+    set_: Optional[List[str]],
 ) -> None:
     JaffX().export_table(
         _make_args(
@@ -251,19 +266,22 @@ def _export_table_command(
             fast_log=fast_log,
             include_all=include_all,
             verbose=verbose,
+            set_=set_,
         ),
         fmt,
     )
 
 
 @export_app.command("txt")
+@reports_errors
 def export_txt(
     network: str = _NETWORK,
     file: str = _FILE,
     label: Optional[str] = _LABEL,
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
-    duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    duplicate_policy: Optional[DuplicatePolicyChoice] = _DUP_POLICY,
+    set_: Optional[List[str]] = _SET,
     tmin: Optional[float] = typer.Option(
         None,
         "--tmin",
@@ -280,25 +298,28 @@ def export_txt(
         None,
         "--nT",
         metavar="INT",
-        help="Initial guess for the number of sampling temperatures",
+        help="Initial number of sampling temperatures (default 64); adaptive "
+        "refinement may increase it",
     ),
     err_tol: Optional[float] = typer.Option(
         None,
         "--err-tol",
         metavar="FLOAT",
-        help="Relative error tolerance for interpolation. Adaptive sampling is disabled and the table size will be exactly nT if unspecified",
+        help="Relative error tolerance for the adaptive interpolation (default 0.01). "
+        "Adaptive sampling is always applied: an unset or zero value uses 0.01",
     ),
     rate_min: Optional[float] = typer.Option(
         None,
         "--rate-min",
         metavar="FLOAT",
-        help="Adaptive error tolerance is not applied to rates below minimum rate",
+        help="Small floor added to the relative-error denominator so near-zero "
+        "rates do not divide by zero (default 1e-30); rates are not clamped to it",
     ),
     rate_max: Optional[float] = typer.Option(
         None,
         "--rate-max",
         metavar="FLOAT",
-        help="Rates above max rate is clipped to prevent overflow",
+        help="Rates above this value are clipped to prevent overflow (default 1e100)",
     ),
     fast_log: Optional[bool] = typer.Option(
         None,
@@ -335,17 +356,20 @@ def export_txt(
         fast_log,
         include_all,
         verbose,
+        set_,
     )
 
 
 @export_app.command("hdf5")
+@reports_errors
 def export_hdf5(
     network: str = _NETWORK,
     file: str = _FILE,
     label: Optional[str] = _LABEL,
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
-    duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    duplicate_policy: Optional[DuplicatePolicyChoice] = _DUP_POLICY,
+    set_: Optional[List[str]] = _SET,
     tmin: Optional[float] = typer.Option(
         None,
         "--tmin",
@@ -362,25 +386,28 @@ def export_hdf5(
         None,
         "--nT",
         metavar="INT",
-        help="Initial guess for the number of sampling temperatures",
+        help="Initial number of sampling temperatures (default 64); adaptive "
+        "refinement may increase it",
     ),
     err_tol: Optional[float] = typer.Option(
         None,
         "--err-tol",
         metavar="FLOAT",
-        help="Relative error tolerance for interpolation. Adaptive sampling is disabled and the table size will be exactly nT if unspecified",
+        help="Relative error tolerance for the adaptive interpolation (default 0.01). "
+        "Adaptive sampling is always applied: an unset or zero value uses 0.01",
     ),
     rate_min: Optional[float] = typer.Option(
         None,
         "--rate-min",
         metavar="FLOAT",
-        help="Adaptive error tolerance is not applied to rates below minimum rate",
+        help="Small floor added to the relative-error denominator so near-zero "
+        "rates do not divide by zero (default 1e-30); rates are not clamped to it",
     ),
     rate_max: Optional[float] = typer.Option(
         None,
         "--rate-max",
         metavar="FLOAT",
-        help="Rates above max rate is clipped to prevent overflow",
+        help="Rates above this value are clipped to prevent overflow (default 1e100)",
     ),
     fast_log: Optional[bool] = typer.Option(
         None,
@@ -417,17 +444,20 @@ def export_hdf5(
         fast_log,
         include_all,
         verbose,
+        set_,
     )
 
 
 @export_app.command("jaff")
+@reports_errors
 def export_jaff(
     network: str = _NETWORK,
     file: str = _FILE,
     label: Optional[str] = _LABEL,
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
-    duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    duplicate_policy: Optional[DuplicatePolicyChoice] = _DUP_POLICY,
+    set_: Optional[List[str]] = _SET,
 ):
     """Export the network to a .jaff file (gzip-compressed JSON payload)."""
     JaffX().export_jaff(
@@ -440,17 +470,20 @@ def export_jaff(
             duplicate_policy=duplicate_policy.value
             if duplicate_policy is not None
             else None,
+            set_=set_,
         )
     )
 
 
 @get_app.command("num-species")
+@reports_errors
 def get_num_species(
     network: str = _NETWORK,
     label: Optional[str] = _LABEL,
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
-    duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    duplicate_policy: Optional[DuplicatePolicyChoice] = _DUP_POLICY,
+    set_: Optional[List[str]] = _SET,
 ):
     """Print the number of species."""
     JaffX().get_nspec(
@@ -462,17 +495,20 @@ def get_num_species(
             duplicate_policy=duplicate_policy.value
             if duplicate_policy is not None
             else None,
+            set_=set_,
         )
     )
 
 
 @get_app.command("num-reactions")
+@reports_errors
 def get_num_reactions(
     network: str = _NETWORK,
     label: Optional[str] = _LABEL,
     funcfile: Optional[str] = _FUNCFILE,
     expand_nuclei: Optional[bool] = _EXPAND_NUCLEI,
-    duplicate_policy: Optional[DuplicatePolicy] = _DUP_POLICY,
+    duplicate_policy: Optional[DuplicatePolicyChoice] = _DUP_POLICY,
+    set_: Optional[List[str]] = _SET,
 ):
     """Print the number of reactions."""
     JaffX().get_nreact(
@@ -484,6 +520,7 @@ def get_num_reactions(
             duplicate_policy=duplicate_policy.value
             if duplicate_policy is not None
             else None,
+            set_=set_,
         )
     )
 

@@ -1,41 +1,44 @@
+# ABOUTME: NetworkParser: detects each network-file line's format and dispatches it
+# ABOUTME: Buckets lines per format parser and collects parsed reactions + globals
+
 """Low-level reaction network file parser for multiple astrochemical formats.
 
-``NetworkParser`` reads a single network file and converts each reaction line
-into a format-independent ``parsedListProps`` dict with keys:
-
-- ``"r"``      — list of reactant name strings
-- ``"p"``      — list of product name strings
-- ``"tmin"``   — lower temperature bound in Kelvin, or ``None``
-- ``"tmax"``   — upper temperature bound in Kelvin, or ``None``
-- ``"rate"``   — rate expression as a Python/SymPy-compatible string
-- ``"type"``   — reaction type concluded by the parser (e.g. ``"photo"``)
-- ``"string"`` — the original network-file line (for error reporting)
-- ``"format"`` — name of the parser that produced the reaction
-- ``"metadata"`` — parser-private data for that parser's post-processing
+``NetworkParser`` reads a single network file and turns each reaction line
+into a format-independent
+:class:`~jaff.core.parsers.network._formats.ParsedRecord` (reactants,
+products, temperature bounds, rate string, type, source line, file-side
+number, the parser's name in ``format`` and parser-private ``metadata``).
 
 Supported file formats
 ----------------------
 The parser auto-detects the format from line patterns.  Each format is a
 self-contained parser under ``parsers.network._formats``; the engine discovers
-them through :func:`~.parsers.network._formats.all_parsers`.  Detection is
+them through :func:`~jaff.core.parsers.network._formats.all_parsers`.  Detection is
 driven by each parser's handler descriptors, ordered by their declared
 ``priority`` (lower is matched first):
 
-1. **PRIZMO** — arrow-notation (``->``) with optional temperature range in
-   ``[tmin, tmax]`` brackets.  Variables in a ``VARIABLES { }`` block.
-2. **UDFA** — colon-delimited, fixed-column database from the UMIST project.
+1. **PRIZMO** — arrow-notation (``->``) followed by a ``[tmin, tmax]``
+   bracket, both before any comma (the brackets are required; either bound may be
+   left empty).  Variables in a ``VARIABLES { }`` block.
+2. **UDFA** — colon-delimited, fixed-column database from the UMIST project; a
+   line starts with its index and a colon.
 3. **KROME** — comma-separated, declared via ``@format:`` header.
    Variable aliases via ``@var:``.
 4. **UCLCHEM** — comma-separated with a ``NAN`` sentinel, includes grain
    surface reactions.
 5. **KIDA** — fixed-width column format from the KIDA database.
 
+Last, any other line with ``->`` or ``:`` goes to a PRIZMO or UDFA fallback handler,
+which reports it as an invalid reaction of that format instead of skipping it.
+
 Rate normalization
 ------------------
-After parsing, all rate strings are lower-cased.  Known format-specific
-symbols (``user_crflux``, ``user_av``, Fortran exponent notation ``d``,
-temperature shortcuts ``t32``, ``invtgas``, etc.) are replaced with canonical
-JAFF symbols before the strings are passed to SymPy for sympification.
+Each format parser normalizes its own rate strings: format-specific symbols
+(e.g. ``user_crflux``, ``user_av``) are rewritten by the parser, and shorthand
+variables such as ``t32`` or ``invtgas`` are supplied as globals by the KROME
+and PRIZMO parsers (their ``BASE_GLOBALS``).  The engine itself only
+lower-cases every rate string after parsing, before ``Network`` passes it to
+SymPy.
 """
 
 import logging
@@ -45,8 +48,7 @@ from sympy import Basic
 
 from ....common import resolve_symbolic_dependencies
 from ....io import JaffLogger, jaff_progress
-from ._formats import Parser, Record, all_parsers
-from ._typing import parsedListProps
+from ._formats import ParsedRecord, Parser, Record, all_parsers
 
 
 class NetworkParser:
@@ -96,7 +98,7 @@ class NetworkParser:
         self.__logger: logging.Logger = logger or JaffLogger().get_logger()
         self.__globals: dict[str, Basic] = {}
 
-        self.__parsed_list: list[parsedListProps] = []
+        self.__parsed_list: list[ParsedRecord] = []
 
         self.__parsers = all_parsers()
         for parser in self.__parsers:
@@ -137,7 +139,9 @@ class NetworkParser:
             self.__globals.update(result.globals)
 
         reactions.sort(key=lambda item: (item[0].source_index, item[0].sub_order))
-        self.__parsed_list[:] = [pr.as_parsed_props(name) for pr, name in reactions]
+        for record, name in reactions:
+            record.format = name
+        self.__parsed_list[:] = [record for record, _ in reactions]
 
         self.__normalize_rates()
         self.__globals = resolve_symbolic_dependencies(self.__globals, fname=self.__file)
@@ -164,16 +168,15 @@ class NetworkParser:
         """
         return list(self.__used_parsers)
 
-    def get_parsed(self) -> tuple[list[parsedListProps], dict[str, Basic]]:
-        """Return the parsed reaction list and resolved global variable map.
+    def get_parsed(self) -> tuple[list[ParsedRecord], dict[str, Basic]]:
+        """Return the parsed reactions and the resolved global variable map.
 
         Returns
         -------
-        tuple[list[parsedListProps], dict[str, Basic]]
-            - ``list[parsedListProps]``: one dict per reaction with keys
-              ``"r"``, ``"p"``, ``"tmin"``, ``"tmax"``, ``"rate"``,
-              ``"type"``, ``"string"``, ``"source_index"``, ``"format"``,
-              ``"metadata"``.
+        tuple[list[ParsedRecord], dict[str, Basic]]
+            - ``list[ParsedRecord]``: one record per reaction, in
+              ``(source_index, sub_order)`` order, its ``format`` set and its
+              ``rate`` lower-cased.
             - ``dict[str, Basic]``: global symbolic constants defined in the
               file (e.g. ``@var`` entries), with all inter-dependencies
               resolved via SymPy substitution.
@@ -231,6 +234,6 @@ class NetworkParser:
 
     def __normalize_rates(self):
         """Lower-case all rate strings so SymPy ``parse_expr`` is case-insensitive."""
-        for r in self.__parsed_list:
-            assert isinstance(r["rate"], str)
-            r["rate"] = r["rate"].lower()
+        for record in self.__parsed_list:
+            assert isinstance(record.rate, str)
+            record.rate = record.rate.lower()

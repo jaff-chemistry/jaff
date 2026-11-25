@@ -32,27 +32,41 @@ constexpr double TOTAL_CHARGE = $($specie_charge$)$;
 $$JAFF END
 
 void rates(double *k, const double *nden, double tgas) {
-    $$JAFF REPEAT idx, rate, cse IN rates
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rates } }
     const double cse$idx$ = $cse$;
+    $$JAFF END
+    $$JAFF REPEAT idx, rate IN rates { CSE { GROUP -> rates } }
     k[$idx$] = $rate$;
     $$JAFF END
 }
 
 void rhs(double *f, const double *nden, double tgas) {
-    $$JAFF REPEAT idx, rhs, cse IN rhses {
+    $$JAFF REPEAT idx, cse IN cses {
         REPLACE {
             "nden\[(\d+)\]" -> "state.xn[\1]"
             "tgas" -> "state.T"
         }
+        GROUP { NAME -> rhs }
     }
     const amrex::Real cse$idx$ = $cse$;
+    $$JAFF END
+    $$JAFF REPEAT idx, rhs IN rhses {
+        REPLACE {
+            "nden\[(\d+)\]" -> "state.xn[\1]"
+            "tgas" -> "state.T"
+        }
+        THERMAL { MODE -> dedt }
+        CSE { GROUP -> rhs }
+    }
     ydot($idx+1$) = $rhs$;
     $$JAFF END
 }
 
 void jacobian(double *J, const double *nden, double tgas) {
-    $$JAFF REPEAT idx, expr, cse IN jacobian
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> jacobian } }
     const double cse$idx$ = $cse$;
-    J($idx+1$, $idx+1$) = $expr$;
+    $$JAFF END
+    $$JAFF REPEAT idx, jac IN jacobian { CSE { GROUP -> jacobian } }
+    J($idx+1$, $idx+1$) = $jac$;
     $$JAFF END
 }

@@ -30,13 +30,13 @@ print(f"Elements:  {net.elements.count}")
 
     [:octicons-arrow-right-24: Network](network.md)
 
-- :phosphor-sliders:{ .sm .middle } **Network Configuration**
+- :phosphor-sliders:{ .sm .middle } **Configuration**
 
     ***
 
-    The network's `jaff.toml`: per-reaction and global temperature-cutoff (`clip` / `extrapolate`) behaviour, and how it composes with `jaffgen.toml`.
+    The `[network]` settings shared by `jaff.toml` and `jaffgen.toml` (one schema): reactions, temperature cutoffs, radiation, dust, thermodynamics, and how the layers stack.
 
-    [:octicons-arrow-right-24: jaff.toml](jaff-toml.md)
+    [:octicons-arrow-right-24: Configuration](../configuration/index.md)
 
 - :phosphor-dna:{ .sm .middle } **Species**
 
@@ -61,6 +61,22 @@ print(f"Elements:  {net.elements.count}")
     Inspect individual `Reaction` objects and the `Reactions` catalogue: filtering, conservation checks, rate expressions, and code generation.
 
     [:octicons-arrow-right-24: Reactions](reactions.md)
+
+- :phosphor-function:{ .sm .middle } **Analysis mode**
+
+    ***
+
+    Numeric values for a network's parameters, species densities and unknown functions (`net.analysis`), used to evaluate rate coefficients and rates and to colour the figures.
+
+    [:octicons-arrow-right-24: Analysis mode](analysis.md)
+
+- :phosphor-graph:{ .sm .middle } **Visualization**
+
+    ***
+
+    Graph, species and stoichiometry figures of a network (`net.visualize`), optionally coloured by rate coefficient or rate.
+
+    [:octicons-arrow-right-24: Visualization](visualization.md)
 
 - :phosphor-terminal-window:{ .sm .middle } **jaffx CLI**
 

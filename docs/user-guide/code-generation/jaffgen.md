@@ -20,18 +20,24 @@ jaffgen --network <file> [options]
 
 ## How it works
 
-A `jaffgen` run is four phases:
+A `jaffgen` run is five phases:
 
-1. **Resolve configuration** — merge three sources by priority (see
-   [below](#configuration-priority)): explicit CLI flags, a
-   [`jaffgen.toml`](jaffgen-toml.md) file, then `Network` constructor defaults.
-2. **Gather template files** — from `--indir`, `--files`, and `--template`.
-   These **combine** — a single run can pull from all three.
-3. **Load the network** — exactly one `Network`, built from the resolved
-   network/label/funcfile/radiation settings.
+1. **Resolve configuration** — merge a
+   [`jaffgen.toml`](../configuration/index.md) (or the one `--template`
+   bundles) and the command line (see [below](#configuration-priority)), and
+   check the `[jaffgen]` section.
+2. **Load the network** — exactly one `Network`: it merges the run's
+   `[network]` settings over its own `jaff.toml` and validates them.
+3. **Gather template files** — from `--indir`, `--files`, and `--template`.
+   These **combine** — a single run can pull from all three. A
+   `jaffgen.toml` and the [template functions](#template-functions) file are
+   set aside: neither is rendered nor written.
 4. **Generate** — run [`TemplateParser`](template-syntax.md) on every gathered
-   file and write the result to `--outdir`, preserving each file's path
-   relative to its source directory.
+   file and write the result to a new [run folder](#run-folders) in
+   `--outdir`, preserving each file's path relative to its source directory,
+   together with any data tables
+   ([`[[jaffgen.table]]`](../configuration/data-tables.md), shielding tables).
+5. **Record** — write the run's whole config to `config.toml` in the run folder.
 
 The mental model: _jaffgen is the template engine driven over a file set with
 one loaded network behind it._
@@ -46,11 +52,46 @@ The three input flags are additive, not exclusive:
 | ------------ | ------------------------------------------------------------- |
 | `--indir`    | Every file in a directory (recursive), keeping its structure  |
 | `--files`    | Specific individual files                                     |
-| `--template` | A built-in collection from `jaff/templates/generator/<name>/` |
+| `--template` | A built-in collection from `templates/<name>/`                |
 
-For `--template`, generator files are collected first; any **preprocessor** file
-(`jaff/templates/preprocessor/<name>/`) whose relative path does not clash is
-appended — so the generator always wins on a path collision.
+For `--template`, every file in the template's folder is rendered, keeping its
+path relative to the folder; files without `$$JAFF` directives (a solver's
+driver, its Makefile, bundled library sources) come out unchanged.
+
+A `$label$` in a file or folder name (of `--indir` or `--template` files) becomes
+the network label, so a template can name folders after the network:
+`units/$label$/rates.f90` is written as `units/GOW/rates.f90` for the GOW network.
+
+---
+
+## Template functions
+
+A template can produce text no built-in command does with
+[`$$JAFF CALL`](template-syntax.md#call): the named function comes from a file
+called exactly `jaffgen_template_functions.py`, next to the templates.
+
+- **Found among all input files.** jaffgen looks for the file in everything it
+  gathered: the `--template` folder, `--indir` (at any depth) and `--files`.
+  More than one is an error that lists them.
+- **Never written.** The file is not copied to the run folder.
+- **Run lazily, once.** Finding the file does not run it. The first
+  `$$JAFF CALL` checked runs it, and every template of the run shares the
+  result; a run without `CALL` never runs it.
+
+```text
+my_solver/
+├── jaffgen_template_functions.py   # @jaffgen_function functions
+├── init.cpp                        # uses $$JAFF CALL
+└── rates.cpp
+```
+
+```bash
+jaffgen --network networks/GOW/GOW.jet --indir my_solver/ --outdir output/
+```
+
+!!! warning "The functions file is code"
+    `jaffgen_template_functions.py` is ordinary Python that jaffgen runs when
+    a template uses `$$JAFF CALL`. Only render templates you trust.
 
 ---
 
@@ -61,12 +102,12 @@ appended — so the generator always wins on a path collision.
 | Argument       | Description                                                                        |
 | -------------- | ---------------------------------------------------------------------------------- |
 | `--network`    | Network file path **or** a built-in network name; required (CLI or `jaffgen.toml`) |
-| `--network-config` | Path to a network [`jaff.toml`](../working-with-networks/jaff-toml.md) (temperature cutoffs); defaults to `<network_dir>/jaff.toml` |
+| `--network-config` | Path to another [`jaff.toml`](../configuration/index.md), merged over `<network_dir>/jaff.toml` |
 | `--label`      | Override the network label (defaults to the file stem)                             |
 | `--funcfile`   | Path to a `.jfunc` auxiliary file; `true` scans the network dir; `false` skips     |
 | `--expand-nuclei` | `--expand-nuclei` / `--no-expand-nuclei` — expand `n_<element>_nuc` element-nucleus sums (default: on) |
-| `--errors`     | `--errors` / `--no-errors` — exit on conservation violations instead of warning    |
-| `--duplicate-policy` | Resolve duplicate rate coefficients over the same temperature range: `preserve-first` (default), `preserve-last`, or `error`. Overrides `jaffgen.toml` and the network `jaff.toml` |
+| `--strict`     | `--strict` / `--no-strict` — fail (exit status 1, naming what was found) instead of warning when network validation finds a problem: unconserved mass or charge, sink/source species, missing recombinations, or isomers |
+| `--duplicate-policy` | Resolve duplicate rate coefficients over the same temperature range: `preserve-first` (default), `preserve-last`, or `error` |
 
 When `--network` is a built-in network name (a sub-directory of `networks/`),
 it resolves to the single `.jet` file inside that directory — the directory
@@ -78,7 +119,7 @@ performs this resolution.
 
 | Argument   | Description                                                           |
 | ---------- | --------------------------------------------------------------------- |
-| `--outdir` | Output directory (created if absent; defaults to `<repo>/generated/`) |
+| `--outdir` | Output directory; each run writes into a new [run folder](#run-folders) in it (created if absent; defaults to `<repo>/generated/`) |
 | `--echo`   | `--echo` / `--no-echo` — copy `$$JAFF` directives into the output as comments (default: on; overrides `echo` in `jaffgen.toml`) |
 
 ### Input sources
@@ -93,7 +134,8 @@ performs this resolution.
 
 | Argument   | Description                                                                                                  |
 | ---------- | ------------------------------------------------------------------------------------------------------------ |
-| `--config` | Path to a [`jaffgen.toml`](jaffgen-toml.md); also auto-detected if a `jaffgen.toml` is among the gathered files |
+| `--config` | Path to a [`jaffgen.toml`](../configuration/index.md); without it, a `jaffgen.toml` bundled with `--template` is used |
+| `--set`    | `--set key.path=value` (repeatable) — set any [config key](../configuration/reference.md), e.g. `--set network.reactions.t_cutoff=clip`; wins over the other options |
 
 ---
 
@@ -101,13 +143,44 @@ performs this resolution.
 
 Each setting is resolved highest-wins:
 
-1. Explicit CLI flag (e.g. `--network`)
-2. [`jaffgen.toml`](jaffgen-toml.md) value (from `--config`, or auto-detected)
-3. `Network` constructor default
+1. `--set key.path=value` items
+2. Other command-line options (e.g. `--network`, `--strict`)
+3. [`jaffgen.toml`](../configuration/index.md) value (from `--config`, or bundled with the template)
+4. `--network-config`, if given
+5. The network's `jaff.toml`
+6. The config defaults
 
-Paths taken from a `jaffgen.toml` are resolved **relative to the config file's
+Paths taken from a config file are resolved **relative to that file's
 directory**; paths given on the CLI are resolved relative to the current
-directory.
+directory. Each option sets one config key; see the
+[option table](../configuration/index.md#from-the-command-line).
+
+The run folder also receives `config.toml`: the run's whole config after
+merging, every key and default included — an exact record of what the run used,
+loadable again with `--config`. It records the output directory actually used,
+the default one included, not the run folder, so a rerun from it writes a new
+run folder next to this one. (The `jaffgen.toml` itself is not copied.)
+
+### Run folders
+
+Each run writes into a new folder in the output directory, named
+`<network>_<template>_<YYYYmmdd-HHMMSS>`, so earlier runs are never
+overwritten:
+
+```text
+output/
+├── GOW_microphysics_20261031-101500/
+└── GOW_microphysics_20261031-103012/
+```
+
+- `<network>` is the network's [`label`](../configuration/index.md) (by
+  default the network file's name without its extension).
+- `<template>` is the `--template` name; without one, the `--indir` folder's
+  name; with only `--files`, `custom`.
+- Characters other than letters, digits, `_`, `.` and `-` become `_`.
+- A second run in the same second gets `-2` appended (then `-3`, ...).
+
+The last log line names the run folder ("Generated files can be found at ...").
 
 ---
 
@@ -184,15 +257,15 @@ jaffgen --config jaffgen.toml
 
 A bundled template can even supply its own config. The `microphysics` collection
 ships a `jaffgen.toml` with a `[network.radiation]` block, so `--template microphysics`
-auto-detects it and turns on photochemistry without any extra flags. See
-[`jaffgen.toml`](jaffgen-toml.md) for the full schema.
+uses it and turns on photochemistry without any extra flags. See the
+[configuration reference](../configuration/reference.md) for every key.
 
 ---
 
 ## Built-in templates
 
-Collections live under `src/jaff/templates/generator/`. List them with:
+Collections live under `templates/` at the repository root. List them with:
 
 ```bash
-ls src/jaff/templates/generator/
+ls templates/
 ```

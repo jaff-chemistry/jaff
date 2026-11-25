@@ -1,0 +1,14 @@
+# Editor linting of the jaff config files against their JSON Schemas (Taplo /
+# Even Better TOML).  Regenerate with `python -m jaff.config.json_schema`.
+
+[[rule]]
+include = ["**/jaff.toml"]
+
+[rule.schema]
+path = "./src/jaff/config/schemas/jaff.schema.json"
+
+[[rule]]
+include = ["**/jaffgen.toml"]
+
+[rule.schema]
+path = "./src/jaff/config/schemas/jaffgen.schema.json"

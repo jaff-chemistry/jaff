@@ -2,7 +2,7 @@
 site_name = "JAFF Documentation"
 site_description = "Just Another Fancy Format - An astrochemical network parser and code generator"
 site_url = "https://jaff-chemistry.github.io/jaff"
-authors = ["JAFF Team"]
+site_author = "JAFF Team"
 copyright = "Copyright &copy; 2025 JAFF Team"
 docs_dir = "docs"
 site_dir = "site"
@@ -10,7 +10,7 @@ dev_addr = "localhost:8000"
 extra_css = ["stylesheets/extra.css?v=16"]
 repo_url = "https://github.com/jaff-chemistry/jaff"
 repo_name = "jaff-chemistry/jaff"
-repo = "fontawesome/brands/git-alt"
+edit_uri = "edit/main/docs/"
 extra_javascript = [
   "javascripts/mathjax.js",
   "https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js",
@@ -37,23 +37,29 @@ nav = [
     { "Working with Networks" = [
       "user-guide/working-with-networks/index.md",
       "user-guide/working-with-networks/network.md",
-      "user-guide/working-with-networks/jaff-toml.md",
       "user-guide/working-with-networks/species.md",
       "user-guide/working-with-networks/reactions.md",
       "user-guide/working-with-networks/elements.md",
+      "user-guide/working-with-networks/analysis.md",
+      "user-guide/working-with-networks/visualization.md",
       "user-guide/working-with-networks/jaffx.md"
+    ] },
+    { "Configuration" = [
+      "user-guide/configuration/index.md",
+      "user-guide/configuration/reference.md",
+      "user-guide/configuration/editor-setup.md",
+      "user-guide/configuration/plugins.md",
+      "user-guide/configuration/data-tables.md"
     ] },
     { "Code Generation" = [
       "user-guide/code-generation/index.md",
       "user-guide/code-generation/template-syntax.md",
-      "user-guide/code-generation/jaffgen-toml.md",
       "user-guide/code-generation/jaffgen.md",
       "user-guide/code-generation/table-interpolation.md",
       "user-guide/code-generation/worked-example.md",
     ] },
     { "Advanced Code Generation" = [
       "user-guide/advanced-code-generation/index.md",
-      "user-guide/advanced-code-generation/builder.md",
       "user-guide/advanced-code-generation/codegen.md"
     ] },
     { "Testing Networks" = [
@@ -63,228 +69,620 @@ nav = [
       "user-guide/testing-networks/gow.md"
     ] }
   ] },
+  # BEGIN generated API nav (python -m jaff._utils.api_docs)
   { "API Reference" = [
-    "api/index.md",
+    "reference/index.md",
     { "Core" = [
-      "api/core/index.md",
-      { "core.Network" = [
-        "api/core/network/check_isomers.md",
-        "api/core/network/check_recombinations.md",
-        "api/core/network/check_sink_sources.md",
-        "api/core/network/compare_reactions.md",
-        "api/core/network/compare_species.md",
-        "api/core/network/thermodynamics.md",
-        "api/core/network/index.md",
-        "api/core/network/sfluxes.md",
-        "api/core/network/sodes.md",
-        "api/core/network/sradodes.md",
-        "api/core/network/symbols.md",
-        "api/core/network/to_hdf5.md",
-        "api/core/network/to_jaff.md",
-        "api/core/network/to_txt.md",
-        "api/core/network/write_table.md"
-      ] },
-      { "core.Specie" = [
-        "api/core/specie/index.md",
-        "api/core/specie/configure.md",
-        "api/core/specie/get_fidx.md",
-        "api/core/specie/serialize.md",
-        "api/core/specie/latex.md",
-        "api/core/specie/parse.md"
-      ] },
-      { "core.Species" = [
-        "api/core/species/index.md",
-        "api/core/species/configure.md",
-        "api/core/species/add.md",
-        "api/core/species/from_serialized.md",
-        "api/core/species/from_name.md",
-        "api/core/species/get_list.md",
-        "api/core/species/names.md",
-        "api/core/species/masses.md",
-        "api/core/species/charges.md",
-        "api/core/species/exploded.md",
-        "api/core/species/latex.md",
-        "api/core/species/serialized.md",
-        "api/core/species/elements.md",
-        "api/core/species/e_idx.md",
-        "api/core/species/normalized_names.md",
-        "api/core/species/neutral.md",
-        "api/core/species/charged.md",
-        "api/core/species/charge_truths.md"
-      ] },
-      { "core.Reaction" = [
-        "api/core/reaction/index.md",
-        "api/core/reaction/species.md",
-        "api/core/reaction/elements.md",
-        "api/core/reaction/is_isomer_version.md",
-        "api/core/reaction/serialize_exploded.md",
-        "api/core/reaction/serialize.md",
-        "api/core/reaction/check.md",
-        "api/core/reaction/check_mass.md",
-        "api/core/reaction/check_charge.md",
-        "api/core/reaction/get_verbatim.md",
-        "api/core/reaction/get_latex.md",
-        "api/core/reaction/get_flux_expression.md",
-        "api/core/reaction/has_any_species.md",
-        "api/core/reaction/has_reactant.md",
-        "api/core/reaction/has_product.md",
-        "api/core/reaction/get_code.md",
-        "api/core/reaction/get_sympy.md",
-        "api/core/reaction/band_xsecs.md",
-        "api/core/reaction/plot_rate_coefficient.md",
-        "api/core/reaction/plot_xsecs.md"
-      ] },
-      { "core.Reactions" = [
-        "api/core/reactions/index.md",
-        "api/core/reactions/add.md",
-        "api/core/reactions/from_serialized.md",
-        "api/core/reactions/all.md",
-        "api/core/reactions/from_verbatim.md",
-        "api/core/reactions/get_list.md",
-        "api/core/reactions/get.md",
-        "api/core/reactions/with_type.md",
-        "api/core/reactions/with_format.md",
-        "api/core/reactions/radiation_emitters.md",
-        "api/core/reactions/verbatim.md",
-        "api/core/reactions/types.md",
-        "api/core/reactions/reactants.md",
-        "api/core/reactions/products.md",
-        "api/core/reactions/rate_coefficients.md",
-        "api/core/reactions/rates.md",
-        "api/core/reactions/tmins.md",
-        "api/core/reactions/tmaxes.md",
-        "api/core/reactions/dE.md",
-        "api/core/reactions/serialized.md",
-        "api/core/reactions/serialized_exploded.md",
-        "api/core/reactions/photo_reactions.md",
-        "api/core/reactions/photo_reaction_truths.md",
-        "api/core/reactions/photo_reaction_indices.md"
-      ] },
+      "reference/core/index.md",
       { "core.Element" = [
-        "api/core/element/index.md",
-        "api/core/element/configure.md"
+        "reference/core/element/index.md",
       ] },
       { "core.Elements" = [
-        "api/core/elements/index.md",
-        "api/core/elements/configure.md",
-        "api/core/elements/truth_matrix.md",
-        "api/core/elements/density_matrix.md",
-        "api/core/elements/from_name.md",
-        "api/core/elements/from_symbol.md",
-        "api/core/elements/get_list.md",
-        "api/core/elements/symbols.md",
-        "api/core/elements/names.md",
-        "api/core/elements/masses.md",
-        "api/core/elements/atomic_masses.md",
-        "api/core/elements/protons.md",
-        "api/core/elements/neutrons.md",
-        "api/core/elements/electrons.md"
-      ] }
+        "reference/core/elements/index.md",
+        "reference/core/elements/truth_matrix.md",
+        "reference/core/elements/density_matrix.md",
+        "reference/core/elements/from_name.md",
+        "reference/core/elements/from_symbol.md",
+        "reference/core/elements/get_list.md",
+        "reference/core/elements/symbols.md",
+        "reference/core/elements/names.md",
+        "reference/core/elements/masses.md",
+        "reference/core/elements/atomic_masses.md",
+        "reference/core/elements/protons.md",
+        "reference/core/elements/neutrons.md",
+        "reference/core/elements/electrons.md",
+      ] },
+      { "core.Network" = [
+        "reference/core/network/index.md",
+        "reference/core/network/filename.md",
+        "reference/core/network/label.md",
+        "reference/core/network/write_shielding_tables.md",
+        "reference/core/network/to_jaff.md",
+        "reference/core/network/compare_reactions.md",
+        "reference/core/network/compare_species.md",
+        "reference/core/network/check_conservation.md",
+        "reference/core/network/check_sink_sources.md",
+        "reference/core/network/check_recombinations.md",
+        "reference/core/network/check_isomers.md",
+        "reference/core/network/reactant_matrix.md",
+        "reference/core/network/product_matrix.md",
+        "reference/core/network/analysis.md",
+        "reference/core/network/visualize.md",
+        "reference/core/network/ode_system.md",
+        "reference/core/network/to_hdf5.md",
+        "reference/core/network/to_txt.md",
+        "reference/core/network/write_table.md",
+      ] },
+      { "core.Reaction" = [
+        "reference/core/reaction/index.md",
+        "reference/core/reaction/function.md",
+        "reference/core/reaction/model.md",
+        "reference/core/reaction/expressions.md",
+        "reference/core/reaction/substitute.md",
+        "reference/core/reaction/tmin.md",
+        "reference/core/reaction/tmax.md",
+        "reference/core/reaction/rate.md",
+        "reference/core/reaction/species.md",
+        "reference/core/reaction/elements.md",
+        "reference/core/reaction/is_isomer_version.md",
+        "reference/core/reaction/serialize_exploded.md",
+        "reference/core/reaction/serialize.md",
+        "reference/core/reaction/normalized_proxy_reaction_str.md",
+        "reference/core/reaction/check_mass.md",
+        "reference/core/reaction/check_charge.md",
+        "reference/core/reaction/get_verbatim.md",
+        "reference/core/reaction/get_latex.md",
+        "reference/core/reaction/get_flux_expression.md",
+        "reference/core/reaction/has_any_species.md",
+        "reference/core/reaction/has_reactant.md",
+        "reference/core/reaction/has_product.md",
+        "reference/core/reaction/get_code.md",
+        "reference/core/reaction/get_sympy.md",
+        "reference/core/reaction/plot_rate_coefficient.md",
+      ] },
+      { "core.Reactions" = [
+        "reference/core/reactions/index.md",
+        "reference/core/reactions/photochemistry.md",
+        "reference/core/reactions/add.md",
+        "reference/core/reactions/add_rate.md",
+        "reference/core/reactions/check_config.md",
+        "reference/core/reactions/link.md",
+        "reference/core/reactions/resolve_rate_references.md",
+        "reference/core/reactions/by_source_index.md",
+        "reference/core/reactions/from_serialized.md",
+        "reference/core/reactions/all.md",
+        "reference/core/reactions/from_verbatim.md",
+        "reference/core/reactions/get_list.md",
+        "reference/core/reactions/get.md",
+        "reference/core/reactions/with_type.md",
+        "reference/core/reactions/with_format.md",
+        "reference/core/reactions/verbatim.md",
+        "reference/core/reactions/types.md",
+        "reference/core/reactions/reactants.md",
+        "reference/core/reactions/products.md",
+        "reference/core/reactions/rate_coefficients.md",
+        "reference/core/reactions/rates.md",
+        "reference/core/reactions/tmins.md",
+        "reference/core/reactions/tmaxes.md",
+        "reference/core/reactions/serialized.md",
+        "reference/core/reactions/serialized_exploded.md",
+        "reference/core/reactions/radiation_emitters.md",
+        "reference/core/reactions/photo_reactions.md",
+        "reference/core/reactions/photo_reaction_truths.md",
+        "reference/core/reactions/photo_reaction_indices.md",
+        "reference/core/reactions/plot_rates.md",
+        "reference/core/reactions/plot_xsecs.md",
+      ] },
+      { "core.Specie" = [
+        "reference/core/specie/index.md",
+        "reference/core/specie/elements.md",
+        "reference/core/specie/get_fidx.md",
+        "reference/core/specie/is_special.md",
+        "reference/core/specie/is_core.md",
+        "reference/core/specie/serialize.md",
+        "reference/core/specie/latex.md",
+      ] },
+      { "core.Species" = [
+        "reference/core/species/index.md",
+        "reference/core/species/add.md",
+        "reference/core/species/special.md",
+        "reference/core/species/core.md",
+        "reference/core/species/from_serialized.md",
+        "reference/core/species/from_name.md",
+        "reference/core/species/get_list.md",
+        "reference/core/species/names.md",
+        "reference/core/species/masses.md",
+        "reference/core/species/exploded.md",
+        "reference/core/species/latex.md",
+        "reference/core/species/charges.md",
+        "reference/core/species/serialized.md",
+        "reference/core/species/elements.md",
+        "reference/core/species/e_idx.md",
+        "reference/core/species/normalized_names.md",
+        "reference/core/species/charge_reverse_map.md",
+        "reference/core/species/neutral.md",
+        "reference/core/species/charged.md",
+        "reference/core/species/charge_truths.md",
+      ] },
+      { "core.NetworkSymbols" = [
+        "reference/core/networksymbols/index.md",
+        "reference/core/networksymbols/ncol.md",
+        "reference/core/networksymbols/free_symbols.md",
+        "reference/core/networksymbols/ndens.md",
+        "reference/core/networksymbols/krates.md",
+        "reference/core/networksymbols/ntot.md",
+        "reference/core/networksymbols/rho.md",
+        "reference/core/networksymbols/n_hnuc.md",
+        "reference/core/networksymbols/element_sum.md",
+        "reference/core/networksymbols/variables.md",
+        "reference/core/networksymbols/applied_functions.md",
+        "reference/core/networksymbols/interp_functions.md",
+        "reference/core/networksymbols/undefined_functions.md",
+        "reference/core/networksymbols/standardize.md",
+        "reference/core/networksymbols/log_summary.md",
+      ] },
+      { "core.Kinetics" = [
+        "reference/core/kinetics/index.md",
+        "reference/core/kinetics/odes.md",
+        "reference/core/kinetics/weighted_rate.md",
+        "reference/core/kinetics/dntot_dt.md",
+        "reference/core/kinetics/drho_dt.md",
+      ] },
+      { "core.OdeSystem" = [
+        "reference/core/odesystem/index.md",
+        "reference/core/odesystem/rhs.md",
+        "reference/core/odesystem/rate_coefficients.md",
+        "reference/core/odesystem/parameters.md",
+        "reference/core/odesystem/jacobian.md",
+        "reference/core/odesystem/jacobian_split.md",
+      ] },
+      { "core.StateVariable" = [
+        "reference/core/statevariable/index.md",
+      ] },
+      { "core.PhotoReaction" = [
+        "reference/core/photoreaction/index.md",
+        "reference/core/photoreaction/compute.md",
+        "reference/core/photoreaction/band_rates.md",
+        "reference/core/photoreaction/cross_section_data.md",
+        "reference/core/photoreaction/expressions.md",
+        "reference/core/photoreaction/substitute.md",
+        "reference/core/photoreaction/band_xsecs.md",
+        "reference/core/photoreaction/plot_xsecs.md",
+      ] },
+      { "core.ReactionRadiation" = [
+        "reference/core/reactionradiation/index.md",
+        "reference/core/reactionradiation/spectral_yield.md",
+        "reference/core/reactionradiation/compute.md",
+        "reference/core/reactionradiation/expressions.md",
+        "reference/core/reactionradiation/substitute.md",
+      ] },
+      { "core.ReactionEnergy" = [
+        "reference/core/reactionenergy/index.md",
+        "reference/core/reactionenergy/compute.md",
+        "reference/core/reactionenergy/change.md",
+        "reference/core/reactionenergy/expressions.md",
+        "reference/core/reactionenergy/substitute.md",
+      ] },
+      { "core.Rate" = [
+        "reference/core/rate/index.md",
+        "reference/core/rate/coefficient.md",
+        "reference/core/rate/symbol.md",
+        "reference/core/rate/densities.md",
+        "reference/core/rate/expanded.md",
+        "reference/core/rate/reduced.md",
+        "reference/core/rate/form.md",
+      ] },
+      { "core.Analysis" = [
+        "reference/core/analysis/index.md",
+        "reference/core/analysis/enabled.md",
+        "reference/core/analysis/enable.md",
+        "reference/core/analysis/evaluate.md",
+        "reference/core/analysis/disable.md",
+        "reference/core/analysis/pop.md",
+        "reference/core/analysis/get_spec.md",
+        "reference/core/analysis/tables.md",
+      ] },
+      { "core.AnalysisSpec" = [
+        "reference/core/analysisspec/index.md",
+      ] },
+      { "core.AnalysisTable" = [
+        "reference/core/analysistable/index.md",
+        "reference/core/analysistable/names.md",
+        "reference/core/analysistable/set.md",
+        "reference/core/analysistable/update.md",
+        "reference/core/analysistable/get.md",
+        "reference/core/analysistable/pop.md",
+        "reference/core/analysistable/values.md",
+        "reference/core/analysistable/missing.md",
+        "reference/core/analysistable/default_label.md",
+      ] },
+      { "core.Entry" = [
+        "reference/core/entry/index.md",
+      ] },
+      { "core.Parameters" = [
+        "reference/core/parameters/index.md",
+        "reference/core/parameters/default_label.md",
+      ] },
+      { "core.Densities" = [
+        "reference/core/densities/index.md",
+        "reference/core/densities/update.md",
+        "reference/core/densities/default_label.md",
+      ] },
+      { "core.Functions" = [
+        "reference/core/functions/index.md",
+        "reference/core/functions/check_expression.md",
+      ] },
     ] },
-    { "Codegen" = [
-      "api/codegen/index.md",
-      { "codegen.Builder" = [
-        "api/codegen/builder/index.md",
-        "api/codegen/builder/build.md"
-      ] },
-      { "codegen.Codegen" = [
-        "api/codegen/codegen/index.md",
-        "api/codegen/codegen/get_commons.md",
-        "api/codegen/codegen/get_indexed_rates.md",
-        "api/codegen/codegen/get_rates_str.md",
-        "api/codegen/codegen/get_indexed_flux_expressions.md",
-        "api/codegen/codegen/get_flux_expressions_str.md",
-        "api/codegen/codegen/get_indexed_ode_expressions.md",
-        "api/codegen/codegen/get_ode_expressions_str.md",
-        "api/codegen/codegen/get_dedt.md",
-        "api/codegen/codegen/get_dtdt.md",
-        "api/codegen/codegen/get_indexed_odes.md",
-        "api/codegen/codegen/get_ode_str.md",
-        "api/codegen/codegen/get_indexed_rhs.md",
-        "api/codegen/codegen/get_rhs_str.md",
-        "api/codegen/codegen/get_indexed_radodes.md",
-        "api/codegen/codegen/get_radode_str.md",
-        "api/codegen/codegen/get_indexed_jacobian.md",
-        "api/codegen/codegen/get_jacobian_str.md",
-        "api/codegen/codegen/get_language_tokens.md",
-      ] },
-      { "codegen.Preprocessor" = [
-        "api/codegen/preprocessor/index.md",
-        "api/codegen/preprocessor/preprocess.md",
-        "api/codegen/preprocessor/preprocess_file.md"
-      ] }
-    ] },
-    { "Drivers" = [
-      "api/drivers/index.md",
-      { "drivers.csv" = [
-        "api/drivers/csv/csv_to_df.md",
-        "api/drivers/csv/csv_to_hdf5.md"
-      ] },
-      { "drivers.HDF5" = [
-        "api/drivers/hdf5/index.md",
-        "api/drivers/hdf5/to_dict.md",
-        "api/drivers/hdf5/from_dict.md",
-        "api/drivers/hdf5/to_csv.md"
-      ] },
-      { "drivers.Db" = [
-        "api/drivers/sqlite/db/index.md",
-        "api/drivers/sqlite/db/connect.md",
-        "api/drivers/sqlite/db/close.md",
-        "api/drivers/sqlite/db/delete.md",
-        "api/drivers/sqlite/db/get_tables.md",
-        "api/drivers/sqlite/db/get_table_names.md",
-        "api/drivers/sqlite/db/table.md",
-        "api/drivers/sqlite/db/table_from_dataframe.md",
-        "api/drivers/sqlite/db/table_from_csv.md",
-        "api/drivers/sqlite/db/query.md"
-      ] },
-      { "drivers.Table" = [
-        "api/drivers/sqlite/table/index.md",
-        "api/drivers/sqlite/table/all_rows.md",
-        "api/drivers/sqlite/table/rows.md",
-        "api/drivers/sqlite/table/get_cell.md",
-        "api/drivers/sqlite/table/set_cell.md",
-        "api/drivers/sqlite/table/insert_row.md",
-        "api/drivers/sqlite/table/insert_rows.md",
-        "api/drivers/sqlite/table/add_column.md",
-        "api/drivers/sqlite/table/delete.md"
-      ] },
-      { "drivers.JaffDb" = ["api/drivers/sqlite/jaffdb/index.md"] },
-      { "drivers.Toml" = [
-        "api/drivers/toml/index.md",
-        "api/drivers/toml/get_key.md"
-      ] }
+    { "Chemistry" = [
+      "reference/chemistry/index.md",
+      "reference/chemistry/periodic_table.md",
     ] },
     { "Physics" = [
-      "api/physics/index.md",
-      { "physics.Constants" = ["api/physics/constants/index.md"] },
-      { "physics.Radiation" = ["api/physics/radiation/index.md"] },
+      "reference/physics/index.md",
+      { "physics.XsecProps" = [
+        "reference/physics/xsecprops/index.md",
+      ] },
+      { "physics.Photochemistry" = [
+        "reference/physics/photochemistry/index.md",
+        "reference/physics/photochemistry/get_custom_xsec.md",
+        "reference/physics/photochemistry/get_xsec.md",
+        "reference/physics/photochemistry/log_fallback_summary.md",
+      ] },
+      { "physics.Radiation" = [
+        "reference/physics/radiation/index.md",
+        "reference/physics/radiation/photon_density.md",
+        "reference/physics/radiation/energy_density.md",
+        "reference/physics/radiation/loss_cross_section.md",
+        "reference/physics/radiation/odes.md",
+        "reference/physics/radiation/ordered_index.md",
+        "reference/physics/radiation/get_photden_profile.md",
+        "reference/physics/radiation/get_total_average_cross_section.md",
+        "reference/physics/radiation/get_group_average_cross_section.md",
+        "reference/physics/radiation/compute.md",
+        "reference/physics/radiation/integrate_over_groups.md",
+        "reference/physics/radiation/average_over_groups.md",
+        "reference/physics/radiation/absorbed_average.md",
+        "reference/physics/radiation/emitted_average.md",
+        "reference/physics/radiation/total_emissivity.md",
+      ] },
+      { "physics.RadiationGroup" = [
+        "reference/physics/radiationgroup/index.md",
+      ] },
+      { "physics.PhotoBand" = [
+        "reference/physics/photoband/index.md",
+      ] },
+      { "physics.Dust" = [
+        "reference/physics/dust/index.md",
+        "reference/physics/dust/attenuation.md",
+      ] },
+      { "physics.EosFactory" = [
+        "reference/physics/eosfactory/index.md",
+        "reference/physics/eosfactory/generate.md",
+        "reference/physics/eosfactory/ideal.md",
+        "reference/physics/eosfactory/multi_gamma.md",
+        "reference/physics/eosfactory/fermi_degenerate.md",
+        "reference/physics/eosfactory/relativistic_fermi_degenerate.md",
+      ] },
+      { "physics.SpecieThermodynamics" = [
+        "reference/physics/speciethermodynamics/index.md",
+        "reference/physics/speciethermodynamics/supports.md",
+        "reference/physics/speciethermodynamics/gamma.md",
+        "reference/physics/speciethermodynamics/is_constant.md",
+      ] },
+      { "physics.Thermodynamics" = [
+        "reference/physics/thermodynamics/index.md",
+        "reference/physics/thermodynamics/dEdt_chemical.md",
+        "reference/physics/thermodynamics/dEdt_extra.md",
+        "reference/physics/thermodynamics/dEdt_tot.md",
+        "reference/physics/thermodynamics/eos.md",
+        "reference/physics/thermodynamics/dE_dT.md",
+        "reference/physics/thermodynamics/dTdt_chemical.md",
+        "reference/physics/thermodynamics/dTdt_extra.md",
+        "reference/physics/thermodynamics/dTdt_tot.md",
+        "reference/physics/thermodynamics/temperature_derivatives.md",
+      ] },
+      "reference/physics/constants/index.md",
+      "reference/physics/units/index.md",
+    ] },
+    { "Code generation" = [
+      "reference/codegen/index.md",
+      { "codegen.Codegen" = [
+        "reference/codegen/codegen/index.md",
+        "reference/codegen/codegen/get_commons.md",
+        "reference/codegen/codegen/get_indexed_rates.md",
+        "reference/codegen/codegen/get_rates_str.md",
+        "reference/codegen/codegen/get_indexed_flux_expressions.md",
+        "reference/codegen/codegen/get_flux_expressions_str.md",
+        "reference/codegen/codegen/get_indexed_ode_expressions.md",
+        "reference/codegen/codegen/get_ode_expressions_str.md",
+        "reference/codegen/codegen/get_dedt.md",
+        "reference/codegen/codegen/get_dtdt.md",
+        "reference/codegen/codegen/get_eos.md",
+        "reference/codegen/codegen/get_eos_dt.md",
+        "reference/codegen/codegen/get_indexed_odes.md",
+        "reference/codegen/codegen/get_ode_str.md",
+        "reference/codegen/codegen/get_indexed_rhs.md",
+        "reference/codegen/codegen/get_rhs_str.md",
+        "reference/codegen/codegen/get_indexed_radodes.md",
+        "reference/codegen/codegen/get_radode_str.md",
+        "reference/codegen/codegen/get_indexed_jacobian.md",
+        "reference/codegen/codegen/get_indexed_jacobian_fixed_t.md",
+        "reference/codegen/codegen/get_indexed_rhs_dt.md",
+        "reference/codegen/codegen/get_indexed_temperature_gradient.md",
+        "reference/codegen/codegen/cse_group.md",
+        "reference/codegen/codegen/get_jacobian_str.md",
+      ] },
+      { "codegen.Language" = [
+        "reference/codegen/language/index.md",
+        "reference/codegen/language/from_extension.md",
+        "reference/codegen/language/derive.md",
+        "reference/codegen/language/registered.md",
+        "reference/codegen/language/comments.md",
+        "reference/codegen/language/format_cse_declaration.md",
+      ] },
+      { "codegen.IndexedReturn" = [
+        "reference/codegen/indexedreturn/index.md",
+      ] },
+      { "codegen.CseGroup" = [
+        "reference/codegen/csegroup/index.md",
+      ] },
+      { "codegen.TemplateParser" = [
+        "reference/codegen/templateparser/index.md",
+        "reference/codegen/templateparser/parse_file.md",
+      ] },
+      { "codegen.TemplateFunctions" = [
+        "reference/codegen/templatefunctions/index.md",
+        "reference/codegen/templatefunctions/names.md",
+        "reference/codegen/templatefunctions/get.md",
+      ] },
+      { "codegen.ExtrasDict" = [
+        "reference/codegen/extrasdict/index.md",
+      ] },
+      "reference/codegen/jaffgen_function.md",
+    ] },
+    { "Drivers" = [
+      "reference/drivers/index.md",
+      { "drivers.Db" = [
+        "reference/drivers/db/index.md",
+        "reference/drivers/db/connect.md",
+        "reference/drivers/db/close.md",
+        "reference/drivers/db/delete.md",
+        "reference/drivers/db/get_tables.md",
+        "reference/drivers/db/get_table_names.md",
+        "reference/drivers/db/table.md",
+        "reference/drivers/db/table_from_dataframe.md",
+        "reference/drivers/db/table_from_csv.md",
+        "reference/drivers/db/query.md",
+      ] },
+      { "drivers.JaffDb" = [
+        "reference/drivers/jaffdb/index.md",
+      ] },
+      { "drivers.Table" = [
+        "reference/drivers/table/index.md",
+        "reference/drivers/table/all_rows.md",
+        "reference/drivers/table/rows.md",
+        "reference/drivers/table/insert_row.md",
+        "reference/drivers/table/insert_rows.md",
+        "reference/drivers/table/add_column.md",
+        "reference/drivers/table/get_cell.md",
+        "reference/drivers/table/set_cell.md",
+        "reference/drivers/table/delete.md",
+      ] },
+      { "drivers.HDF5" = [
+        "reference/drivers/hdf5/index.md",
+        "reference/drivers/hdf5/to_dict.md",
+        "reference/drivers/hdf5/from_dict.md",
+        "reference/drivers/hdf5/to_csv.md",
+      ] },
+      "reference/drivers/csv/index.md",
     ] },
     { "Plotting" = [
-      "api/plotting/index.md",
-      "api/plotting/plot.md",
-      "api/plotting/plot_rates.md",
-      "api/plotting/plot_xsecs.md",
-      "api/plotting/themes.md",
-    ] }
+      "reference/plotting/index.md",
+      { "plotting.FigureSpec" = [
+        "reference/plotting/figurespec/index.md",
+        "reference/plotting/figurespec/from_dict.md",
+      ] },
+      { "plotting.AxesSpec" = [
+        "reference/plotting/axesspec/index.md",
+        "reference/plotting/axesspec/from_dict.md",
+      ] },
+      { "plotting.SeriesSpec" = [
+        "reference/plotting/seriesspec/index.md",
+        "reference/plotting/seriesspec/from_dict.md",
+      ] },
+      { "plotting.NetworkVisualizer" = [
+        "reference/plotting/networkvisualizer/index.md",
+        "reference/plotting/networkvisualizer/graph.md",
+        "reference/plotting/networkvisualizer/stoichiometry.md",
+        "reference/plotting/networkvisualizer/species.md",
+      ] },
+      { "plotting.NetworkTheme" = [
+        "reference/plotting/networktheme/index.md",
+      ] },
+      { "plotting.RateColormap" = [
+        "reference/plotting/ratecolormap/index.md",
+      ] },
+      "reference/plotting/plot.md",
+      "reference/plotting/plot_rates.md",
+      "reference/plotting/plot_xsecs.md",
+      "reference/plotting/render.md",
+      "reference/plotting/register_style.md",
+      "reference/plotting/register_palette.md",
+    ] },
+    { "Configuration" = [
+      "reference/config/index.md",
+      "reference/config/list_subdirs.md",
+      "reference/config/predefined_networks.md",
+      "reference/config/predefined_templates.md",
+      "reference/config/resolve_network_path.md",
+      { "Base" = [
+        "reference/config/base/index.md",
+        { "ConfigModel" = [
+          "reference/config/base/configmodel/index.md",
+        ] },
+        "reference/config/base/as_layer.md",
+        "reference/config/base/attribute_descriptions.md",
+        "reference/config/base/dotted.md",
+        "reference/config/base/field_descriptions.md",
+        "reference/config/base/format_validation_errors.md",
+        "reference/config/base/lower.md",
+        "reference/config/base/overlay.md",
+      ] },
+      { "Loader" = [
+        "reference/config/loader/index.md",
+        "reference/config/loader/atomic_tables.md",
+        "reference/config/loader/deep_merge.md",
+        "reference/config/loader/dump_config.md",
+        "reference/config/loader/load_config.md",
+        "reference/config/loader/load_layer.md",
+        "reference/config/loader/resolve_paths.md",
+      ] },
+      { "Network" = [
+        "reference/config/network/index.md",
+        { "JaffTomlConfig" = [
+          "reference/config/network/jafftomlconfig/index.md",
+        ] },
+        { "NetworkConfig" = [
+          "reference/config/network/networkconfig/index.md",
+        ] },
+        "reference/config/network/jaff_toml_for.md",
+        "reference/config/network/load_network_config.md",
+      ] },
+      { "Reactions" = [
+        "reference/config/reactions/index.md",
+        { "PhotoConfig" = [
+          "reference/config/reactions/photoconfig/index.md",
+        ] },
+        { "ReactionConfig" = [
+          "reference/config/reactions/reactionconfig/index.md",
+        ] },
+        { "ReactionsConfig" = [
+          "reference/config/reactions/reactionsconfig/index.md",
+          "reference/config/reactions/reactionsconfig/own.md",
+          "reference/config/reactions/reactionsconfig/resolve.md",
+        ] },
+      ] },
+      { "Radiation" = [
+        "reference/config/radiation/index.md",
+        { "RadiationConfig" = [
+          "reference/config/radiation/radiationconfig/index.md",
+        ] },
+      ] },
+      { "Shielding" = [
+        "reference/config/shielding/index.md",
+        { "ShieldingConfig" = [
+          "reference/config/shielding/shieldingconfig/index.md",
+        ] },
+        { "ShieldingParams" = [
+          "reference/config/shielding/shieldingparams/index.md",
+        ] },
+        "reference/config/shielding/check_shielding.md",
+      ] },
+      { "Energy change" = [
+        "reference/config/energy change/index.md",
+        { "EnergyChangeConfig" = [
+          "reference/config/energy change/energychangeconfig/index.md",
+        ] },
+        { "EnergyChangeParams" = [
+          "reference/config/energy change/energychangeparams/index.md",
+        ] },
+        { "ReactionThermodynamicsConfig" = [
+          "reference/config/energy change/reactionthermodynamicsconfig/index.md",
+        ] },
+        "reference/config/energy change/check_energy_change.md",
+      ] },
+      { "Heating cooling rate" = [
+        "reference/config/heating cooling rate/index.md",
+        { "HeatingCoolingRateConfig" = [
+          "reference/config/heating cooling rate/heatingcoolingrateconfig/index.md",
+        ] },
+        { "HeatingCoolingRateParams" = [
+          "reference/config/heating cooling rate/heatingcoolingrateparams/index.md",
+        ] },
+      ] },
+      { "Emissivity" = [
+        "reference/config/emissivity/index.md",
+        { "EmissivityConfig" = [
+          "reference/config/emissivity/emissivityconfig/index.md",
+        ] },
+        { "EmissivityParams" = [
+          "reference/config/emissivity/emissivityparams/index.md",
+        ] },
+      ] },
+      { "Absorption coefficient" = [
+        "reference/config/absorption coefficient/index.md",
+        { "AbsorptionCoefficientConfig" = [
+          "reference/config/absorption coefficient/absorptioncoefficientconfig/index.md",
+        ] },
+        { "AbsorptionCoefficientParams" = [
+          "reference/config/absorption coefficient/absorptioncoefficientparams/index.md",
+        ] },
+      ] },
+      { "Dust" = [
+        "reference/config/dust/index.md",
+        { "DustConfig" = [
+          "reference/config/dust/dustconfig/index.md",
+        ] },
+        { "PhotoelectricEmissionConfig" = [
+          "reference/config/dust/photoelectricemissionconfig/index.md",
+        ] },
+      ] },
+      { "Thermodynamics" = [
+        "reference/config/thermodynamics/index.md",
+        { "ThermodynamicsConfig" = [
+          "reference/config/thermodynamics/thermodynamicsconfig/index.md",
+        ] },
+      ] },
+      { "EOS" = [
+        "reference/config/eos/index.md",
+        { "FermiDegenerateEosConfig" = [
+          "reference/config/eos/fermidegenerateeosconfig/index.md",
+        ] },
+        { "IdealEosConfig" = [
+          "reference/config/eos/idealeosconfig/index.md",
+        ] },
+        { "MultiGammaEosConfig" = [
+          "reference/config/eos/multigammaeosconfig/index.md",
+        ] },
+        { "RelativisticFermiDegenerateEosConfig" = [
+          "reference/config/eos/relativisticfermidegenerateeosconfig/index.md",
+        ] },
+      ] },
+      { "jaffgen" = [
+        "reference/config/jaffgen/index.md",
+        { "JaffgenConfig" = [
+          "reference/config/jaffgen/jaffgenconfig/index.md",
+        ] },
+        { "JaffgenRunConfig" = [
+          "reference/config/jaffgen/jaffgenrunconfig/index.md",
+        ] },
+        { "JaffgenTomlConfig" = [
+          "reference/config/jaffgen/jaffgentomlconfig/index.md",
+        ] },
+        "reference/config/jaffgen/bundled_config.md",
+        "reference/config/jaffgen/load_jaffgen_config.md",
+      ] },
+    ] },
+    { "Errors" = [
+      "reference/errors/index.md",
+    ] },
   ] },
+  # END generated API nav
   { "Development" = [
     "development/installation.md",
     "development/contributing.md",
     "development/codebase-structure.md",
     "development/code-style.md",
+    "development/api-documentation.md",
     "development/testing.md",
     "development/adding-parsers.md",
+    "development/adding-configuration.md",
     "development/adding-shielding-functions.md",
+    "development/writing-plugins.md",
     "development/adding-template-properties.md"
   ] },
   { "About" = ["about/license.md"] }
 ]
-
-[project.repository]
-url = "https://github.com/jaff-chemistry/jaff"
-name = "jaff-chemistry/jaff"
-edit_uri = "edit/main/docs/"
 
 # -----------------------------------------------------------------------------
 # THEME CONFIGURATION
@@ -377,14 +775,6 @@ Testing = "test"
 [[project.extra.social]]
 icon = "fontawesome/brands/github"
 link = "https://github.com/jaff-chemistry/jaff"
-
-[project.plugins.mkdocstrings]
-handlers.python.paths = ["src"]
-handlers.python.options.docstring_style = "google"
-handlers.python.options.docstring_section_style = "table"
-handlers.python.options.show_root_heading = true
-handlers.python.options.show_source = true
-handlers.python.options.show_signature_annotations = true
 
 [project.markdown_extensions.abbr]
 

@@ -1,41 +1,52 @@
 # AGENTS.md - Agent Guidelines for JAFF
 
-JAFF (Just Another Fancy Format) is an astrochemical network parser that parses chemical reaction network files and generates code in multiple languages (C++, C, Fortran, Python).
+JAFF (Just Another Fancy Format) is an astrochemical network parser that parses chemical reaction network files and generates code in multiple languages (C, C++, Fortran, Python, Rust, Julia, R).
 
 ## Build, Lint, and Test Commands
 
 ### Installation
 
 ```bash
-uv pip install --system -e ".[dev]"    # Install with dev dependencies
+uv sync --extra dev                     # Install with dev dependencies
 ```
+
+Always run tools as `uv run --extra dev ...`. Plain `uv run` does an inexact sync: it
+leaves already-installed dev extras in place but will not install them, so on a fresh
+environment `pytest`, `ruff`, `ty` or `zensical` may be missing.
+Data tables download on first use; set `JAFF_OFFLINE=1` to forbid network access.
 
 ### Running Tests
 
 ```bash
-uv run pytest                           # Run all tests
-uv run pytest -v                        # Verbose output
-uv run pytest tests/test_network.py     # Run specific test file
-uv run pytest tests/test_network.py::test_load_network  # Run single test
-uv run pytest -k "network"              # Run tests matching pattern
-uv run pytest --cov=jaff                # Run with coverage
+uv run --extra dev pytest                # Run all tests
+uv run --extra dev pytest -v             # Verbose output
+uv run --extra dev pytest tests/core/network                  # One package's tests
+uv run --extra dev pytest tests/core/network/test_network.py  # One test file
+uv run --extra dev pytest tests/core/network/test_network.py::TestConstruction  # One class
+uv run --extra dev pytest -k "network"   # Run tests matching pattern
+uv run --extra dev pytest --cov=jaff     # Run with coverage
 ```
 
 ### Code Formatting & Linting
 
 ```bash
-ruff format src/ tests/                 # Format code
-ruff format --check src/                # Check formatting without modifying
-ruff check src/                         # Lint code
-ruff check --fix src/                   # Fix linting issues
+uv run --extra dev ruff format --check <files>  # Check formatting without modifying
+uv run --extra dev ruff format <files>          # Format the files you changed
+uv run --extra dev ruff check <files>           # Lint code
+uv run --extra dev ty check <files>             # Type check (ruff misses type errors; src and plugins)
 ```
+
+Only format and fix the files you touched, and only if they were already formatted:
+`tests/` is not lint-clean and a repo-wide `ruff format` / `--fix` rewrites unrelated
+files. Pre-existing `ty` errors exist; make sure you add none.
 
 ## Code Style Guidelines
 
 ### Python Version
 
 - Support Python 3.11+
-- Use `List`, `Dict` from `typing` (not built-in generics)
+- Start modules with `from __future__ import annotations`; use built-in generics
+  (`list[str]`, `dict[str, Any]`) and `X | None`, not `List`/`Dict`/`Optional`
 
 ### Formatting (Ruff)
 
@@ -52,23 +63,35 @@ ruff check --fix src/                   # Fix linting issues
 ### Type Hints
 
 - Always use type hints for function signatures
-- Import from `typing`: `List`, `Dict`, `Optional`, `Union`, `Tuple`, `Any`
+- Built-in generics and PEP 604 unions; import only what has no built-in form
+  (`Any`, `Callable`, `Mapping`, `Sequence`, ...) from `typing`
 - Use `pathlib.Path` for file paths
+- Older modules still use `List`/`Dict`/`Optional`; convert them when you touch them
 
 ```python
-from typing import List, Dict, Optional, Union, Tuple, Any
+from __future__ import annotations
+
 from pathlib import Path
+from typing import Any
+
 import numpy as np
 
+
 def process_species(
-    names: List[str],
+    names: list[str],
     masses: np.ndarray,
-    options: Optional[Dict[str, Any]] = None
-) -> Tuple[List[str], np.ndarray]:
+    options: dict[str, Any] | None = None,
+) -> tuple[list[str], np.ndarray]:
     pass
 ```
 
-### Docstrings (Google Style)
+### Docstrings (numpydoc)
+
+Docstrings are the only source of the API reference (`docs/reference/`, generated
+by `uv run --extra dev python -m jaff._utils.api_docs`) and of the config key
+descriptions (schemas and `docs/user-guide/configuration/reference.md`). Use numpydoc
+sections; document config keys in an `Attributes` section, worded for someone
+editing a TOML file.
 
 ```python
 def compute_rates(network: Network, temperature: float) -> np.ndarray:
@@ -77,15 +100,22 @@ def compute_rates(network: Network, temperature: float) -> np.ndarray:
     This function calculates rate coefficients for all reactions
     in the network at the specified temperature.
 
-    Args:
-        network: Chemical reaction network
-        temperature: Gas temperature in Kelvin
+    Parameters
+    ----------
+    network : Network
+        Chemical reaction network.
+    temperature : float
+        Gas temperature in Kelvin.
 
-    Returns:
-        Array of rate coefficients in cm³/s
+    Returns
+    -------
+    np.ndarray
+        Rate coefficients in cm^3 s^-1.
 
-    Raises:
-        ValueError: If temperature is negative
+    Raises
+    ------
+    ValueError
+        If temperature is negative.
     """
 ```
 
@@ -119,10 +149,14 @@ except ValueError as e:
 1. Standard library, 2. Third-party packages, 3. Local imports
 
 ```python
+from __future__ import annotations
+
 import os
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Any
+
 import numpy as np
+
 from jaff import Network
 ```
 
@@ -133,14 +167,135 @@ from jaff import Network
 - Test function naming: `test_<description>()`
 - Use pytest fixtures in `conftest.py`
 - Use `@pytest.mark.parametrize` for parameterized tests
+- Compare every number from a computation with `pytest.approx`, never `==` or a
+  string match: floats, numbers inside snapshots and docstring `Examples` output
+  (`tests/meta/test_docstring_examples.py` compares the numbers there with
+  `pytest.approx`, so paste the real output). The last digits differ between
+  platforms (macOS and Linux maths libraries)
+- Write paths and text files the same on every OS: `encoding="utf-8"` on every
+  `open` / `read_text` / `write_text` (Windows defaults to cp1252), and compare or
+  write relative paths with `.as_posix()` (Windows `str()` uses backslashes)
 
-### Special Project Rules
+## Tests
+
+`tests/` mirrors `src/jaff/`: put a test in the folder of the package whose code it
+tests (`tests/core/network/`, `tests/physics/dust/`, `tests/codegen/templating/`, ...).
+Cross-cutting tests go in `tests/e2e/` (golden code, generated solvers, bundled
+networks, snapshots) or `tests/meta/` (public API, API docs, imports, notebooks). A
+module's config tests sit with the module; `tests/config/` holds only the loader,
+schema and reference machinery. Every folder has an `__init__.py`.
+
+- **Data paths**: import from `tests._paths` (`FIXTURES_DIR`, `SNAPSHOTS_DIR`,
+  `GOLDEN_DIR`, `REPO_ROOT`); never build paths from `Path(__file__)`.
+- **Shared helpers** live in `tests/helpers/` and are imported as
+  `from tests.helpers.xsec_props import ...` / `from tests.helpers.codegen_render import ...`.
+- **Fixtures** (`tests/conftest.py`): `make_network(lines, name=..., **kwargs)` builds a
+  `Network` from inline reaction lines in `tmp_path`; `fixtures_dir`,
+  `sample_network`; an autouse fixture silences the banner and logging.
+- **Regenerating references**: `JAFF_UPDATE_GOLDEN=1` (golden code in `tests/golden/`),
+  `JAFF_UPDATE_SNAPSHOTS=1` (snapshots); review the diff before keeping it.
+- **Reproducing a rendered-code failure**: `JAFF_GOLDEN_SEED=<seed>` (the seed is in
+  the failure message).
+
+## Configuration
+
+`jaff.toml` and `jaffgen.toml` share one schema built from pydantic models. Each
+configurable module owns a `config.py` next to its code (e.g.
+`physics/dust/config.py`), and a parent model lists its children's models as fields,
+so the TOML keys mirror the class structure (`[network.dust.pe]`). One merge rule
+(`config/loader.py`: tables key by key, `eos` / shielding tables whole, one
+validation at the end) builds every config. `Network` owns `[network]`: defaults <
+the `jaff.toml` next to the network (always applied: the network's own defaults) <
+`config=` (one source: a TOML file, a `dict` of the `[network]` keys or a
+`NetworkConfig`) < keyword args. jaffgen layers `jaffgen.toml` < CLI options <
+`--set key.path=value` over that.
+
+`Network(...)`'s keyword arguments are the `[network]` keys, named and nested as in
+the file: `strict`, `label`, `funcfile`, `expand_nuclei`, and the tables `reactions`,
+`radiation`, `dust`, `thermodynamics` (each a `dict` or its config model), e.g.
+`Network("GOW", reactions={"photo": {"use_proxy_photoreaction": True}},
+thermodynamics={"eos": {"gamma": 1.4}})`. Settings are read back from `net.config`
+(same structure); don't copy config values onto other attributes.
+
+To add a setting, follow `docs/development/adding-configuration.md`. In short:
+
+1. Add the field to the module's `ConfigModel` subclass (`jaff.config.base`; strict,
+   frozen, unknown keys rejected) and document it in the class's numpydoc
+   `Attributes` (that text becomes the schema and reference description).
+2. A new `config.py` gets an `__all__`, a field on its parent model, an entry in
+   `CONFIG_MODULES` (`tests/config/test_config_modules.py`) and one in
+   `CONFIG_MODULES` of `src/jaff/_utils/api_docs.py`.
+3. The class doing the work takes its own section (`Thing(network, config)`), never
+   the whole config, keeps it read-only as `self.config`, passes `config.<child>` to
+   the components it builds, and holds only computed state otherwise: no copies of
+   settings, no reads of another component's settings from `net.config`. Reactions
+   do the same: the catalogue is `Reactions(config.reactions)` and owns the reaction
+   settings (`net.reactions.config.resolve(s)` gives a reaction's `reaction.config`,
+   `.own(s)` the keys set on it alone; `add_rate` applies `duplicate_policy`;
+   `check_config()` checks per-reaction entries), and a
+   photo reaction's `reaction.photo` is a `PhotoReaction(reaction, config.photo)`
+   component holding its photo settings, computed photo state and the photo logic
+   (`compute()`, `band_xsecs`, `plot_xsecs()`); every reaction's `reaction.rad` is a
+   `ReactionRadiation(reaction)` component (its `.jfunc` spectral yield, read not
+   copied, and the computed `group_yields`). A reaction component lists every
+   expression it holds in `expressions()` and rewrites them in
+   `substitute(mapping)`: `Reactions.link()` resolves `rc_<N>` through them and
+   `tests/e2e/test_no_shorthand_survives.py` checks them. `.jfunc` functions are
+   read through `net.functions` (`value(name)` / `call(name, args)`) or
+   `reaction.function(kind)`, already standardized. Checks against the network
+   raise `ParserError` with the key path.
+4. `Network`'s keyword arguments are exactly the `[network]` keys: a new top-level
+   field of `NetworkConfig` needs a keyword of the same name (a test enforces it);
+   nothing else maps keywords. Optional CLI shortcut: an entry in `CLI_KEYS`
+   (`src/jaff/cli/_helper.py`).
+5. Regenerate the committed editor schemas:
+   `uv run --extra dev python -m jaff.config.json_schema`
+   (`tests/config/test_config_json_schema.py` fails when they are stale).
+
+There are no aliases for old keys: a renamed key is a hard break.
+
+## Documentation
+
+- Docs are built with Zensical: `uv run --extra dev zensical build --strict`.
+- The API reference (`docs/reference/`) and the configuration reference
+  (`docs/user-guide/configuration/reference.md`) are generated from docstrings and
+  are **not committed** (gitignored; CI generates them). Generate them before a local
+  build or serve:
+
+  ```bash
+  uv run --extra dev python -m jaff._utils.api_docs   # API pages + API nav in zensical.toml
+  uv run --extra dev python -m jaff.config.reference  # configuration reference
+  ```
+
+- The API nav section of `zensical.toml` *is* committed; regenerate it when exports
+  change (`tests/meta/test_api_docs.py` checks it).
+- Documented packages are `PACKAGES` and `CONFIG_MODULES` in `src/jaff/_utils/api_docs.py`;
+  their `__all__` (strings only) decides what gets a page.
+- Write docstring markup as reST-style ``code``, :class:`~a.b.C` (tilde = last name
+  only), fenced code blocks (never `::` / `.. math::`), and `>>>` only in `Examples`.
+- How docstrings become pages: `docs/development/api-documentation.md`. In short:
+  - a class page = description, Constructor (from the `__init__` docstring's
+    `Parameters`, or its text when it has none), the class `Attributes` table, then `Notes`, `Examples`, and a
+    page per public method/property the class itself defines (inherited ones get none);
+  - each member's first docstring line is its row text in the tables, so make it
+    stand alone;
+  - one `Parameters` entry per name (grouped `a, b : float` gives both the first type);
+  - a constant's description is the string literal right after its assignment;
+  - config models' `Attributes` also become the JSON-schema descriptions and the
+    configuration reference: write them for TOML users.
+- `Examples` are run by `tests/meta/test_docstring_examples.py` (banner and logs left out,
+  a module's examples in order in one scratch folder): paste real output, and have each
+  example import or build what it uses.
+
+## Special Project Rules
 
 1. **File headers**: Each code file starts with a 2-line comment:
     ```python
     # ABOUTME: <short description>
     # ABOUTME: <optional second line>
     ```
+    Not every existing module has one yet and nothing checks it; add the header to
+    new files and to files you edit.
 2. **Coverage goals**: >80% overall, >90% for critical modules
 3. **Preserve existing comments** unless demonstrably false
 4. **TDD approach**: Write tests BEFORE implementing new features
@@ -149,16 +304,123 @@ from jaff import Network
 
 ```
 src/jaff/       # Main source code
-tests/          # Test files
+tests/          # Test files, mirroring src/jaff/ (core/, physics/, codegen/, ...)
+                # plus e2e/ and meta/; paths via tests/_paths.py
   fixtures/     # Test data
-examples/       # Example marimo notebooks (run by tests/test_example_notebooks.py)
+examples/       # Example marimo notebooks (run by tests/meta/test_example_notebooks.py)
+plugins/        # Opt-in physics plugins, imported as jaff.plugins (reactions/<serialized>/,
+                # physics/radiation/, physics/thermodynamics/); spec .superpowers/specs/2026-11-21-plugins.md
 docs/           # Documentation
 ```
 
 ## Key Modules
 
-- `network.py`: Network class for loading/managing chemical networks
-- `codegen.py`: Multi-language code generation
-- `file_parser.py`: File format parsing
-- `reaction.py`: Reaction representations
-- `species.py`: Species representations
+- `core/network/network.py`: `Network`, loading/managing a chemical network
+- `core/network/kinetics.py`: `Kinetics` (`net.kinetics`), the chemistry's rates of change:
+  species `odes()`, `weighted_rate()`, `dntot_dt()`, `drho_dt()` (no cache: callers cache)
+- `core/network/ode_system.py`: `OdeSystem` (`net.ode_system(...)`), the state vector,
+  rhs and Jacobian a solver integrates; `Codegen` prints it rather than assembling
+  equations. `form="reduced"` puts `krate[r]` in the rows (definitions in
+  `system.rate_coefficients`) and builds the Jacobian by the chain rule over them;
+  rows and coefficients have powers of rates split (`split_power`, same values)
+- `core/reaction/`, `core/species/`, `core/elements/`: reactions, species, elements;
+  `reaction.rate` is a `Rate`: `.coefficient` (the only way to the rate coefficient),
+  `.expanded` (coefficient × reactant densities) and `.reduced`
+  (`krate[r]` symbol, `r` = catalogue position) forms. Equation builders take
+  `form="expanded" | "reduced"`: `Reactions.rates`, the `Kinetics` methods,
+  `Radiation.odes`, and the `Thermodynamics` methods `dEdt_chemical()`, `dEdt_tot()`,
+  `dTdt_chemical()`, `dTdt_tot()`
+- `core/parsers/`: network file formats and `.jfunc` auxiliary functions
+- `core/analysis/`: `net.analysis` (analysis mode): values and legend labels for a
+  network's parameters, species densities and unknown functions (`enable()`,
+  `disable()`, `pop()`, `get_spec()`; tables `parameters` / `densities` / `functions`).
+  `net.analysis.evaluate(exprs, parameters, densities, functions)` is the one numeric
+  evaluator (an Expr gives a float, a sequence a 1-D array, a matrix its shape); there
+  are no per-quantity `evaluate_*` methods
+- `physics/`: radiation and photo-reactions, dust, thermodynamics/EOS, constants
+- `plotting/network/`: `net.visualize` (`NetworkVisualizer`): graph and
+  stoichiometry-matrix figures of a network's species and reactions; `graph()` /
+  `species()` colour by `colour_by="rate_coefficient" | "rate"` from `net.analysis`
+  and list its labelled entries in the legend panel under the drawing
+- `common/derivative.py`: `derivative(expr, y, value)`, `∂expr/∂y` per `Piecewise` branch,
+  using the log-derivative optimization where it applies (the reduced Jacobian's `∂k/∂y`)
+- `common/optimizations/`: exact SymPy rewrites that make generated code cheaper, one
+  module each: `cost` (weighted op count: arithmetic 1, division 4, `exp`/`log`/real
+  `pow`/calls 20), `log_derivative` (`value · ∂ln(expr)/∂y` for products of powers and
+  `exp`, when its `cost` is no higher than `diff`'s), `shared_cse` (one CSE over expressions and symbol definitions such as
+  `krate[r]`, topologically ordered, no aliases, guarded, pruned; every `Codegen` getter
+  prints through it), `guard` (called by `shared_cse`: a CSE temporary read only inside
+  `Piecewise` branches becomes `Piecewise((value, guard), (0.0, True))`, guard = the
+  input-only conditions it is read under, so a fit is never evaluated out of its range),
+  `optimize(expr, rules=RULES)` (one bottom-up pass applying the per-node rules, each
+  distinct subtree once; `Codegen._code` calls it last, right before printing, as any
+  later SymPy rewrite undoes them) with the rules in `powers`: `exp_power` (`b**x`,
+  numeric `b`, as `exp(ln(b)*x)`: `pow(10, x)` costs ~2.4 `exp`) and `integer_power`
+  (`x**n`, `2 <= |n| <= 8`, symbol bases, as unevaluated products `(x*x)*x` /
+  `1.0/(x*x)`: C/C++ `pow(x, 3)` is a library call). A new per-node rewrite is a rule
+  added to `RULES`; `bottom_up(rules)` is the memoized pass itself (cache kept across
+  calls). `PRE_CSE_RULES` are per-node rules `Codegen._print_parts` applies to items
+  and definitions before CSE (always, with or without it), for rewrites that must see
+  inside what CSE makes temporaries: `split_log` (`log(c*exp(b)*R)` as
+  `log(c) + b + log(R)`, so an `exp(-E/T)` that underflows at low T is no `log(0)`).
+  `split` holds it and `split_power` (`(c*exp(b)*R)**e` as `c**e*exp(e*b)*R**e`);
+  both treat `a**x` (numeric `a > 0`) like `exp(x*ln a)`. `OdeSystem` applies
+  `split_power` to its rhs rows and rate coefficients before differentiating: the
+  plain derivative of a rate raised to a state-dependent power holds an `exp(+E/T)`
+  that overflows at low T. `shared_logs(exprs, definitions)` (a base raised to several non-integer
+  exponents: one `L = log(b)` and one `exp(f*L)` (or `sqrt`) per fractional part `f`,
+  returned as definitions; `Codegen._print_parts` calls it before `shared_cse`).
+  Rewrites walk each distinct subtree once (`bottom_up`, a `seen` set): SymPy's
+  `replace` / `preorder_traversal` revisit shared subtrees (GOW Jacobian: 22M nodes).
+  Helpers that only use them live outside it
+- `codegen/`: `Codegen`, `Language`s, the `$$JAFF` template engine (`templating/`);
+  `cse_group([(kind, options), ...])` prints several kinds (rates, odes, radodes, rhs,
+  jacobian) with one shared CSE (reduced form with several members; cached); each
+  `get_indexed_*` getter is a one-member build (`_part`) printed by `_print_parts`;
+  in templates, `REPEAT idx, cse IN cses { GROUP { NAME -> g } }` emits a CSE group's
+  temporaries and expression blocks (`rates`, `odes`, `radodes`, `rhses`, `jacobian`;
+  item `$jac$` for the Jacobian) join it with `CSE { GROUP -> g }` (no embedded `cse`
+  variable; groups per file, checked in `render.py`, built by `Codegen.cse_group`);
+  `$$JAFF CALL` inserts text from `@jaffgen_function` functions in a template's
+  `jaffgen_template_functions.py` (`templating/functions.py`)
+- `common/registry.py` + `common/plugins.py`: `Registry(kind, packages)` holds opt-in
+  plugins of one kind keyed by `(name, reaction)` (`register` decorator; `find` prefers the
+  reaction's own plugin, else a global one; shielding's registry is one); on first lookup it
+  imports its packages, then `load_plugins()` imports the repo-root `plugins/` folder as
+  `jaff.plugins` (every public subpackage, any depth, once; each `__init__.py` imports its
+  modules). Repo-root folders (`plugins/`, `templates/`, `networks/`) are used from a git
+  clone; packaging them is deferred. `config/plugin_table.py`: `PluginTable`, a flat
+  `{type = "<plugin>", <settings>...}` config table selecting a registered plugin (settings
+  validated by its `config_model()`, a `PluginParams`; one editor-schema branch per plugin);
+  `ShieldingConfig` is one. Per-reaction energy change: `physics/thermodynamics/
+  energy_change/` (`EnergyChangeFunction` plugins, `energy_change(reaction)` in erg per event,
+  + heats, − cools; registry with no core plugins), selected by
+  `[network.reactions.reaction."<s>".thermodynamics] energy_change = {type = ...}` (per
+  reaction only: `ReactionConfig` and `ReactionsConfig` share `_ReactionSettings`, only the
+  former has `thermodynamics`). `reaction.model(kind)` (`MODEL_KINDS`: `energy_change` ->
+  `.jfunc` `deltaE`) gives the `.jfunc` function, else the configured plugin's value, else
+  `None`; `reaction.energy` (`ReactionEnergy`, `core/reaction/reaction_energy.py`) holds the
+  result as `per_event` (falling back to the file's value, then 0) and gives the reaction's
+  `dE/dt` term, `energy.change(form)`; a `per_event` in `ph_E` is averaged over the band photons the
+  reaction absorbs (`Radiation.absorbed_average`, per band, photon-weighted in both modes) or emits
+  (`Radiation.emitted_average`, `Y/E`); both or
+  neither is a `ParserError` (spec .superpowers/specs/2026-11-24-reaction-energy.md). Test-only plugins live in
+  `tests/helpers/energy_change_plugins.py` and are installed per test (`install(monkeypatch)`),
+  never into the real registry (they would leak into the committed-schema test). Global
+  heating/cooling: `physics/thermodynamics/heating_cooling_rate/` (`HeatingCoolingRateFunction`
+  plugins, `heating_cooling_rate(net, params)` in erg cm⁻³ s⁻¹; own registry, never bound to
+  a reaction), listed in `[network.thermodynamics] heating_cooling_rate = [{type = ...}, ...]`;
+  `dEdt_extra` = `.jfunc` `heatingCoolingRate` + every entry (summed; an exact copy of an
+  entry is rejected, the same type with other settings is not; `check_no_copies` in
+  `plugin_table`). Test-only plugins: `tests/helpers/heating_cooling_rate_plugins.py`. Radiation:
+  `physics/photo_reactions/emissivity/` and `.../absorption_coefficient/` (plugins return a
+  spectrum in `ph_E`: erg cm⁻³ s⁻¹ eV⁻¹ / cm⁻¹), listed in `[network.radiation] emissivity` /
+  `absorption_coefficient`; `Radiation.compute()` sums them with the `.jfunc`
+  `globalEmissivity` / `globalAbsorptionCoefficient`, then integrates / averages the total per
+  group (`radiation.emissivity` etc. are the totals). Test-only: `tests/helpers/radiation_plugins.py`. Docs:
+  `docs/user-guide/configuration/plugins.md` (selecting plugins, `.jfunc` precedence / summing,
+  lists) and `docs/development/writing-plugins.md` (writing each kind; keep its examples
+  runnable)
+- `config/`: config base models, loader, JSON schemas, reference generator
+- `cli/`: `jaffgen` and `jaffx`
+- `drivers/`, `io/`: HDF5/SQLite/TOML/CSV access, data downloads, logging

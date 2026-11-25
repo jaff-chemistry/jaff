@@ -92,7 +92,9 @@ class _ToDirective(Transformer):
 @cache
 def _parser() -> Lark:
     """The header parser, built once per process."""
-    return Lark(GRAMMAR.read_text(), parser="lalr", propagate_positions=True)
+    return Lark(
+        GRAMMAR.read_text(encoding="utf-8"), parser="lalr", propagate_positions=True
+    )
 
 
 def _add_group(
@@ -216,7 +218,7 @@ def _blank_marker(text: str) -> Optional[str]:
 
 
 def parse_header(text: str, line: int, file: Path) -> Directive:
-    """Parse the header text that follows ``$$JAFF``.
+    """Parse a directive header, including its ``$$JAFF`` marker.
 
     Args:
         text: Raw header source, starting with the (indented) ``$$JAFF`` line;
@@ -231,7 +233,7 @@ def parse_header(text: str, line: int, file: Path) -> Directive:
         IncompleteHeaderError: If the text ends inside an open option block.
         SplitOptionError: If a line ends in the middle of an option.
         DirectiveSyntaxError: If the text does not match the grammar.
-        ParserError: On a repeated option group or key.
+        ParserError: On a repeated option group, key or ``USE`` name.
     """
     lines = [part.rstrip("\r") for part in text.split("\n")]
 

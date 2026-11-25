@@ -19,8 +19,9 @@ So a template is your real source code, with small generated regions created
 by directives. The directive lines themselves are written to the output as
 comments (see [Echo](#echo)).
 
-Templates are processed by the [`jaffgen`](jaffgen.md) CLI or the
-[builder API](../advanced-code-generation/builder.md).
+Templates are processed by the [`jaffgen`](jaffgen.md) CLI, or from Python with
+`TemplateParser` (`#!python TemplateParser(net, Path("rates.cpp")).parse_file()`
+returns the rendered text).
 
 ---
 
@@ -39,8 +40,9 @@ $$JAFF END
 
 It consists of these pieces:
 
-- **Header** — `$$JAFF`, the command name and its arguments. Arguments are
-  separated by commas or spaces.
+- **Header** — `$$JAFF`, the command name and its arguments. A list of names
+  is separated by commas (`SUB nspec, nreact`); a space-separated list such as
+  `SUB nspec nreact` is a `DirectiveSyntaxError`.
 - **Option block** — an optional `{ … }` after the arguments. The opening `{`
   must be on the header line; the block itself may continue over several
   lines. `#` starts a comment that runs to the end of the line (outside quoted
@@ -99,14 +101,14 @@ lines always end in `\n`, also for templates written with `\r\n`.
 | `GET`     | Retrieve properties of a named entity                         |
 | `HAS`     | Test whether a species, reaction, or element exists           |
 | `REDUCE`  | Build a summed expression over collections                   |
+| `CALL`    | Insert the text a Python function of yours returns (no body)  |
 | `END`     | Close the current directive block                             |
-| `DEFINE`  | Name a set of options for reuse with `USE` (no body)          |
-| `USE`     | Pull a `DEFINE`d option set into an option block              |
+| `DEFINE`  | Name a set of options for reuse with the `USE` option (no body) |
 | `LANG`    | Set the target language of the file (no body)                 |
 | `COMMENT` | Set the comment token used to echo directives (no body)       |
 
-Every command with a body accepts the global `REPLACE` and `USE` options (see
-[Options](#options)).
+Every command with a body, and `CALL`, accepts the global `REPLACE` and `USE`
+options (see [Options](#options)).
 
 Each example below was rendered against a small test network with the species
 `H`, `e-`, `H+`, `He++`, `He+` (in that order) unless stated otherwise.
@@ -137,6 +139,8 @@ $$JAFF END
 | `e_idx`    | `int`  | Index of the electron species              |
 | `dedt`     | `str`  | Language-specific total `dE/dt` expression |
 | `dtdt`     | `str`  | Language-specific total `dT/dt` expression |
+| `eos`      | `str`  | Language-specific EOS internal energy `E(T, n)` [erg cm⁻³] |
+| `eos_dt`   | `str`  | Language-specific `∂E/∂T` of that energy [erg cm⁻³ K⁻¹], e.g. to recover `T` from an evolved energy |
 
 Integer tokens accept inline arithmetic with `+`, `-`, `*`, `/` (see
 [Placeholders](#placeholders)):
@@ -180,9 +184,8 @@ per item (**vertical**); without it, the body's bracketed list is filled inline
 
 ### Vertical mode
 
-Every body line holding a placeholder of the REPEAT (`$idx…$`, `$IDX$`, the item
-variable or a declared `$cse$`) is written once per item; other lines are copied
-once. `$idx$` is the zero-based index; `$idx+N$`, `$idx-N$`, `$idx*N$` and
+Every body line holding a placeholder of the REPEAT (`$idx…$`, `$IDX$` or the
+item variable) is written once per item; other lines are copied once. `$idx$` is the zero-based index; `$idx+N$`, `$idx-N$`, `$idx*N$` and
 `$idx/N$` transform it. If a line has `$idx$` tokens, their number must match the
 collection's dimensionality (1 for lists, 2 for matrices).
 
@@ -276,26 +279,31 @@ std::vector<std::string> species = {"H", "e-", "H+", "He++", "He+"};
 
 ### CSE (common subexpression elimination)
 
-`rates`, `odes`, `rhses`, `radodes`, and `jacobian` support a third variable, `cse`, that
-holds repeated sub-expressions as named temporaries. The temporaries are
-emitted only where a sub-expression is **actually shared** across items — a tiny
-network with no repetition produces none.
+Repeated sub-expressions are computed once, as named temporaries, by a **CSE
+group**: a `REPEAT idx, cse IN cses` block emits the temporaries, and the
+expression blocks it serves join it with `CSE { GROUP -> name }`. `rates`, `odes`,
+`rhses`, `radodes` and `jacobian` can join a group; a block in no group prints its
+expressions without CSE. The temporaries are emitted only where a sub-expression
+is **actually shared**, so a tiny network with no repetition produces none.
 
 ```cpp
-$$JAFF REPEAT idx, ode, cse IN odes
+$$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> odes } }
 const double x$idx$ = $cse$;
+$$JAFF END
+$$JAFF REPEAT idx, ode IN odes { CSE { GROUP -> odes } }
 dydt[$idx$] = $ode$;
 $$JAFF END
 ```
 
 Output (here two sub-expressions are shared, so the `$cse$` line expands to two
-temporaries and the ODE lines reference them; without shared sub-expressions
-the `$cse$` line produces nothing):
+temporaries and the ODE lines reference them):
 
 ```cpp
-// $$JAFF REPEAT idx, ode, cse IN odes
+// $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> odes } }
 const double x0 = 4.1207223003988966e-10*std::pow(tgas, -0.80000000000000004)*nden[1]*nden[2] - 5.8500000000000005e-11*std::sqrt(tgas)*std::exp(-157809.10000000001/tgas)*nden[0]*nden[1];
 const double x1 = nden[1]*std::pow(nden[3], 2);
+// $$JAFF END
+// $$JAFF REPEAT idx, ode IN odes { CSE { GROUP -> odes } }
 dydt[0] = x0;
 dydt[1] = -x0 - x1;
 dydt[2] = -x0;
@@ -304,32 +312,78 @@ dydt[4] = x1;
 // $$JAFF END
 ```
 
+Each block keeps its own options (`THERMAL`, `RADIATION`, `REPLACE`, …); the CSE
+block takes `GROUP` and `REPLACE` / `USE` only, so give it the same `REPLACE` as
+the blocks it serves (a shared `DEFINE` holding just the `REPLACE` works well).
+Emit the CSE block before the expression blocks in the generated code: they
+read its temporaries.
+
+**Several blocks in one group** share one set of temporaries. A solver that
+evaluates the RHS and the Jacobian at the same state can compute both in one
+function, with every rate coefficient evaluated once and the Jacobian's
+derivatives reusing it (the group is built from the
+[reduced form](../working-with-networks/network.md#rate-coefficients-as-symbols)):
+
+```cpp
+$$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rhs_jac } }
+const double cse$idx$ = $cse$;
+$$JAFF END
+$$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt }  CSE { GROUP -> rhs_jac } }
+ydot[$idx$] = $rhs$;
+$$JAFF END
+$$JAFF REPEAT idx, jac IN jacobian { THERMAL { MODE -> dedt }  CSE { GROUP -> rhs_jac } }
+J[$idx$][$idx$] = $jac$;
+$$JAFF END
+```
+
+The bundled `rosenbrock_cpp` template builds its `rhs_jac()` this way, and its
+integrator calls it whenever it needs an analytic Jacobian.
+
+With the energy in the state (`THERMAL { MODE -> dedt }`) the temperature
+`T(e, n)` depends on every density, so the Jacobian is nearly dense. The split
+properties give it as `J = A + a cᵀ`: `jacobian_fixed_t` is the sparse part at
+fixed temperature (energy column empty), `rhs_dt` the column `a` and
+`temperature_gradient` the row `c`. A solver can factor `I/(γh) - A` sparsely and
+add the rank-one term with the Sherman–Morrison formula. Like the other
+expression properties they print only non-zero entries and can join a CSE group
+with `rhses`. They need `MODE -> dedt`.
+
+Groups are per template file, and a block joins one by name, so two blocks with
+the same options can still be in different groups (or in none). A group named by
+a block but without a `cses` block, a `cses` block no block joins, and a group
+name declared twice are errors.
+
 The temporaries are named after the identifier that contains `$idx$` on the
 `$cse$` line: `x$idx$` gives `x0, x1, …` and `tmp$idx$_value` gives
 `tmp0_value, tmp1_value, …`, with or without spaces around `=`. That line must
-be the first line of the block that expands, since the temporaries have to be
-declared before the other lines use them. The identifier must start with a
-letter or underscore before `$idx$`, and the index takes no arithmetic, so
-`$idx$x`, `cse[$idx$]` and `cse$idx+1$` are rejected with a `ParserError`. A
-`$cse$` line is only special when `cse` is in the variable list.
+be the first line of the `cses` block that expands. The identifier must start
+with a letter or underscore before `$idx$`, and the index takes no arithmetic, so
+`$idx$x`, `cse[$idx$]` and `cse$idx+1$` are rejected with a `ParserError`.
 
 ### Properties
 
-`REPEAT vars IN property` — the variables are written in the order shown:
-`idx`, the item variable, then `cse` where the property supports it.
+`REPEAT vars IN property` — the variables are written in the order shown: `idx`,
+then the item variable.
 
 #### Expression-generating properties
 
-These produce code expressions (rendered in the target language). Only those
-with a `cse` variable support CSE.
+These produce code expressions (rendered in the target language). The ones
+with `CSE` among their option groups can join a [CSE group](#cse-common-subexpression-elimination);
+`cses` emits a group's temporaries.
 
 | Property           | Variables              | Description                      | Option groups                               |
 | ------------------ | ---------------------- | -------------------------------- | ------------------------------------------- |
-| `rates`            | `idx, rate, cse`       | Rate-coefficient expressions     | —                                           |
-| `odes`             | `idx, ode, cse`        | Full ODE expressions (dy/dt)     | —                                           |
-| `rhses`            | `idx, rhs, cse`        | RHS including the thermal row    | `THERMAL`, `RADIATION`              |
-| `jacobian`         | `idx, expr, cse`       | Jacobian matrix elements (2D)    | `THERMAL`, `RADIATION`              |
-| `radodes`          | `idx, radode, cse`     | Radiation moment ODEs            | `RADIATION` (`ORDER` only)          |
+| `cses`             | `idx, cse`             | Temporaries of a CSE group       | `GROUP`                                     |
+| `rates`            | `idx, rate`            | Rate-coefficient expressions     | `CSE`                                       |
+| `odes`             | `idx, ode`             | Full ODE expressions (dy/dt)     | `CSE`                                       |
+| `rhses`            | `idx, rhs`             | RHS including the thermal row    | `THERMAL`, `RADIATION`, `CSE`               |
+| `jacobian`         | `idx, jac`             | Jacobian matrix elements (2D)    | `THERMAL`, `RADIATION`, `CSE`               |
+| `jacobian_fixed_t` | `idx, jac`             | Split `dedt` Jacobian: fixed-temperature part `A` (2D, sparse) | `THERMAL`, `RADIATION`, `CSE`  |
+| `rhs_dt`           | `idx, rhs_dt`          | Split `dedt` Jacobian: column `a = ∂rhs/∂T` | `THERMAL`, `RADIATION`, `CSE`               |
+| `temperature_gradient` | `idx, dtdy`        | Split `dedt` Jacobian: row `c = ∂T/∂state` (`∂T/∂n_j`, then `∂T/∂e`) | `THERMAL`, `RADIATION`, `CSE` |
+| `radodes`          | `idx, radode`          | Radiation moment ODEs            | `RADIATION` (`ORDER` only), `CSE`           |
+| `parameters`       | `idx, parameter`       | Free parameters of the ODE system (names, sorted; `tgas` only with `MODE -> none`) | `THERMAL`, `RADIATION` |
+| `functions`        | `idx, function`        | Undefined functions the network calls and all their first partial derivatives (`name_partial_<i>`, as the Jacobian calls them), as stub signatures (`name(a0, a1)`, sorted) | — |
 | `flux_expressions` | `idx, flux_expression` | Flux = rate × reactant densities | —                                           |
 | `ode_expressions`  | `idx, ode_expression`  | ODE terms without assignment     | —                                           |
 
@@ -340,6 +394,7 @@ with a `cse` variable support CSE.
 | `species`                      | `idx, specie`                              | —              |
 | `species_with_normalized_sign` | `idx, specie_with_normalized_sign`         | `SIGN` |
 | `specie_masses`                | `idx, specie_mass`                         | —              |
+| `specie_gammas`                | `idx, specie_gamma` (adiabatic index, `specie.thermodynamics.gamma`; ideal and multi_gamma EOS only) | —  |
 | `specie_charges`               | `idx, specie_charge`                       | —              |
 | `specie_masses_ne`             | `idx, specie_mass_ne`                      | —              |
 | `specie_charges_ne`            | `idx, specie_charge_ne`                    | —              |
@@ -390,10 +445,12 @@ everywhere; see [Options](#options) for their general rules.
 
 | Group       | Key       | Values                                       | Description                                                                                       |
 | ----------- | --------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `THERMAL`   | `MODE`    | `none`, `dedt`, `dtdt`                       | Thermal ODE row: none, `dE/dt` or `dT/dt`. Default `dedt` for `rhses`, `none` for `jacobian`.     |
+| `THERMAL`   | `MODE`    | `none`, `dedt`, `dtdt`                       | Thermal ODE row: none, `dE/dt` or `dT/dt`. Default `none` (for `rhses`, `jacobian` and `parameters`).        |
 | `THERMAL`   | `ENERGY`  | `volumetric`, `specific`, `per_particle`, `molar` | Internal-energy form used when `MODE` is `dedt` (default `volumetric`).                      |
 | `RADIATION` | `ENABLED` | `True`/`False`                               | Include radiation ODE / Jacobian terms (`rhses`, `jacobian`).                                     |
-| `RADIATION` | `ORDER`   | integer                                      | Order of the radiation moments (`rhses`, `jacobian`, `radodes`).                                  |
+| `RADIATION` | `ORDER`   | `0`–`3`                                      | Layout of the per-band density and flux equations (`rhses`, `jacobian`, `radodes`); see [Codegen](../advanced-code-generation/codegen.md#radiation-odes-get_radode_str). |
+| `GROUP`     | `NAME`    | text                                         | The CSE group a `cses` block emits the temporaries of (required).                                 |
+| `CSE`       | `GROUP`   | text                                         | The CSE group an expression block joins; without it the block prints without CSE.                 |
 | `SIGN`      | `POS`     | text                                         | String for the `+` charge marker (`species_with_normalized_sign`, default `j`).                   |
 | `SIGN`      | `NEG`     | text                                         | String for the `-` charge marker (`species_with_normalized_sign`, default `k`).                   |
 
@@ -403,34 +460,36 @@ A realistic Jacobian directive remaps array accessors and picks the thermal
 (`dE/dt`) row and energy form:
 
 ```cpp
-$$JAFF REPEAT idx, expr, cse IN jacobian {
+$$JAFF DEFINE state {
     REPLACE {
         "nden\[\s*(\d+)\s*\]" -> "state.xn[\1]"
         "tgas" -> "state.T"
     }
+}
+$$JAFF REPEAT idx, cse IN cses { USE state  GROUP { NAME -> jac } }
+cse$idx$ = $cse$;
+$$JAFF END
+$$JAFF REPEAT idx, jac IN jacobian {
+    USE state
     THERMAL { MODE -> dedt  ENERGY -> specific }
     RADIATION { ENABLED -> False }
+    CSE { GROUP -> jac }
 }
-cse$idx$ = $cse$;
-J[$idx$][$idx$] = $expr$;
+J[$idx$][$idx$] = $jac$;
 $$JAFF END
 ```
 
 Output (abridged — the full block has 30 temporaries; the extra column `[5]` is
-the thermal row):
+the derivative with respect to the thermal variable):
 
 ```cpp
-// $$JAFF REPEAT idx, expr, cse IN jacobian {
-    // REPLACE {
-        // "nden\[\s*(\d+)\s*\]" -> "state.xn[\1]"
-        // "tgas" -> "state.T"
-    // }
-    // THERMAL { MODE -> dedt  ENERGY -> specific }
-    // RADIATION { ENABLED -> False }
-// }
+...
 cse0 = std::exp(-157809.10000000001/state.T);
 cse1 = cse0*state.xn[1];
 cse2 = std::sqrt(state.T);
+...
+// $$JAFF END
+// $$JAFF REPEAT idx, jac IN jacobian {
 ...
 J[0][0] = -cse13*cse9 - cse4;
 J[0][1] = -cse13*cse17 + cse15 - cse16;
@@ -673,6 +732,80 @@ copied (with `REPLACE` applied).
 
 ---
 
+## CALL
+
+```text
+$$JAFF CALL name { options }
+```
+
+Insert text that no other command produces. `name` is a Python function in the
+template's `jaffgen_template_functions.py`, registered with the
+`@jaffgen_function` decorator; it takes the network and returns a string, and
+that string replaces the `CALL` line. `CALL` has no body and no `$$JAFF END`.
+
+```python
+# jaffgen_template_functions.py
+from jaff.codegen import jaffgen_function
+
+
+@jaffgen_function
+def species_names(net):
+    names = ", ".join(f'"{s.name}"' for s in net.species)
+    return f"const char* names[] = {{{names}}};"
+
+
+@jaffgen_function("reset")
+def _reset_abundances(net):
+    return "\n".join(f"y[{i}] = 0.0;  // {s.name}" for i, s in enumerate(net.species))
+```
+
+```cpp
+$$JAFF CALL species_names
+
+void reset(double* y) {
+    $$JAFF CALL reset { REPLACE { "0\.0" -> "1e-20" } }
+}
+```
+
+renders as
+
+```cpp
+// $$JAFF CALL species_names
+const char* names[] = {"H", "e-", "H+", "He++", "He+"};
+
+void reset(double* y) {
+    // $$JAFF CALL reset { REPLACE { "0\.0" -> "1e-20" } }
+    y[0] = 1e-20;  // H
+    y[1] = 1e-20;  // e-
+    y[2] = 1e-20;  // H+
+    y[3] = 1e-20;  // He++
+    y[4] = 1e-20;  // He+
+}
+```
+
+- A function is called by its own name, or by the name given to the decorator
+  (`@jaffgen_function("reset")`). Functions without the decorator are plain
+  helpers and cannot be called.
+- Every returned line gets the indentation of the `CALL` line (empty lines get
+  none), so functions can return unindented text. A final newline is added if
+  missing; an empty string renders nothing.
+- `REPLACE`, written on the `CALL` or pulled in with `USE`, runs on every
+  returned line. `CALL` takes no option groups.
+- The returned text is inserted as is: no placeholders, no language printing,
+  no CSE.
+- The file runs when the first `CALL` is checked, once per jaffgen run; a run
+  without `CALL` never runs it. How jaffgen finds the file is described in
+  [jaffgen](jaffgen.md#template-functions).
+
+From Python, pass the functions to `TemplateParser` yourself:
+`#!python TemplateParser(net, path, functions=TemplateFunctions(funcs_path))`.
+
+!!! warning "The functions file is code"
+    `jaffgen_template_functions.py` is ordinary Python that jaffgen runs. Only
+    render templates you trust.
+
+---
+
 ## Placeholders
 
 Body lines are substituted as follows:
@@ -687,7 +820,7 @@ Body lines are substituted as follows:
   (`$idx+1$`, `$idx * 2$`, …). **Every** `$idx…$` token on a line counts
   towards the dimensionality check. `$IDX$` is the first index, through the
   arithmetic of the line's first `$idx…$` token if it has one.
-- A `cse` variable's line `cse$idx$ = $cse$` must be the first line that
+- In a `cses` block, the line `cse$idx$ = $cse$` must be the first line that
   expands (see [CSE](#cse-common-subexpression-elimination)).
 - In `REDUCE`, `$( … )$` marks the part repeated per item.
 
@@ -822,6 +955,13 @@ block's local `REPLACE` pair runs after the one from `micro`, so `state.T` is
 renamed to `T_gas`; long lines abridged):
 
 ```cpp
+// $$JAFF DEFINE micro {
+    // REPLACE {
+        // "nden\[\s*(\d+)\s*\]" -> "state.xn[\1]"
+        // "tgas" -> "state.T"      # comments run to the end of the line
+    // }
+// }
+
 // $$JAFF REPEAT idx, rate IN rates { USE micro }
 rate[0] = 5.8500000000000005e-11*std::sqrt(state.T)*std::exp(-157809.10000000001/state.T);
 rate[1] = 2.6e-13*std::pow(state.T/10000.0, -0.80000000000000004);
@@ -946,7 +1086,7 @@ added.
 
 The echo can be switched off with the `echo_directives` argument of
 `TemplateParser`. `jaffgen` sets it from `echo` in
-[`jaffgen.toml`](jaffgen-toml.md) or the `--echo/--no-echo` flag (default on).
+[`jaffgen.toml`](../configuration/index.md) or the `--echo/--no-echo` flag (default on).
 
 In Fortran, wrapping of long lines leaves comment lines alone.
 
@@ -972,11 +1112,14 @@ option value, an invalid regex or `\N` reference, a `USE` of an unknown or
 later `DEFINE`, a repeated `DEFINE` or `USE`, a `GET` entity that is not in the
 network, of the wrong kind, or a reaction name shared by several mechanisms
 (`HAS` only checks its kind; a missing entity simply gives `0`), options on `END`, a `$$JAFF` line inside a
-body, a misplaced or repeated `LANG`/`COMMENT`, an unknown language, and no
-language at all.
+body, a misplaced or repeated `LANG`/`COMMENT`, an unknown language, no
+language at all, and for `CALL`: no `jaffgen_template_functions.py`, a name it
+does not register, a file that fails to run, or two functions registered under
+one name.
 
 Errors in a multi-line header report the line they occur on; errors about a
 body line (the CSE line, the number of `$idx$` tokens) report that body line.
 Any other failure while a command renders (for example no radiation bands, or a
-division by zero in `$x/0$`) is also a `ParserError`, at the directive, with the
+division by zero in `$x/0$`, a `CALL` function that raises or returns something
+other than a string) is also a `ParserError`, at the directive, with the
 original exception as its cause.

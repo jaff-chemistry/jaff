@@ -1,116 +1,129 @@
+# ABOUTME: Leiden tabulated line shielding (shielding.type = "leiden"), a global
+# ABOUTME: shielding function interpolating the shipped leiden.hdf5 tables
 """Leiden tabulated line-shielding (global shielding function).
 
 Builds the shielding factor for a photo-reaction from the collapsed Leiden
 shielding tables (``data/shielding/leiden.hdf5``, one group per reaction).  For
-each requested shielding species the relevant column-density grid (``N``) and
-shielding-factor column are extracted into a per-reaction
-``shielding_<reaction>.hdf5`` next to the generated code, and the total factor
-is the product of one interpolation call per shielding species.
+each requested shielding species the column-density grid (``N``) and the
+shielding-factor column are extracted into a per-reaction table, returned with
+the factor (kept as ``photo.shielding_tables``) and written out as
+``shielding_<reaction>.hdf5`` by
+:meth:`~jaff.core.network.Network.write_shielding_tables` (``jaffgen`` writes it
+to the output directory).  The total factor is the product of one
+interpolation call per shielding species.
 
 A reaction selects this function via ``shielding.type = "leiden"`` and must
-declare ``shielding.shielded_by`` (a subset of :data:`LEIDEN_SPECIES_MAP`); the
+declare ``shielding.shielded_by`` (a subset of :data:`LeidenSpecies`); the
 optional ``shielding.radiation`` field picks the radiation-field subgroup
-(default ``"ISRF"``).
+(default ``"isrf"``).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Literal, cast
 
 from sympy import Expr, Float, Function
 
 from jaff.config import SHIELDING_DATA_DIR
+from jaff.config.base import LowerStr
+from jaff.physics.photo_reactions.shielding.config import ShieldingParams
 from jaff.drivers import HDF5
-from jaff.errors import ParserError
 
-from .. import ShieldingFunction, _register
+from .. import ShieldingFunction, ShieldingResult, register
 
 if TYPE_CHECKING:
-    from jaff.core.network import Network
     from jaff.core.reaction import Reaction
 
-LEIDEN_SPECIES_MAP: dict[str, str] = {
-    "H2": "H2",
-    "H": "H",
-    "C": "C",
-    "N2": "N2",
-    "CO": "CO",
-    "self": "",
-}
+#: Species with a shielding column in the Leiden tables; ``"self"`` stands for
+#: the reaction's own reactant.
+LeidenSpecies = Literal["H2", "H", "C", "N2", "CO", "self"]
 
 
-@_register
+class LeidenParams(ShieldingParams):
+    """Settings of the Leiden tabulated shielding.
+
+    Attributes
+    ----------
+    shielded_by : list of str
+        Shielding species, ``"self"`` being the reaction's own reactant; their
+        factors multiply.
+    radiation : str
+        Radiation field the shielding factors were computed for: the name of a
+        subgroup of the reaction's group in the shipped ``leiden.hdf5``
+        (case-insensitive).  Every reaction has ``"isrf"`` (the default),
+        ``"bb-4000"``, ``"bb-10000"``, ``"bb-20000"``, ``"ly-alpha"``,
+        ``"solar"`` and ``"tw-hya"``; all but ``"Zn._PHOTON__Zn+.e-"`` have
+        ``"mathis-1983"``; only ``"HF._PHOTON__F.H"`` and
+        ``"HF._PHOTON__HF+.e-"`` have ``"gondhalekar-1980"`` and
+        ``"habing-1968"``.  Some subgroups lack some species (``"ly-alpha"``
+        is empty for 84 of the 149 reactions).  The value is not checked when
+        the config is read: a missing subgroup fails when the shielding table
+        is read from ``leiden.hdf5``.
+    """
+
+    shielded_by: List[LeidenSpecies]
+    radiation: LowerStr = "isrf"
+
+
+@register
 class Leiden(ShieldingFunction):
     """Leiden tabulated line-shielding (``shielding.type = "leiden"``)."""
 
     name = "leiden"
     reaction = None  # global: applies to any reaction
 
-    def get_shielding(self, reaction: "Reaction", network: "Network") -> Expr:
-        """Return the Leiden tabulated shielding factor for *reaction*.
+    @staticmethod
+    def config_model() -> type[LeidenParams]:
+        """Return the settings model: ``shielded_by`` and ``radiation``."""
+        return LeidenParams
+
+    def get_shielding(self, reaction: "Reaction") -> ShieldingResult:
+        """Return the Leiden tabulated shielding factor for *reaction* and its table.
 
         Extracts the column-density grid and one shielding-factor column per
-        species in ``reaction.photo.shielding.props["shielded_by"]`` from
-        ``data/shielding/leiden.hdf5``, writes them to a per-reaction
-        ``shielding_<reaction>.hdf5`` in the generator output directory, and
-        returns the product of one
+        species in the ``shielded_by`` setting from
+        ``data/shielding/leiden.hdf5`` as the reaction's
+        ``shielding_<reaction>.hdf5`` table, and returns it with the product of
+        one
         ``interp_<index>_shielding_<species>(ncol_<species>)`` interpolation
         call per shielding species.
 
-        Recognised ``shielded_by`` entries are the keys of
-        :data:`LEIDEN_SPECIES_MAP`; ``"self"`` resolves to the reaction's
-        reactant (its own column density).  The optional ``shielding.radiation``
-        field selects the radiation-field subgroup and defaults to ``"ISRF"``.
+        Recognised ``shielded_by`` entries are :data:`LeidenSpecies`; ``"self"``
+        resolves to the reaction's reactant (its own column density).  The
+        optional ``radiation`` setting selects the radiation-field subgroup and
+        defaults to ``"isrf"``.
 
         Raises
         ------
         ParserError
-            If ``shielded_by`` is missing, or names a species not in
-            :data:`LEIDEN_SPECIES_MAP`.
+            If ``shielded_by`` is missing, names a species not in
+            :data:`LeidenSpecies`, or another setting is unknown or invalid.
         """
-        assert reaction.photo is not None and reaction.photo.shielding is not None
-        sprops = reaction.photo.shielding.props
+        params = cast(LeidenParams, self.params(reaction))
 
-        if "shielded_by" not in sprops:
-            raise ParserError(
-                "'shielded_by' must be specified for Leiden shielding tables"
-            )
-
-        if "radiation" not in sprops:
-            sprops["radiation"] = "ISRF"
-
-        # "self" shields by the reaction's own reactant column density.
-        species_map = {**LEIDEN_SPECIES_MAP, "self": f"{reaction.reactants[0]}"}
-        if any(sp not in species_map for sp in sprops["shielded_by"]):
-            raise ParserError(
-                f"Invalid shielding specie detected for reaction: {reaction}"
-            )
-
-        sprops["radiation"] = sprops["radiation"].lower()
         # The N grid is shared at the reaction-group level; the shielding-factor
         # columns live under the radiation-field subgroup.
         h5group_core = f"{SHIELDING_DATA_DIR}/leiden.hdf5::{reaction.serialized}"
-        h5group_rad = f"{h5group_core}/{sprops['radiation']}"
+        h5group_rad = f"{h5group_core}/{params.radiation}"
         h5obj = HDF5()
 
         ncol = h5obj.to_dict(h5group_core, include="N")
-        shielding_table = h5obj.to_dict(h5group_rad, include=sprops["shielded_by"])
+        shielding_table = h5obj.to_dict(
+            h5group_rad, include=[str(sp) for sp in params.shielded_by]
+        )
         h5dict = {**ncol, **shielding_table}
 
-        # Emit a per-reaction shielding table the generated code interpolates over.
-        output_dir = network.spec._metadata["jaffgen_object"].jaffgen_config["output_dir"]
-        h5obj.from_dict(
-            f"{output_dir}/shielding_{reaction.serialized}.hdf5",
-            h5dict,
-            mode="w",
-        )
+        # The per-reaction table the generated code interpolates over.
+        tables = {f"shielding_{reaction.serialized}.hdf5": h5dict}
 
         # Total factor = product of one interpolation call per shielding species.
         from jaff.core import NetworkSymbols
 
         shielding: Expr = Float(1.0)
-        for specie in sprops["shielded_by"]:
+        for specie in params.shielded_by:
+            # "self" shields by the reaction's own reactant column density.
+            column = f"{reaction.reactants[0]}" if specie == "self" else specie
             interp = Function(f"interp_{reaction.index}_shielding_{specie}")
-            shielding *= interp(NetworkSymbols.ncol(species_map[specie]))
+            shielding *= interp(NetworkSymbols.ncol(column))
 
-        return shielding
+        return ShieldingResult(shielding, tables)

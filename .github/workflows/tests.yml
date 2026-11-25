@@ -50,7 +50,12 @@ jobs:
                   restore-keys: |
                       jaff-data-v3-${{ matrix.os }}-
 
+            # sys.monitoring-based coverage (Python 3.12+; older versions fall back to
+            # the default tracer): the default tracer made 3.12 ~30x slower on tests
+            # that call the generated Python solvers' rhs and Jacobian many times.
             - name: Run tests with pytest
+              env:
+                  COVERAGE_CORE: sysmon
               run: |
                   uv run pytest tests/ -v --cov=jaff --cov-report=xml --cov-report=term
 

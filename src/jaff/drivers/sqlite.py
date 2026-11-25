@@ -1,9 +1,12 @@
+# ABOUTME: SQLite driver: Db (connection wrapper), Table (single-table queries) and
+# ABOUTME: JaffDb (handle on the bundled jaff.db photo/Verner/atomic-mass database).
 """
 SQLite database driver.
 
 This module provides two general-purpose SQLite wrappers (:class:`Db` and
 :class:`Table`) and one JAFF-specific convenience subclass (:class:`JaffDb`)
-that points at the bundled Verner photoionization cross-section database.
+that points at the database bundled with JAFF (photo-reaction cross-section
+sources, Verner photoionization fits and atomic masses).
 
 Classes
 -------
@@ -13,22 +16,20 @@ Table
     Thin query interface for a single table inside a :class:`Db`.
 JaffDb
     Subclass of :class:`Db` pre-configured for the built-in ``jaff.db``
-    database (Verner photoionization cross-sections).
+    database.
 
-Typical usage
--------------
-::
-
-    from jaff.drivers import JaffDb
-
-    with JaffDb() as db:
-        table = db.table("verner_cross_sections")
-        rows = table.rows(cols=["reaction", "xsecs"], conditions="Z = 1")
+Examples
+--------
+>>> from jaff.drivers import JaffDb
+>>> with JaffDb() as db:
+...     table = db.table("verner_cross_sections")
+...     rows = table.rows(cols=["reaction", "xsecs"], conditions="Z = 1")
 """
 
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Hashable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -38,18 +39,59 @@ from ..config import DB_DIR
 from .csv import csv_to_df
 
 
+def _ident(name: Hashable) -> str:
+    """
+    Quote a table or column name for SQL.
+
+    The name is wrapped in double quotes with inner double quotes doubled, so
+    spaces, brackets, quotes and reserved words (``order``) are taken as part
+    of the name, never as SQL.
+
+    Parameters
+    ----------
+    name : Hashable
+        Table or column name (a pandas label is converted with ``str``).
+
+    Returns
+    -------
+    str
+        The quoted identifier.
+    """
+    return '"' + str(name).replace('"', '""') + '"'
+
+
+def _columns(cols: Sequence[str] | None) -> str:
+    """
+    Return the quoted column list of a ``SELECT`` (``*`` for all columns).
+
+    Parameters
+    ----------
+    cols : sequence of str or None
+        Column names; ``None`` or empty selects every column.
+
+    Returns
+    -------
+    str
+        Comma-separated quoted names, or ``*``.
+    """
+    return ", ".join(_ident(c) for c in cols) if cols else "*"
+
+
 class Db:
     """
     Context-manager wrapper around a SQLite database connection.
 
     Manages connection lifecycle (open/close), provides table enumeration,
     and exposes helpers for constructing :class:`Table` objects and running
-    raw SQL queries.
+    raw SQL queries.  The constructor only validates and stores the path;
+    the connection is opened by :meth:`connect`, or on entering a ``with``
+    block (which also calls :meth:`close` on exit).
 
     Parameters
     ----------
     db_path : Path or str
-        Path to the ``.db`` SQLite file.  The file must already exist.
+        Path to the ``.db`` SQLite file.  The file must already exist; the
+        driver does not create new databases.
 
     Attributes
     ----------
@@ -58,14 +100,33 @@ class Db:
     cursor : sqlite3.Cursor or None
         Active cursor; ``None`` before :meth:`connect` is called.
     db_path : Path
-        Resolved path to the database file.
+        Path to the database file, as given (a ``str`` is converted to
+        :class:`~pathlib.Path`; it is not resolved).
 
-    Raises
-    ------
-    ValueError
-        If *db_path* is not a :class:`str` or :class:`~pathlib.Path`.
-    FileNotFoundError
-        If *db_path* does not exist on the filesystem.
+    Examples
+    --------
+    Build a table from a DataFrame in an existing (here empty) database file:
+
+    >>> import sqlite3
+    >>> import pandas as pd
+    >>> from jaff.drivers import Db
+    >>> sqlite3.connect("demo.db").close()
+    >>> df = pd.DataFrame(
+    ...     {"mass": [1.008, 4.003], "charge": [0, 0]},
+    ...     index=pd.Index(["H", "He"], name="species"),
+    ... )
+    >>> with Db("demo.db") as db:
+    ...     table = db.table_from_dataframe("species", df)
+    ...     db.get_table_names()
+    ['species']
+
+    Without a ``with`` block, open and close the connection explicitly:
+
+    >>> db = Db("demo.db")
+    >>> db.connect()
+    >>> [tuple(row) for row in db.query("SELECT species, mass FROM species")]
+    [('H', 1.008), ('He', 4.003)]
+    >>> db.close()
     """
 
     def __init__(self, db_path: Path | str):
@@ -74,7 +135,8 @@ class Db:
         Parameters
         ----------
         db_path : Path or str
-            Path to the ``.db`` SQLite file.
+            Path to the ``.db`` SQLite file.  The file must already exist; the
+            driver does not create new databases.
 
         Raises
         ------
@@ -106,8 +168,9 @@ class Db:
         """
         Open the database connection and create a cursor.
 
-        Uses :attr:`sqlite3.Row` as the row factory so that column values
-        can be accessed by name as well as by index.
+        Uses :class:`sqlite3.Row` as the row factory so that column values
+        can be accessed by name (``row["column_name"]``) as well as by index.
+        Called automatically on entering a ``with`` block.
 
         Returns
         -------
@@ -121,6 +184,9 @@ class Db:
     def close(self) -> None:
         """
         Close the cursor and the underlying database connection.
+
+        Releases the database file handle.  Called automatically on exiting a
+        ``with`` block.
 
         Returns
         -------
@@ -142,6 +208,9 @@ class Db:
         """
         Delete the database file from disk.
 
+        Does not close an open connection first; call :meth:`close` before
+        deleting if one is active.  This cannot be undone.
+
         Returns
         -------
         None
@@ -156,10 +225,13 @@ class Db:
         """
         Return all table records from the SQLite master table.
 
+        Prefer :meth:`get_table_names` for plain strings.
+
         Returns
         -------
         list[sqlite3.Row]
-            Each element is a row from ``sqlite_master`` with ``type='table'``.
+            Each element is a row from ``sqlite_master`` with ``type='table'``,
+            holding only its ``name`` column.
 
         Raises
         ------
@@ -180,7 +252,7 @@ class Db:
         Returns
         -------
         list[str]
-            Alphabetically unordered list of table name strings.
+            Table names, in the (unsorted) order of the SQLite schema.
 
         Raises
         ------
@@ -201,6 +273,10 @@ class Db:
     def table(self, name: str) -> "Table":
         """
         Return a :class:`Table` object for the named table.
+
+        The wrapper is bound to the current connection and cursor.  The table
+        must already exist; use :meth:`table_from_dataframe` or
+        :meth:`table_from_csv` to create one.
 
         Parameters
         ----------
@@ -240,10 +316,13 @@ class Db:
         Parameters
         ----------
         name : str
-            Name of the table to create.
+            Name of the table to create.  Any existing table with this name is
+            dropped first.
         df : pandas.DataFrame
-            Source data.  The DataFrame's index becomes the primary key
-            (named after ``df.index.name`` or ``"index"`` if unnamed).
+            Source data.  The DataFrame's index becomes a ``TEXT`` primary key
+            (named after ``df.index.name`` or ``"index"`` if unnamed).  Integer
+            columns become ``INTEGER``, float columns ``REAL`` and all others
+            ``TEXT``.
 
         Returns
         -------
@@ -254,13 +333,30 @@ class Db:
         ------
         RuntimeError
             If called before :meth:`connect`.
+
+        Examples
+        --------
+        With ``demo.db`` from the :class:`Db` examples:
+
+        >>> import pandas as pd
+        >>> from jaff.drivers import Db
+        >>> db = Db("demo.db")
+        >>> db.connect()
+        >>> df = pd.DataFrame(
+        ...     {"mass": [1.008, 4.003], "charge": [0, 0]},
+        ...     index=pd.Index(["H", "He"], name="species"),
+        ... )
+        >>> table = db.table_from_dataframe("species", df)
+        >>> [tuple(row) for row in table.all_rows()]
+        [('H', 1.008, 0), ('He', 4.003, 0)]
+        >>> db.close()
         """
         self.__verify_cursor_instance()
         assert self.cursor is not None
         assert self.connection is not None
 
         # Drop any pre-existing table of the same name.
-        self.cursor.execute(f"DROP TABLE IF EXISTS {name}")
+        self.cursor.execute(f"DROP TABLE IF EXISTS {_ident(name)}")
 
         index_col = df.index.name or "index"
 
@@ -273,13 +369,13 @@ class Db:
                 sql_type = "REAL"
             else:
                 sql_type = "TEXT"
-            col_defs.append(f"{col_name} {sql_type}")
+            col_defs.append(f"{_ident(col_name)} {sql_type}")
 
         columns_str = ", ".join(col_defs)
 
         self.connection.execute(f"""
-            CREATE TABLE {name} (
-                {index_col} TEXT PRIMARY KEY,
+            CREATE TABLE {_ident(name)} (
+                {_ident(index_col)} TEXT PRIMARY KEY,
                 {columns_str}
             )
         """)
@@ -294,7 +390,9 @@ class Db:
 
         Delegates to :meth:`table_from_dataframe` after reading the CSV with
         :func:`~jaff.drivers.csv.csv_to_df`.  The first column of the CSV is
-        used as the DataFrame index (and therefore the primary key).
+        used as the DataFrame index (and therefore the primary key).  Column
+        types are inferred as in :meth:`table_from_dataframe`, and any
+        existing table with the same name is replaced.
 
         Parameters
         ----------
@@ -303,12 +401,19 @@ class Db:
         file : Path
             Path to the source CSV file.
         delimiter : str
-            Field delimiter character for the CSV file.
+            Field delimiter character for the CSV file, e.g. ``","``.
 
         Returns
         -------
         Table
             Query interface for the newly created table.
+
+        Raises
+        ------
+        RuntimeError
+            If called before :meth:`connect`.
+        FileNotFoundError
+            If *file* does not exist.
         """
         return self.table_from_dataframe(
             name, csv_to_df(file, sep=delimiter, index_col=0)
@@ -325,17 +430,30 @@ class Db:
         Parameters
         ----------
         query : str
-            Valid SQL query string.
+            Valid SQL query string, e.g. ``"SELECT * FROM rates WHERE T > 100"``.
 
         Returns
         -------
         list[sqlite3.Row]
-            All rows returned by the query.
+            All rows returned by the query (empty if there are none).  Rows
+            support both index and column-name access (``row["mass"]``).
 
         Raises
         ------
         RuntimeError
             If called before :meth:`connect`, or if the query is invalid.
+
+        Examples
+        --------
+        >>> from jaff.drivers import JaffDb
+        >>> with JaffDb() as db:
+        ...     [
+        ...         tuple(row)
+        ...         for row in db.query(
+        ...             "SELECT reaction, Z, N FROM verner_cross_sections WHERE Z = 1"
+        ...         )
+        ...     ]
+        [('H._PHOTON__H+.e-', 1, 1)]
         """
         try:
             self.__verify_cursor_instance()
@@ -410,8 +528,11 @@ class Table:
     """
     Query interface for a single table inside a :class:`Db` connection.
 
-    Provides methods to select, insert, and drop rows without writing raw
-    SQL for each operation.
+    Provides methods to select and insert rows, add columns, read and update
+    single cells, and drop the whole table (:meth:`delete`) without writing
+    raw SQL for each operation.  There is no method to delete rows.
+    Instances are usually obtained from :meth:`Db.table`,
+    :meth:`Db.table_from_dataframe` or :meth:`Db.table_from_csv`.
 
     Parameters
     ----------
@@ -422,12 +543,35 @@ class Table:
     cur : sqlite3.Cursor
         Active cursor for the connection.
 
-    Raises
-    ------
-    ValueError
-        If *conn* is not a :class:`sqlite3.Connection`, *cur* is not a
-        :class:`sqlite3.Cursor`, or *name* does not match any table in the
-        database.
+    Attributes
+    ----------
+    name : str
+        Name of the table in the database.
+    conn : sqlite3.Connection
+        Database connection, shared with the parent :class:`Db`.
+    cur : sqlite3.Cursor
+        Cursor used to execute queries on the table.
+
+    Examples
+    --------
+    With ``demo.db`` holding the ``species`` table built in the :class:`Db`
+    examples:
+
+    >>> from jaff.drivers import Db
+    >>> db = Db("demo.db")
+    >>> db.connect()
+    >>> table = db.table("species")
+    >>> table.get_cell("species", "He", "mass")
+    4.003
+    >>> table.set_cell("species", "He", "charge", 1)
+    >>> table.add_column("note", default="none")
+    >>> table.insert_row(["C", 12.011, 0, "atom"])
+    >>> [
+    ...     tuple(row)
+    ...     for row in table.rows(cols=["species", "note"], conditions="mass > 2")
+    ... ]
+    [('He', 'none'), ('C', 'atom')]
+    >>> db.close()
     """
 
     def __init__(self, name: str, conn: sqlite3.Connection, cur: sqlite3.Cursor):
@@ -460,8 +604,8 @@ class Table:
                 "Cursor must be an object of sqlite3.Cursor"
             )
         # Verify the table actually exists in the database.
-        comm = f"SELECT * FROM sqlite_master WHERE type='table' and name='{name}'"
-        if not cur.execute(comm).fetchall():
+        comm = "SELECT * FROM sqlite_master WHERE type='table' and name=?"
+        if not cur.execute(comm, [name]).fetchall():
             raise ValueError(f"Invalid table name: {name}")
 
         self.name = name
@@ -472,54 +616,58 @@ class Table:
     # Read operations
     # ------------------------------------------------------------------
 
-    def all_rows(self, cols: list[str] = ["*"]) -> list[Any]:
+    def all_rows(self, cols: Sequence[str] | None = None) -> list[Any]:
         """
         Fetch every row in the table.
 
         Parameters
         ----------
-        cols : list of str, optional
-            Columns to retrieve.  Defaults to all columns (``["*"]``).
+        cols : sequence of str or None, optional
+            Names of the columns to retrieve (any name, quoted for you).
+            ``None`` (default) retrieves all columns.
 
         Returns
         -------
         list[sqlite3.Row]
-            All rows in the table for the selected columns.
+            All rows in the table for the selected columns.  Rows support both
+            index and column-name access.
         """
-        comm = f"SELECT {','.join(cols) if len(cols) > 1 else cols[0]} FROM {self.name}"
-        self.cur.execute(comm)
+        self.cur.execute(f"SELECT {_columns(cols)} FROM {_ident(self.name)}")
 
         return self.cur.fetchall()
 
     def rows(
         self,
-        cols: list[str] = ["*"],
+        cols: Sequence[str] | None = None,
         conditions: str = "",
+        params: Sequence[Any] | None = None,
     ) -> list[Any]:
         """
         Fetch rows that match an optional SQL ``WHERE`` clause.
 
         Parameters
         ----------
-        cols : list of str, optional
-            Columns to retrieve.  Defaults to all columns (``["*"]``).
+        cols : sequence of str or None, optional
+            Names of the columns to retrieve (any name, quoted for you).
+            ``None`` (default) retrieves all columns.
         conditions : str, optional
             SQL ``WHERE`` clause body (without the ``WHERE`` keyword), e.g.
-            ``"nion = 1 AND ne < 5"``.  If empty, all rows are returned.
+            ``"nion = 1 AND ne < 5"``.  It is run as SQL, so it must be
+            trusted text: put values in *params* as ``?`` placeholders
+            (``"reaction = ?"``) rather than pasting them in.  If empty, all
+            rows are returned.
+        params : sequence or None, optional
+            Values bound to the ``?`` placeholders of *conditions*, in order.
 
         Returns
         -------
         list[sqlite3.Row]
             Matching rows for the selected columns.
         """
-        columns = ",".join(cols) if len(cols) > 1 else cols[0]
-
-        comm = (
-            f"SELECT {columns} FROM {self.name} WHERE {conditions}"
-            if conditions
-            else f"SELECT {columns} FROM {self.name}"
-        )
-        self.cur.execute(comm)
+        comm = f"SELECT {_columns(cols)} FROM {_ident(self.name)}"
+        if conditions:
+            comm += f" WHERE {conditions}"
+        self.cur.execute(comm, list(params or []))
 
         return self.cur.fetchall()
 
@@ -531,19 +679,21 @@ class Table:
         """
         Insert a single row into the table.
 
-        Uses parameterised placeholders to guard against SQL injection.
+        Uses parameterised placeholders to guard against SQL injection, and
+        commits immediately.
 
         Parameters
         ----------
         values : list of str, float, or int
-            One value per column, in schema order.
+            One value per column (including the primary key), in schema
+            order.
 
         Returns
         -------
         None
         """
         placeholders = ",".join(["?"] * len(values))
-        comm = f"INSERT INTO {self.name} VALUES ({placeholders})"
+        comm = f"INSERT INTO {_ident(self.name)} VALUES ({placeholders})"
         self.cur.execute(comm, values)
         self.conn.commit()
 
@@ -552,7 +702,8 @@ class Table:
         Insert multiple rows into the table.
 
         Calls :meth:`insert_row` for each row, committing after every
-        individual insertion.
+        individual insertion.  For bulk imports prefer
+        :meth:`Db.table_from_dataframe`, which uses pandas' faster path.
 
         Parameters
         ----------
@@ -575,9 +726,9 @@ class Table:
         """
         Add a new column to the table.
 
-        Issues an ``ALTER TABLE ... ADD COLUMN`` statement.  Existing rows
-        receive *default* (or ``NULL`` if *default* is not given) for the new
-        column.
+        Issues an ``ALTER TABLE ... ADD COLUMN`` statement and commits.
+        Existing rows receive *default* (or ``NULL`` if *default* is not
+        given) for the new column.
 
         Parameters
         ----------
@@ -585,7 +736,7 @@ class Table:
             Name of the column to add.
         col_type : str, optional
             SQLite column type/affinity (e.g. ``"TEXT"``, ``"INTEGER"``,
-            ``"REAL"``).  Defaults to ``"TEXT"``.
+            ``"REAL"``, ``"BLOB"``).  Defaults to ``"TEXT"``.
         default : str, float, int, or None, optional
             Default value applied to existing rows and used when no value is
             supplied on insert.  If ``None`` (the default), no ``DEFAULT``
@@ -595,9 +746,14 @@ class Table:
         -------
         None
         """
-        comm = f"ALTER TABLE {self.name} ADD COLUMN {col_name} {col_type}"
+        comm = f"ALTER TABLE {_ident(self.name)} ADD COLUMN {_ident(col_name)} {col_type}"
         if default is not None:
-            literal = f"'{default}'" if isinstance(default, str) else default
+            # DEFAULT cannot be a bound parameter: quote text as an SQL literal.
+            literal = (
+                "'" + default.replace("'", "''") + "'"
+                if isinstance(default, str)
+                else default
+            )
             comm += f" DEFAULT {literal}"
         self.cur.execute(comm)
         self.conn.commit()
@@ -636,13 +792,16 @@ class Table:
         """
         # Validate the target column exists (consistent ValueError on typo).
         self.cur.execute(
-            f"SELECT type FROM pragma_table_info('{self.name}') WHERE name = ?",
-            [col_name],
+            "SELECT type FROM pragma_table_info(?) WHERE name = ?",
+            [self.name, col_name],
         )
         if self.cur.fetchone() is None:
             raise ValueError(f"Invalid column name: {col_name}")
 
-        comm = f"SELECT {col_name} FROM {self.name} WHERE {index_col} = ?"
+        comm = (
+            f"SELECT {_ident(col_name)} FROM {_ident(self.name)} "
+            f"WHERE {_ident(index_col)} = ?"
+        )
         self.cur.execute(comm, [index_value])
         rows = self.cur.fetchall()
 
@@ -666,7 +825,7 @@ class Table:
         The target row is identified by the value of its index column
         (typically the primary key), and the target column by name.  Before
         writing, the Python type of *value* is checked against the declared
-        SQLite type of *col_name*.
+        SQLite type of *col_name*; the change is then committed.
 
         Parameters
         ----------
@@ -678,7 +837,9 @@ class Table:
             Name of the column whose cell is being set.
         value : str, float, int, or bytes
             New value for the cell.  Its type must match the declared type of
-            *col_name* (TEXT->str, INTEGER->int, REAL->int/float, BLOB->bytes).
+            *col_name* (TEXT->str, INTEGER->int, REAL->int/float, BLOB->bytes);
+            ``bool`` is rejected for INTEGER and REAL columns.  Columns of any
+            other declared type accept any value.
 
         Returns
         -------
@@ -701,8 +862,8 @@ class Table:
 
         # Look up the declared type of the target column.
         self.cur.execute(
-            f"SELECT type FROM pragma_table_info('{self.name}') WHERE name = ?",
-            [col_name],
+            "SELECT type FROM pragma_table_info(?) WHERE name = ?",
+            [self.name, col_name],
         )
         col = self.cur.fetchone()
         if col is None:
@@ -720,7 +881,10 @@ class Table:
                 f"column '{col_name}' type {col_type}"
             )
 
-        comm = f"UPDATE {self.name} SET {col_name} = ? WHERE {index_col} = ?"
+        comm = (
+            f"UPDATE {_ident(self.name)} SET {_ident(col_name)} = ? "
+            f"WHERE {_ident(index_col)} = ?"
+        )
         self.cur.execute(comm, [value, index_value])
         self.conn.commit()
 
@@ -728,11 +892,14 @@ class Table:
         """
         Drop this table from the database.
 
+        Issues ``DROP TABLE`` and commits; this cannot be undone, and the
+        :class:`Table` object is no longer usable afterwards.
+
         Returns
         -------
         None
         """
-        comm = f"DROP TABLE {self.name}"
+        comm = f"DROP TABLE {_ident(self.name)}"
         self.cur.execute(comm)
         self.conn.commit()
 
@@ -741,21 +908,29 @@ class JaffDb(Db):
     """
     Pre-configured database handle for the bundled JAFF database.
 
-    Points at ``jaff/db/jaff.db``, which contains the Verner (1996)
-    photoionization cross-section data used by JAFF's photo-reaction
-    processing.  Access the data via :meth:`~Db.table`:
+    Points at ``jaff/db/jaff.db``, which holds the data used by JAFF's
+    photo-reaction processing and species handling, one table each:
 
-    ::
+    - ``photo_reaction_cross_sections``: per photo-reaction, its decay type,
+      photo-absorption flag and Leiden/NORAD cross-section sources;
+    - ``verner_cross_sections``: the Verner (1996) photoionization fits;
+    - ``atomic_masses``: per element, its name, ``mass``, ``atomic_mass`` and
+      proton, neutron and electron counts.
 
-        with JaffDb() as db:
-            table = db.table("verner_cross_sections")
-            rows = table.all_rows()
+    The database path is resolved automatically from the package directory,
+    so the constructor takes no arguments.  Access the data via
+    :meth:`~Db.table`.
 
-    Parameters
-    ----------
-    None
-        The database path is resolved automatically from the package
-        directory.
+    Examples
+    --------
+    >>> from jaff.drivers import JaffDb
+    >>> with JaffDb() as db:
+    ...     table = db.table("verner_cross_sections")
+    ...     [
+    ...         tuple(row)
+    ...         for row in table.rows(cols=["reaction", "Z", "N"], conditions="Z = 1")
+    ...     ]
+    [('H._PHOTON__H+.e-', 1, 1)]
     """
 
     def __init__(self):

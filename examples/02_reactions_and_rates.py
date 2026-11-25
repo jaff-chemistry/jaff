@@ -149,7 +149,7 @@ def _(mo):
     mo.md(r"""
     ## The rate is symbolic
 
-    `rxn.rate_coefficient` is a [SymPy](https://www.sympy.org) expression in the gas
+    `rxn.rate.coefficient` is a [SymPy](https://www.sympy.org) expression in the gas
     temperature `tgas`, not a number. Keeping it symbolic means one rate can be
     differentiated exactly, printed in any language, or evaluated on a
     temperature grid later, without re-parsing.
@@ -169,7 +169,7 @@ def _(mo):
 
 @app.cell
 def _(rxn):
-    rxn.rate_coefficient
+    rxn.rate.coefficient
     return
 
 
@@ -187,7 +187,7 @@ def _(mo):
 def _(rxn):
     import sympy
 
-    sympy.diff(rxn.rate_coefficient, sympy.Symbol("tgas"))
+    sympy.diff(rxn.rate.coefficient, sympy.Symbol("tgas"))
     return
 
 
@@ -305,8 +305,8 @@ def _(mo):
     The fourth, collisional dissociation of H₂ by electrons, behaves completely
     differently. Its rate $5.6\times10^{-11}\,T^{1/2}\,e^{-102124/T}$ carries a
     Boltzmann factor for the 102 124 K (about 8.8 eV) energy barrier: at 10 K it
-    is around $10^{-316}$, about 300 orders of magnitude below the
-    recombinations. Plotted on the same axes it would squash them flat, so it gets
+    is around $10^{-4445}$, which underflows to exactly 0 in double precision,
+    thousands of orders of magnitude below the recombinations. Plotted on the same axes it would squash them flat, so it gets
     its own plot over the range where it matters. It climbs by about 18
     orders of magnitude between 2 000 K and 10 000 K.
     """)
@@ -367,7 +367,7 @@ def _(load_network):
         "H + H -> H2  [10, 100]    1e-17*(Tgas/1e2)**0.5\n"
         "H + H -> H2  [200, 1000]  3e-17*(Tgas/3e2)\n"
     )
-    EXTRAPOLATE_TOML = '[network.rates]\nT_cutoff = "extrapolate"\n'
+    EXTRAPOLATE_TOML = '[network.reactions]\nt_cutoff = "extrapolate"\n'
 
     scratch = tempfile.TemporaryDirectory()
     two_range = {}
@@ -417,9 +417,9 @@ def _(mo, two_range):
     mo.vstack(
         [
             mo.md("**clip**"),
-            two_range["clip"].rate_coefficient,
+            two_range["clip"].rate.coefficient,
             mo.md("**extrapolate**"),
-            two_range["extrapolate"].rate_coefficient,
+            two_range["extrapolate"].rate.coefficient,
         ]
     )
     return
@@ -462,7 +462,7 @@ def _(mo):
 def _(mo, net):
     mo.ui.table(
         [
-            {"reaction": rxn.verbatim, "rate": str(rxn.rate_coefficient)}
+            {"reaction": rxn.verbatim, "rate": str(rxn.rate.coefficient)}
             for rxn in net.reactions
             if "_PHOTON" in rxn.reactants.names()
         ],
@@ -478,9 +478,11 @@ def _(mo):
     `jaff.plotting.plot_xsecs` draws the cross-sections. Hydrogen photoionisation
     switches on at the 13.6 eV ionisation threshold and falls off steeply above
     it; its data (from the NORAD database) give only the ionisation (photodecay)
-    cross-section, so the panel has one curve. For
-    CH₂ photodissociation the two differ: photo-absorption counts every absorbed
-    photon, photodecay only those that actually break the molecule. Pass
+    cross-section, so the panel has one curve. For CH₂ photodissociation the
+    Leiden data give both: photo-absorption counts every absorbed photon,
+    photodecay only those that actually break the molecule. For CH₂ the two
+    tabulations happen to be identical, so the two curves lie on top of each
+    other; for other molecules they can differ. Pass
     `energy_unit="nm"` to plot against wavelength instead of photon energy.
     """)
     return

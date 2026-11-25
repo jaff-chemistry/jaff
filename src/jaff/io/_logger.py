@@ -1,9 +1,11 @@
+# ABOUTME: JAFF logging (JaffLogger, Rich or plain handler) and environment-aware
+# ABOUTME: progress bars (JaffProgress, jaff_progress) for terminal/Jupyter/marimo.
 """
 JAFF logging and progress-bar infrastructure.
 
 This module sets up a single :class:`JaffLogger` singleton backed by Rich's
 :class:`~rich.logging.RichHandler` (or a plain :class:`~logging.StreamHandler`
-inside Jupyter notebooks).  It also provides :class:`JaffProgress`, a subclass
+inside Jupyter or marimo notebooks).  It also provides :class:`JaffProgress`, a subclass
 of :class:`~rich.progress.Progress` that adapts its rendering strategy based on
 whether the process is running inside a Jupyter kernel, another interactive
 Python session, or a plain terminal.
@@ -157,7 +159,8 @@ class JaffProgress(Progress):
     * :meth:`track` -- overrides the parent implementation to handle the
       Jupyter / interactive-shell rendering quirks (Jupyter does not support
       in-place terminal overwrites, so a fresh :class:`~rich.progress.Progress`
-      context is spun up for each iteration instead of mutating the global bar).
+      context is spun up for each :meth:`track` call instead of mutating the
+      global bar).
 
     In non-interactive terminal sessions the global progress bar is kept alive
     for the lifetime of the process via :func:`atexit.register`.
@@ -243,7 +246,10 @@ class JaffProgress(Progress):
             Total number of items.  Inferred from ``len(sequence)`` when
             ``None`` and the sequence supports it.
         task_id : TaskID or None, optional
-            Existing task ID to update instead of creating a new one.
+            Accepted for signature compatibility with the parent class but
+            ignored: a new task is always created.
+        *args
+            Accepted for signature compatibility; unused.
         description : str, optional
             Label displayed next to the progress bar (default ``"Working..."``).
         update_period : float, optional
@@ -339,7 +345,7 @@ class _StripMarkupFormatter(logging.Formatter):
     Logging formatter that strips Rich markup tags from messages.
 
     Used as the formatter for the plain :class:`~logging.StreamHandler` that
-    handles output in Jupyter environments, where Rich's terminal escape codes
+    handles output in Jupyter and marimo environments, where Rich's terminal escape codes
     would appear as raw text.
     """
 
@@ -371,16 +377,18 @@ class JaffLogger:
 
     Configures the logger on first access with either a
     :class:`~rich.logging.RichHandler` (terminal) or a plain
-    :class:`~logging.StreamHandler` with markup stripping (Jupyter).
-    Subsequent instantiations with the same *name* reuse the existing handler
-    set because :func:`logging.getLogger` returns the same object.
+    :class:`~logging.StreamHandler` with markup stripping (Jupyter or
+    marimo).  Subsequent instantiations with the same *name* reuse the existing
+    handler set because :func:`logging.getLogger` returns the same object.
 
     Parameters
     ----------
     name : str, optional
         Logger name (default ``"JAFF"``).
     level : int, optional
-        Initial log level (default :data:`logging.INFO`).
+        Log level (default :data:`logging.INFO`).  It is applied on every
+        instantiation, so creating a ``JaffLogger`` resets a level set earlier
+        on the same named logger.
     """
 
     def __init__(self, name: str = "JAFF", level: int = logging.INFO):
@@ -391,7 +399,8 @@ class JaffLogger:
         name : str, optional
             Logger name, by default ``"JAFF"``.
         level : int, optional
-            Initial log level, by default :data:`logging.INFO`.
+            Log level set on the logger (on every instantiation), by default
+            :data:`logging.INFO`.
         """
         self.logger = logging.getLogger(name)
 

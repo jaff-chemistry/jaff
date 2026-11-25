@@ -1,5 +1,5 @@
 # ABOUTME: REPEAT's properties: where each one's items come from, its variables, options
-# ABOUTME: Option groups map to keyword arguments of the source, checked per property
+# ABOUTME: Option groups map to keyword arguments of the source; expression props join CSE
 
 from __future__ import annotations
 
@@ -36,25 +36,23 @@ class RepeatProp:
     """A property REPEAT can iterate over.
 
     Attributes:
-        vars: Variables it offers: ``idx``, the item variable, then special ones
-            such as ``cse``.
+        vars: Variables it offers: ``idx`` and the item variable.
         source: Builds the items from the context and the keyword arguments.
         groups: Option groups it accepts, key by key.
+        kind: For an expression property, the :meth:`Codegen.cse_group
+            <jaff.codegen.Codegen.cse_group>` kind it prints; it can then join a
+            CSE group with ``CSE { GROUP -> name }``.
     """
 
     vars: Tuple[str, ...]
     source: Source
     groups: Mapping[str, Mapping[str, Setting]] = field(default_factory=dict)
+    kind: Optional[str] = None
 
     @property
     def item(self) -> str:
         """The variable holding each item, e.g. ``specie``."""
         return self.vars[1]
-
-    @property
-    def special(self) -> Tuple[str, ...]:
-        """Variables beyond ``idx`` and the item, e.g. ``("cse",)``."""
-        return self.vars[2:]
 
 
 _THERMAL = {
@@ -69,8 +67,9 @@ _THERMAL = {
         "ORDER": Setting("rad_order", parse_int),
     },
 }
-_THERMAL_ONLY = {"THERMAL": _THERMAL["THERMAL"]}
 _RADODES = {"RADIATION": {"ORDER": Setting("order", parse_int)}}
+_JOIN = {"CSE": {"GROUP": Setting("cse_group", parse_text)}}
+_NAME = {"GROUP": {"NAME": Setting("name", parse_text)}}
 _SIGN = {"SIGN": {"POS": Setting("pos", parse_text), "NEG": Setting("neg", parse_text)}}
 
 
@@ -80,41 +79,98 @@ def _items(item: str, getter: Callable[[RenderContext], Any]) -> RepeatProp:
 
 
 def _expressions(
-    item: str, method: str, groups: Optional[Mapping[str, Mapping[str, Setting]]] = None
+    item: str,
+    kind: str,
+    method: str,
+    groups: Optional[Mapping[str, Mapping[str, Setting]]] = None,
 ) -> RepeatProp:
-    """A property of codegen expressions with CSE; *method* is a Codegen method."""
+    """Codegen expressions of *kind*; *method* prints them alone, without CSE.
+
+    In a CSE group (``CSE { GROUP -> name }``) the REPEAT command takes them from
+    the group instead (see :mod:`.groups`).
+    """
     return RepeatProp(
-        ("idx", item, "cse"),
-        lambda c, kw: getattr(c.cg, method)(**kw),
-        groups or {},
+        ("idx", item),
+        lambda c, kw: getattr(c.cg, method)(**kw, use_cse=False)["expressions"],
+        {**(groups or {}), **_JOIN},
+        kind,
     )
 
 
+def _parameters(ctx: RenderContext, kwargs: Dict[str, Any]) -> list[str]:
+    """The ODE system's free parameters, printed as in the generated code."""
+    system = ctx.net.ode_system(**kwargs)
+
+    return [ctx.cg.lang.code_gen(p, strict=False) for p in system.parameters]
+
+
+def _specie_gammas(ctx: RenderContext) -> list[str]:
+    """Every species' adiabatic index (``specie.thermodynamics.gamma``), printed."""
+    gammas, missing = [], []
+    for specie in ctx.net.species:
+        if specie.thermodynamics is None:
+            missing.append(specie.name)
+        else:
+            gammas.append(ctx.cg.lang.code_gen(specie.thermodynamics.gamma, strict=False))
+
+    if missing:
+        eos = ctx.net.config.thermodynamics.eos.type
+        raise TemplateError(
+            f"specie_gammas: the {eos!r} EOS gives no adiabatic index to "
+            f"{', '.join(missing)} (only ideal and multi_gamma do)"
+        )
+
+    return gammas
+
+
+def _functions(ctx: RenderContext) -> list[str]:
+    """Stub signatures of the network's undefined functions and their derivatives.
+
+    Each function called undefined (:attr:`NetworkSymbols.applied_functions
+    <jaff.core.network.NetworkSymbols.applied_functions>`) with *k* arguments
+    gives ``name(a0, ..., a<k-1>)`` and its ``k`` first partial derivatives
+    ``name_partial_<i>(...)``, named as the printed Jacobian calls them; sorted.
+    """
+    arities = {
+        call.func.__name__: len(call.args) for call in ctx.net.symbols.applied_functions
+    }
+    signatures = []
+    for name, nargs in sorted(arities.items()):
+        arguments = f"({', '.join(f'a{i}' for i in range(nargs))})"
+        signatures.append(name + arguments)
+        signatures.extend(f"{name}_partial_{i}{arguments}" for i in range(nargs))
+
+    return signatures
+
+
+def _no_source(ctx: RenderContext, kwargs: Dict[str, Any]) -> Any:
+    """``cses`` items come from its group, not from a source (see :mod:`.groups`)."""
+    raise TypeError("REPEAT IN cses takes its items from its CSE group")
+
+
 PROPERTIES: Dict[str, RepeatProp] = {
-    "rates": _expressions("rate", "get_indexed_rates"),
+    "cses": RepeatProp(("idx", "cse"), _no_source, _NAME),
+    "rates": _expressions("rate", "rates", "get_indexed_rates"),
     "flux_expressions": _items(
         "flux_expression", lambda c: c.cg.get_indexed_flux_expressions()
     ),
     "ode_expressions": _items(
         "ode_expression", lambda c: c.cg.get_indexed_ode_expressions()
     ),
-    "odes": _expressions("ode", "get_indexed_odes"),
-    "radodes": _expressions("radode", "get_indexed_radodes", _RADODES),
-    "rhses": _expressions("rhs", "get_indexed_rhs", _THERMAL),
-    "jacobian": _expressions("expr", "get_indexed_jacobian", _THERMAL),
-    # One evaluation of the RHS and the Jacobian with shared temporaries: emit
-    # rhs_jacobian (temporaries and RHS rows) first, then rhs_jacobian_entries
-    # (Jacobian entries only) in the same scope, with the same options.
-    "rhs_jacobian": RepeatProp(
-        ("idx", "rhs", "cse"),
-        lambda c, kw: c.cg.get_indexed_rhs_jacobian(part="rhs", **kw),
-        _THERMAL_ONLY,
+    "odes": _expressions("ode", "odes", "get_indexed_odes"),
+    "radodes": _expressions("radode", "radodes", "get_indexed_radodes", _RADODES),
+    "rhses": _expressions("rhs", "rhs", "get_indexed_rhs", _THERMAL),
+    "jacobian": _expressions("jac", "jacobian", "get_indexed_jacobian", _THERMAL),
+    # The split dedt Jacobian J = A + a c^T (OdeSystem.jacobian_split)
+    "jacobian_fixed_t": _expressions(
+        "jac", "jacobian_fixed_t", "get_indexed_jacobian_fixed_t", _THERMAL
     ),
-    "rhs_jacobian_entries": RepeatProp(
-        ("idx", "expr"),
-        lambda c, kw: c.cg.get_indexed_rhs_jacobian(part="jacobian", **kw)["expressions"],
-        _THERMAL_ONLY,
+    "rhs_dt": _expressions("rhs_dt", "rhs_dt", "get_indexed_rhs_dt", _THERMAL),
+    "temperature_gradient": _expressions(
+        "dtdy", "temperature_gradient", "get_indexed_temperature_gradient", _THERMAL
     ),
+    "parameters": RepeatProp(("idx", "parameter"), _parameters, _THERMAL),
+    "functions": _items("function", _functions),
     "reactions": _items("reaction", lambda c: c.net.reactions.verbatim()),
     "species": _items("specie", lambda c: c.net.species.names()),
     "species_with_normalized_sign": RepeatProp(
@@ -124,6 +180,7 @@ PROPERTIES: Dict[str, RepeatProp] = {
     ),
     "elements": _items("element", lambda c: c.net.elements.symbols()),
     "specie_masses": _items("specie_mass", lambda c: c.net.species.masses()),
+    "specie_gammas": _items("specie_gamma", _specie_gammas),
     "reactants": _items("reactant", lambda c: c.net.reactions.reactants()),
     "products": _items("product", lambda c: c.net.reactions.products()),
     "photo_reactions": _items(

@@ -1,3 +1,5 @@
+# ABOUTME: Codegen class turning a Network into rate/flux/ODE/Jacobian code strings.
+# ABOUTME: Supports C++, C, Fortran, Python, Rust, Julia and R with optional CSE.
 """Multi-language code generator for astrochemical network ODEs.
 
 This module exposes the :class:`Codegen` class which transforms a parsed
@@ -14,8 +16,8 @@ Typical workflow
 1. Parse the network with :class:`~jaff.core.network.Network`.
 2. Instantiate :class:`Codegen` for the desired language.
 3. Call the ``get_*_str()`` helpers to obtain formatted code strings.
-4. Insert those strings into template files via the
-   :class:`~jaff.codegen.preprocessor.Preprocessor`.
+4. Or render ``$$JAFF`` template files, whose directives call these helpers,
+   with :class:`~jaff.codegen.TemplateParser` (the ``jaffgen`` command).
 
 Per-language syntax conventions live on :class:`~jaff.codegen._languages.Language`;
 per-method bracket/token overrides are applied by the
@@ -24,21 +26,50 @@ per-method bracket/token overrides are applied by the
 
 from __future__ import annotations
 
-import re
-from itertools import count, product
-from typing import TYPE_CHECKING, Iterator, List, Set, Tuple, cast
+from dataclasses import dataclass
+from itertools import count
+from typing import TYPE_CHECKING, Any, Iterator, Mapping, Sequence, cast
 
 import sympy as sp
 
+from ..common.optimizations import (
+    PRE_CSE_RULES,
+    bottom_up,
+    optimize,
+    shared_cse,
+    shared_logs,
+)
 from ..io._logger import JaffLogger, jaff_progress
 from ..types import IndexedList, IndexedValue
 from ._languages import Language, scoped_tokens
-from ._typing import IndexedReturn
+from ._typing import CseGroup, IndexedReturn
 
 if TYPE_CHECKING:
     import logging
 
-    from ..core.network import Network
+    from ..core.network import Network, OdeSystem
+
+
+@dataclass(frozen=True)
+class _Part:
+    """The expressions of one kind, before CSE and printing.
+
+    Attributes
+    ----------
+    items : list
+        SymPy expressions, or strings already in the target language.
+    indices : list of list of int
+        The index of each item (``[i]``, or ``[i, j]`` for a Jacobian entry).
+    name : str
+        What the items are, for the progress description.
+    optimizations : str or None
+        The :func:`sympy.cse` optimizations this kind asks for.
+    """
+
+    items: Sequence[sp.Basic | str]
+    indices: Sequence[list[int]]
+    name: str
+    optimizations: str | None = None
 
 
 class Codegen:
@@ -48,12 +79,17 @@ class Codegen:
     parsed :class:`~jaff.core.network.Network` it can produce assignment
     statements for:
 
-    * **Reaction rates** — ``k[i] = <rate_expa>``
+    * **Reaction rates** — ``k[i] = <rate_expr>``
     * **Flux expressions** — ``flux[i] = k[i] * y[r1] * y[r2]``
     * **ODE right-hand sides** — ``dy[i]/dt = sum(±flux[j])``
     * **Analytical Jacobian** — ``J[i, j] = ∂f_i/∂y_j``
-    * **Energy derivative** — ``dE/dt`` (optional, with EOS coupling)
+    * **Thermal equation** — ``dE/dt`` or ``dT/dt`` from
+      ``net.thermodynamics`` (optional)
     * **Radiation ODEs** — moment-equations for radiation fields (optional)
+
+    Supported languages: C++ (``cxx``, ``cpp``, ``c++``), C (``c``),
+    Fortran 90 (``fortran``, ``f90``), Python (``python``, ``py``),
+    Rust (``rust``, ``rs``), Julia (``julia``, ``jl``) and R (``r``).
 
     Per-method ``get_*_str()`` overrides (bracket style, assignment operator,
     line terminator) are applied by the :func:`~jaff.codegen._languages.scoped_tokens`
@@ -65,29 +101,78 @@ class Codegen:
     CSE temporaries are emitted before the main expressions and named with a
     numeric suffix, e.g. ``cse0``, ``cse1``, …
 
-    Parameters
+    Attributes
     ----------
-    network : Network
-        Parsed chemical reaction network.
-    lang : str, optional
-        Target language alias.  Accepted values: ``"c++"``, ``"cpp"``,
-        ``"cxx"``, ``"c"``, ``"fortran"``, ``"f90"``, ``"python"``,
-        ``"py"``, ``"rust"``, ``"rs"``, ``"julia"``, ``"jl"``, ``"r"``.
-        Default is ``"c++"``.
+    net : Network
+        The reaction network being code-generated.
+    lang : Language
+        The resolved language config carrying every syntax token (see Notes).
+    logger : logging.Logger
+        JAFF logger instance.
 
-    Raises
-    ------
-    InvalidLanguageError
-        If *lang* is not a supported language.
+    Notes
+    -----
+    All per-language syntax lives on the
+    :class:`~jaff.codegen._languages.Language` object at ``cg.lang``:
+
+    | Attribute | Description |
+    | --- | --- |
+    | ``lang.name`` | Canonical language name (e.g. ``"cxx"``, ``"fortran"``) |
+    | ``lang.lb``, ``lang.rb`` | 1-D array brackets (``[`` ``]``; ``(`` ``)`` for Fortran) |
+    | ``lang.mlb``, ``lang.mrb`` | 2-D array brackets |
+    | ``lang.sep`` | 2-D index separator (``"]["`` C-style, ``", "`` Fortran/Julia/R) |
+    | ``lang.assignment_op`` | Assignment operator (``"="``; ``"<-"`` for R) |
+    | ``lang.line_end`` | Statement terminator (``";"`` for C/C++/Rust, else ``""``) |
+    | ``lang.code_gen`` | SymPy printer used to serialise expressions |
+    | ``lang.idx_offset`` | Array index base (``0``; ``1`` for Fortran/Julia/R) |
+    | ``lang.comment`` | Single-line comment prefix (``"//"``, ``"!"`` or ``"#"``) |
+    | ``lang.types`` | Generic type name → language spelling (e.g. ``"double "``) |
+    | ``lang.extras`` | Extra tokens such as type qualifiers and class specifiers |
+
+    The ``get_*_str()`` overrides only last for the call: ``cg.lang`` is
+    restored afterwards.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> from jaff.codegen import Codegen
+    >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+    >>> net = Network("h_photoionization", radiation=bands)
+    >>> cg = Codegen(net, lang="cxx")
+    >>> cg.lang
+    <Language cxx>
+    >>> cg.lang.idx_offset, cg.lang.line_end
+    (0, ';')
+    >>> print(cg.get_flux_expressions_str(), end="")
+    flux[0] = k[0] * y[idx_h];
+    flux[1] = k[1] * y[idx_hj] * y[idx_e];
+    >>> print(Codegen(net, lang="f90").get_flux_expressions_str(), end="")
+    flux(1) = k(1) * y(idx_h)
+    flux(2) = k(2) * y(idx_hj) * y(idx_e)
     """
-
-    _THERMAL_MODES = ("none", "dedt", "dtdt")
 
     def __init__(
         self,
         network: Network,
         lang: str = "c++",
     ) -> None:
+        """Bind a network to a target language.
+
+        Parameters
+        ----------
+        network : Network
+            Parsed chemical reaction network.
+        lang : str, optional
+            Target language alias.  Accepted values: ``"c++"``, ``"cpp"``,
+            ``"cxx"``, ``"c"``, ``"fortran"``, ``"f90"``, ``"python"``,
+            ``"py"``, ``"rust"``, ``"rs"``, ``"julia"``, ``"jl"``, ``"r"``.
+            Default is ``"c++"``.
+
+        Raises
+        ------
+        InvalidLanguageError
+            If *lang* is not a supported language.
+        """
         self.lang = Language(lang)
         self.net: Network = network
         self.logger: logging.Logger = JaffLogger().get_logger()
@@ -98,8 +183,8 @@ class Codegen:
         idx_offset: int = -1,
         idx_prefix: str = "",
         definition_prefix: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
+        assignment_op: str | None = None,
+        line_end: str | None = None,
     ) -> str:
         """Generate species index definitions and network-size constants.
 
@@ -108,12 +193,14 @@ class Codegen:
         species count (``nspecs``) and reaction count (``nreactions``).
 
         Example output for C++ with two species H and H2 (``fidx`` names are
-        lower-cased)::
+        lower-cased and already start with ``idx_``):
 
-            const int idx_h  = 0;
-            const int idx_h2 = 1;
-            const int nspecs = 2;
-            const int nreactions = 5;
+        ```cpp
+        const int idx_h = 0;
+        const int idx_h2 = 1;
+        const int nspecs = 2;
+        const int nreactions = 5;
+        ```
 
         Parameters
         ----------
@@ -121,20 +208,41 @@ class Codegen:
             Base index added to each species position.  ``-1`` uses the
             language default stored in ``self.lang.idx_offset``.
         idx_prefix : str, optional
-            String prepended to each species index name, e.g. ``"idx_"``.
+            String prepended to each species index name (``fidx``, which
+            already starts with ``idx_``), e.g. ``"my_"`` yields ``my_idx_h``.
         definition_prefix : str, optional
             String prepended to each definition line, e.g. ``"const int "``
             for C/C++.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses ``self.lang.assignment_op``.
-        line_end : str, optional
-            Line terminator override.  Empty string uses ``self.lang.line_end``.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses
+            ``self.lang.assignment_op``.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses
+            ``self.lang.line_end``.
 
         Returns
         -------
         str
             Multi-line string of index definitions followed by the size
             constants ``nspecs`` and ``nreactions``.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> cg = Codegen(Network("h_photoionization"), lang="cxx")
+        >>> print(cg.get_commons(definition_prefix="const int "), end="")
+        const int idx_h = 0;
+        const int idx_hj = 1;
+        const int idx_e = 2;
+        const int nspecs = 3;
+        const int nreactions = 2;
+        >>> print(Codegen(cg.net, lang="f90").get_commons(), end="")
+        idx_h = 1
+        idx_hj = 2
+        idx_e = 3
+        nspecs = 3
+        nreactions = 2
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
         scommons = ""
@@ -155,7 +263,7 @@ class Codegen:
         cse_var: str = "x",
         cse_suffix: str = "",
     ) -> IndexedReturn:
-        """Return rate-coefficient expressions as an :class:`~jaff.types.IndexedReturn`.
+        """Return rate-coefficient expressions as an :class:`~jaff.codegen.IndexedReturn`.
 
         Applies SymPy CSE across all symbolic rates to minimise repeated
         sub-expression evaluation in the generated code.  Rates stored as raw
@@ -186,78 +294,51 @@ class Codegen:
             * ``"expressions"`` — :class:`~jaff.types.IndexedList` of
               ``(reaction_idx, rate_str)`` pairs for the final rate of each
               reaction (possibly referencing CSE temporaries).
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation=bands)
+        >>> rates = Codegen(net, lang="python").get_indexed_rates()
+        >>> rates["extras"]["cse"]
+        IndexedList([])
+        >>> for idx, rate in rates["expressions"]:
+        ...     print(idx, rate)
+        [0] 5.85154082319921e-8*photden[1] + 1.1420465158197e-10*photden[2]
+        [1] 1.65941781598291e-10*tgas**(-0.7)
         """
-        out: IndexedReturn = {
-            "extras": {"cse": IndexedList()},
-            "expressions": IndexedList(),
-        }
-        # Maps reaction index -> symbolic rate for reactions eligible for CSE.
-        # String rates are excluded (see docstring).
-        cse_dict: dict[int, sp.Basic | str] = {}
-        if use_cse:
-            for i, rea in enumerate(self.net.reactions):
-                # Skip raw-string rates — they are already valid target-language code
-                if type(rea.rate_coefficient) is str:
-                    continue
-                cse_dict[i] = rea.rate_coefficient
-
-            if cse_dict:
-                exprs = cse_dict.values()
-
-                # Create a numbered symbol generator for CSE temp names
-                cse_symbols = self._cse_symbols(cse_var, cse_suffix)
-                replacements, reduced_exprs = sp.cse(
-                    exprs, optimizations="basic", symbols=cse_symbols
-                )
-
-                # Drop CSE temporaries not referenced by any reduced expression
-                replacements = self.__prune_cse(replacements, reduced_exprs)
-
-                if replacements:
-                    for var, expr in replacements:
-                        idx: int = self._cse_index(var, cse_var, cse_suffix)
-                        expr = self.lang.code_gen(
-                            expr, strict=False, allow_unknown_functions=True
-                        )
-                        out["extras"]["cse"].append(IndexedValue([idx], expr))
-
-                # Overwrite the original symbolic rates with their CSE-reduced forms
-                for key, expr in zip(cse_dict.keys(), reduced_exprs):
-                    expr = self.lang.code_gen(
-                        expr, strict=False, allow_unknown_functions=True
-                    )
-                    cse_dict[key] = expr
-
-        # Build the final expression list for all reactions.
-        # Reactions absent from cse_dict (string rates) fall back to their
-        # get_code() representation, which passes string rates through.
-        for i, rea in enumerate(self.net.reactions):
-            rate = cse_dict[i] if cse_dict.get(i, "") else rea.get_code(self.lang.name)
-            out["expressions"].append(IndexedValue([i], rate))
-
-        return out
+        return self._indexed("rates", {}, use_cse, cse_var, cse_suffix)
 
     @scoped_tokens("lang")
     def get_rates_str(
         self,
         idx_offset: int = -1,
         rate_variable: str = "k",
-        brac_format: str = "",
+        brac_format: str | None = None,
         use_cse: bool = True,
         cse_var: str = "x",
+        cse_suffix: str = "",
         var_prefix: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
+        assignment_op: str | None = None,
+        line_end: str | None = None,
     ) -> str:
         """Generate rate-coefficient assignment code as a multi-line string.
 
         Delegates to :meth:`get_indexed_rates` to obtain (optionally CSE-
-        reduced) rate expressions, then formats them as::
+        reduced) rate expressions, then formats them as:
 
-            x0 = <cse_expr>;         // CSE temporaries (if any)
-            k[0] = x0 * exp(-alpha); // reaction 0 rate
-            k[1] = photorates(1, …); // reaction 1 (1-based photo-reaction number)
-            …
+        ```cpp
+        const double x0 = <cse_expr>;  // CSE temporaries (if any)
+        k[0] = x0 * exp(-alpha);       // reaction 0 rate
+        k[1] = …;                      // reaction 1 rate
+        ```
+
+        CSE temporaries are declared with the language's
+        :meth:`~jaff.codegen._languages.Language.format_cse_declaration`
+        (``const double`` for C++, ``double`` for C, ``let x0: f64`` for
+        Rust, a plain assignment otherwise).
 
         Parameters
         ----------
@@ -265,40 +346,60 @@ class Codegen:
             Base index for array subscripts.  ``-1`` uses the language default.
         rate_variable : str, optional
             Name of the rate array.  Default ``"k"``.
-        brac_format : str, optional
-            Override 1-D bracket style (``"[]"``, ``"()"``, …).  Empty string
-            uses the language default.
+        brac_format : str or None, optional
+            Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
+            ``"<>"``.  ``None`` (default) uses the language default.
         use_cse : bool, optional
             Enable CSE.  Default ``True``.
         cse_var : str, optional
             Prefix for CSE temporary variable names.  Default ``"x"``.
+        cse_suffix : str, optional
+            Text appended after the index of each CSE temporary name, as in
+            the ``get_indexed_*`` getters.  Default ``""``.
         var_prefix : str, optional
-            Type declaration prefix for CSE temporaries, e.g. ``"const double "``.
-            When empty, the language-default type qualifier and ``double`` type
-            are used.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses the language default.
-        line_end : str, optional
-            Line terminator override.  Empty string uses the language default.
+            Declaration type of each CSE temporary, used verbatim in place of the
+            language's own (``const double`` for C++), e.g. ``"amrex::Real "``
+            gives ``amrex::Real cse0 = ...;``.  ``""`` (default) keeps the
+            language's.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses the language default.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses the language default.
 
         Returns
         -------
         str
             Multi-line string of rate-coefficient assignments, including any
             CSE temporary definitions.
+
+        Raises
+        ------
+        InvalidLanguageError
+            If *brac_format* is not a supported bracket style.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation=bands)
+        >>> print(Codegen(net, lang="cxx").get_rates_str(), end="")
+        k[0] = 5.8515408231992116e-8*photden[1] + 1.1420465158197018e-10*photden[2];
+        k[1] = 1.6594178159829075e-10*std::pow(tgas, -0.69999999999999996);
+        >>> print(Codegen(net, lang="f90").get_rates_str(rate_variable="kr"), end="")
+        kr(1) = 5.85154082319921d-8*photden(1) + 1.1420465158197d-10*photden(2)
+        kr(2) = 1.65941781598291d-10*tgas**(-0.7d0)
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
         rates = ""
 
-        rate_expressions = self.get_indexed_rates(use_cse=use_cse, cse_var=cse_var)
+        rate_expressions = self.get_indexed_rates(
+            use_cse=use_cse, cse_var=cse_var, cse_suffix=cse_suffix
+        )
 
         # Emit CSE temporary definitions first so the main rate lines can
         # reference them without forward-declaration issues.
-        if use_cse:
-            for idx, expression in rate_expressions["extras"]["cse"]:
-                _idx = idx[0]
-                var_name = f"{cse_var}{_idx}"
-                rates += self.lang.format_cse_declaration(var_name, expression) + "\n"
+        rates += self._cse_declarations(rate_expressions, cse_var, cse_suffix, var_prefix)
 
         for idx, expression in rate_expressions["expressions"]:
             _idx = idx[0]
@@ -312,20 +413,33 @@ class Codegen:
         """Return per-reaction flux expressions as an :class:`~jaff.types.IndexedList`.
 
         Each flux is the product of the reaction's rate coefficient and all
-        reactant densities::
+        reactant densities:
 
-            flux[i] = k[$IDX$] * y[r1] * y[r2] * …
+        ```text
+        flux[i] = k[$IDX$] * y[r1] * y[r2] * …
+        ```
 
-        The ``$IDX$`` placeholder is left literal here and replaced with the
-        concrete reaction index when the expressions are rendered to a string
-        by :meth:`get_flux_expressions_str` or
-        :class:`~jaff.codegen.TemplateParser`.
+        A reactant appearing twice (stoichiometric coefficient 2) appears
+        twice in the product.  The ``$IDX$`` placeholder is left literal here
+        and replaced with the concrete reaction index when the expressions are
+        rendered by :class:`~jaff.codegen.TemplateParser`.
 
         Returns
         -------
         IndexedList
             One entry per reaction.  Each entry is an
             :class:`~jaff.types.IndexedValue` of ``([reaction_index], flux_str)``.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> cg = Codegen(Network("h_photoionization"), lang="cxx")
+        >>> print(cg.get_indexed_flux_expressions())
+        IndexedList[
+        [0] -> k[$IDX$] * y[idx_h]
+        [1] -> k[$IDX$] * y[idx_hj] * y[idx_e]
+        ]
         """
         out = IndexedList()
         for i, rea in enumerate(self.net.reactions):
@@ -345,16 +459,18 @@ class Codegen:
         species_var: str = "y",
         idx_prefix: str = "",
         idx_offset: int = -1,
-        brac_format: str = "",
+        brac_format: str | None = None,
         flux_var: str = "flux",
-        assignment_op: str = "",
-        line_end: str = "",
+        assignment_op: str | None = None,
+        line_end: str | None = None,
     ) -> str:
         """Generate flux-assignment code as a multi-line string.
 
-        Produces one line per reaction of the form::
+        Produces one line per reaction of the form:
 
-            flux[i] = k[i] * y[r1] * y[r2]
+        ```text
+        flux[i] = k[i] * y[r1] * y[r2]
+        ```
 
         where *r1*, *r2*, … are the formatted indices (``fidx``) of the
         reaction's reactant species.  The concrete flux expression is built by
@@ -368,23 +484,43 @@ class Codegen:
         species_var : str, optional
             Name of the species density array.  Default ``"y"``.
         idx_prefix : str, optional
-            Prefix prepended to species index names inside the expression,
-            e.g. ``"idx_"`` to yield ``y[idx_H]``.
+            Prefix prepended to species index names (``fidx``, which already
+            start with ``idx_``) inside the expression, e.g. ``"my_"`` yields
+            ``y[my_idx_h]``.
         idx_offset : int, optional
-            Base index for array subscripts.  ``-1`` uses the language default.
-        brac_format : str, optional
-            Override 1-D bracket style.  Empty string uses the language default.
+            Base index for array subscripts.  ``-1`` uses the language
+            default (``0`` for C/C++/Python/Rust, ``1`` for Fortran/Julia/R).
+        brac_format : str or None, optional
+            Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
+            ``"<>"``.  ``None`` (default) uses the language default.
         flux_var : str, optional
             Name of the flux array.  Default ``"flux"``.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses the language default.
-        line_end : str, optional
-            Line terminator override.  Empty string uses the language default.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses the language default.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses the language default.
 
         Returns
         -------
         str
             Multi-line string of flux assignments, one per reaction.
+
+        Raises
+        ------
+        InvalidLanguageError
+            If *brac_format* is not a supported bracket style.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> cg = Codegen(Network("h_photoionization"), lang="cxx")
+        >>> print(cg.get_flux_expressions_str(), end="")
+        flux[0] = k[0] * y[idx_h];
+        flux[1] = k[1] * y[idx_hj] * y[idx_e];
+        >>> print(cg.get_flux_expressions_str(brac_format="()", flux_var="F"), end="")
+        F(0) = k(0) * y(idx_h);
+        F(1) = k(1) * y(idx_hj) * y(idx_e);
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
         fluxes = ""
@@ -407,12 +543,14 @@ class Codegen:
         """Return per-species ODE flux-sum expressions as an :class:`~jaff.types.IndexedList`.
 
         Constructs the symbolic right-hand side for each species density ODE
-        by collecting all fluxes that produce or consume that species::
+        by collecting all fluxes that produce or consume that species:
 
-            dn_i/dt = - flux[j1] - flux[j2] + flux[j3] + …
+        ```text
+        dn_i/dt = - flux[j1] - flux[j2] + flux[j3] + …
+        ```
 
         Reactant species appear with a negative sign (consumption) and product
-        species with a positive sign (production).
+        species with a positive sign (production).  No CSE is applied.
 
         Notes
         -----
@@ -427,6 +565,18 @@ class Codegen:
             One entry per species.  Each entry is an
             :class:`~jaff.types.IndexedValue` of ``([species_index], sum_str)``
             where *sum_str* is a signed sum of ``flux[j]`` terms.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> cg = Codegen(Network("h_photoionization"), lang="cxx")
+        >>> print(cg.get_indexed_ode_expressions())
+        IndexedList[
+        [0] ->  - flux[0] + flux[1]
+        [1] ->  + flux[0] - flux[1]
+        [2] ->  + flux[0] - flux[1]
+        ]
         """
 
         with jaff_progress.indeterminate("Generating ode expressions"):
@@ -459,21 +609,24 @@ class Codegen:
         idx_prefix: str = "",
         derivative_prefix: str = "d",
         derivative_var: str | None = None,
-        brac_format: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
+        brac_format: str | None = None,
+        assignment_op: str | None = None,
+        line_end: str | None = None,
     ) -> str:
         """Generate ``dy/dt`` assignment code using a pre-computed flux array.
 
-        Produces one line per species of the form::
+        Produces one line per species of the form:
 
-            dy[idx_H] = -flux[0] + flux[3]
-            dy[idx_H2] = +flux[0] - flux[1]
+        ```cpp
+        dy[idx_h] =  - flux[0] + flux[3];
+        dy[idx_h2] =  + flux[0] - flux[1];
+        ```
 
         Unlike :meth:`get_indexed_ode_expressions`, this method uses the
         species formatted-index name (``fidx``) as the subscript so the output
-        integrates naturally with symbolic-index constants (e.g. ``idx_H = 0``
-        defined by :meth:`get_commons`).
+        integrates naturally with symbolic-index constants (e.g. ``idx_h = 0``
+        defined by :meth:`get_commons`).  Species that appear in no reaction
+        get no line.
 
         Parameters
         ----------
@@ -486,25 +639,47 @@ class Codegen:
             Name of the species density array used to derive the derivative
             variable name.  Default ``"y"``.
         idx_prefix : str, optional
-            Prefix prepended to each species index name, e.g. ``"idx_"``.
+            Prefix prepended to each species index name (``fidx``, which
+            already starts with ``idx_``), e.g. ``"my_"`` yields
+            ``dy[my_idx_h]``.
         derivative_prefix : str, optional
             Prefix prepended to *species_var* to form the derivative variable
             name when *derivative_var* is not given.  Default ``"d"``
             (yields ``"dy"``).
         derivative_var : str or None, optional
             Explicit name for the derivative array (overrides
-            *derivative_prefix* + *species_var*).
-        brac_format : str, optional
-            Override 1-D bracket style.  Empty string uses the language default.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses the language default.
-        line_end : str, optional
-            Line terminator override.  Empty string uses the language default.
+            *derivative_prefix* + *species_var*).  Default ``None``.
+        brac_format : str or None, optional
+            Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
+            ``"<>"``.  ``None`` (default) uses the language default.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses the language default.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses the language default.
 
         Returns
         -------
         str
             Multi-line string of derivative assignments, one per active species.
+
+        Raises
+        ------
+        InvalidLanguageError
+            If *brac_format* is not a supported bracket style.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> cg = Codegen(Network("h_photoionization"), lang="cxx")
+        >>> print(cg.get_ode_expressions_str(), end="")
+        dy[idx_h] =  - flux[0] + flux[1];
+        dy[idx_hj] =  + flux[0] - flux[1];
+        dy[idx_e] =  + flux[0] - flux[1];
+        >>> print(cg.get_ode_expressions_str(derivative_var="ydot"), end="")
+        ydot[idx_h] =  - flux[0] + flux[1];
+        ydot[idx_hj] =  + flux[0] - flux[1];
+        ydot[idx_e] =  + flux[0] - flux[1];
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
         # Construct the derivative variable name (e.g. "dy") unless overridden
@@ -535,8 +710,12 @@ class Codegen:
     def get_dedt(self, energy: str = "volumetric") -> str:
         """Target-language code for the total energy time-derivative.
 
-        Prints :attr:`Thermodynamics.dEdt_tot` in the requested form (see
-        :meth:`InternalEnergy.normaliser`).
+        A thin printer over ``net.thermodynamics.dEdt_tot()``
+        (:meth:`~jaff.physics.thermodynamics.Thermodynamics.dEdt_tot`): it
+        renders ``dEdt_tot().normaliser(energy)`` (see
+        :meth:`~jaff.physics.thermodynamics.InternalEnergy.normaliser`) as a
+        target-language expression.  For the temperature rate see
+        :meth:`get_dtdt`.
 
         Parameters
         ----------
@@ -553,81 +732,122 @@ class Codegen:
         ------
         ValueError
             If *energy* is not a valid form.
+
+        Notes
+        -----
+        The forms are time derivatives of the normalised energies, with
+        ``E`` the volumetric internal energy, ``rho = Σ m_i n_i`` and
+        ``n_tot = Σ n_i``:
+
+        ```text
+        volumetric    dE/dt                                         erg/cm³/s
+        specific      d(E/rho)/dt = (dE/dt)/rho - E (drho/dt)/rho²  erg/g/s
+        per_particle  d(E/n_tot)/dt = (dE/dt)/n_tot                 erg/s
+                                      - E (dn_tot/dt)/n_tot²
+        molar         N_A d(E/n_tot)/dt                             erg/mol/s
+        ```
+
+        The quotient rule means the non-volumetric forms also contain the
+        term from the changing normaliser, not just ``dE/dt`` divided by it.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation=bands)
+        >>> print(Codegen(net, lang="python").get_dedt())
+        -2.29107354821899e-26*tgas**0.3*(0.684 - 0.0416*math.log(0.0001*tgas))*...
         """
-        expr = self.net.thermodynamics.dEdt_tot.normaliser(energy)
+        expr = self.net.thermodynamics.dEdt_tot().normaliser(energy)
         return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
 
     def get_dtdt(self) -> str:
         """Target-language code for the gas-temperature rate ``dT/dt``.
 
-        Prints :attr:`Thermodynamics.dTdt_tot`.
+        A thin printer over ``net.thermodynamics.dTdt_tot()``
+        (:meth:`~jaff.physics.thermodynamics.Thermodynamics.dTdt_tot`).  It is
+        selected in the RHS and Jacobian generators with ``thermal="dtdt"``
+        (template option group ``THERMAL { MODE -> dtdt }``).  For the energy
+        rate see :meth:`get_dedt`.
 
         Returns
         -------
         str
             Single-expression code string (no assignment or line terminator).
+
+        Notes
+        -----
+        With ``E = E(T, n)`` the volumetric internal energy (the EOS):
+
+        ```text
+        dT/dt = (dE_tot/dt - Σ_i ∂E/∂n_i · dn_i/dt) / (∂E/∂T)
+        ```
+
+        The composition term accounts for reactions changing the particle
+        numbers that share the thermal energy.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation=bands)
+        >>> print(Codegen(net, lang="python").get_dtdt())
+        (-2.29107354821899e-26*tgas**0.3*...)/(2.0709734999999e-16*nden[0] + ...)
         """
-        expr = self.net.thermodynamics.dTdt_tot
+        expr = self.net.thermodynamics.dTdt_tot()
         return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
 
-    def _thermal_rows(self, thermal: str, energy: str) -> list[sp.Expr]:
-        """Thermal ODE row for *thermal* (``none`` → no row).
+    def get_eos(self) -> str:
+        """Target-language code for the EOS volumetric internal energy ``E(T, n)``.
 
-        ``dedt`` → total dE/dt in the *energy* form (see
-        :attr:`Thermodynamics.dEdt_tot` and :meth:`InternalEnergy.normaliser`);
-        ``dtdt`` → total dT/dt (:attr:`Thermodynamics.dTdt_tot`).
+        A thin printer over ``net.thermodynamics.eos.volumetric``
+        (:attr:`~jaff.physics.thermodynamics.InternalEnergy.volumetric`), the
+        energy of the EOS chosen in ``[network.thermodynamics.eos]``, in
+        erg cm⁻³.  Template token ``$eos$`` of ``$$JAFF SUB eos``.
 
-        Raises
-        ------
-        ValueError
-            If *thermal* is not ``none``, ``dedt`` or ``dtdt``.
+        Returns
+        -------
+        str
+            Single-expression code string (no assignment or line terminator).
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> net = Network("networks/demos/demo2.jet")
+        >>> print(Codegen(net, lang="python").get_eos())
+        1.49999999999992*tgas*(1.380649e-16*nden[0] + 1.380649e-16*nden[1] + 1.380649e-16*nden[2])
         """
-        if thermal not in self._THERMAL_MODES:
-            raise ValueError(
-                f"Invalid thermal mode {thermal!r}; "
-                f"valid modes are: {', '.join(self._THERMAL_MODES)}"
-            )
+        expr = self.net.thermodynamics.eos.volumetric
+        return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
 
-        thermo = self.net.thermodynamics
-        if thermal == "dedt":
-            return [thermo.dEdt_tot.normaliser(energy)]
-        if thermal == "dtdt":
-            return [thermo.dTdt_tot]
+    def get_eos_dt(self) -> str:
+        """Target-language code for ``∂E/∂T``, the EOS energy's temperature derivative.
 
-        return []
+        A thin printer over ``net.thermodynamics.dE_dT``
+        (:attr:`~jaff.physics.thermodynamics.Thermodynamics.dE_dT`): the volumetric
+        heat capacity at fixed densities [erg cm⁻³ K⁻¹] of the EOS chosen in
+        ``[network.thermodynamics.eos]``.  With it a template can recover
+        the temperature from an evolved energy by Newton's method.  Template
+        token ``$eos_dt$`` of ``$$JAFF SUB eos_dt``.
 
-    def _energy_column(
-        self,
-        jacobian_matrix: sp.Matrix,
-        dxdot_dtgas_list: list[sp.Expr],
-        nden_matrix: sp.IndexedBase,
-        energy: str,
-    ) -> sp.Matrix:
-        """Energy column ∂F/∂e and in-place species-column chain-rule correction.
+        Returns
+        -------
+        str
+            Single-expression code string (no assignment or line terminator).
 
-        Converts the temperature dependence into the state-vector framework via
-        the EOS relation.  With ``e = eos.normaliser(energy)`` the state variable
-        replacing T:
-
-        * ``∂F/∂e = (∂F/∂T)/(∂e/∂T)`` (returned column), and
-        * ``∂F/∂n_j|_e = ∂F/∂n_j|_T − (∂F/∂T)(∂e/∂n_j)/(∂e/∂T)`` (applied to
-          the species columns of *jacobian_matrix* in place).
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> net = Network("networks/demos/demo2.jet")
+        >>> print(Codegen(net, lang="python").get_eos_dt())
+        2.0709734999999e-16*nden[0] + 2.0709734999999e-16*nden[1] + 2.0709734999999e-16*nden[2]
         """
-        n_species = self.net.species.count
-        tgas = self.net.symbols.tgas
-        e_form = self.net.thermodynamics.eos.normaliser(energy)
-        de_dtgas = sp.diff(e_form, tgas)
-        # nden_matrix is scalar indexed (IndexedBase), use scalar form for differentiation
-        de_dn = [sp.diff(e_form, nden_matrix[j]) for j in range(n_species)]
-
-        for j in jaff_progress.track(
-            range(n_species), description="Applying EOS chain rule to species columns"
-        ):
-            for i, dxdot_dtgas in enumerate(dxdot_dtgas_list):
-                correction = dxdot_dtgas * de_dn[j] / de_dtgas
-                jacobian_matrix[i, j] = jacobian_matrix[i, j] - correction
-
-        return sp.Matrix([d / de_dtgas for d in dxdot_dtgas_list])
+        expr = self.net.thermodynamics.dE_dT
+        return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
 
     def get_indexed_odes(
         self,
@@ -635,7 +855,7 @@ class Codegen:
         cse_var: str = "cse",
         cse_suffix: str = "",
     ) -> IndexedReturn:
-        """Return symbolic ODE RHS expressions as an :class:`~jaff.types.IndexedReturn`.
+        """Return symbolic ODE RHS expressions as an :class:`~jaff.codegen.IndexedReturn`.
 
         Builds the full per-species ``dn_i/dt`` expressions by substituting
         the reaction rate symbols ``k[i]`` with their concrete symbolic rate
@@ -667,48 +887,38 @@ class Codegen:
               :class:`~jaff.types.IndexedList`.
             * ``"expressions"`` — per-species ODE expressions as
               :class:`~jaff.types.IndexedList`.
+
+        Notes
+        -----
+        The rate of change of species ``n`` sums the fluxes ``f_i`` of every
+        reaction it takes part in, with a minus sign when ``n`` is a reactant
+        and a plus sign when it is a product:
+
+        ```text
+        dn/dt = Σ_i (±) f_i
+        ```
+
+        Here the fluxes are inlined (``k_i`` times the reactant densities
+        ``nden[j]``), unlike :meth:`get_indexed_ode_expressions`.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation=bands)
+        >>> odes = Codegen(net, lang="python").get_indexed_odes()
+        >>> for idx, expr in odes["extras"]["cse"]:
+        ...     print(idx, expr)
+        [0] 1.65941781598291e-10*tgas**(-0.7)*nden[1]*nden[2] - (...)*nden[0]
+        [1] -cse0
+        >>> for idx, expr in odes["expressions"]:
+        ...     print(idx, expr)
+        [0] cse0
+        [1] cse1
+        [2] cse1
         """
-        with jaff_progress.indeterminate("Generating odes"):
-            ir: IndexedReturn = {
-                "extras": {"cse": IndexedList()},
-                "expressions": IndexedList(),
-            }
-
-            # Map symbolic rate placeholders k[i] to concrete rate expressions
-            subs_k = {
-                sp.symbols(f"k[{i}]"): rea.rate_coefficient
-                for i, rea in enumerate(self.net.reactions)
-            }
-
-            # Retrieve symbolic dn_i/dt expressions and inline the rates
-            ode_symbols = self.net.sodes()
-            ode_symbols = [sode.xreplace(subs_k) for sode in ode_symbols]
-
-        if use_cse:
-            with jaff_progress.indeterminate("Generating cse expressions"):
-                cse_symbols = self._cse_symbols(cse_var, cse_suffix)
-                replacements, reduced_exprs = sp.cse(ode_symbols, symbols=cse_symbols)
-
-                # Remove unused CSE temporaries to keep generated code lean
-                replacements = self.__prune_cse(replacements, reduced_exprs)
-
-                for var, expr in replacements:
-                    idx: int = self._cse_index(var, cse_var, cse_suffix)
-                    expr = self.lang.code_gen(
-                        expr, strict=False, allow_unknown_functions=True
-                    )
-                    ir["extras"]["cse"].append(IndexedValue([idx], expr))
-
-                # Switch to CSE-reduced forms for the main expression list
-                ode_symbols = reduced_exprs
-
-        for i, expr in enumerate(
-            jaff_progress.track(ode_symbols, description="Generating ode code")
-        ):
-            expr = self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
-            ir["expressions"].append(IndexedValue([i], expr))
-
-        return ir
+        return self._indexed("odes", {}, use_cse, cse_var, cse_suffix)
 
     @scoped_tokens("lang")
     def get_ode_str(
@@ -716,57 +926,87 @@ class Codegen:
         idx_offset: int = 0,
         use_cse: bool = True,
         cse_var: str = "cse",
+        cse_suffix: str = "",
         ode_var: str = "f",
-        brac_format: str = "",
+        brac_format: str | None = None,
         def_prefix: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
+        assignment_op: str | None = None,
+        line_end: str | None = None,
     ) -> str:
         """Generate ODE right-hand side assignment code as a multi-line string.
 
-        Wraps :meth:`get_indexed_odes` and formats the result as::
+        Wraps :meth:`get_indexed_odes` and formats the result as:
 
-            const double cse0 = …;   // CSE temporaries (if any)
-            f[0] = cse0 * nden[1];   // dn_H/dt
-            f[1] = …;                // dn_H2/dt
-            …
+        ```cpp
+        const double cse0 = …;   // CSE temporaries (if any)
+        f[0] = cse0 * nden[1];   // dn_H/dt
+        f[1] = …;                // dn_H2/dt
+        ```
+
+        The thermal equation is not included; see :meth:`get_rhs_str`.
 
         Parameters
         ----------
         idx_offset : int, optional
-            Base index for species ODE array subscripts.  Default ``0``.
+            Base index for species ODE array subscripts.  Default ``0``;
+            negative values use the language default (``0`` for
+            C/C++/Python/Rust, ``1`` for Fortran/Julia/R).
         use_cse : bool, optional
             Enable CSE.  Default ``True``.
         cse_var : str, optional
             Prefix for CSE temporary variable names.  Default ``"cse"``.
+        cse_suffix : str, optional
+            Text appended after the index of each CSE temporary name, as in
+            the ``get_indexed_*`` getters.  Default ``""``.
         ode_var : str, optional
             Name of the output ODE array.  Default ``"f"``.
-        brac_format : str, optional
-            Override 1-D bracket style.  Empty string uses the language default.
+        brac_format : str or None, optional
+            Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
+            ``"<>"``.  ``None`` (default) uses the language default.
         def_prefix : str, optional
-            Type declaration prefix for CSE temporaries.  Empty string uses the
-            language-default type qualifier and ``double`` type.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses the language default.
-        line_end : str, optional
-            Line terminator override.  Empty string uses the language default.
+            Declaration type of each CSE temporary, used verbatim in place of the
+            language's own (``const double`` for C++), e.g. ``"amrex::Real "``
+            gives ``amrex::Real cse0 = ...;``.  ``""`` (default) keeps the
+            language's.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses the language default.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses the language default.
 
         Returns
         -------
         str
             Multi-line string of ODE assignments, including any CSE temporaries.
+
+        Raises
+        ------
+        InvalidLanguageError
+            If *brac_format* is not a supported bracket style.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation=bands)
+        >>> print(Codegen(net, lang="cxx").get_ode_str(), end="")
+        const double cse0 = 1.6594178159829075e-10*std::pow(tgas, ...)*nden[0];
+        const double cse1 = -cse0;
+        f[0] = cse0;
+        f[1] = cse1;
+        f[2] = cse1;
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
 
         ode_code: str = ""
-        ode_expressions = self.get_indexed_odes(use_cse=use_cse, cse_var=cse_var)
+        ode_expressions = self.get_indexed_odes(
+            use_cse=use_cse, cse_var=cse_var, cse_suffix=cse_suffix
+        )
 
         # Emit CSE temporaries before the main ODE assignments
-        if use_cse:
-            for idx, expression in ode_expressions["extras"]["cse"]:
-                _idx = idx[0]
-                var_name = f"{cse_var}{_idx}"
-                ode_code += self.lang.format_cse_declaration(var_name, expression) + "\n"
+        ode_code += self._cse_declarations(
+            ode_expressions, cse_var, cse_suffix, def_prefix
+        )
 
         for idx, expression in ode_expressions["expressions"]:
             _idx = idx[0]
@@ -778,13 +1018,13 @@ class Codegen:
         self,
         use_cse: bool = True,
         cse_var: str = "cse",
-        thermal: str = "dedt",
+        thermal: str = "none",
         energy: str = "volumetric",
         radiation: bool = False,
         rad_order: int = 0,
         cse_suffix: str = "",
     ) -> IndexedReturn:
-        """Return the combined ODE + energy (+ radiation) RHS as an :class:`~jaff.types.IndexedReturn`.
+        """Return the combined ODE + energy (+ radiation) RHS as an :class:`~jaff.codegen.IndexedReturn`.
 
         Assembles the full right-hand side vector by concatenating, in order:
 
@@ -807,17 +1047,19 @@ class Codegen:
             Text appended after the index of each CSE temporary name, e.g.
             ``"_value"`` yields ``<cse_var>0_value``.  Default ``""``.
         thermal : str, optional
-            Thermal equation mode: ``"none"``, ``"dedt"`` or ``"dtdt"``.
-            Default ``"dedt"``.
+            Thermal equation mode: ``"none"``, ``"dedt"`` (total dE/dt, see
+            :meth:`get_dedt`) or ``"dtdt"`` (total dT/dt, see
+            :meth:`get_dtdt`).  Default ``"none"``.
         energy : str, optional
-            Evolved internal-energy form (see :attr:`Thermodynamics.dEdt_tot`
-            and :meth:`InternalEnergy.normaliser`).
-            Default ``"volumetric"``.
+            Evolved internal-energy form when *thermal* is ``"dedt"``:
+            ``"volumetric"``, ``"specific"``, ``"per_particle"`` or
+            ``"molar"`` (see :meth:`get_dedt`).  Default ``"volumetric"``.
         radiation : bool, optional
             Include radiation moment ODEs in the RHS.  Default ``False``.
         rad_order : int, optional
-            Order of the radiation moment closure (``0``–``3``).  Used only
-            when *radiation* is ``True``.
+            Radiation layout order (``0``–``3``, see
+            :meth:`get_indexed_radodes`).  Used only when *radiation* is
+            ``True``.  Default ``0``.
 
         Returns
         -------
@@ -827,54 +1069,34 @@ class Codegen:
             * ``"extras"["cse"]`` — CSE temporaries.
             * ``"expressions"`` — All RHS expressions in the order described
               above, indexed sequentially from 0.
+
+        Raises
+        ------
+        ValueError
+            If *thermal* is not a valid mode, or *energy* is not a valid
+            form.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation=bands)
+        >>> cg = Codegen(net, lang="cxx")
+        >>> len(cg.get_indexed_rhs(thermal="dedt")["expressions"])  # 3 species + dE/dt
+        4
+        >>> rhs = cg.get_indexed_rhs(thermal="none", radiation=True)
+        >>> len(rhs["expressions"])  # 3 species + 3 bands x (density, flux)
+        9
         """
-        with jaff_progress.indeterminate("Generating rhs equations"):
-            ir: IndexedReturn = {
-                "extras": {"cse": IndexedList()},
-                "expressions": IndexedList(),
-            }
+        options = {
+            "thermal": thermal,
+            "energy": energy,
+            "radiation": radiation,
+            "rad_order": rad_order,
+        }
 
-            # Substitute symbolic rate placeholders with concrete expressions
-            subs_k = {
-                sp.symbols(f"k[{i}]"): rea.rate_coefficient
-                for i, rea in enumerate(self.net.reactions)
-            }
-
-            # Start with species density ODEs; inline rate expressions
-            rhs_symbols = self.net.sodes()
-            rhs_symbols = [sode.xreplace(subs_k) for sode in rhs_symbols]
-            # Append thermal row (per *thermal*) and (optionally) radiation ODEs
-            rhs_symbols.extend(
-                [
-                    *self._thermal_rows(thermal, energy),
-                    *(self.net.sradodes(rad_order) if radiation else []),
-                ]
-            )
-
-        if use_cse:
-            with jaff_progress.indeterminate("Generating cse expressions"):
-                cse_symbols = self._cse_symbols(cse_var, cse_suffix)
-                replacements, reduced_exprs = sp.cse(rhs_symbols, symbols=cse_symbols)
-
-                # Prune CSE temporaries unreachable from any expression
-                replacements = self.__prune_cse(replacements, reduced_exprs)
-
-                for var, expr in replacements:
-                    idx: int = self._cse_index(var, cse_var, cse_suffix)
-                    expr = self.lang.code_gen(
-                        expr, strict=False, allow_unknown_functions=True
-                    )
-                    ir["extras"]["cse"].append(IndexedValue([idx], expr))
-
-                rhs_symbols = reduced_exprs
-
-        for i, expr in enumerate(
-            jaff_progress.track(rhs_symbols, description="Generating RHS code")
-        ):
-            expr = self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
-            ir["expressions"].append(IndexedValue([i], expr))
-
-        return ir
+        return self._indexed("rhs", options, use_cse, cse_var, cse_suffix)
 
     @scoped_tokens("lang")
     def get_rhs_str(
@@ -882,12 +1104,13 @@ class Codegen:
         idx_offset: int = 0,
         use_cse: bool = True,
         cse_var: str = "cse",
+        cse_suffix: str = "",
         ode_var: str = "f",
-        brac_format: str = "",
+        brac_format: str | None = None,
         def_prefix: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
-        thermal: str = "dedt",
+        assignment_op: str | None = None,
+        line_end: str | None = None,
+        thermal: str = "none",
         energy: str = "volumetric",
         radiation: bool = False,
         rad_order: int = 0,
@@ -895,49 +1118,90 @@ class Codegen:
         """Generate the full RHS assignment code as a multi-line string.
 
         Wraps :meth:`get_indexed_rhs` and formats the combined species ODE,
-        energy, and (optional) radiation expressions as::
+        energy, and (optional) radiation expressions as:
 
-            const double cse0 = …;  // CSE temporaries
-            f[0] = …;               // dn_H/dt
-            …
-            f[N] = …;               // dE/dt or dT/dt (thermal row)
-            f[N+1] = …;             // radiation ODE 0 (if radiation=True)
+        ```cpp
+        const double cse0 = …;  // CSE temporaries
+        f[0] = …;               // dn_H/dt
+        …
+        f[N] = …;               // dE/dt or dT/dt (thermal row)
+        f[N+1] = …;             // radiation ODE 0 (if radiation=True)
+        ```
 
         Parameters
         ----------
         idx_offset : int, optional
-            Base index for the output array subscripts.  Default ``0``.
+            Base index for the output array subscripts.  Default ``0``;
+            negative values use the language default (``0`` for
+            C/C++/Python/Rust, ``1`` for Fortran/Julia/R).
         use_cse : bool, optional
             Enable joint CSE across all RHS equations.  Default ``True``.
         cse_var : str, optional
             Prefix for CSE temporary variable names.  Default ``"cse"``.
+        cse_suffix : str, optional
+            Text appended after the index of each CSE temporary name, as in
+            the ``get_indexed_*`` getters.  Default ``""``.
         ode_var : str, optional
             Name of the output RHS array.  Default ``"f"``.
-        brac_format : str, optional
-            Override 1-D bracket style.  Empty string uses the language default.
+        brac_format : str or None, optional
+            Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
+            ``"<>"``.  ``None`` (default) uses the language default.
         def_prefix : str, optional
-            Type declaration prefix for CSE temporaries.  Empty string uses the
-            language-default type qualifier and ``double`` type.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses the language default.
-        line_end : str, optional
-            Line terminator override.  Empty string uses the language default.
+            Declaration type of each CSE temporary, used verbatim in place of the
+            language's own (``const double`` for C++), e.g. ``"amrex::Real "``
+            gives ``amrex::Real cse0 = ...;``.  ``""`` (default) keeps the
+            language's.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses the language default.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses the language default.
         thermal : str, optional
-            Thermal equation mode: ``"none"``, ``"dedt"`` or ``"dtdt"``.
-            Default ``"dedt"``.
+            Thermal equation mode: ``"none"``, ``"dedt"`` (total dE/dt, see
+            :meth:`get_dedt`) or ``"dtdt"`` (total dT/dt, see
+            :meth:`get_dtdt`).  Default ``"none"``.
         energy : str, optional
-            Evolved internal-energy form (see :attr:`Thermodynamics.dEdt_tot`
-            and :meth:`InternalEnergy.normaliser`).
-            Default ``"volumetric"``.
+            Evolved internal-energy form when *thermal* is ``"dedt"``:
+            ``"volumetric"``, ``"specific"``, ``"per_particle"`` or
+            ``"molar"`` (see :meth:`get_dedt`).  Default ``"volumetric"``.
         radiation : bool, optional
-            Include radiation moment ODEs.  Default ``False``.
+            Include radiation moment ODEs after the thermal row.
+            Default ``False``.
         rad_order : int, optional
-            Radiation moment closure order.  Default ``0``.
+            Radiation layout order (``0``–``3``, see
+            :meth:`get_indexed_radodes`).  Default ``0``.
 
         Returns
         -------
         str
             Multi-line string of all RHS assignments including CSE temporaries.
+
+        Raises
+        ------
+        ValueError
+            If *thermal* is not a valid mode, or *energy* is not a valid
+            form.
+        InvalidLanguageError
+            If *brac_format* is not a supported bracket style.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation=bands)
+        >>> print(Codegen(net, lang="cxx").get_rhs_str(thermal="dedt"), end="")
+        const double cse4 = std::log(tgas);
+        const double cse5 = std::exp(0.30000000000000004*cse4);
+        const double cse0 = cse5*nden[1]*nden[2];
+        const double cse1 = 5.8515408231992116e-8*photden[1] + ...*photden[2];
+        const double cse2 = 1.6594178159829075e-10*cse0/tgas - cse1*nden[0];
+        const double cse3 = -cse2;
+        f[0] = cse2;
+        f[1] = cse3;
+        f[2] = cse3;
+        f[3] = -2.2910735482189854e-26*cse0*(...) + 6.4...e-12*cse1*nden[0];
+
+        ``f[3]`` is the dE/dt row at index ``n_species``.
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
 
@@ -945,6 +1209,7 @@ class Codegen:
         rhs_expressions = self.get_indexed_rhs(
             use_cse=use_cse,
             cse_var=cse_var,
+            cse_suffix=cse_suffix,
             thermal=thermal,
             energy=energy,
             radiation=radiation,
@@ -952,11 +1217,9 @@ class Codegen:
         )
 
         # Emit CSE temporaries before the main assignments
-        if use_cse:
-            for idx, expression in rhs_expressions["extras"]["cse"]:
-                _idx = idx[0]
-                var_name = f"{cse_var}{_idx}"
-                rhs_code += self.lang.format_cse_declaration(var_name, expression) + "\n"
+        rhs_code += self._cse_declarations(
+            rhs_expressions, cse_var, cse_suffix, def_prefix
+        )
 
         for idx, expression in rhs_expressions["expressions"]:
             _idx = idx[0]
@@ -971,17 +1234,28 @@ class Codegen:
         cse_var: str = "rcse",
         cse_suffix: str = "",
     ) -> IndexedReturn:
-        """Return radiation moment ODE expressions as an :class:`~jaff.types.IndexedReturn`.
+        """Return radiation moment ODE expressions as an :class:`~jaff.codegen.IndexedReturn`.
 
         Retrieves the symbolic radiation moment equations from
-        :meth:`~jaff.core.network.Network.sradodes` for the specified closure
+        :meth:`~jaff.physics.Radiation.odes` for the specified closure
         order and optionally applies CSE.
+
+        Each radiation band contributes two equations, one for its density
+        ``rd_i`` (``radeden[i]`` energy density, or ``photden[i]`` photon
+        density in photon mode) and one for its flux ``f_i`` (``rflux[i]``).
 
         Parameters
         ----------
         order : int, optional
-            Radiation moment closure order (``0``–``3``).  Passed directly to
-            :meth:`~jaff.core.network.Network.sradodes`.  Default ``0``.
+            Layout of the radiation equations, passed directly to
+            :meth:`~jaff.physics.Radiation.odes`.  Default ``0``.
+
+            | Order | Layout |
+            | --- | --- |
+            | ``0`` | ``[rd_0, f_0, rd_1, f_1, …]`` |
+            | ``1`` | ``[f_0, rd_0, f_1, rd_1, …]`` |
+            | ``2`` | ``[rd_0, rd_1, …, f_0, f_1, …]`` |
+            | ``3`` | ``[f_0, f_1, …, rd_0, rd_1, …]`` |
         use_cse : bool, optional
             Enable CSE across the radiation ODE expressions.  Default ``True``.
         cse_var : str, optional
@@ -999,40 +1273,32 @@ class Codegen:
             * ``"extras"["cse"]`` — CSE temporaries.
             * ``"expressions"`` — radiation ODE expressions indexed
               sequentially from 0.
+
+        Raises
+        ------
+        RuntimeError
+            If the network has no radiation field.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation=bands)
+        >>> radodes = Codegen(net, lang="cxx").get_indexed_radodes(order=0)
+        >>> for idx, expr in radodes["expressions"]:
+        ...     print(idx, expr)
+        [0] 0
+        [1] 0
+        [2] -rcse0*photden[1]
+        [3] -rcse0*rflux[1]
+        [4] -rcse1*photden[2]
+        [5] -rcse1*rflux[2]
+
+        Band 0 (1–13.6 eV) lies below the H ionisation threshold, so its
+        equations vanish.
         """
-        ir: IndexedReturn = {
-            "extras": {"cse": IndexedList()},
-            "expressions": IndexedList(),
-        }
-        radode_symbols = self.net.sradodes(order)
-
-        if use_cse:
-            with jaff_progress.indeterminate("Generating cse expressions"):
-                cse_symbols = self._cse_symbols(cse_var, cse_suffix)
-                replacements, reduced_exprs = sp.cse(radode_symbols, symbols=cse_symbols)
-
-                # Prune unreferenced CSE temporaries to avoid dead code
-                replacements = self.__prune_cse(replacements, reduced_exprs)
-
-                # Emit only the CSE temporaries actually used by the radiation ODEs
-                for var, expr in replacements:
-                    idx: int = self._cse_index(var, cse_var, cse_suffix)
-                    expr = self.lang.code_gen(
-                        expr, strict=False, allow_unknown_functions=True
-                    )
-                    ir["extras"]["cse"].append(IndexedValue([idx], expr))
-
-                radode_symbols = reduced_exprs
-
-        for i, expr in enumerate(
-            jaff_progress.track(
-                radode_symbols, description="Generating radiaton ode code"
-            )
-        ):
-            expr = self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
-            ir["expressions"].append(IndexedValue([i], expr))
-
-        return ir
+        return self._indexed("radodes", {"order": order}, use_cse, cse_var, cse_suffix)
 
     @scoped_tokens("lang")
     def get_radode_str(
@@ -1040,11 +1306,12 @@ class Codegen:
         idx_offset: int = 0,
         use_cse: bool = True,
         cse_var: str = "rcse",
+        cse_suffix: str = "",
         radode_var: str = "f",
-        brac_format: str = "",
+        brac_format: str | None = None,
         def_prefix: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
+        assignment_op: str | None = None,
+        line_end: str | None = None,
         order: int = 0,
     ) -> str:
         """Generate radiation moment ODE assignment code as a multi-line string.
@@ -1055,24 +1322,33 @@ class Codegen:
         Parameters
         ----------
         idx_offset : int, optional
-            Base index for the output array subscripts.  Default ``0``.
+            Base index for the output array subscripts.  Default ``0``;
+            negative values use the language default (``0`` for
+            C/C++/Python/Rust, ``1`` for Fortran/Julia/R).
         use_cse : bool, optional
             Enable CSE.  Default ``True``.
         cse_var : str, optional
             Prefix for CSE temporary variable names.  Default ``"rcse"``.
+        cse_suffix : str, optional
+            Text appended after the index of each CSE temporary name, as in
+            the ``get_indexed_*`` getters.  Default ``""``.
         radode_var : str, optional
             Name of the output radiation ODE array.  Default ``"f"``.
-        brac_format : str, optional
-            Override 1-D bracket style.  Empty string uses the language default.
+        brac_format : str or None, optional
+            Override 1-D bracket style: ``"()"``, ``"{}"``, ``"[]"`` or
+            ``"<>"``.  ``None`` (default) uses the language default.
         def_prefix : str, optional
-            Type declaration prefix for CSE temporaries.  Empty string uses the
-            language-default type qualifier and ``double`` type.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses the language default.
-        line_end : str, optional
-            Line terminator override.  Empty string uses the language default.
+            Declaration type of each CSE temporary, used verbatim in place of the
+            language's own (``const double`` for C++), e.g. ``"amrex::Real "``
+            gives ``amrex::Real cse0 = ...;``.  ``""`` (default) keeps the
+            language's.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses the language default.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses the language default.
         order : int, optional
-            Radiation moment closure order passed to :meth:`get_indexed_radodes`.
+            Radiation layout order (``0``–``3``) passed to
+            :meth:`get_indexed_radodes`, which describes the layouts.
             Default ``0``.
 
         Returns
@@ -1080,19 +1356,48 @@ class Codegen:
         str
             Multi-line string of radiation ODE assignments including any CSE
             temporaries.
+
+        Raises
+        ------
+        InvalidLanguageError
+            If *brac_format* is not a supported bracket style.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation=bands)
+        >>> cg = Codegen(net, lang="cxx")
+        >>> print(cg.get_radode_str(), end="")
+        const double rcse0 = 5.8515408231992116e-8*nden[0];
+        const double rcse1 = 1.1420465158197018e-10*nden[0];
+        f[0] = 0;
+        f[1] = 0;
+        f[2] = -rcse0*photden[1];
+        f[3] = -rcse0*rflux[1];
+        f[4] = -rcse1*photden[2];
+        f[5] = -rcse1*rflux[2];
+
+        With ``order=1`` each band's flux equation comes before its density
+        equation:
+
+        >>> print(cg.get_radode_str(order=1, use_cse=False), end="")
+        f[0] = 0;
+        f[1] = 0;
+        f[2] = -5.8515408231992116e-8*nden[0]*rflux[1];
+        f[3] = -5.8515408231992116e-8*nden[0]*photden[1];
+        f[4] = -1.1420465158197018e-10*nden[0]*rflux[2];
+        f[5] = -1.1420465158197018e-10*nden[0]*photden[2];
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
 
-        radode_code: str = ""
-        radode_expressions = self.get_indexed_radodes(order, use_cse, cse_var)
-
-        if use_cse:
-            for idx, expression in radode_expressions["extras"]["cse"]:
-                _idx = idx[0]
-                var_name = f"{cse_var}{_idx}"
-                radode_code += (
-                    self.lang.format_cse_declaration(var_name, expression) + "\n"
-                )
+        radode_expressions = self.get_indexed_radodes(
+            order, use_cse, cse_var, cse_suffix=cse_suffix
+        )
+        radode_code = self._cse_declarations(
+            radode_expressions, cse_var, cse_suffix, def_prefix
+        )
 
         for idx, expression in radode_expressions["expressions"]:
             _idx = idx[0]
@@ -1110,34 +1415,27 @@ class Codegen:
         rad_order: int = 0,
         cse_suffix: str = "",
     ) -> IndexedReturn:
-        """Return the analytical Jacobian ∂f_i/∂y_j as an :class:`~jaff.types.IndexedReturn`.
+        """Return the analytical Jacobian ∂f_i/∂y_j as an :class:`~jaff.codegen.IndexedReturn`.
 
         Computes the exact (analytical) Jacobian of the ODE right-hand side
         vector ``f`` with respect to the state vector ``y`` using SymPy's
         symbolic differentiation.  Only non-zero Jacobian elements are
         included in the output, making this suitable for sparse solver formats.
 
-        The computation proceeds in four main stages:
-
-        1. **Symbol mapping** — Each ``nden[i]`` (a SymPy
-           :class:`~sympy.MatrixSymbol` entry) is mapped to a scalar symbol
-           ``y_i`` to allow :meth:`sympy.Matrix.jacobian` to differentiate
-           element-wise.  Radiation density/flux symbols are similarly mapped.
-        2. **Rate inlining** — Symbolic rate placeholders ``k[i]`` are
-           replaced with the concrete rate expressions after the symbol
-           substitution.
-        3. **Jacobian computation** — :meth:`sympy.Matrix.jacobian` is called
-           on the full ODE vector with respect to ``[y_0, y_1, …]``.
-        4. **Back-substitution** — Scalar symbols ``y_i`` in the generated
-           code strings are replaced with their original array notation
-           ``nden[i]`` (and ``radeden[i]`` / ``rflux[i]`` for radiation) via
-           regex.
+        The Jacobian is :attr:`OdeSystem.jacobian <jaff.core.OdeSystem.jacobian>`
+        of ``net.ode_system(thermal, energy, radiation, rad_order)``; this
+        method applies CSE to its non-zero entries (row by row) and prints them.
 
         When *thermal* is not ``"none"``, the thermal row is appended and an
         extra column is inserted after the species columns to account for the
         implicit temperature dependence: ``∂ẋ_i/∂T_gas`` for ``"dtdt"``, or
-        ``∂ẋ_i/∂e`` via the EOS chain rule for ``"dedt"`` (see
-        :meth:`_energy_column`).
+        ``∂ẋ_i/∂e`` via the EOS chain rule for ``"dedt"``.  With
+        ``e = eos.normaliser(energy)`` the evolved energy:
+
+        ```text
+        ∂F/∂e       = (∂F/∂T) / (∂e/∂T)
+        ∂F/∂n_j|_e  = ∂F/∂n_j|_T - (∂F/∂T) (∂e/∂n_j) / (∂e/∂T)
+        ```
 
         Parameters
         ----------
@@ -1152,15 +1450,16 @@ class Codegen:
             Text appended after the index of each CSE temporary name, e.g.
             ``"_value"`` yields ``<cse_var>0_value``.  Default ``""``.
         energy : str, optional
-            Evolved internal-energy form (see :attr:`Thermodynamics.dEdt_tot`
+            Evolved internal-energy form (see :meth:`Thermodynamics.dEdt_tot`
             and :meth:`InternalEnergy.normaliser`).
             Default ``"volumetric"``.
         radiation : bool, optional
             Include radiation moment equations in the Jacobian.
             Default ``False``.
         rad_order : int, optional
-            Radiation moment closure order (``0``–``3``).  Used only when
-            *radiation* is ``True``.
+            Radiation layout order (``0``–``3``, see
+            :meth:`get_indexed_radodes`).  Used only when *radiation* is
+            ``True``.  Default ``0``.
 
         Returns
         -------
@@ -1177,211 +1476,262 @@ class Codegen:
         ValueError
             If *radiation* is ``True`` and *rad_order* is not in ``{0,1,2,3}``,
             or *thermal* is not a valid mode.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation=bands)
+        >>> jac = Codegen(net, lang="cxx").get_indexed_jacobian()
+        >>> for idx, expr in jac["expressions"][:3]:
+        ...     print(idx, expr)
+        [0, 0] -cse0
+        [0, 1] cse2
+        [0, 2] cse3
+        >>> for idx, expr in jac["extras"]["cse"][:2]:
+        ...     print(idx, expr)
+        [0] 5.8515408231992116e-8*photden[1] + 1.1420465158197018e-10*photden[2]
+        [1] 1.6594178159829075e-10*std::pow(tgas, -0.69999999999999996)
         """
+        options = {
+            "thermal": thermal,
+            "energy": energy,
+            "radiation": radiation,
+            "rad_order": rad_order,
+        }
 
-        with jaff_progress.indeterminate("Preprocessing jacobian"):
-            if radiation and rad_order not in [0, 1, 2, 3]:
-                raise ValueError("Invalid order: Supported orders are 0, 1, 2, 3")
+        return self._indexed("jacobian", options, use_cse, cse_var, cse_suffix)
 
-            ir: IndexedReturn = {
-                "extras": {"cse": IndexedList()},
-                "expressions": IndexedList(),
-            }
-            n_species = self.net.species.count
-            n_rad_eqns = (
-                2 * self.net.radiation.nbands if radiation and self.net.radiation else 0
+    def _split_options(
+        self, thermal: str, energy: str, radiation: bool, rad_order: int
+    ) -> dict[str, Any]:
+        return {
+            "thermal": thermal,
+            "energy": energy,
+            "radiation": radiation,
+            "rad_order": rad_order,
+        }
+
+    def get_indexed_jacobian_fixed_t(
+        self,
+        thermal: str = "dedt",
+        use_cse: bool = True,
+        cse_var: str = "cse",
+        energy: str = "volumetric",
+        radiation: bool = False,
+        rad_order: int = 0,
+        cse_suffix: str = "",
+    ) -> IndexedReturn:
+        """The fixed-temperature part A of the split ``dedt`` Jacobian ``J = A + a cᵀ``.
+
+        Prints the non-zero entries of ``A`` from
+        :attr:`OdeSystem.jacobian_split <jaff.core.OdeSystem.jacobian_split>`
+        (``[i, j]`` indices, energy column empty), with CSE as
+        :meth:`get_indexed_jacobian`; template property ``jacobian_fixed_t``.
+        Unlike the full Jacobian it keeps the chemistry's sparsity, so a solver
+        can factor ``I/(γh) - A`` sparsely and add the rank-one term ``a cᵀ``
+        (:meth:`get_indexed_rhs_dt`, :meth:`get_indexed_temperature_gradient`)
+        with the Sherman-Morrison formula.
+
+        Parameters
+        ----------
+        thermal : str, optional
+            Must be ``"dedt"`` (the default): the split needs the energy in the
+            state.
+        use_cse, cse_var, cse_suffix
+            As for :meth:`get_indexed_jacobian`.
+        energy, radiation, rad_order
+            The ODE system, as for :meth:`get_indexed_jacobian`.
+
+        Returns
+        -------
+        IndexedReturn
+            CSE temporaries and the ``[i, j]``-indexed entries.
+
+        Raises
+        ------
+        ValueError
+            If *thermal* is not ``"dedt"``.
+        """
+        options = self._split_options(thermal, energy, radiation, rad_order)
+
+        return self._indexed("jacobian_fixed_t", options, use_cse, cse_var, cse_suffix)
+
+    def get_indexed_rhs_dt(
+        self,
+        thermal: str = "dedt",
+        use_cse: bool = True,
+        cse_var: str = "cse",
+        energy: str = "volumetric",
+        radiation: bool = False,
+        rad_order: int = 0,
+        cse_suffix: str = "",
+    ) -> IndexedReturn:
+        """The column ``a = ∂rhs/∂T`` of the split ``dedt`` Jacobian ``J = A + a cᵀ``.
+
+        Prints the non-zero entries (``[i]`` = row) of ``a`` from
+        :attr:`OdeSystem.jacobian_split <jaff.core.OdeSystem.jacobian_split>`;
+        template property ``rhs_dt``.  See :meth:`get_indexed_jacobian_fixed_t`.
+
+        Parameters
+        ----------
+        thermal : str, optional
+            Must be ``"dedt"`` (the default).
+        use_cse, cse_var, cse_suffix
+            As for :meth:`get_indexed_jacobian`.
+        energy, radiation, rad_order
+            The ODE system, as for :meth:`get_indexed_jacobian`.
+
+        Returns
+        -------
+        IndexedReturn
+            CSE temporaries and the ``[i]``-indexed entries.
+
+        Raises
+        ------
+        ValueError
+            If *thermal* is not ``"dedt"``.
+        """
+        options = self._split_options(thermal, energy, radiation, rad_order)
+
+        return self._indexed("rhs_dt", options, use_cse, cse_var, cse_suffix)
+
+    def get_indexed_temperature_gradient(
+        self,
+        thermal: str = "dedt",
+        use_cse: bool = True,
+        cse_var: str = "cse",
+        energy: str = "volumetric",
+        radiation: bool = False,
+        rad_order: int = 0,
+        cse_suffix: str = "",
+    ) -> IndexedReturn:
+        """The row ``c = ∂T/∂state`` of the split ``dedt`` Jacobian ``J = A + a cᵀ``.
+
+        Prints the non-zero entries (``[j]`` = state index) of ``c`` from
+        :attr:`OdeSystem.jacobian_split <jaff.core.OdeSystem.jacobian_split>`:
+        ``∂T/∂n_j`` at fixed energy, then ``∂T/∂e``; template property
+        ``temperature_gradient``.  See :meth:`get_indexed_jacobian_fixed_t`.
+
+        Parameters
+        ----------
+        thermal : str, optional
+            Must be ``"dedt"`` (the default).
+        use_cse, cse_var, cse_suffix
+            As for :meth:`get_indexed_jacobian`.
+        energy, radiation, rad_order
+            The ODE system, as for :meth:`get_indexed_jacobian`.
+
+        Returns
+        -------
+        IndexedReturn
+            CSE temporaries and the ``[j]``-indexed entries.
+
+        Raises
+        ------
+        ValueError
+            If *thermal* is not ``"dedt"``.
+        """
+        options = self._split_options(thermal, energy, radiation, rad_order)
+
+        return self._indexed(
+            "temperature_gradient", options, use_cse, cse_var, cse_suffix
+        )
+
+    def cse_group(
+        self,
+        members: Sequence[tuple[str, Mapping[str, Any]]],
+        cse_var: str = "cse",
+        cse_suffix: str = "",
+    ) -> CseGroup:
+        """Several kinds of expressions printed with one shared set of CSE temporaries.
+
+        Each member is ``(kind, options)``: *kind* one of ``"rates"``,
+        ``"odes"``, ``"radodes"``, ``"rhs"``, ``"jacobian"`` and the split
+        Jacobian's ``"jacobian_fixed_t"``, ``"rhs_dt"`` and
+        ``"temperature_gradient"``, *options* the
+        keyword arguments of the matching ``get_indexed_*`` method other than the
+        CSE ones (e.g. ``{"thermal": "dedt"}`` or ``{"order": 2}``).  One
+        :func:`~jaff.common.optimizations.shared_cse` runs over every member's
+        expressions, so sub-expressions are computed once for all of them.
+
+        With several members the equations are built in the reduced form
+        (:class:`~jaff.core.reaction.Rate`): every rate coefficient becomes a
+        temporary evaluated once, and the Jacobian's derivatives reuse it.  A single
+        member prints exactly as its ``get_indexed_*`` method with CSE.  The result
+        is cached per members, temporary names and language tokens.
+
+        Parameters
+        ----------
+        members : sequence of (str, mapping)
+            The kinds of expressions and their options.
+        cse_var : str, optional
+            Prefix of the temporaries.  Default ``"cse"``.
+        cse_suffix : str, optional
+            Text appended after each temporary's index.  Default ``""``.
+
+        Returns
+        -------
+        CseGroup
+            The temporaries, and each member's expressions in member order.
+
+        Raises
+        ------
+        ValueError
+            If there is no member, a kind is unknown, or an option is invalid.
+        RuntimeError
+            If ``"radodes"`` is asked of a network without a radiation field.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> cg = Codegen(Network("h_photoionization"), lang="cxx")
+        >>> members = [("rhs", {"thermal": "dtdt"}), ("jacobian", {"thermal": "dtdt"})]
+        >>> group = cg.cse_group(members)
+        >>> for idx, expr in group.temporaries[:2]:
+        ...     print(idx, expr)
+        [16] photorates(1, 13.6, 1.0e+99)
+        [0] cse16*nden[0]
+        >>> rhs, jacobian = group.expressions
+        >>> for idx, expr in jacobian[:2]:
+        ...     print(idx, expr)
+        [0, 0] -cse16
+        [0, 1] cse5
+
+        ``cse16`` is the photo rate coefficient (``krate[0]``): evaluated first, as
+        the temporaries after it read it, and once for the rhs and the Jacobian.
+        """
+        members = [(kind, dict(options)) for kind, options in members]
+        if not members:
+            raise ValueError("A CSE group needs at least one member")
+
+        key = (
+            tuple((kind, tuple(sorted(options.items()))) for kind, options in members),
+            cse_var,
+            cse_suffix,
+            self.lang.name,
+            self.lang.lb,
+            self.lang.rb,
+        )
+        cache = self.__dict__.setdefault("_cse_groups", {})
+        if key not in cache:
+            form = "reduced" if len(members) > 1 else "expanded"
+            parts = [self._part(kind, options, form) for kind, options in members]
+            definitions = None
+            if form == "reduced":
+                definitions = {
+                    r.rate.symbol: r.rate.coefficient
+                    for r in self.net.reactions
+                    if not isinstance(r.rate.coefficient, str)
+                }
+            temporaries, printed = self._print_parts(
+                parts, True, cse_var, cse_suffix, definitions
             )
-            thermal_rows = self._thermal_rows(thermal, energy)
-            n_ode_eqns = n_species + len(thermal_rows) + n_rad_eqns
+            cache[key] = CseGroup(temporaries, tuple(printed))
 
-            # Scalar differentiation symbols for each state variable.
-            # SymPy's jacobian() requires ordinary scalar symbols, not
-            # MatrixSymbol entries, so we map nden[i] -> y_i temporarily.
-            y_syms = [sp.symbols(f"y_{i}") for i in range(n_species)]
-
-            if radiation and self.net.radiation:
-                # Pad with placeholder symbols; will be overwritten below
-                y_syms.extend([sp.symbols("xx") for _ in range(n_rad_eqns)])
-
-                # Map radiation energy/flux quantities to dedicated scalar symbols
-                # ei: energy-density index; fi: flux index (order-dependent)
-                for i in range(self.net.radiation.nbands):
-                    ei, fi = self.net.radiation.ordered_index(i, rad_order)
-                    y_syms[n_species + ei] = sp.symbols(f"ry_{i}")
-                    y_syms[n_species + fi] = sp.symbols(f"fy_{i}")
-
-            nden_matrix = self.net.symbols.ndens
-
-            # Substitution dicts: scalar indexed form -> scalar y_i symbols
-            nden_to_y = {}
-            radden_to_y = {}
-            radflux_to_y = {}
-
-            for i in range(n_species):
-                # Map scalar indexed form directly to y_i
-                nden_to_y[nden_matrix[i]] = y_syms[i]
-
-            if radiation and self.net.radiation:
-                radden_matrix = sp.IndexedBase(
-                    "radeden" if self.net.radiation.mode == "u" else "photden",
-                    shape=(self.net.radiation.nbands,),
-                )
-                radflux_matrix = sp.IndexedBase(
-                    "rflux", shape=(self.net.radiation.nbands,)
-                )
-
-                for i in range(self.net.radiation.nbands):
-                    ei, fi = self.net.radiation.ordered_index(i, rad_order)
-                    # Map scalar indexed form directly to y_i
-                    radden_to_y[radden_matrix[i]] = y_syms[n_species + ei]
-                    # Map scalar indexed form directly to y_i
-                    radflux_to_y[radflux_matrix[i]] = y_syms[n_species + fi]
-
-            # Substitute nden/radiation symbols inside rate expressions first,
-            # then build the subs_k dict that replaces k[i] placeholders in
-            # the ODE expressions with those fully-scalar rate expressions.
-            k_exprs = [
-                rea.rate_coefficient.xreplace(
-                    {**nden_to_y, **radden_to_y, **radflux_to_y}
-                )
-                for rea in self.net.reactions
-            ]
-
-            subs_k = {
-                sp.symbols(f"k[{i}]"): k_exprs[i] for i in range(len(self.net.reactions))
-            }
-            ode_symbols = self.net.sodes()
-
-            # Optionally append the thermal equation and radiation ODEs
-            ode_symbols.extend(thermal_rows)
-
-            if radiation:
-                ode_symbols.extend(self.net.sradodes(order=rad_order))
-
-            # Apply all substitutions in a single pass: nden/rad -> y_i, k[i] -> rate
-            ode_symbols = [
-                sode.xreplace({**nden_to_y, **radden_to_y, **radflux_to_y, **subs_k})
-                for sode in ode_symbols
-            ]
-
-        # Compute the full dense Jacobian matrix symbolically
-        y_index = {sym: col for col, sym in enumerate(y_syms)}
-        jacobian_matrix = sp.zeros(len(ode_symbols), len(y_syms))
-        for row, sode in enumerate(
-            jaff_progress.track(
-                ode_symbols, description="Generating jacobian number desnities terms"
-            )
-        ):
-            for sym in sode.free_symbols:
-                col = y_index.get(sym)
-                if col is not None:
-                    jacobian_matrix[row, col] = sode.diff(sym)
-
-        if thermal_rows:
-            tgas = self.net.symbols.tgas
-            dxdot_dtgas_list = [
-                sp.diff(ode_symbols[i], tgas)
-                for i in jaff_progress.track(
-                    range(n_ode_eqns), description="Generating jacobian thermal terms"
-                )
-            ]
-            if thermal == "dtdt":
-                dde = sp.Matrix(dxdot_dtgas_list)
-            else:
-                dde = self._energy_column(
-                    jacobian_matrix, dxdot_dtgas_list, nden_matrix, energy
-                )
-            left = jacobian_matrix[:, :n_species]
-            right = jacobian_matrix[:, n_species:]
-
-            # Insert the thermal-coupling column between species and radiation cols
-            jacobian_matrix = left.row_join(dde).row_join(right)
-
-        # Regex patterns to back-substitute scalar symbols -> array notation in
-        # the serialised code strings.
-        dpattern = re.compile(r"\by_(\d+)\b")  # y_i -> nden[i]
-        if radiation and self.net.radiation is not None:
-            rrdpattern = re.compile(r"\bry_(\d+)\b")  # ry_i -> radeden/photden[i]
-            rfdpattern = re.compile(r"\bfy_(\d+)\b")  # fy_i -> rflux[i]
-
-        def _replace_y(match: re.Match[str], var) -> str:
-            """Regex replacement helper: ``y_N`` → ``var[N]``."""
-            idx = int(match.group(1))
-            return f"{var}{self.lang.lb}{idx}{self.lang.rb}"
-
-        if use_cse:
-            with jaff_progress.indeterminate("Generating cse expressions"):
-                cse_symbols = self._cse_symbols(cse_var, cse_suffix)
-                replacements, reduced_exprs = sp.cse(
-                    list(jacobian_matrix), symbols=cse_symbols
-                )
-
-                replacements = self.__prune_cse(replacements, reduced_exprs)
-                # Keep a str-keyed dict so __convert_unknown_derivatives can
-                # resolve CSE symbols back to their defining expressions.
-                replacements_dict = {str(k): v for k, v in replacements}
-
-                for var, expr in replacements:
-                    # Handle Derivative() nodes arising from user-defined rate
-                    # functions before serialisation
-                    expr = self.__convert_unknown_derivatives(expr, replacements_dict)
-                    idx: int = self._cse_index(var, cse_var, cse_suffix)
-                    expr_str = self.lang.code_gen(
-                        expr, strict=False, allow_unknown_functions=True
-                    )
-                    # Back-substitute scalar symbols to array notation
-                    expr_str = dpattern.sub(lambda m: _replace_y(m, "nden"), expr_str)
-
-                    if radiation and self.net.radiation is not None:
-                        rad = self.net.radiation
-                        expr_str = rrdpattern.sub(
-                            lambda m: _replace_y(
-                                m,
-                                "radeden" if rad.mode == "u" else "photden",
-                            ),
-                            expr_str,
-                        )
-                        expr_str = rfdpattern.sub(
-                            lambda m: _replace_y(m, "rflux"), expr_str
-                        )
-
-                    ir["extras"]["cse"].append(IndexedValue([idx], expr_str))
-
-        # Iterate over every (row, col) pair and emit non-zero elements only.
-        # Row-major iteration: element [i, j] lives at index i*n + j in the
-        # flattened reduced_exprs list produced by sp.cse().
-        for i, j in jaff_progress.track(
-            product(range(n_ode_eqns), repeat=2), description="Generating jacobian code"
-        ):
-            expr = reduced_exprs[i * n_ode_eqns + j] if use_cse else jacobian_matrix[i, j]
-
-            # Skip structural zeros to support sparse output formats
-            if expr == 0:
-                continue
-
-            expr = self.__convert_unknown_derivatives(
-                expr, replacements_dict if use_cse else None
-            )
-            expr_str = self.lang.code_gen(
-                expr, strict=False, allow_unknown_functions=True
-            )
-            # Back-substitute scalar y_i -> nden[i] and radiation symbols
-            expr_str = dpattern.sub(lambda m: _replace_y(m, "nden"), expr_str)
-
-            if radiation and self.net.radiation is not None:
-                rad = self.net.radiation
-                expr_str = rrdpattern.sub(
-                    lambda m: _replace_y(
-                        m,
-                        "radeden" if rad.mode == "u" else "photden",
-                    ),
-                    expr_str,
-                )
-                expr_str = rfdpattern.sub(lambda m: _replace_y(m, "rflux"), expr_str)
-
-            ir["expressions"].append(IndexedValue([i, j], expr_str))
-
-        return ir
+        return cache[key]
 
     @scoped_tokens("lang")
     def get_jacobian_str(
@@ -1390,21 +1740,28 @@ class Codegen:
         idx_offset: int = 0,
         use_cse: bool = True,
         cse_var: str = "cse",
+        cse_suffix: str = "",
         jac_var: str = "J",
-        matrix_format: str = "",
+        matrix_format: str | None = None,
         var_prefix: str = "",
-        assignment_op: str = "",
-        line_end: str = "",
+        assignment_op: str | None = None,
+        line_end: str | None = None,
+        energy: str = "volumetric",
+        radiation: bool = False,
+        rad_order: int = 0,
     ) -> str:
         """Generate Jacobian assignment code as a multi-line string.
 
         Wraps :meth:`get_indexed_jacobian` and formats the sparse non-zero
-        elements as::
+        elements as:
 
-            const double cse0 = …;       // CSE temporaries (if any)
-            J[0][1] = cse0 * nden[2];    // ∂f_0/∂y_1
-            J[2][2] = …;                 // ∂f_2/∂y_2
-            …
+        ```cpp
+        const double cse0 = …;       // CSE temporaries (if any)
+        J[0][1] = cse0 * nden[2];    // ∂f_0/∂y_1
+        J[2][2] = …;                 // ∂f_2/∂y_2
+        ```
+
+        Only non-zero elements are emitted; ``J[i][j]`` is ``∂f_i/∂y_j``.
 
         Parameters
         ----------
@@ -1412,23 +1769,49 @@ class Codegen:
             Thermal equation mode (``"none"``, ``"dedt"`` or ``"dtdt"``);
             adds the thermal row/column when not ``"none"``.  Default ``"none"``.
         idx_offset : int, optional
-            Base index for row and column subscripts.  Default ``0``.
+            Base index for row and column subscripts.  Default ``0``;
+            negative values use the language default (``0`` for
+            C/C++/Python/Rust, ``1`` for Fortran/Julia/R).
         use_cse : bool, optional
             Enable CSE.  Default ``True``.
         cse_var : str, optional
             Prefix for CSE temporary variable names.  Default ``"cse"``.
+        cse_suffix : str, optional
+            Text appended after the index of each CSE temporary name, as in
+            the ``get_indexed_*`` getters.  Default ``""``.
         jac_var : str, optional
             Name of the Jacobian matrix.  Default ``"J"``.
-        matrix_format : str, optional
-            Override 2-D bracket/separator format.  Empty string uses the
-            language default.
+        matrix_format : str or None, optional
+            Override 2-D bracket/separator format.  ``None`` (default) uses the
+            language default (``J[i][j]`` for C/C++/Python/Rust, ``J(i, j)``
+            for Fortran, ``J[i, j]`` for Julia/R).  Valid values:
+
+            | Format | Output style |
+            | --- | --- |
+            | ``"()"`` / ``"()()"`` | ``J(i)(j)`` |
+            | ``"(,)"`` | ``J(i, j)`` |
+            | ``"[]"`` / ``"[][]"`` | ``J[i][j]`` |
+            | ``"[,]"`` | ``J[i, j]`` |
+            | ``"{}"`` / ``"{}{}"`` | ``J{i}{j}`` |
+            | ``"{,}"`` | ``J{i, j}`` |
+            | ``"<>"`` / ``"<><>"`` | ``J<i><j>`` |
+            | ``"<,>"`` | ``J<i, j>`` |
         var_prefix : str, optional
-            Type declaration prefix for CSE temporaries.  Empty string uses the
-            language-default type qualifier and ``double`` type.
-        assignment_op : str, optional
-            Assignment operator override.  Empty string uses the language default.
-        line_end : str, optional
-            Line terminator override.  Empty string uses the language default.
+            Declaration type of each CSE temporary, used verbatim in place of the
+            language's own (``const double`` for C++), e.g. ``"amrex::Real "``
+            gives ``amrex::Real cse0 = ...;``.  ``""`` (default) keeps the
+            language's.
+        assignment_op : str or None, optional
+            Assignment operator override.  ``None`` (default) uses the language default.
+        line_end : str or None, optional
+            Line terminator override.  ``None`` (default) uses the language default.
+        energy : str, optional
+            Evolved internal-energy form when *thermal* is ``"dedt"`` (see
+            :meth:`get_indexed_jacobian`).  Default ``"volumetric"``.
+        radiation : bool, optional
+            Include the radiation-moment equations.  Default ``False``.
+        rad_order : int, optional
+            Radiation layout order (``0``–``3``).  Default ``0``.
 
         Returns
         -------
@@ -1440,338 +1823,291 @@ class Codegen:
         ------
         InvalidLanguageError
             If *matrix_format* is not a supported format string.
+        ValueError
+            If *thermal* or *energy* is not valid, or *radiation* is requested
+            without a radiation field.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> from jaff.codegen import Codegen
+        >>> bands = {"bands": [1, 13.6, 100, "inf"]}
+        >>> net = Network("h_photoionization", radiation=bands)
+        >>> cg = Codegen(net, lang="cxx")
+        >>> print(cg.get_jacobian_str(matrix_format="[,]"), end="")
+        const double cse0 = 5.8515408231992116e-8*photden[1] + ...*photden[2];
+        const double cse1 = 1.6594178159829075e-10*std::pow(tgas, -0.69999999999999996);
+        const double cse2 = cse1*nden[2];
+        const double cse3 = cse1*nden[1];
+        const double cse4 = -cse2;
+        const double cse5 = -cse3;
+        J[0, 0] = -cse0;
+        J[0, 1] = cse2;
+        J[0, 2] = cse3;
+        J[1, 0] = cse0;
+        J[1, 1] = cse4;
+        J[1, 2] = cse5;
+        J[2, 0] = cse0;
+        J[2, 1] = cse4;
+        J[2, 2] = cse5;
         """
         ioff = idx_offset if idx_offset >= 0 else self.lang.idx_offset
 
         jac_expressions = self.get_indexed_jacobian(
-            cse_var=cse_var, use_cse=use_cse, thermal=thermal
+            thermal=thermal,
+            use_cse=use_cse,
+            cse_var=cse_var,
+            cse_suffix=cse_suffix,
+            energy=energy,
+            radiation=radiation,
+            rad_order=rad_order,
         )
 
-        jac_code: str = ""
+        jac_code = self._cse_declarations(
+            jac_expressions, cse_var, cse_suffix, var_prefix
+        )
 
-        if use_cse:
-            for idx, expr in jac_expressions["extras"]["cse"]:
-                _idx = idx[0]
-                var_name = f"{cse_var}{_idx}"
-                jac_code += self.lang.format_cse_declaration(var_name, expr) + "\n"
-
-        # Generate Jacobian code without CSE
+        # Emit one assignment per Jacobian element (may reference the CSE temps)
         for [i, j], expr in jac_expressions["expressions"]:
             jac_code += f"{jac_var}{self.lang.mlb}{ioff + i}{self.lang.sep}{ioff + j}{self.lang.mrb} {self.lang.assignment_op} {expr}{self.lang.line_end}\n"
 
         return jac_code
 
-    def get_indexed_rhs_jacobian(
+    def _indexed(
         self,
-        part: str = "rhs",
-        thermal: str = "dedt",
-        use_cse: bool = True,
-        cse_var: str = "cse",
-        energy: str = "volumetric",
-        cse_suffix: str = "",
+        kind: str,
+        options: Mapping[str, Any],
+        use_cse: bool,
+        cse_var: str,
+        cse_suffix: str,
     ) -> IndexedReturn:
-        """Return the RHS and the analytical Jacobian sharing one set of temporaries.
-
-        Integrators evaluate the Jacobian at the state where they also need the
-        right-hand side, so both can be emitted into one function. Every rate
-        coefficient that depends on temperature only becomes a single
-        temporary that the RHS, the species Jacobian and the temperature
-        column all reference, and the temperature column uses a closed form of
-        each rate's derivative instead of differentiating the inlined rate:
-
-        * ``dk/dT = k * d(ln k)/dT`` per Piecewise branch, whenever that is
-          cheaper than ``sp.diff(k, T)`` (Arrhenius forms, ``10**poly(log T)``
-          fits and products of powers reduce to a sum of simple terms);
-        * ``∂f/∂T = ∂f/∂T|_k + Σ_r (∂f/∂k_r) dk_r/dT`` for each row.
-
-        Rates that depend on number densities are inlined as in
-        :meth:`get_indexed_jacobian`. The temporaries are numbered from one
-        counter, rate-coefficient sub-expressions first, then the rate
-        coefficients, then the sub-expressions of the RHS and Jacobian.
-
-        Both parts are built in one pass and cached, so a template can emit the
-        RHS (with the temporaries) and then the Jacobian entries (without) in
-        the same scope.
-
-        Parameters
-        ----------
-        part : str, optional
-            ``"rhs"`` returns the temporaries and the RHS rows; ``"jacobian"``
-            returns no temporaries and the non-zero Jacobian entries, which
-            reference the ``"rhs"`` part's temporaries. Default ``"rhs"``.
-        thermal : str, optional
-            Thermal equation mode (``"none"``, ``"dedt"`` or ``"dtdt"``).
-            Default ``"dedt"``.
-        use_cse : bool, optional
-            Accepted for symmetry with the other getters; the shared
-            temporaries are the point of this method, so it must be ``True``.
-        cse_var : str, optional
-            Prefix for temporary names.  Default ``"cse"``.
-        energy : str, optional
-            Evolved internal-energy form.  Default ``"volumetric"``.
-        cse_suffix : str, optional
-            Text appended after the index of each temporary name.
-
-        Returns
-        -------
-        IndexedReturn
-            ``"extras"["cse"]`` and ``"expressions"`` as described for *part*.
-
-        Raises
-        ------
-        ValueError
-            If *part* is not ``"rhs"`` or ``"jacobian"`` or *use_cse* is false.
-        """
-        if part not in ("rhs", "jacobian"):
-            raise ValueError(f"Invalid part {part!r}; expected 'rhs' or 'jacobian'")
-        if not use_cse:
-            raise ValueError("get_indexed_rhs_jacobian always shares temporaries")
-
-        key = (
-            thermal,
-            cse_var,
-            energy,
-            cse_suffix,
-            self.lang.name,
-            self.lang.lb,
-            self.lang.rb,
+        """One kind of expressions printed alone, as an :class:`IndexedReturn`."""
+        temporaries, (expressions,) = self._print_parts(
+            [self._part(kind, options)], use_cse, cse_var, cse_suffix
         )
-        cache = self.__dict__.setdefault("_rhs_jacobian_cache", {})
-        if key not in cache:
-            cache[key] = self.__build_rhs_jacobian(thermal, cse_var, energy, cse_suffix)
 
-        rhs_ir, jac_ir = cache[key]
-        return rhs_ir if part == "rhs" else jac_ir
+        return {"extras": {"cse": temporaries}, "expressions": expressions}
 
-    @staticmethod
-    def _rate_derivative(k: sp.Expr, k_sym: sp.Symbol, tgas: sp.Symbol) -> sp.Expr:
-        """dk/dT for a temperature-only rate *k*, written with *k_sym* where cheaper.
+    def _part(
+        self, kind: str, options: Mapping[str, Any], form: str = "expanded"
+    ) -> _Part:
+        """The symbolic expressions of one *kind*, built with *options* in *form*."""
+        builders = {
+            "rates": self.__rates_part,
+            "odes": self.__odes_part,
+            "radodes": self.__radodes_part,
+            "rhs": self.__rhs_part,
+            "jacobian": self.__jacobian_part,
+            "jacobian_fixed_t": self.__jacobian_fixed_t_part,
+            "rhs_dt": self.__rhs_dt_part,
+            "temperature_gradient": self.__temperature_gradient_part,
+        }
+        if kind not in builders:
+            raise ValueError(
+                f"Unknown expression kind {kind!r}; expected one of: "
+                f"{', '.join(builders)}"
+            )
 
-        Each Piecewise branch ``b`` contributes ``d(ln b)/dT``; the result is
-        ``k_sym * Piecewise((d ln b_1/dT, c_1), ...)``, which shares *k_sym*'s
-        exponentials and powers with the RHS. Falls back to ``sp.diff(k, T)``
-        when the logarithmic form is not cheaper.
+        return builders[kind](form, **options)
+
+    def __rates_part(self, form: str) -> _Part:
+        """Every rate coefficient; a raw-string rate is already target-language code."""
+        items: list[sp.Basic | str] = []
+        for rea in self.net.reactions:
+            k = rea.rate.coefficient
+            items.append(rea.get_code(self.lang.name) if isinstance(k, str) else k)
+
+        return _Part(items, [[i] for i in range(len(items))], "rate", "basic")
+
+    def __odes_part(self, form: str) -> _Part:
+        """The species ODEs (:meth:`Kinetics.odes <jaff.core.Kinetics.odes>`)."""
+        with jaff_progress.indeterminate("Generating odes"):
+            odes = list(self.net.kinetics.odes(form))
+
+        return _Part(odes, [[i] for i in range(len(odes))], "ode")
+
+    def __radodes_part(self, form: str, order: int = 0) -> _Part:
+        """The radiation-moment ODEs (:meth:`~jaff.physics.Radiation.odes`)."""
+        if self.net.radiation is None:
+            raise RuntimeError("The network has no radiation field: no radiation odes")
+
+        odes = list(self.net.radiation.odes(order, form))
+
+        return _Part(odes, [[i] for i in range(len(odes))], "radiation ode")
+
+    def _system(self, form: str, **choices: Any) -> OdeSystem:
+        """The ODE system for *choices* in *form*, built once per Codegen.
+
+        Every part of one system (rhs, Jacobian, split Jacobian) reads the same
+        :class:`~jaff.core.OdeSystem`, so its derivatives are taken once.
         """
-        plain = sp.diff(k, tgas)
+        key = (form, tuple(sorted(choices.items())))
+        systems = self.__dict__.setdefault("_systems", {})
+        if key not in systems:
+            systems[key] = self.net.ode_system(**choices, form=form)
 
-        def log_derivative(branch: sp.Expr) -> sp.Expr | None:
-            if branch == 0:
-                return sp.S.Zero
-            log_branch = sp.expand_log(sp.log(branch), force=True)
-            # A logarithm of a sum is left when the branch is not a product of
-            # powers and exponentials; its quotient form saves nothing.
-            if any(lg.args[0].is_Add for lg in log_branch.atoms(sp.log)):
-                return None
-            return sp.diff(log_branch, tgas)
+        return systems[key]
 
-        if isinstance(k, sp.Piecewise):
-            pieces = []
-            for branch, cond in k.args:
-                dlog = log_derivative(branch)
-                if dlog is None:
-                    return plain
-                pieces.append((dlog, cond))
-            candidate = k_sym * sp.Piecewise(*pieces)
-        else:
-            dlog = log_derivative(k)
-            if dlog is None:
-                return plain
-            candidate = k_sym * dlog
+    def __rhs_part(self, form: str, **choices: Any) -> _Part:
+        """The rhs of :meth:`Network.ode_system <jaff.core.Network.ode_system>`."""
+        with jaff_progress.indeterminate("Generating rhs equations"):
+            rows = self._system(form, **choices).rhs.flat()
 
-        return candidate if sp.count_ops(candidate) < sp.count_ops(plain) else plain
+        return _Part(rows, [[i] for i in range(len(rows))], "RHS")
 
-    def __symbolic_rate_odes(
-        self, y_syms: List[sp.Symbol], nden_to_y: dict
-    ) -> Tuple[List[sp.Expr], dict, dict]:
-        """Species ODEs with each temperature-only rate coefficient as a symbol.
+    def __jacobian_part(self, form: str, **choices: Any) -> _Part:
+        """The non-zero Jacobian entries of the ODE system, by row then column."""
+        entries = sorted(self._system(form, **choices).jacobian.todok().items())
 
-        A reaction's flux ``rate`` is ``k * prod(nden)``; when ``rate / k`` is
-        free of temperature and ``k`` of number densities, the flux is rebuilt
-        as ``k_sym * (rate / k)``. Other reactions keep their inlined flux.
+        return _Part(
+            [e for _, e in entries], [[i, j] for (i, j), _ in entries], "jacobian"
+        )
+
+    def __jacobian_fixed_t_part(self, form: str, **choices: Any) -> _Part:
+        """The non-zero entries of the split Jacobian's fixed-T part A."""
+        fixed_t, _, _ = self._system(form, **choices).jacobian_split
+        entries = sorted(fixed_t.todok().items())
+
+        return _Part(
+            [e for _, e in entries],
+            [[i, j] for (i, j), _ in entries],
+            "fixed-temperature jacobian",
+        )
+
+    def __rhs_dt_part(self, form: str, **choices: Any) -> _Part:
+        """The non-zero entries of the split Jacobian's column a = ∂rhs/∂T."""
+        _, column, _ = self._system(form, **choices).jacobian_split
+        entries = [(i, e) for i, e in enumerate(column) if e != 0]
+
+        return _Part([e for _, e in entries], [[i] for i, _ in entries], "rhs dT")
+
+    def __temperature_gradient_part(self, form: str, **choices: Any) -> _Part:
+        """The non-zero entries of the split Jacobian's row c = ∂T/∂state."""
+        _, _, row = self._system(form, **choices).jacobian_split
+        entries = [(j, e) for j, e in enumerate(row) if e != 0]
+
+        return _Part([e for _, e in entries], [[j] for j, _ in entries], "dT/dstate")
+
+    def _print_parts(
+        self,
+        parts: Sequence[_Part],
+        use_cse: bool,
+        cse_var: str,
+        cse_suffix: str = "",
+        definitions: Mapping[Any, sp.Basic] | None = None,
+    ) -> tuple[IndexedList, list[IndexedList]]:
+        """CSE the symbolic items of *parts* together (optionally) and print them.
+
+        The CSE is :func:`~jaff.common.optimizations.shared_cse`: with
+        *definitions* (symbols used in the items and their values, e.g. the
+        ``krate[r]`` of the reduced form) each definition becomes a temporary
+        shared with the items; ``optimizations="basic"`` when every part asks for
+        it.  Before it, :func:`~jaff.common.optimizations.shared_logs` rewrites the
+        powers of a base used with several non-integer exponents over one shared
+        ``log``; before everything (with or without CSE), the
+        :data:`~jaff.common.optimizations.PRE_CSE_RULES` rewrite the items and
+        definitions.  String items are printed as they are.  Derivatives of undefined
+        functions become ``<name>_partial_<n>(...)`` calls (see
+        :meth:`__convert_unknown_derivatives`).
 
         Returns
         -------
         tuple
-            The ODEs (in ``y_i`` symbols), ``{k_sym: k_expr}`` and
-            ``{reaction index: k_sym}``.
+            The temporaries, and one :class:`~jaff.types.IndexedList` per part.
         """
-        tgas = self.net.symbols.tgas
-        y_set = set(y_syms)
-        k_defs: dict = {}
-        k_syms: dict = {}
-        fluxes = []
-        for i, rea in enumerate(self.net.reactions):
-            flux = rea.rate.xreplace(nden_to_y)
-            k = rea.rate_coefficient.xreplace(nden_to_y)
-            monomial = flux / k if k != 0 else None
-            if (
-                monomial is not None
-                and not (k.free_symbols & y_set)
-                and tgas not in monomial.free_symbols
-                and monomial.free_symbols <= y_set
-            ):
-                k_sym = sp.Symbol(f"_jaff_rate_{i}")
-                k_defs[k_sym] = k
-                k_syms[i] = k_sym
-                flux = k_sym * monomial
-            fluxes.append(flux)
-
-        odes: List[sp.Expr] = [sp.S.Zero for _ in range(self.net.species.core.count)]
-
-        def slot(participant) -> int:
-            fidx = participant.fidx
-            if isinstance(fidx, str) and fidx.startswith("idx_"):
-                return participant.index
-            return int(fidx)
-
-        for i, rea in enumerate(self.net.reactions):
-            for rr in rea.reactants.core:
-                odes[slot(rr)] -= fluxes[i]
-            for pp in rea.products.core:
-                odes[slot(pp)] += fluxes[i]
-
-        return odes, k_defs, k_syms
-
-    def __build_rhs_jacobian(
-        self, thermal: str, cse_var: str, energy: str, cse_suffix: str
-    ) -> Tuple[IndexedReturn, IndexedReturn]:
-        """Build both parts of :meth:`get_indexed_rhs_jacobian`."""
-        with jaff_progress.indeterminate("Generating shared rhs/jacobian"):
-            n_species = self.net.species.count
-            tgas = self.net.symbols.tgas
-            nden_matrix = self.net.symbols.ndens
-            y_syms = [sp.symbols(f"y_{i}") for i in range(n_species)]
-            nden_to_y = {nden_matrix[i]: y_syms[i] for i in range(n_species)}
-
-            odes, k_defs, k_syms = self.__symbolic_rate_odes(y_syms, nden_to_y)
-            thermal_rows = [
-                row.xreplace(nden_to_y) for row in self._thermal_rows(thermal, energy)
+        # Rewrites that must see inside sub-expressions CSE would make temporaries;
+        # one cache, so subtrees shared between items are rewritten once.
+        with jaff_progress.indeterminate("Rewriting expressions"):
+            pre_cse = bottom_up(PRE_CSE_RULES)
+            symbolic = [
+                pre_cse(i) for part in parts for i in part.items if not isinstance(i, str)
             ]
-            odes = [*odes, *thermal_rows]
-            n_eqns = len(odes)
-
-            jac = sp.zeros(n_eqns, n_species)
-            y_index = {sym: col for col, sym in enumerate(y_syms)}
-            for row, ode in enumerate(odes):
-                for sym in ode.free_symbols:
-                    col = y_index.get(sym)
-                    if col is not None:
-                        jac[row, col] = ode.diff(sym)
-
-            if thermal_rows:
-                dk = {
-                    k_sym: self._rate_derivative(k_expr, k_sym, tgas)
-                    for k_sym, k_expr in k_defs.items()
-                }
-                dxdot_dtgas = []
-                for ode in odes:
-                    d = sp.diff(ode, tgas)
-                    for k_sym in ode.free_symbols & dk.keys():
-                        d += sp.diff(ode, k_sym) * dk[k_sym]
-                    dxdot_dtgas.append(d)
-
-                if thermal == "dtdt":
-                    dde = sp.Matrix(dxdot_dtgas)
-                else:
-                    dde = self._energy_column(jac, dxdot_dtgas, nden_matrix, energy)
-                jac = jac.row_join(dde)
-            jac = jac.xreplace(nden_to_y)
-
-        with jaff_progress.indeterminate("Generating shared cse expressions"):
-            # One CSE over the rate coefficients, the RHS and the Jacobian, so
-            # sub-expressions of inlined rates (e.g. in the thermal row) are
-            # shared with the rate temporaries too.
-            k_list = list(k_defs)
-            outputs = [*(k_defs[s] for s in k_list), *odes, *list(jac)]
-            symbols = self._cse_symbols(cse_var, cse_suffix)
-            temps, reduced = sp.cse(outputs, symbols=symbols)
-
-            # Bind each rate symbol to a temporary of its own and order all
-            # definitions so each follows the ones it reads.
-            rename = {s: next(symbols) for s in k_list}
-            defs = [*temps, *((s, e) for s, e in zip(k_list, reduced[: len(k_list)]))]
-            defs = [(rename.get(s, s), e.xreplace(rename)) for s, e in defs]
-            reduced = [e.xreplace(rename) for e in reduced[len(k_list) :]]
-            defs = self.__prune_cse(self._topological_defs(defs), reduced)
-            replacements_dict = {str(k): v for k, v in defs}
-
-        dpattern = re.compile(r"\by_(\d+)\b")
-
-        def emit(expr: sp.Expr) -> str:
-            expr = self.__convert_unknown_derivatives(expr, replacements_dict)
-            text = self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
-            return dpattern.sub(
-                lambda m: f"nden{self.lang.lb}{int(m.group(1))}{self.lang.rb}", text
-            )
-
-        rhs_ir: IndexedReturn = {
-            "extras": {"cse": IndexedList()},
-            "expressions": IndexedList(),
-        }
-        jac_ir: IndexedReturn = {
-            "extras": {"cse": IndexedList()},
-            "expressions": IndexedList(),
-        }
-        for var, expr in defs:
-            idx = self._cse_index(var, cse_var, cse_suffix)
-            rhs_ir["extras"]["cse"].append(IndexedValue([idx], emit(expr)))
-
-        for i in range(n_eqns):
-            rhs_ir["expressions"].append(IndexedValue([i], emit(reduced[i])))
-
-        n_cols = jac.shape[1]
-        for i, j in product(range(n_eqns), range(n_cols)):
-            expr = reduced[n_eqns + i * n_cols + j]
-            if expr == 0:
-                continue
-            jac_ir["expressions"].append(IndexedValue([i, j], emit(expr)))
-
-        return rhs_ir, jac_ir
-
-    @staticmethod
-    def _topological_defs(
-        defs: List[Tuple[sp.Symbol, sp.Expr]],
-    ) -> List[Tuple[sp.Symbol, sp.Expr]]:
-        """Order definitions so each follows those it reads, otherwise stably."""
-        expr_of = dict(defs)
-        position = {sym: n for n, (sym, _) in enumerate(defs)}
-        names = set(expr_of)
-        done: set = set()
-        ordered: List[Tuple[sp.Symbol, sp.Expr]] = []
-
-        for root, _ in defs:
-            stack = [(root, False)]
-            while stack:
-                sym, expanded = stack.pop()
-                if sym in done:
-                    continue
-                if expanded:
-                    done.add(sym)
-                    ordered.append((sym, expr_of[sym]))
-                    continue
-                stack.append((sym, True))
-                deps = sorted(
-                    cast(Set[sp.Symbol], expr_of[sym].free_symbols & names) - done,
-                    key=lambda s: -position[s],
+            definitions = {k: pre_cse(v) for k, v in (definitions or {}).items()}
+        temporaries = IndexedList()
+        cse_defs: dict[str, sp.Basic] | None = None
+        if use_cse and symbolic:
+            basic = all(part.optimizations == "basic" for part in parts)
+            with jaff_progress.indeterminate("Sharing logarithms"):
+                # Powers of a common base over one shared log: new temporaries.
+                symbolic, definitions = shared_logs(symbolic, definitions)
+            with jaff_progress.indeterminate("Finding common subexpressions"):
+                replacements, symbolic = shared_cse(
+                    symbolic,
+                    definitions,
+                    self._cse_symbols(cse_var, cse_suffix),
+                    "basic" if basic else None,
                 )
-                stack.extend((d, False) for d in deps)
+            # str-keyed so __convert_unknown_derivatives can resolve CSE
+            # symbols back to their defining expressions
+            cse_defs = {str(var): expr for var, expr in replacements}
+            for var, expr in jaff_progress.track(
+                replacements, description="Generating cse code"
+            ):
+                idx = self._cse_index(var, cse_var, cse_suffix)
+                temporaries.append(IndexedValue([idx], self._code(expr, cse_defs)))
 
-        return ordered
+        reduced = iter(symbolic)
+        printed = []
+        for part in parts:
+            out = IndexedList()
+            for key, item in jaff_progress.track(
+                list(zip(part.indices, part.items)),
+                description=f"Generating {part.name} code",
+            ):
+                text = (
+                    item if isinstance(item, str) else self._code(next(reduced), cse_defs)
+                )
+                out.append(IndexedValue(key, text))
+            printed.append(out)
+
+        return temporaries, printed
+
+    def _code(self, expr: sp.Basic, cse_defs: dict[str, sp.Basic] | None = None) -> str:
+        """*expr* printed in the target language, unknown derivatives resolved and
+        optimized (:func:`~jaff.common.optimizations.optimize`)."""
+        expr = self.__convert_unknown_derivatives(expr, cse_defs)
+        # Last, right before printing: any later SymPy rewrite would undo it.
+        expr = optimize(expr)
+        return self.lang.code_gen(expr, strict=False, allow_unknown_functions=True)
+
+    def _cse_declarations(
+        self, printed: IndexedReturn, cse_var: str, cse_suffix: str = "", prefix: str = ""
+    ) -> str:
+        """One declaration line per CSE temporary of *printed*.
+
+        A non-empty *prefix* (e.g. ``"amrex::Real "``) replaces the language's
+        own declaration type (``const double`` for C++), used verbatim.  A
+        declaration always assigns with the language's own operator: an
+        ``assignment_op`` override (``J[i][j] += ...``) is for the output
+        entries, not for initialising a temporary.
+        """
+        lang = self.lang.derive(assignment_op=Language(self.lang.name).assignment_op)
+        lines = []
+        for idx, expr in printed["extras"]["cse"]:
+            name = f"{cse_var}{idx[0]}{cse_suffix}"
+            if prefix:
+                lines.append(f"{prefix}{name} {lang.assignment_op} {expr}{lang.line_end}")
+            else:
+                lines.append(lang.format_cse_declaration(name, expr))
+
+        return "".join(line + "\n" for line in lines)
 
     @staticmethod
     def __convert_unknown_derivatives(
-        expr: sp.Expr, cse_defs: dict | None = None
-    ) -> sp.Expr:
+        expr: sp.Basic, cse_defs: dict | None = None
+    ) -> sp.Basic:
         """Replace unevaluated SymPy derivatives with named partial-function calls.
 
         When SymPy differentiates a user-defined function (e.g. a rate that
         calls ``photorates(...)`` or a custom analytic function), it produces
         :class:`~sympy.Derivative` or :class:`~sympy.Subs` nodes that no
         language printer can serialise.  This method replaces each such node
-        with a synthetic function whose name encodes the derivative signature::
+        with a synthetic function whose name encodes the derivative signature:
 
-            Derivative(foo(a, b), a)  →  foo_partial_0(a, b)
-            Subs(Derivative(bar(x), x), x, 0)  →  bar_partial_0(a, evaluated_0)
+        ```text
+        Derivative(foo(a, b), a)           →  foo_partial_0(a, b)
+        Subs(Derivative(bar(x), x), x, 0)  →  bar_partial_0(0)
+        ```
 
         The suffix ``_N`` indicates that differentiation was performed with
         respect to the argument at position *N*.
@@ -1782,7 +2118,7 @@ class Codegen:
 
         Parameters
         ----------
-        expr : sympy.Expr
+        expr : sympy.Basic
             Expression potentially containing :class:`~sympy.Derivative` or
             :class:`~sympy.Subs` nodes.
         cse_defs : dict or None, optional
@@ -1792,7 +2128,7 @@ class Codegen:
 
         Returns
         -------
-        sympy.Expr
+        sympy.Basic
             Expression with all derivative nodes replaced by named function
             calls that are safe to serialise.
         """
@@ -1892,7 +2228,7 @@ class Codegen:
             yield sp.Symbol(f"{prefix}{n}{suffix}")
 
     @staticmethod
-    def _cse_index(var: sp.Symbol, prefix: str, suffix: str = "") -> int:
+    def _cse_index(var: sp.Basic, prefix: str, suffix: str = "") -> int:
         """Recover the counter of a CSE temporary named ``<prefix><n><suffix>``.
 
         Only the text between *prefix* and *suffix* is parsed, so digits inside
@@ -1930,59 +2266,3 @@ class Codegen:
             )
 
         return int(index)
-
-    @staticmethod
-    def __prune_cse(
-        replacements: list[tuple[sp.Symbol, sp.Expr]], expressions: List[sp.Expr]
-    ) -> List[Tuple[sp.Symbol, sp.Expr]]:
-        """Remove CSE temporaries not transitively used by any reduced expression.
-
-        SymPy's :func:`~sympy.cse` can produce temporaries that are only
-        referenced by *other* temporaries that themselves become unreferenced
-        after the ``optimizations="basic"`` pass.  This method performs a
-        depth-first reachability analysis starting from all free symbols in
-        *expressions* and discards every temporary not on a live path.
-
-        Parameters
-        ----------
-        replacements : list of (sympy.Symbol, sympy.Expr)
-            CSE output in order: each tuple ``(tmp_sym, defining_expr)``.
-        expressions : list of sympy.Expr
-            The CSE-reduced main expressions that reference the temporaries.
-
-        Returns
-        -------
-        list of (sympy.Symbol, sympy.Expr)
-            Subset of *replacements* containing only live temporaries,
-            preserving their original order (important for correct emission
-            order in the generated code).
-        """
-        if not replacements:
-            return []
-
-        dep_map = dict(replacements)
-        cse_syms = set(dep_map.keys())
-
-        used: set = set()
-
-        def _dfs(sym: sp.Symbol) -> None:
-            """Recursively mark *sym* and all CSE symbols it depends on as used."""
-            if sym in used:
-                return
-            used.add(sym)
-
-            expr = dep_map.get(sym)
-            if expr is None:
-                return
-
-            # Recurse into any CSE temporaries appearing inside this definition
-            for dep in cast(Set[sp.Symbol], expr.free_symbols & cse_syms):
-                _dfs(dep)
-
-        # Seed the reachability search from the main (non-temporary) expressions
-        for expr in expressions:
-            for sym in cast(Set[sp.Symbol], expr.free_symbols & cse_syms):
-                _dfs(sym)
-
-        # Return only live temporaries in their original definition order
-        return [(var, dep_map[var]) for var, _ in replacements if var in used]

@@ -6,9 +6,10 @@ import numpy as np
 import pytest
 
 from jaff.plotting import themes
-from jaff.plotting.render import render
+from jaff.plotting import render
 from jaff.plotting.spec import FigureSpec, SeriesSpec
 from jaff.plotting.themes import resolve_style, split_style
+from tests._paths import REPO_ROOT
 
 X = np.logspace(17, 22, 120)
 Y = 1e-6 * (1 + np.tanh(np.log10(X) - 19)) + 1e-12
@@ -827,7 +828,10 @@ def test_plot_rates_kappa_label():
     from types import SimpleNamespace
 
     r = SimpleNamespace(
-        rate_coefficient=1e-10 * tgas, tmin=10, tmax=1000, get_latex=lambda: "R"
+        rate=SimpleNamespace(coefficient=1e-10 * tgas),
+        tmin=10,
+        tmax=1000,
+        get_latex=lambda: "R",
     )
     _, axes = plot_rates([r], show=False)
     assert axes[0, 0].get_ylabel() == r"$\log_{10}$ $\kappa$"
@@ -835,14 +839,11 @@ def test_plot_rates_kappa_label():
 
 def test_inside_y_labels_keep_clear_of_inside_titles():
     # GOW: long reaction titles inside 2 x 4 panels next to inside y labels
-    from pathlib import Path
-
     from jaff import Network
     from jaff.plotting import plot_rates
     from jaff.plotting.adapters import rate_series
 
-    root = Path(__file__).resolve().parents[2]
-    net = Network(str(root / "networks/GOW/GOW.jet"))
+    net = Network(str(REPO_ROOT / "networks/GOW/GOW.jet"))
     ok = [r for r in net.reactions if rate_series(r, quiet=True) is not None][:8]
     fig, axes = plot_rates(ok, grid=(4, 4), show=False, close=False)
     r = _draw(fig)

@@ -17,23 +17,28 @@ The sections below collect the pytest invocations you'll use day to day.
 
 ### Basic Commands
 
-Run the whole suite, or narrow down to a file, a single test, or a name pattern.
+Run the whole suite, or narrow down to a package, a file, a single test, or a name
+pattern. Run pytest through `uv run --extra dev` so the dev tools are installed
+(see the [Installation Guide](installation.md)).
 
 ```bash
 # Run all tests
-pytest
+uv run --extra dev pytest
 
 # Run with verbose output
-pytest -v
+uv run --extra dev pytest -v
+
+# Run one package's tests
+uv run --extra dev pytest tests/core/parsers
 
 # Run specific test file
-pytest tests/test_network_parsers.py
+uv run --extra dev pytest tests/core/parsers/test_network_parsers.py
 
-# Run specific test
-pytest tests/test_network_parsers.py::test_load_krome
+# Run specific test (Class::method)
+uv run --extra dev pytest tests/core/parsers/test_network_parsers.py::TestNetworkParsers::test_krome_format_detection
 
 # Run tests matching pattern
-pytest -k "network"
+uv run --extra dev pytest -k "network"
 ```
 
 ### Coverage
@@ -42,33 +47,28 @@ Measure how much of `jaff` the suite exercises and generate a browsable report.
 
 ```bash
 # Run with coverage
-pytest --cov=jaff
+uv run --extra dev pytest --cov=jaff
 
 # Generate HTML coverage report
-pytest --cov=jaff --cov-report=html
+uv run --extra dev pytest --cov=jaff --cov-report=html
 
 # View report
 open htmlcov/index.html
 ```
 
-### Markers
+### Environment Variables
 
-Markers let you select subsets of tests by category.
+The suite defines no custom pytest markers. Optional behaviour is switched on with
+environment variables instead:
 
-<!-- prettier-ignore -->
-!!! warning "Markers"
-    Markers have not yet been added to the suite. The commands below show the intended usage once markers are defined (see [Test Markers](#test-markers)).
+| Variable                            | Effect                                                                                                   |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `JAFF_UPDATE_GOLDEN=1`              | Rewrite the committed generated code in `tests/golden/` from the current templates.                      |
+| `JAFF_UPDATE_SNAPSHOTS=1`           | Record the snapshots (parser output in `tests/snapshots/parser_output/`, template-engine output in `tests/snapshots/template_engine/`) instead of comparing against them. |
+| `JAFF_GOLDEN_SEED=<seed>`           | Fix the random input seed of the rendered-code tests, to reproduce a failure (the seed is in the failure message). |
+| `JAFF_OFFLINE=1`                    | Do not contact the data server: no registry fetch and no downloads, so only already-installed data tables are available. |
 
-```bash
-# Run only fast tests
-pytest -m "not slow"
-
-# Run only slow tests
-pytest -m slow
-
-# Run only unit tests
-pytest -m unit
-```
+After refreshing golden code or snapshots, review the diff before keeping it.
 
 ## Test Organization
 
@@ -76,45 +76,55 @@ How the `tests/` directory is laid out and how individual test files are structu
 
 ### Directory Structure
 
-Tests live in a flat `tests/` directory, one file per area, with sample network
-files under `tests/fixtures/`:
+Tests mirror the source tree: a test lives in the folder of the package whose
+code it tests. Cross-cutting checks have their own folders, and test data sits
+at the top level:
 
-```
+```text
 tests/
-├── __init__.py
-├── test_network_initialization.py   # Network construction
-├── test_network_parsers.py          # Multi-format parsing (KROME, KIDA, …)
-├── test_network_validation.py       # Duplicate / sink / isomer checks
-├── test_network_edge_cases.py       # Empty / malformed networks
-├── test_network_json.py             # .jaff round-trip
-├── test_sympy_json.py               # SymPy ↔ JSON encoding
-├── test_cse_generation.py           # CSE in generated code
-├── test_languages.py                # Per-language code generation
-├── test_ode_and_jac.py              # ODE + Jacobian generation
-├── test_repo_networks_json_roundtrip.py
-└── fixtures/                        # Sample input files
-    ├── sample_krome.dat
-    ├── sample_kida.dat
-    ├── sample_kida_valid.dat        # + sample_kida_valid.jfunc
-    ├── sample_prizmo.dat
-    ├── sample_uclchem.dat
-    ├── sample_udfa.dat
-    ├── empty_network.dat
-    ├── malformed_network.dat
-    ├── test_cse.dat
-    ├── test_jac.dat
-    └── test_jac_dedt.dat            # + test_jac_dedt.jfunc
+├── conftest.py          # shared fixtures (make_network, quiet logging, …)
+├── _paths.py            # TESTS_DIR, REPO_ROOT, FIXTURES_DIR, SNAPSHOTS_DIR, GOLDEN_DIR
+├── helpers/             # shared helpers imported as tests.helpers.<module>: code-generation
+│                        #   runners, build harnesses, test-only plugins, data builders
+├── core/
+│   ├── network/         # Network construction, validation, serialization, densities
+│   ├── reaction/        # rate expressions, rate segments, temperature cutoffs
+│   ├── species/         # Specie / Species
+│   ├── elements/        # Elements
+│   └── parsers/         # file formats (KIDA, KROME, PRIZMO, UCLCHEM, UDFA), .jfunc
+├── physics/
+│   ├── photo_reactions/ # radiation, cross sections, shielding, aux functions
+│   ├── dust/
+│   └── thermodynamics/  # EOS, internal energy, dE/dt and dT/dt
+├── codegen/             # Codegen, languages, Jacobians
+│   └── templating/      # the $$JAFF template engine
+├── config/              # config loading, JSON schemas, reference page
+├── cli/                 # jaffgen / jaffx
+├── common/  types/  drivers/  utils/  plotting/
+├── e2e/                 # golden code, generated solvers, bundled networks, snapshots
+├── meta/                # public API, API docs, import side effects, notebooks
+├── fixtures/            # sample input files
+├── golden/              # committed generated code (JAFF_UPDATE_GOLDEN=1 to refresh)
+└── snapshots/           # characterization snapshots
 ```
+
+A module's config tests sit with the module (`physics/dust/test_dust_config.py`);
+`config/` holds only the loading machinery. Read data through `tests._paths`
+(`FIXTURES_DIR`, `SNAPSHOTS_DIR`, `GOLDEN_DIR`, `REPO_ROOT`, `TESTS_DIR`) or the
+`fixtures_dir` fixture, never `Path(__file__)` or a path relative to the current
+directory, so a test file can move — and pytest can run from anywhere — without
+breaking.
 
 ### Test File Structure
 
 Group related tests into `Test<Subject>` classes with descriptive method names.
 
 ```python
-"""Tests for Network parsing."""
+# ABOUTME: Tests for Network parsing
+# ABOUTME: Loads the KROME sample fixture and checks the result
 
-import pytest
 from jaff import Network
+from tests._paths import FIXTURES_DIR
 
 
 class TestNetwork:
@@ -122,23 +132,14 @@ class TestNetwork:
 
     def test_load_basic_network(self):
         """Test loading a basic network."""
-        net = Network("tests/fixtures/sample_krome.dat")
+        net = Network(str(FIXTURES_DIR / "sample_krome.dat"))
         assert len(net.species) > 0
         assert len(net.reactions) > 0
 
-    def test_load_krome_format(self):
-        """Test loading KROME format."""
-        net = Network("tests/fixtures/sample_krome.dat")
-        assert net.label is not None
-
-
-class TestNetworkValidation:
-    """Network validation tests."""
-
-    def test_duplicate_reactions(self):
-        """Test detection of duplicate reactions."""
-        # Test implementation
-        pass
+    def test_label_is_file_stem(self):
+        """The network label defaults to the file name without extension."""
+        net = Network(str(FIXTURES_DIR / "sample_krome.dat"))
+        assert net.label == "sample_krome"
 ```
 
 ## Writing Tests
@@ -147,14 +148,13 @@ Patterns for the most common kinds of test, from a plain assertion to parametriz
 
 ### Basic Test
 
-The simplest test loads a fixture and asserts on the resulting object.
+The simplest test requests a fixture and asserts on the resulting object.
 
 ```python
-def test_network_species_count():
+def test_network_species_count(sample_network):
     """Test species are loaded."""
-    net = Network("tests/fixtures/sample_krome.dat")
-    assert len(net.species) > 0
-    assert net.species.count == len(net.species)
+    assert len(sample_network.species) > 0
+    assert sample_network.species.count == len(sample_network.species)
 ```
 
 ### Testing Exceptions
@@ -162,7 +162,11 @@ def test_network_species_count():
 Use `pytest.raises` to assert that bad input fails the way you expect.
 
 ```python
+import pytest
+
+from jaff import Network
 from jaff.errors import ParserError
+from tests._paths import FIXTURES_DIR
 
 
 def test_missing_file_raises_error():
@@ -170,10 +174,11 @@ def test_missing_file_raises_error():
     with pytest.raises(FileNotFoundError):
         Network("nonexistent.dat")
 
+
 def test_malformed_network_raises_error():
     """Test that a malformed network raises a ParserError."""
     with pytest.raises(ParserError):
-        Network("tests/fixtures/malformed_network.dat")
+        Network(str(FIXTURES_DIR / "malformed_network.dat"))
 ```
 
 ### Parametrized Tests
@@ -181,17 +186,22 @@ def test_malformed_network_raises_error():
 Run the same test body over many inputs with `@pytest.mark.parametrize`.
 
 ```python
-@pytest.mark.parametrize("lang,expected_bracket", [
-    ("c++", "["),
-    ("c", "["),
-    ("fortran", "("),
-    ("python", "["),
-])
-def test_codegen_brackets(lang, expected_bracket):
+from jaff import Codegen
+
+
+@pytest.mark.parametrize(
+    "lang,expected_bracket",
+    [
+        ("c++", "["),
+        ("c", "["),
+        ("fortran", "("),
+        ("python", "["),
+    ],
+)
+def test_codegen_brackets(sample_network, lang, expected_bracket):
     """Test bracket style for each language."""
-    net = Network("tests/fixtures/sample_krome.dat")
-    cg = Codegen(network=net, lang=lang)
-    assert cg.lb == expected_bracket
+    cg = Codegen(network=sample_network, lang=lang)
+    assert cg.lang.lb == expected_bracket
 ```
 
 ### Parametrized with Multiple Arguments
@@ -199,13 +209,16 @@ def test_codegen_brackets(lang, expected_bracket):
 Parametrize over several arguments at once to cover a matrix of cases.
 
 ```python
-@pytest.mark.parametrize("filename,expected_species,expected_reactions", [
-    ("sample_krome.dat", 10, 20),
-    ("sample_kida.dat", 50, 100),
-])
+@pytest.mark.parametrize(
+    "filename,expected_species,expected_reactions",
+    [
+        ("sample_krome.dat", 9, 6),
+        ("sample_kida.dat", 6, 7),
+    ],
+)
 def test_network_sizes(filename, expected_species, expected_reactions):
-    """Test networks load with expected sizes (counts are illustrative)."""
-    net = Network(f"tests/fixtures/{filename}")
+    """Test networks load with the expected sizes."""
+    net = Network(str(FIXTURES_DIR / filename))
     assert len(net.species) == expected_species
     assert len(net.reactions) == expected_reactions
 ```
@@ -215,25 +228,39 @@ def test_network_sizes(filename, expected_species, expected_reactions):
 Fixtures provide reusable setup. Define shared fixtures in a `conftest.py`, or
 inline in the test module that uses them.
 
-### Basic Fixtures
+### Shared Fixtures
 
-A fixture returns a prepared object that any test can request by name.
+`tests/conftest.py` provides these to every test:
+
+| Fixture          | Scope    | What it gives you                                                                                  |
+| ---------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `_quiet`         | autouse  | Silences the JAFF banner (`print`) and logging, so test output stays clean.                         |
+| `fixtures_dir`   | function | `tests/fixtures/` as a `Path` (the same as `tests._paths.FIXTURES_DIR`).                            |
+| `make_network`   | function | Factory `make_network(lines, name=..., **kwargs)`: writes reaction lines to a file in `tmp_path` and loads it as a `Network`; `kwargs` go to `Network`. |
+| `sample_network` | function | A `Network` loaded from `tests/fixtures/sample_kida.dat`.                                           |
+| `snapshot_store` | function | Compares values against JSON snapshots in `tests/snapshots/parser_output/` (`JAFF_UPDATE_SNAPSHOTS=1` records them). |
+| `rendered`       | session  | Renders the templates in `tests/fixtures/templates/` once per network and returns the output folder. |
+| `render_seed`    | session  | Random input seed for rendered-code tests (`JAFF_GOLDEN_SEED` fixes it).                           |
+
+`tests/plotting/conftest.py` adds, for the plotting tests only, an autouse fixture
+that closes every Matplotlib figure after each test (and selects the `Agg` backend)
+and `jaff_warnings`, a list that records the JAFF logger's warnings.
+
+### Defining Fixtures
+
+Define shared fixtures in a `conftest.py`, or inline in the test module that uses
+them. A fixture can build on other fixtures:
 
 ```python
-# conftest.py
 import pytest
-from jaff import Network
+
+from jaff import Codegen
+
 
 @pytest.fixture
-def small_network():
-    """Small test network."""
-    return Network("tests/fixtures/sample_krome.dat")
-
-@pytest.fixture
-def codegen_cpp(small_network):
-    """C++ code generator for the small network."""
-    from jaff import Codegen
-    return Codegen(network=small_network, lang="c++")
+def codegen_cpp(sample_network):
+    """C++ code generator for the sample network."""
+    return Codegen(network=sample_network, lang="c++")
 ```
 
 ### Using Fixtures
@@ -241,9 +268,16 @@ def codegen_cpp(small_network):
 Request a fixture by adding its name as a test argument.
 
 ```python
-def test_with_fixture(small_network):
+def test_with_fixture(sample_network):
     """Test using the network fixture."""
-    assert len(small_network.species) > 0
+    assert len(sample_network.species) > 0
+
+
+def test_inline_network(make_network):
+    """Build a network from inline reaction lines."""
+    net = make_network(["H + H -> H2 [10,1000] 1e-10"], name="my_net.dat")
+    assert net.label == "my_net"
+
 
 def test_code_generation(codegen_cpp):
     """Test rate code generation."""
@@ -260,7 +294,8 @@ across a module, or get a fresh instance per test.
 @pytest.fixture(scope="module")
 def expensive_network():
     """Module-scoped fixture for expensive setup (loaded once per module)."""
-    return Network("tests/fixtures/sample_kida.dat")
+    return Network(str(FIXTURES_DIR / "sample_kida.dat"))
+
 
 @pytest.fixture(scope="function")
 def temp_directory(tmp_path):
@@ -272,34 +307,37 @@ def temp_directory(tmp_path):
 
 Where test inputs come from and how to create throwaway files.
 
-### Creating Test Networks
+### Test Networks
 
-Fixture network files are small plain-text reaction lists checked into `tests/fixtures/`.
+Small network files in each supported format are checked into `tests/fixtures/`
+(`sample_kida.dat`, `sample_krome.dat`, `sample_prizmo.dat`, `sample_uclchem.dat`,
+`sample_udfa.dat`, plus edge cases such as `empty_network.dat` and
+`malformed_network.dat`). For example, `sample_krome.dat` starts with:
 
-```python
-# tests/fixtures/sample_krome.dat
-H + O -> OH, 1.2e-10 * (tgas/300)**0.5
-H2 + O -> OH + H, 3.4e-11 * exp(-500/tgas)
-C + O2 -> CO + O, 5.6e-12
+```text
+# Sample KROME network file
+@format:idx,R,R,R,P,P,P,P,tmin,tmax,rate
+@var:inv_tgas = 1.0/tgas
+@var:t32 = tgas/3e2
+
+# idx,R1,R2,R3,P1,P2,P3,P4,tmin,tmax,rate
+1,H,H,H,H2,H,,,10,1000,5.0e-30
+2,H2,PHOTON,,H,H,,,10,3000,1.0e-11
 ```
+
+For a one-off network, prefer the `make_network` fixture over a new fixture file.
 
 ### Using Temporary Files
 
 Use pytest's `tmp_path` fixture for files a test writes and reads back.
 
 ```python
-def test_network_save_load(tmp_path):
-    """Test saving and loading a network."""
-    # Create network
-    net = Network("tests/fixtures/sample_krome.dat")
-
-    # Save to a temporary .jaff file
+def test_network_save(tmp_path, sample_network):
+    """Test saving a network."""
     output_file = tmp_path / "test.jaff"
-    net.to_jaff(output_file)
+    sample_network.to_jaff(output_file)
 
-    # Load and verify
-    net2 = Network(str(output_file))
-    assert len(net2.species) == len(net.species)
+    assert output_file.read_bytes()[:2] == b"\x1f\x8b"  # gzip
 ```
 
 ## Mocking
@@ -312,6 +350,7 @@ Patch I/O and other externals so tests don't touch the real filesystem.
 
 ```python
 from unittest.mock import Mock, patch
+
 
 def test_with_mock():
     """Test with a mocked open()."""
@@ -335,6 +374,7 @@ def mock_network():
     net.reactions = [Mock()]
     return net
 
+
 def test_with_mock_network(mock_network):
     """Test using the mocked network."""
     assert len(mock_network.species) == 2
@@ -350,20 +390,20 @@ Each test should verify a single behaviour so failures point to one cause.
 
 ```python
 # Good
-def test_network_loads_successfully():
+def test_network_loads_successfully(sample_network):
     """Test network loads without error."""
-    net = Network("tests/fixtures/sample_krome.dat")
-    assert net is not None
+    assert sample_network is not None
 
-def test_network_has_species():
+
+def test_network_has_species(sample_network):
     """Test network has species."""
-    net = Network("tests/fixtures/sample_krome.dat")
-    assert len(net.species) > 0
+    assert len(sample_network.species) > 0
+
 
 # Avoid
 def test_everything():
     """Test everything at once."""
-    net = Network("tests/fixtures/sample_krome.dat")
+    net = Network(str(FIXTURES_DIR / "sample_krome.dat"))
     assert net is not None
     assert len(net.species) > 0
     # ... many more assertions
@@ -379,6 +419,7 @@ def test_codegen_raises_error_for_unsupported_language():
     """Test that an unsupported language raises ValueError."""
     pass
 
+
 # Avoid
 def test_lang():
     pass
@@ -393,9 +434,11 @@ def test_empty_network():
     """Test handling of an empty network."""
     pass
 
+
 def test_network_with_one_species():
     """Test a network with a single species."""
     pass
+
 
 def test_network_with_duplicate_species():
     """Test handling of duplicate species."""
@@ -412,11 +455,13 @@ def test_file_not_found():
     with pytest.raises(FileNotFoundError):
         Network("nonexistent.dat")
 
+
 def test_invalid_format():
     """Test ParserError for an invalid format."""
     from jaff.errors import ParserError
+
     with pytest.raises(ParserError):
-        Network("tests/fixtures/malformed_network.dat")
+        Network(str(FIXTURES_DIR / "malformed_network.dat"))
 ```
 
 ## Integration Tests
@@ -431,7 +476,7 @@ This test drives the whole path: load a network, generate code, write it out, ve
 def test_complete_code_generation_workflow(tmp_path):
     """Test the complete workflow from network to code."""
     # Load network
-    net = Network("tests/fixtures/sample_krome.dat")
+    net = Network(str(FIXTURES_DIR / "sample_kida.dat"))
 
     # Create code generator
     cg = Codegen(network=net, lang="c++")
@@ -454,58 +499,14 @@ def test_complete_code_generation_workflow(tmp_path):
     assert "f[0]" in content
 ```
 
-## Performance Tests
-
-Guard against regressions in speed and memory. Mark these `slow` so they can be skipped.
-
-### Timing Tests
-
-Assert that an operation finishes within a time budget.
-
-```python
-import time
-
-@pytest.mark.slow
-def test_large_network_performance():
-    """Test that a large network loads in reasonable time."""
-    start = time.time()
-    net = Network("tests/fixtures/sample_kida.dat")
-    duration = time.time() - start
-
-    assert duration < 30.0  # Should load in < 30 seconds
-```
-
-### Memory Tests
-
-Track peak allocation with `tracemalloc` and assert an upper bound.
-
-```python
-import tracemalloc
-
-@pytest.mark.slow
-def test_memory_usage():
-    """Test that memory usage stays reasonable."""
-    tracemalloc.start()
-
-    net = Network("tests/fixtures/sample_krome.dat")
-    cg = Codegen(network=net, lang="c++")
-    rates = cg.get_rates_str(use_cse=True)
-
-    current, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-
-    # Peak memory should be reasonable
-    assert peak < 100 * 1024 * 1024  # < 100 MB
-```
-
 ## Continuous Integration
 
-The **Tests** workflow runs `pytest` (with coverage) on every push and pull
+The **Tests** workflow installs with `uv sync --locked --extra dev` and runs `pytest` (with coverage) on every push and pull
 request to `main`, across Linux, macOS, and Windows on Python 3.11, 3.12, and
 3.13, and uploads coverage to Codecov. The suite also executes the
 [example notebooks](../getting-started/examples.md) headless
-(`tests/test_example_notebooks.py`) and builds and runs the solvers generated by
-the Fortran and C++ templates (`tests/test_generated_solvers_run.py`); these build
+(`tests/meta/test_example_notebooks.py`) and builds and runs the solvers generated by
+the Fortran and C++ templates (`tests/e2e/test_generated_solvers_run.py`); these build
 tests run only on Linux. A second workflow builds the docs.
 
 For the full list of CI workflows and what each one gates, see the
@@ -517,7 +518,7 @@ Target coverage levels for the suite:
 
 - **Overall coverage**: > 80%
 - **Critical modules**: > 90%
-- **New code**: 100% coverage required
+- **New code**: covered by tests written before the implementation (TDD)
 
 ### Check Coverage
 
@@ -525,10 +526,10 @@ Use `--cov-report=term-missing` to see exactly which lines are untested.
 
 ```bash
 # Show untested lines in the terminal
-pytest --cov=jaff --cov-report=term-missing
+uv run --extra dev pytest --cov=jaff --cov-report=term-missing
 
 # Generate a browsable HTML report
-pytest --cov=jaff --cov-report=html
+uv run --extra dev pytest --cov=jaff --cov-report=html
 open htmlcov/index.html
 ```
 
@@ -542,16 +543,16 @@ Increase verbosity, surface prints, or stop early to zero in on a failure.
 
 ```bash
 # Run with detailed output
-pytest -vv
+uv run --extra dev pytest -vv
 
-# Show print statements
-pytest -s
+# Show output (note: the autouse `_quiet` fixture replaces `print` with a no-op)
+uv run --extra dev pytest -s
 
 # Stop at first failure
-pytest -x
+uv run --extra dev pytest -x
 
 # Run last failed tests
-pytest --lf
+uv run --extra dev pytest --lf
 ```
 
 ### Debugging Tests
@@ -559,59 +560,14 @@ pytest --lf
 Drop into a debugger at the point of interest.
 
 ```python
-def test_debug_example():
+def test_debug_example(sample_network):
     """Test with a debugger breakpoint."""
-    net = Network("tests/fixtures/sample_krome.dat")
+    net = sample_network
 
     # Built-in breakpoint (Python 3.7+)
     breakpoint()
 
     assert len(net.species) > 0
-```
-
-## Test Markers
-
-Markers tag tests so they can be selected or skipped as a group.
-
-<!-- prettier-ignore -->
-!!! warning "Markers"
-    Markers are not yet defined in `pyproject.toml`. The snippets below show how they will be configured and used once added.
-
-### Defining Markers
-
-Register markers under `[tool.pytest.ini_options]` in `pyproject.toml`.
-
-```toml
-# pyproject.toml
-[tool.pytest.ini_options]
-markers = [
-    "slow: marks tests as slow",
-    "unit: unit tests",
-    "integration: integration tests",
-    "network: network-related tests",
-]
-```
-
-### Using Markers
-
-Apply markers with the `@pytest.mark.<name>` decorator; multiple markers stack.
-
-```python
-@pytest.mark.slow
-def test_large_network():
-    """Slow test."""
-    pass
-
-@pytest.mark.unit
-def test_species_creation():
-    """Unit test."""
-    pass
-
-@pytest.mark.integration
-@pytest.mark.network
-def test_full_workflow():
-    """Integration test for the network workflow."""
-    pass
 ```
 
 ## See Also

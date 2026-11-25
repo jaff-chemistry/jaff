@@ -1,3 +1,6 @@
+# ABOUTME: Unit conversion (astropy) and mathtext axis labels for cross-section plots
+# ABOUTME: Converts photon energy / wavelength and cross-section units from eV and cm²
+
 """Unit conversion and axis-label helpers for cross-section plots.
 
 Photo cross sections are stored internally as photon energy in eV and cross

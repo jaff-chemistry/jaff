@@ -1,3 +1,5 @@
+# ABOUTME: Builds the atomic-mass table in jaff.db from data/atom_mass.csv.
+# ABOUTME: Run as a one-off maintenance script.
 import pandas as pd
 
 from jaff.config import DATA_DIR

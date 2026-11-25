@@ -3,7 +3,7 @@
 
 
 # Sample function override format
-@function chemRate1(chi, av, colden_H2, b)
+@function chemRateCoeff1(chi, av, colden_H2, b)
 # This provides a function for the H2 dissociation rate given the
 # ISRF strength, extinction, H2 column, and Doppler parameter, which
 # overrides the expression provided in the network definition file.

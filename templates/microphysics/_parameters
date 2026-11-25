@@ -1,0 +1,15 @@
+# ABOUTME: Runtime parameters of the JAFF-generated network: the network's own
+# ABOUTME: parameters, set in the inputs file as network.<name> = <value>
+@namespace: network
+$$JAFF LANG cxx
+$$JAFF COMMENT "#"
+
+# cutoff for species number densities
+small_x                 real          1.e-100
+
+# The network's parameters (actual_rhs reads them as network_rp::<name>). Each
+# starts at -1.e300, which means unset: actual_network_init() stops naming any
+# left unset, so set every one in the inputs file.
+$$JAFF REPEAT idx, parameter IN parameters { THERMAL { MODE -> dedt } }
+$parameter$             real          -1.e300
+$$JAFF END

@@ -1,0 +1,28 @@
+# ABOUTME: FLASH Config of the JAFF-generated network for the KromeChemistry unit: its
+# ABOUTME: species, the network parameters (jaff_<name>) and the integrator settings
+$$JAFF LANG fortran
+$$JAFF COMMENT "#"
+$$JAFF SUB label
+REQUIRES Simulation/SimulationComposition/KromeChemistry/$label$
+$$JAFF END
+
+# Cells below this density [g cm^-3] are skipped; the gas temperature is floored
+# at krome_temp_floor [K] before each burn
+PARAMETER krome_temp_floor        REAL 1.0
+PARAMETER krome_density_threshold REAL 0.0
+
+# DLSODES tolerances (relative; absolute [cm^-3, K]) and steps per FLASH step
+PARAMETER jaff_rtol      REAL    1.0e-8
+PARAMETER jaff_atol      REAL    1.0e-20
+PARAMETER jaff_max_steps INTEGER 1000000
+# Evolve the gas temperature with dT/dt from the network's EOS (else it stays fixed)
+PARAMETER jaff_evolve_temperature BOOLEAN TRUE
+
+# The network's parameters. Each starts at -1.0e300, which means unset:
+# KromeChemistry_init stops naming any left unset, so set every one in flash.par.
+$$JAFF REPEAT idx, parameter IN parameters { THERMAL { MODE -> dtdt } }
+PARAMETER jaff_$parameter$ REAL -1.0e300
+$$JAFF END
+
+# One SPECIES per network species (lower-case j/k names: + -> j, - -> k)
+$$JAFF CALL flash_species

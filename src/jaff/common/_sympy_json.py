@@ -1,3 +1,5 @@
+# ABOUTME: Versioned JSON (de)serializer for SymPy expressions: compact list-tag
+# ABOUTME: encoding used by .jaff files, plus a verbose dict encoding for debugging.
 """
 Versioned JSON serializer / deserializer for SymPy expressions.
 
@@ -9,7 +11,11 @@ Public API
     version.
 :func:`dumps` / :func:`loads`
     JSON string round-trip for a single SymPy expression with a full metadata
-    envelope (``format``, ``schema_version``, ``sympy_version``).
+    envelope (``format``, ``schema_version``, ``sympy_version``).  The
+    round-trip holds for the default compact encoding only: :func:`loads`
+    (via :func:`from_jsonable`) decodes compact nodes, so a payload written
+    with ``dumps(..., compact=False)`` currently raises
+    :class:`~jaff.errors.SympyJsonError` on loading.
 :func:`to_jsonable` / :func:`from_jsonable`
     Lower-level helpers that convert to/from a JSON-compatible Python object
     (list/number/dict) without wrapping it in the metadata envelope.  Used by
@@ -21,7 +27,7 @@ Encoding formats
 Two encoder variants are provided:
 
 * :class:`_Encoder` (verbose) -- each node is a ``{"type": ..., ...}`` dict.
-  Useful for debugging.
+  Useful for debugging; only the private :class:`_Decoder` reads it back.
 * :class:`_EncoderCompact` (default) -- each node is a compact list whose
   first element is a short tag string.  Tag mapping:
 
@@ -34,7 +40,7 @@ Two encoder variants are provided:
   ``I``   ``Integer``
   ``Q``   ``Rational``
   float   ``Float`` (raw number)
-  ``Flt`` ``Float`` (with precision)
+  ``Flt`` ``Float`` (with precision; decoded only, never written)
   ``Str`` internal ``Str``
   ``MS``  ``MatrixSymbol``
   ``ME``  ``MatrixElement``
@@ -49,6 +55,8 @@ Two encoder variants are provided:
   ``log`` ``log``
   ``Max`` ``Max``
   ``Min`` ``Min``
+  ``IB``  ``IndexedBase``
+  ``Idx`` ``Indexed``
   ======  ================
 
 Cross-version compatibility
@@ -115,7 +123,7 @@ def dumps(
     compact : bool, optional
         Use the compact list-based encoding (default ``True``).  Pass
         ``False`` to use the verbose dict-based encoding (useful for
-        debugging).
+        debugging); :func:`loads` cannot currently read that form back.
     include_assumptions : bool, optional
         Whether to embed symbol assumption flags (e.g. ``positive=True``) in
         the output (default ``True``).
@@ -523,7 +531,9 @@ class _EncoderCompact:
             # Convert shape to list of ints (may contain sympy Integers)
             shape = None
             if expr.shape:
-                shape = [int(s) if isinstance(s, sympy.Integer) else s for s in expr.shape]
+                shape = [
+                    int(s) if isinstance(s, sympy.Integer) else s for s in expr.shape
+                ]
             return ["IB", name, shape]
 
         if isinstance(expr, sympy.Indexed):

@@ -28,10 +28,12 @@ dependencies = [
   "numpy>=2.0.0",
   "pandas>=2.3.3",
   "pooch>=1.9.0",
+  "pydantic>=2.14.1",
   "pygments>=2.19.2",
   "rich>=15.0.0",
   "scipy>=1.13.0",
   "sympy>=1.14.0",
+  "tomli-w>=1.2.0",
   "typer>=0.27.0",
 ]
 
@@ -48,9 +50,10 @@ dev = [
   "pytest>=7.0",
   "pytest-cov",
   "ruff",
+  "ty",
   "check-jsonschema",
   "zensical",
-  "mkdocstrings[python]>=0.24.0",
+  "griffelib>=2.3",
   "pymdown-extensions>=10.5",
   "pygments",
   "kaleido"
@@ -126,9 +129,9 @@ where = ["src"]
 [tool.setuptools.package-data]
 jaff = [
   "data/*.dat",
-  "templates/**/*",
   "db/jaff.db",
-  "codegen/templating/*.lark"
+  "codegen/templating/*.lark",
+  "config/schemas/*.json"
 ]
 
 # astropy.constants injects its members dynamically at import, so static
@@ -139,3 +142,13 @@ include = ["src/jaff/physics/constants.py"]
 
 [tool.ty.overrides.rules]
 unresolved-attribute = "ignore"
+
+# Editor linting of the jaff config files against their JSON Schemas (Tombi;
+# Taplo reads .taplo.toml).  Regenerate with `python -m jaff.config.json_schema`.
+[[tool.tombi.schemas]]
+path = "src/jaff/config/schemas/jaff.schema.json"
+include = ["**/jaff.toml"]
+
+[[tool.tombi.schemas]]
+path = "src/jaff/config/schemas/jaffgen.schema.json"
+include = ["**/jaffgen.toml"]

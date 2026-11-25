@@ -44,8 +44,10 @@ contains
   subroutine rhs(f, nden, tgas)
     real(8), intent(out) :: f(:)
     real(8), intent(in) :: nden(nspec), tgas
-    $$JAFF REPEAT idx, rhs, cse IN rhses
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rhs } }
     cse$idx$ = $cse$
+    $$JAFF END
+    $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt }  CSE { GROUP -> rhs } }
     f($idx+1$) = $rhs$
     $$JAFF END
   end subroutine rhs
@@ -53,8 +55,8 @@ contains
   subroutine jacobian(J, nden, tgas)
     real(8), intent(out) :: J(:, :)
     real(8), intent(in) :: nden(nspec), tgas
-    $$JAFF REPEAT idx, expr IN jacobian
-    J($idx+1$, $idx+1$) = $expr$
+    $$JAFF REPEAT idx, jac IN jacobian
+    J($idx+1$, $idx+1$) = $jac$
     $$JAFF END
   end subroutine jacobian
 

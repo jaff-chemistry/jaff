@@ -14,7 +14,7 @@ earlier ones, so they read best in order.
 
 | Notebook                     | Network(s)                 | What it covers                                                                                                                                         |
 | ---------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `01_network_basics.py`       | `demo1`                    | Loading a network, the mixed input formats in one file, the load pipeline, species, catalogue queries, stoichiometry and a hand-made charge check      |
+| `01_network_basics.py`       | `demo1`, `water_co`        | Loading a network, the mixed input formats in one file, the load pipeline, species, catalogue queries, stoichiometry and a hand-made charge check      |
 | `02_reactions_and_rates.py`  | `demo1`, `h_photo`         | Reaction identity and types, symbolic rates, printing a rate in seven languages, flux expressions, rate plots, multi-range rates, photo cross-sections |
 | `03_comparing_networks.py`   | `demo1`, `demo2`           | Matching species and reactions by their serialized form, and why shared reactions can still have different rates                                      |
 | `04_codegen_jaffgen.py`      | `demo2`                    | Template collections and directives; generating, building and running a Python and a Fortran solver with `jaffgen`                                     |
@@ -42,7 +42,9 @@ leaves the repository untouched.
 
 ## Requirements
 
-Notebooks `01`–`03` and `06` need only JAFF itself. The code-generation
+Notebooks `01`–`03` and `06` need only JAFF itself, although `02` plots
+photo cross sections, so the first time it runs it downloads that data (see
+[Data files](installation.md#data-files)). The code-generation
 notebooks shell out to external tools:
 
 - `04_codegen_jaffgen.py` builds the Fortran solver with `gfortran` and `make`;
@@ -53,6 +55,6 @@ notebooks shell out to external tools:
 
 ## Tested in CI
 
-`tests/test_example_notebooks.py` runs every notebook headless as part of the
+`tests/meta/test_example_notebooks.py` runs every notebook headless as part of the
 regular test suite and requires it to exit 0. Notebooks `04` and `05` run only
 on Linux, and are skipped when a tool they need is missing.

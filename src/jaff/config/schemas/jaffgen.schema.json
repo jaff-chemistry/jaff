@@ -1,0 +1,784 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "AbsorptionCoefficientConfig": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Absorption coefficient",
+      "type": "object",
+      "description": "An absorption coefficient spectrum in ph_E (cm⁻¹); `type` selects the model and its keys."
+    },
+    "DustConfig": {
+      "additionalProperties": false,
+      "description": "Dust (`[network.dust]`); the table enables the dust module.",
+      "properties": {
+        "rv": {
+          "default": 3.1,
+          "description": "Total-to-selective extinction ratio R_V selecting the tabulated dust model: `3.1`, `4.0` or `5.5`.",
+          "enum": [
+            3.1,
+            4.0,
+            5.5
+          ],
+          "title": "Rv",
+          "type": "number"
+        },
+        "u_reduction": {
+          "default": "absorption",
+          "description": "Dust cross-section attenuating the radiation density: `\"extinction\"`, `\"absorption\"`, `\"scattering\"`, `\"transport\"` or `\"none\"`.",
+          "enum": [
+            "extinction",
+            "absorption",
+            "scattering",
+            "transport",
+            "none"
+          ],
+          "title": "U Reduction",
+          "type": "string"
+        },
+        "f_reduction": {
+          "default": "transport",
+          "description": "Dust cross-section attenuating the radiation flux (same choices).",
+          "enum": [
+            "extinction",
+            "absorption",
+            "scattering",
+            "transport",
+            "none"
+          ],
+          "title": "F Reduction",
+          "type": "string"
+        },
+        "pe": {
+          "$ref": "#/$defs/PhotoelectricEmissionConfig",
+          "default": {
+            "threshold_low": 6.0,
+            "threshold_high": 13.6
+          },
+          "description": "Photoelectric emission settings."
+        }
+      },
+      "title": "DustConfig",
+      "type": "object"
+    },
+    "EmissivityConfig": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Emissivity",
+      "type": "object",
+      "description": "A volume emission spectrum in ph_E (erg cm⁻³ s⁻¹ eV⁻¹); `type` selects the model and its keys."
+    },
+    "EnergyChangeConfig": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Energy change",
+      "type": "object",
+      "description": "Energy one event of the reaction adds to the gas (erg; negative cools); `type` selects the model and its keys."
+    },
+    "FermiDegenerateEosConfig": {
+      "additionalProperties": false,
+      "description": "Non-relativistic degenerate Fermi gas (`type = \"fermi_degenerate\"`).\n\nNot implemented yet: the config is accepted, but building the EOS raises\n`NotImplementedError`.",
+      "properties": {
+        "type": {
+          "const": "fermi_degenerate",
+          "default": "fermi_degenerate",
+          "description": "`\"fermi_degenerate\"` (case-insensitive); required.",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "FermiDegenerateEosConfig",
+      "type": "object"
+    },
+    "HeatingCoolingRateConfig": {
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Heating/cooling rate",
+      "type": "object",
+      "description": "A global heating/cooling mechanism (erg cm⁻³ s⁻¹; negative cools); `type` selects the model and its keys."
+    },
+    "IdealEosConfig": {
+      "additionalProperties": false,
+      "description": "Ideal-gas EOS (`type = \"ideal\"`).",
+      "properties": {
+        "type": {
+          "const": "ideal",
+          "default": "ideal",
+          "description": "`\"ideal\"` (case-insensitive); the EOS used when `type` is omitted.",
+          "title": "Type",
+          "type": "string"
+        },
+        "gamma": {
+          "default": 1.6666666666667,
+          "description": "Adiabatic index, > 1.",
+          "exclusiveMinimum": 1.0,
+          "title": "Gamma",
+          "type": "number"
+        }
+      },
+      "title": "IdealEosConfig",
+      "type": "object"
+    },
+    "JaffgenConfig": {
+      "additionalProperties": false,
+      "description": "Code-generation run (`[jaffgen]`, `jaffgen.toml` only).",
+      "properties": {
+        "template": {
+          "type": "string",
+          "description": "Built-in template collection.",
+          "title": "Template"
+        },
+        "input_dir": {
+          "format": "path",
+          "type": "string",
+          "description": "Directory of template files to process.",
+          "title": "Input Dir"
+        },
+        "input_files": {
+          "default": [],
+          "description": "Individual template files.",
+          "items": {
+            "format": "path",
+            "type": "string"
+          },
+          "title": "Input Files",
+          "type": "array"
+        },
+        "output_dir": {
+          "format": "path",
+          "type": "string",
+          "description": "Output directory; without it, `<repo_root>/generated`. Each run writes into a new folder in it, `<network>_<template>_<YYYYmmdd-HHMMSS>`.",
+          "title": "Output Dir"
+        },
+        "network_file": {
+          "format": "path",
+          "type": "string",
+          "description": "Network file, or the name of a predefined network.",
+          "title": "Network File"
+        },
+        "network_config": {
+          "format": "path",
+          "type": "string",
+          "description": "Another `jaff.toml`, merged over the one next to the network file.",
+          "title": "Network Config"
+        },
+        "echo": {
+          "default": true,
+          "description": "Echo the template directives as comments in the output.",
+          "title": "Echo",
+          "type": "boolean"
+        },
+        "table": {
+          "default": [],
+          "description": "`[[jaffgen.table]]` data-table conversions, passed on unchecked.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Table",
+          "type": "array"
+        }
+      },
+      "title": "JaffgenConfig",
+      "type": "object"
+    },
+    "MultiGammaEosConfig": {
+      "additionalProperties": false,
+      "description": "Ideal gas with a per-species adiabatic index (`type = \"multi_gamma\"`).",
+      "properties": {
+        "type": {
+          "const": "multi_gamma",
+          "default": "multi_gamma",
+          "description": "`\"multi_gamma\"` (case-insensitive); required.",
+          "title": "Type",
+          "type": "string"
+        },
+        "default_gamma": {
+          "description": "Adiabatic index of species absent from `gamma_map`, > 1.",
+          "exclusiveMinimum": 1.0,
+          "title": "Default Gamma",
+          "type": "number"
+        },
+        "gamma_map": {
+          "additionalProperties": {
+            "exclusiveMinimum": 1.0,
+            "type": "number"
+          },
+          "description": "Adiabatic index per species name, each > 1.",
+          "title": "Gamma Map",
+          "type": "object"
+        }
+      },
+      "required": [
+        "default_gamma",
+        "gamma_map",
+        "type"
+      ],
+      "title": "MultiGammaEosConfig",
+      "type": "object"
+    },
+    "NetworkConfig": {
+      "additionalProperties": false,
+      "description": "Network (`[network]`).",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Human-readable network name; without it, the network file stem.",
+          "title": "Label"
+        },
+        "strict": {
+          "default": false,
+          "description": "Treat validation problems (conservation, sinks/sources, ...) as fatal: the first one raises `NetworkCheckError`.",
+          "title": "Strict",
+          "type": "boolean"
+        },
+        "funcfile": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "format": "path",
+              "type": "string"
+            }
+          ],
+          "default": true,
+          "description": "`.jfunc` auxiliary file: `true` looks next to the network file, `false` loads none, a path names it.",
+          "title": "Funcfile"
+        },
+        "expand_nuclei": {
+          "default": true,
+          "description": "Expand `n_<element>_nuc` into the element-nucleus sum.",
+          "title": "Expand Nuclei",
+          "type": "boolean"
+        },
+        "reactions": {
+          "$ref": "#/$defs/ReactionsConfig",
+          "default": {
+            "duplicate_policy": "preserve-first",
+            "t_cutoff": "clip",
+            "photo": {
+              "override_custom_cross_section": false,
+              "override_custom_rate": false,
+              "pi_database": "norad",
+              "shielding": null,
+              "use_proxy_photoreaction": true
+            },
+            "reaction": {}
+          },
+          "description": "Settings of the reactions."
+        },
+        "radiation": {
+          "$ref": "#/$defs/RadiationConfig",
+          "description": "Radiation field; the table enables radiation."
+        },
+        "dust": {
+          "$ref": "#/$defs/DustConfig",
+          "description": "Dust; the table enables the dust module."
+        },
+        "thermodynamics": {
+          "$ref": "#/$defs/ThermodynamicsConfig",
+          "default": {
+            "eos": {
+              "gamma": 1.6666666666667,
+              "type": "ideal"
+            },
+            "heating_cooling_rate": []
+          },
+          "description": "Thermodynamics."
+        }
+      },
+      "title": "NetworkConfig",
+      "type": "object"
+    },
+    "PhotoConfig": {
+      "additionalProperties": false,
+      "description": "Photo-reaction settings (`[network.reactions.photo]`).\n\nThe same keys appear in the global `[network.reactions.photo]` table and\nin a reaction's own `[network.reactions.reaction.\"<serialized>\".photo]`\ntable.  A key left out of a reaction's table takes the global value; a key\nleft out of the global table takes its default: `pi_database = \"norad\"`,\n`override_custom_rate = false`, `override_custom_cross_section = false`,\n`use_proxy_photoreaction = true` and no `shielding`.",
+      "properties": {
+        "pi_database": {
+          "enum": [
+            "norad",
+            "verner",
+            "leiden"
+          ],
+          "type": "string",
+          "description": "Photoionisation cross-section database: `\"norad\"`, `\"verner\"` or `\"leiden\"`.",
+          "title": "Pi Database"
+        },
+        "override_custom_rate": {
+          "type": "boolean",
+          "description": "Replace a reaction's `.jfunc` `chemRateCoeff<N>` rate with one computed from its cross section over the radiation bands.  Has no effect without a `[network.radiation]` table: the `chemRateCoeff` is then always kept.",
+          "title": "Override Custom Rate"
+        },
+        "override_custom_cross_section": {
+          "type": "boolean",
+          "description": "Ignore a reaction's `.jfunc` `photoCrossSection<N>` and take its cross section from the database.  The global value only applies with a `[network.radiation]` table; a value in a reaction's own table applies with or without one.",
+          "title": "Override Custom Cross Section"
+        },
+        "use_proxy_photoreaction": {
+          "type": "boolean",
+          "description": "Look cross sections up under the proxy reaction (`CHx` → `CH`).",
+          "title": "Use Proxy Photoreaction"
+        },
+        "shielding": {
+          "$ref": "#/$defs/ShieldingConfig",
+          "description": "Line shielding of the rate; without it, the rate is not shielded."
+        }
+      },
+      "title": "PhotoConfig",
+      "type": "object"
+    },
+    "PhotoelectricEmissionConfig": {
+      "additionalProperties": false,
+      "description": "Photoelectric emission of the dust (`[network.dust.pe]`).",
+      "properties": {
+        "threshold_low": {
+          "default": 6.0,
+          "description": "Lower edge of the photoelectric band in eV (grain work function).",
+          "title": "Threshold Low",
+          "type": "number"
+        },
+        "threshold_high": {
+          "default": 13.6,
+          "description": "Upper edge of the photoelectric band in eV, above `threshold_low`.",
+          "title": "Threshold High",
+          "type": "number"
+        }
+      },
+      "title": "PhotoelectricEmissionConfig",
+      "type": "object"
+    },
+    "RadiationConfig": {
+      "additionalProperties": false,
+      "description": "Radiation field (`[network.radiation]`); the table enables radiation.\n\nOnly the shape of the settings is checked here; whether the band-averaged\nspectrum converges is checked by the radiation field itself.",
+      "properties": {
+        "bands": {
+          "description": "Increasing photon-energy band edges in eV, at least two; `\"inf\"` is allowed as the last edge only.",
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "const": "inf",
+                "type": "string"
+              }
+            ]
+          },
+          "title": "Bands",
+          "type": "array"
+        },
+        "profile_index": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            }
+          ],
+          "default": 0.0,
+          "description": "Spectral index *α* of the photon-number spectrum `n(E) ∝ E^(α-2)`: one for every band, or a list with one per band.",
+          "title": "Profile Index"
+        },
+        "mode": {
+          "default": "nph",
+          "description": "Tracked quantity: `\"nph\"` (photon number density) or `\"u\"` (energy density).",
+          "enum": [
+            "nph",
+            "u"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "c": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": 29979245800.0,
+          "description": "Speed of light in cm/s, or a symbol name (e.g. `\"c_hat\"`) for a reduced speed of light.",
+          "title": "C"
+        },
+        "background_field": {
+          "default": "draine",
+          "description": "Reference radiation field used to scale `chi_pe`.",
+          "enum": [
+            "bb_4000",
+            "bb_10000",
+            "bb_20000",
+            "draine",
+            "habing",
+            "mathis",
+            "solar",
+            "tw_hydra"
+          ],
+          "title": "Background Field",
+          "type": "string"
+        },
+        "absorption_attenuates_flux": {
+          "default": true,
+          "description": "Whether the `globalAbsorptionCoefficient` also attenuates the flux equations, not only the density equations.",
+          "title": "Absorption Attenuates Flux",
+          "type": "boolean"
+        },
+        "emissivity": {
+          "default": [],
+          "description": "Emission sources, each `{ type = \"<plugin>\", ... }`: a volume emissivity spectrum in `ph_E` (erg cm⁻³ s⁻¹ eV⁻¹).  Their spectra are summed with the `.jfunc` `globalEmissivity` and integrated over each band; an entry repeating another exactly (same type and settings) is rejected.  Empty by default.",
+          "items": {
+            "$ref": "#/$defs/EmissivityConfig"
+          },
+          "title": "Emissivity",
+          "type": "array"
+        },
+        "absorption_coefficient": {
+          "default": [],
+          "description": "Absorbers, each `{ type = \"<plugin>\", ... }`: an absorption coefficient spectrum in `ph_E` (cm⁻¹).  Their spectra are summed with the `.jfunc` `globalAbsorptionCoefficient` and averaged over each band; an entry repeating another exactly is rejected.  Empty by default.",
+          "items": {
+            "$ref": "#/$defs/AbsorptionCoefficientConfig"
+          },
+          "title": "Absorption Coefficient",
+          "type": "array"
+        }
+      },
+      "required": [
+        "bands"
+      ],
+      "title": "RadiationConfig",
+      "type": "object"
+    },
+    "ReactionConfig": {
+      "additionalProperties": false,
+      "description": "Settings of one reaction (`[network.reactions.reaction.\"<serialized>\"]`).\n\n`None` means unset: the value comes from the global settings.",
+      "properties": {
+        "duplicate_policy": {
+          "enum": [
+            "preserve-first",
+            "preserve-last",
+            "error"
+          ],
+          "type": "string",
+          "description": "How two rate coefficients over the same temperature range are resolved: `\"preserve-first\"`, `\"preserve-last\"` or `\"error\"`.",
+          "title": "Duplicate Policy"
+        },
+        "t_cutoff": {
+          "enum": [
+            "clip",
+            "extrapolate",
+            "zero"
+          ],
+          "type": "string",
+          "description": "Rate outside the temperature range: `\"clip\"` holds the value at the nearest limit, `\"extrapolate\"` extends the outermost formulas and `\"zero\"` makes the rate 0 below the lowest and above the highest limit (KROME's behaviour).  A gap between two ranges is interpolated in every mode.",
+          "title": "T Cutoff"
+        },
+        "photo": {
+          "$ref": "#/$defs/PhotoConfig",
+          "description": "Photo-reaction settings."
+        },
+        "thermodynamics": {
+          "$ref": "#/$defs/ReactionThermodynamicsConfig",
+          "description": "Thermodynamic settings of this reaction only (`energy_change`); there is no `[network.reactions]` default."
+        }
+      },
+      "title": "ReactionConfig",
+      "type": "object"
+    },
+    "ReactionThermodynamicsConfig": {
+      "additionalProperties": false,
+      "description": "Thermodynamic settings of one reaction (its `thermodynamics` table).",
+      "properties": {
+        "energy_change": {
+          "$ref": "#/$defs/EnergyChangeConfig",
+          "description": "The energy-change plugin of the reaction (`{ type = \"<plugin>\", ... }`): the energy one event adds to the gas (erg; negative cools).  A `.jfunc` `deltaE<N>` takes preference over it."
+        }
+      },
+      "title": "ReactionThermodynamicsConfig",
+      "type": "object"
+    },
+    "ReactionsConfig": {
+      "additionalProperties": false,
+      "description": "Settings of the reactions (`[network.reactions]`).\n\nEach key applies to every reaction, unless a reaction's own table\n(`reaction.\"<serialized>\"`) sets it.",
+      "properties": {
+        "duplicate_policy": {
+          "default": "preserve-first",
+          "description": "How two rate coefficients over the same temperature range are resolved: `\"preserve-first\"`, `\"preserve-last\"` or `\"error\"`.",
+          "enum": [
+            "preserve-first",
+            "preserve-last",
+            "error"
+          ],
+          "title": "Duplicate Policy",
+          "type": "string"
+        },
+        "t_cutoff": {
+          "default": "clip",
+          "description": "Rate outside the temperature range: `\"clip\"` holds the value at the nearest limit, `\"extrapolate\"` extends the outermost formulas and `\"zero\"` makes the rate 0 below the lowest and above the highest limit (KROME's behaviour).  A gap between two ranges is interpolated in every mode.",
+          "enum": [
+            "clip",
+            "extrapolate",
+            "zero"
+          ],
+          "title": "T Cutoff",
+          "type": "string"
+        },
+        "photo": {
+          "$ref": "#/$defs/PhotoConfig",
+          "default": {
+            "pi_database": "norad",
+            "override_custom_rate": false,
+            "override_custom_cross_section": false,
+            "use_proxy_photoreaction": true,
+            "shielding": null
+          },
+          "description": "Photo-reaction settings."
+        },
+        "reaction": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ReactionConfig"
+          },
+          "default": {},
+          "description": "Per-reaction settings keyed by serialized reaction; a key set there wins over the same key here.",
+          "title": "Reaction",
+          "type": "object"
+        }
+      },
+      "title": "ReactionsConfig",
+      "type": "object"
+    },
+    "RelativisticFermiDegenerateEosConfig": {
+      "additionalProperties": false,
+      "description": "Relativistic degenerate Fermi gas (`type = \"relativistic_fermi_degenerate\"`).\n\nNot implemented yet: the config is accepted, but building the EOS raises\n`NotImplementedError`.",
+      "properties": {
+        "type": {
+          "const": "relativistic_fermi_degenerate",
+          "default": "relativistic_fermi_degenerate",
+          "description": "`\"relativistic_fermi_degenerate\"` (case-insensitive); required.",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "RelativisticFermiDegenerateEosConfig",
+      "type": "object"
+    },
+    "ShieldingConfig": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "db1996"
+            },
+            "min_ncol": {
+              "default": 1e-50,
+              "description": "Floor on the dimensionless column `x = N(H2) / 5e14 cm^-2` of the fit (a floor on `x`, not on the column density in cm^-2).",
+              "title": "Min Ncol",
+              "type": "number"
+            },
+            "min_vdisp": {
+              "default": 1e-50,
+              "description": "Floor on the dimensionless Doppler parameter `b5 = sqrt(2) * vdisp / 1e5 cm/s` of the fit (a floor on `b5`, not on the velocity dispersion in cm/s); keeps `x / b5` finite when `vdisp` is 0.",
+              "title": "Min Vdisp",
+              "type": "number"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "db1996 shielding (only for H2._PHOTON__H.H)",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "hg2015"
+            },
+            "min_ncol": {
+              "default": 1e-50,
+              "description": "Floor on the dimensionless column `x = N(H2) / 5e14 cm^-2` of the fit (a floor on `x`, not on the column density in cm^-2).",
+              "title": "Min Ncol",
+              "type": "number"
+            },
+            "min_vdisp": {
+              "default": 1e-50,
+              "description": "Floor on the dimensionless Doppler parameter `b5 = sqrt(2) * vdisp / 1e5 cm/s` of the fit (a floor on `b5`, not on the velocity dispersion in cm/s); keeps `x / b5` finite when `vdisp` is 0.",
+              "title": "Min Vdisp",
+              "type": "number"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "title": "hg2015 shielding (only for H2._PHOTON__H.H)",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "leiden"
+            },
+            "shielded_by": {
+              "description": "Shielding species, `\"self\"` being the reaction's own reactant; their factors multiply.",
+              "items": {
+                "enum": [
+                  "H2",
+                  "H",
+                  "C",
+                  "N2",
+                  "CO",
+                  "self"
+                ],
+                "type": "string"
+              },
+              "title": "Shielded By",
+              "type": "array"
+            },
+            "radiation": {
+              "default": "isrf",
+              "description": "Radiation field the shielding factors were computed for: the name of a subgroup of the reaction's group in the shipped `leiden.hdf5` (case-insensitive).  Every reaction has `\"isrf\"` (the default), `\"bb-4000\"`, `\"bb-10000\"`, `\"bb-20000\"`, `\"ly-alpha\"`, `\"solar\"` and `\"tw-hya\"`; all but `\"Zn._PHOTON__Zn+.e-\"` have `\"mathis-1983\"`; only `\"HF._PHOTON__F.H\"` and `\"HF._PHOTON__HF+.e-\"` have `\"gondhalekar-1980\"` and `\"habing-1968\"`.  Some subgroups lack some species (`\"ly-alpha\"` is empty for 84 of the 149 reactions).  The value is not checked when the config is read: a missing subgroup fails when the shielding table is read from `leiden.hdf5`.",
+              "title": "Radiation",
+              "type": "string"
+            }
+          },
+          "required": [
+            "shielded_by"
+          ],
+          "title": "leiden shielding",
+          "type": "object"
+        }
+      ],
+      "description": "Line shielding of a photo reaction; `type` selects the model (default 'leiden') and its keys.",
+      "title": "Shielding"
+    },
+    "ThermodynamicsConfig": {
+      "additionalProperties": false,
+      "description": "Thermodynamics (`[network.thermodynamics]`).",
+      "properties": {
+        "eos": {
+          "default": {
+            "type": "ideal",
+            "gamma": 1.6666666666667
+          },
+          "description": "Equation of state; its `type` selects the model and its keys.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/IdealEosConfig"
+            },
+            {
+              "$ref": "#/$defs/MultiGammaEosConfig"
+            },
+            {
+              "$ref": "#/$defs/FermiDegenerateEosConfig"
+            },
+            {
+              "$ref": "#/$defs/RelativisticFermiDegenerateEosConfig"
+            }
+          ],
+          "title": "Eos"
+        },
+        "heating_cooling_rate": {
+          "default": [],
+          "description": "Global heating/cooling mechanisms, each `{ type = \"<plugin>\", ... }` (erg cm⁻³ s⁻¹; negative cools).  Their rates are summed and added to the `.jfunc` `heatingCoolingRate`; an entry repeating another exactly (same type and settings) is rejected.  Empty by default.",
+          "items": {
+            "$ref": "#/$defs/HeatingCoolingRateConfig"
+          },
+          "title": "Heating Cooling Rate",
+          "type": "array"
+        }
+      },
+      "title": "ThermodynamicsConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A `jaffgen.toml` file: a code-generation run and its network settings.",
+  "properties": {
+    "network": {
+      "$ref": "#/$defs/NetworkConfig",
+      "default": {
+        "label": null,
+        "strict": false,
+        "funcfile": true,
+        "expand_nuclei": true,
+        "reactions": {
+          "duplicate_policy": "preserve-first",
+          "photo": {
+            "override_custom_cross_section": false,
+            "override_custom_rate": false,
+            "pi_database": "norad",
+            "shielding": null,
+            "use_proxy_photoreaction": true
+          },
+          "reaction": {},
+          "t_cutoff": "clip"
+        },
+        "radiation": null,
+        "dust": null,
+        "thermodynamics": {
+          "eos": {
+            "gamma": 1.6666666666667,
+            "type": "ideal"
+          },
+          "heating_cooling_rate": []
+        }
+      }
+    },
+    "jaffgen": {
+      "$ref": "#/$defs/JaffgenConfig",
+      "default": {
+        "template": null,
+        "input_dir": null,
+        "input_files": [],
+        "output_dir": null,
+        "network_file": null,
+        "network_config": null,
+        "echo": true,
+        "table": []
+      }
+    }
+  },
+  "title": "JaffgenTomlConfig",
+  "type": "object"
+}

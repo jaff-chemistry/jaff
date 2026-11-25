@@ -1,3 +1,5 @@
+# ABOUTME: Radiation and RadiationGroup: the radiation bands and the band-averaged
+# ABOUTME: symbolic photo-reaction rate coefficients
 """
 Radiation band groups and frequency-integrated rate coefficients.
 
@@ -12,18 +14,22 @@ This module defines two classes:
 
 Photon spectrum assumption
 --------------------------
-The photon number spectrum is assumed to follow a power law in photon energy::
+The photon number spectrum is assumed to follow a power law in photon energy:
 
-    n(E) ∝ E^(α - 2)
+```text
+n(E) ∝ E^(α - 2)
+```
 
 where ``α`` is the spectral index ``profile_idx`` (from
-``RadiationProps.profile_index``).  ``α`` may be a single global value or one
+``RadiationConfig.profile_index``).  ``α`` may be a single global value or one
 value per band, in which case the spectrum is a piecewise power law (a
 histogram, intentionally discontinuous at band edges): each band ``i`` uses its
 own ``α_i`` and is normalised independently.  The energy-integrated version
-(energy density per unit energy interval) is therefore::
+(energy density per unit energy interval) is therefore:
 
-    u(E) = E * n(E) ∝ E^(α - 1)
+```text
+u(E) = E * n(E) ∝ E^(α - 1)
+```
 
 This form is used when computing band-average cross sections and average
 photon energies.
@@ -31,16 +37,20 @@ photon energies.
 Rate coefficient derivation
 ----------------------------
 For a reaction with tabulated cross section σ(E) the *photon-flux-weighted*
-average cross section in band *i* is::
+average cross section in band *i* is:
 
-    <σ>_i = ∫_{E_lo}^{E_hi} σ(E) n(E) dE  /  ∫_{E_lo}^{E_hi} n(E) dE
+```text
+<σ>_i = ∫_{E_lo}^{E_hi} σ(E) n(E) dE  /  ∫_{E_lo}^{E_hi} n(E) dE
+```
 
 The symbolic rate coefficient stored in the radiation density variable
 ``den[i]`` (either energy density *u_i* in erg/cm³ or photon density *n_i*
-in cm⁻³) is::
+in cm⁻³) is:
 
-    k_i = c * den[i] * <σ>_i          (photon density mode)
-    k_i = c * den[i] * <σ>_i / <E>_i  (energy density mode)
+```text
+k_i = c * den[i] * <σ>_i          (photon density mode)
+k_i = c * den[i] * <σ>_i / <E>_i  (energy density mode)
+```
 
 where *c* is the speed of light and ``<E>_i`` is the band-average photon
 energy (``eavg``).  The rate counts photons, so ``<σ>_i`` is photon-number
@@ -48,9 +58,11 @@ weighted.
 
 The radiation a band *loses* is a different quantity in energy-density mode:
 each absorbed photon takes its own energy ``E``, so the energy loss weights
-the (absorption) cross section by photon energy::
+the (absorption) cross section by photon energy:
 
-    du_i/dt ⊃ -c * u_i * <σ>_i^(E),   <σ>_i^(E) = ∫ σ E n dE / ∫ E n dE
+```text
+du_i/dt ⊃ -c * u_i * <σ>_i^(E),   <σ>_i^(E) = ∫ σ E n dE / ∫ E n dE
+```
 
 In photon-density mode the band loses photons at the reaction rate, so the
 photon-number weighting applies to both.
@@ -68,31 +80,34 @@ field is therefore an energy density in erg/cm³.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING, ClassVar, List, cast
 
 import numpy as np
 import sympy as sp
 from astropy import units as u
 
 from ...common._integrators import smart_integrate
-from ...core.reaction.reaction_props import GroupedPhotoReactionProps
-from ._photochemistry import Photochemistry, XsecProps
+from ...io import JaffLogger
+from ...io._logger import jaff_progress
 from .background_field import BackgroundField
 
 if TYPE_CHECKING:
     from ...core.network import Network
-    from ...core.reaction import Reaction
-    from ...physics import RadiationProps
+    from .config import RadiationConfig
 
 
 class RadiationGroup:
     """
     A single frequency band in the radiation field discretisation.
 
-    Each group spans the photon-energy interval ``[lower, upper]`` (in eV).
+    Each group spans the photon-energy interval ``[lower, upper]`` (in eV) and
+    holds that band's spectral profile and its integrals, the normalisations of
+    the band averages.  :class:`Radiation` builds one group per band
+    (``net.radiation.groups``); you normally only read them.
+
     Per-reaction band data is not stored here: each photo reaction holds one
-    :class:`~jaff.core.reaction.reaction_props.GroupedPhotoReactionProps` per
-    band in ``reaction.photo.rgrouped``.
+    :class:`~jaff.physics.PhotoBand` per band in ``reaction.photo.bands``, each
+    holding its group; ``reaction.photo.band_xsecs`` shows them as a table.
 
     Parameters
     ----------
@@ -122,10 +137,6 @@ class RadiationGroup:
         Lower energy bound in eV.
     upper : float, int, or sympy.Basic
         Upper energy bound in eV.
-    band : tuple
-        ``(lower, upper)`` convenience pair.
-    dE : float or sympy.Basic
-        Band width ``upper - lower`` in eV.
     profile_idx : float
         Spectral index *α* of this band.
     ph_E : sympy.Symbol
@@ -148,15 +159,35 @@ class RadiationGroup:
         terms by it stays CGS-consistent.  Computed on construction and
         shared across all reactions in the band.
     emissivity : sympy.Expr or None
-        The network ``globalEmissivity`` integrated over this band, in the units of
-        the band's density equation (erg cm⁻³ s⁻¹ in ``"u"`` mode, photons
-        cm⁻³ s⁻¹ in ``"nph"`` mode); see :meth:`Radiation.integrate_over_groups`.
-        ``None`` without a ``globalEmissivity`` function.
+        The network emissivity (``globalEmissivity`` plus the ``emissivity``
+        plugins) integrated over this band, in the units of the band's density
+        equation (erg cm⁻³ s⁻¹ in ``"u"`` mode, photons cm⁻³ s⁻¹ in ``"nph"``
+        mode); see :meth:`Radiation.integrate_over_groups`.  ``None`` without
+        either.
     absorption_coefficient : sympy.Expr or None
-        The network ``globalAbsorptionCoefficient`` averaged over this band
-        (cm⁻¹), energy-weighted in ``"u"`` mode and photon-number weighted in
-        ``"nph"`` mode; see :meth:`Radiation.average_over_groups`.  ``None``
-        without a ``globalAbsorptionCoefficient`` function.
+        The network absorption coefficient (``globalAbsorptionCoefficient`` plus
+        the ``absorption_coefficient`` plugins) averaged over this band (cm⁻¹),
+        energy-weighted in ``"u"`` mode and photon-number weighted in ``"nph"``
+        mode; see :meth:`Radiation.average_over_groups`.  ``None`` without
+        either.  It is removed from
+        the band's density equation as ``c * <α>_i * den[i]``.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> net = Network(
+    ...     "h_photoionization",
+    ...     radiation={"bands": [1, 13.6, 100, "inf"]},
+    ... )
+    >>> grp = net.radiation.groups[1]
+    >>> grp, grp.sym, grp.lower, grp.upper
+    (Rad_group(1, band=(13.6, 100.0)), photden[1], 13.6, 100.0)
+    >>> grp.nph_profile, grp.energy_profile
+    (ph_E**(-2.0), ph_E**(-1.0))
+    >>> grp.photden  # ∫ E^-2 dE from 13.6 to 100 eV
+    0.06352941176470589
+    >>> net.radiation.groups[2].upper  # open band (100 eV, oo)
+    oo
     """
 
     def __init__(
@@ -184,23 +215,21 @@ class RadiationGroup:
         profile_idx : float
             Spectral index *α* of this band's photon-number spectrum
             ``n(E) ∝ E^(α-2)``.
+
+        Raises
+        ------
+        ValueError
+            If *lower* is not an ``int`` or ``float``.
         """
         self.index: int = index
         self.sym: sp.Basic = sym
         self.lower: float | int = lower
         self.upper: float | int | sp.Basic = upper
-        self.band: tuple = (lower, upper)
 
         if not isinstance(self.lower, (int, float)):
             raise ValueError(
                 f"Radiation group lower bound must be a float or int. Found {self.lower}"
             )
-        # Band width; may be symbolic when upper is sp.oo.
-        self.dE: float | None = (
-            self.upper - self.lower  # type: ignore
-            if all(isinstance(val, (int, float)) for val in [self.upper, self.lower])
-            else None
-        )
         from ...core.network import NetworkSymbols
 
         self.ph_E: sp.Symbol = NetworkSymbols.ph_E
@@ -230,7 +259,7 @@ class RadiationGroup:
         str
             String including group index and energy band.
         """
-        return f"Rad_group({self.index}, band={self.band})"
+        return f"Rad_group({self.index}, band={(self.lower, self.upper)})"
 
     def __str__(self):
         """Return human-readable description of this radiation group.
@@ -247,78 +276,154 @@ class Radiation:
     """
     Collection of frequency bands with integrated photoionisation rate coefficients.
 
-    On construction the band-edge list is parsed (replacing the string
-    ``"inf"`` with ``sympy.oo``) and a :class:`RadiationGroup` object is
-    created for each consecutive pair of edges.
+    The radiation field is split into contiguous photon-energy *bands*.  On
+    construction the band-edge list is parsed (replacing the string ``"inf"``
+    with ``sympy.oo``) and a :class:`RadiationGroup` object is created for each
+    consecutive pair of edges.
+
+    :class:`~jaff.core.Network` builds it from its radiation config, given as
+    the ``radiation`` argument (a dict or a
+    :class:`~jaff.physics.photo_reactions.config.RadiationConfig`) or as the
+    ``[network.radiation]`` table of a config file, and stores it as
+    ``net.radiation`` (``None`` when radiation is off).  Every photo reaction
+    then assembles its rate coefficient and per-band data from the band
+    integrals offered here (see
+    :meth:`~jaff.core.reaction.PhotoReaction.band_rates`).
 
     Parameters
     ----------
     network : Network
         The network the radiation field belongs to; retained on
         ``self.network`` and forwarded to shielding look-ups.
-    props : RadiationProps
-        Radiation configuration object supplying the band edges, spectral
-        index, mode, speed of light, and background field (see
-        :class:`~jaff.physics.RadiationProps`).
+    config : RadiationConfig
+        The ``[network.radiation]`` config: band edges, spectral index, mode,
+        speed of light, background field and absorption flag.
 
     Attributes
     ----------
     network : Network
         The network passed to the constructor.
+    config : RadiationConfig
+        The ``[network.radiation]`` settings (read-only).  ``config.mode`` is
+        ``"nph"`` (field tracked as photon number density, cm⁻³) or ``"u"``
+        (energy density, erg cm⁻³): it names the density variable
+        (``"photden"`` vs. ``"radeden"``) and sets the normalisation of the
+        rate coefficients.  ``config.absorption_attenuates_flux`` says whether
+        the ``globalAbsorptionCoefficient`` also attenuates the flux equations
+        (``-c * <α>_i * rflux[i]``); see :meth:`odes`.
     bands : list of (int, float, or sympy.Basic)
-        Band-edge list from ``props.bands`` (``"inf"`` already replaced by
-        ``sympy.oo`` by :class:`RadiationProps`).
-    mode : str
-        ``"nph"`` -- field tracked as photon number density (cm⁻³) -- or
-        ``"u"`` -- field tracked as energy density (erg cm⁻³).  Controls the
-        name of the symbolic density variable (``"radeden"`` vs. ``"photden"``)
-        and the normalisation of rate coefficients.
+        Band-edge list from ``config.bands``, ``"inf"`` replaced by
+        ``sympy.oo``.
     c : float or sympy.Symbol
         Speed of light in cm/s (CGS), used in rate-coefficient expressions as
-        ``k = c * den * <σ>``.  A string value in ``props.c`` (e.g. ``"c_hat"``
+        ``k = c * den * <σ>``.  A string value in ``config.c`` (e.g. ``"c_hat"``
         for a reduced speed of light) becomes a SymPy symbol.
     background_field : BackgroundField
-        Background radiation field built from ``props.background_field``.
+        Background radiation field built from ``config.background_field``.
     nbands : int
         Number of bands (``len(bands) - 1``).
     den : sympy.IndexedBase
         Symbolic radiation-density variable, shape ``(nbands,)``, named
         ``"radeden"`` in energy-density mode or ``"photden"`` otherwise.
+    flux : sympy.IndexedBase
+        Symbolic radiation-flux variable ``rflux``, shape ``(nbands,)``: the
+        flux moment of each band, in the units of :attr:`den` times a speed.
     groups : list of RadiationGroup
         One :class:`RadiationGroup` per band, in ascending energy order.  Each
         carries its own spectral index *α_i* (``grp.profile_idx``, from
-        ``props.profile_index``; a scalar applies to every band).  Typical
+        ``config.profile_index``; a scalar applies to every band).  Typical
         values: 1 (flat energy spectrum), 2 (flat photon spectrum).
     ph_E : sympy.Symbol
         The photon-energy symbol (eV), :attr:`NetworkSymbols.ph_E`, used in the
         symbolic profiles.
     nph_profile : sympy.Piecewise
-        Piecewise photon-number spectral profile: ``E^(α_i - 2)`` in band *i*
-        (see :meth:`_piecewise_profile`).
+        Piecewise photon-number spectral profile: ``E^(α_i - 2)`` in band *i*.
+        A point on an interior edge belongs to the band above it; energies
+        below ``bands[0]`` use the first band's profile and energies above
+        ``bands[-1]`` the last band's.  When every band has the same index the
+        pieces collapse into one power law.
     energy_profile : sympy.Piecewise
-        Piecewise energy-density spectral profile: ``E^(α_i - 1)`` in band *i*.
+        Piecewise energy-density spectral profile: ``E^(α_i - 1)`` in band *i*
+        (same edge rules).
     photden_tot : sympy.Expr or float
         Integral of ``nph_profile`` over the full band range (the sum of the
         per-band ``grp.photden``), used to normalise the full-spectrum
-        cross section ``reaction.photo.xsec.total``.
+        cross section ``reaction.photo.xsec_total``.
     emissivity : sympy.Expr or None
-        The network ``.jfunc`` ``globalEmissivity``: the *volume* emissivity,
-        i.e. radiation energy emitted per unit volume, time and photon energy
-        (erg cm⁻³ s⁻¹ eV⁻¹), integrated over solid angle, as an expression in
-        ``ph_E``.  ``None`` without one.  Its
+        The network's *volume* emissivity: the ``.jfunc`` ``globalEmissivity``
+        plus every ``config.emissivity`` plugin entry, i.e. radiation energy
+        emitted per unit volume, time and photon energy (erg cm⁻³ s⁻¹ eV⁻¹),
+        integrated over solid angle, as an expression in ``ph_E``.  ``None``
+        without either.  Its
         per-group integrals are ``grp.emissivity``; their sum is
-        :attr:`total_emissivity`.
+        :attr:`total_emissivity`.  Set by :meth:`compute`.
     absorption_coefficient : sympy.Expr or None
-        The network ``.jfunc`` ``globalAbsorptionCoefficient``: the fraction of
-        the radiation absorbed per unit path length (cm⁻¹) as a function of
-        ``ph_E`` (eV).  ``None`` without one.  Its per-group averages are
-        ``grp.absorption_coefficient``.
+        The network's absorption coefficient: the ``.jfunc``
+        ``globalAbsorptionCoefficient`` plus every ``config.absorption_coefficient``
+        plugin entry, the fraction of the radiation absorbed per unit path length
+        (cm⁻¹) as a function of ``ph_E`` (eV).  ``None`` without either.  Its per-group averages are
+        ``grp.absorption_coefficient``.  Set by :meth:`compute`.
+
+    Notes
+    -----
+    Within band *i* the photon-number spectrum is a power law with that band's
+    own spectral index ``α_i`` (``config.profile_index``: a scalar for every
+    band, or one value per band):
+
+    ```
+    n(E) ∝ E^(α_i - 2),    u(E) = E n(E) ∝ E^(α_i - 1)
+    ```
+
+    Each band is normalised on its own, so the spectrum is a histogram,
+    discontinuous at the band edges by design.  Common values are ``α = 1``
+    (flat energy spectrum) and ``α = 2`` (flat photon spectrum).
+
+    The rate coefficient of a photo reaction is the sum over bands of
+
+    ```
+    k_i = c * den[i] * <σ>_i            ("nph" mode)
+    k_i = c * den[i] * <σ>_i / <E>_i    ("u" mode)
+    ```
+
+    with ``<σ>_i`` the photon-number-weighted band-average cross section and
+    ``<E>_i`` the band-average photon energy (``grp.eavg``, erg), i.e.
+    ``c * photon_density(group) * <σ>_i`` (:meth:`photon_density`).  Each photo
+    reaction assembles it (:meth:`~jaff.core.reaction.PhotoReaction.band_rates`)
+    and stores it as ``reaction.photo.band_rate``, ``reaction.photo.xsec_total``
+    and ``reaction.photo.bands``.  :meth:`odes` builds the
+    radiation-moment equations from them, laid out by :meth:`ordered_index`.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from jaff import Network
+    >>> net = Network(
+    ...     "h_photoionization",
+    ...     radiation={
+    ...         "bands": [1, 13.6, 100, "inf"],
+    ...         "profile_index": [0, 1, 0],
+    ...     },
+    ... )
+    >>> rad = net.radiation
+    >>> rad.bands, rad.nbands, rad.config.mode, rad.den
+    ([1.0, 13.6, 100.0, oo], 3, 'nph', photden)
+    >>> rad.groups
+    [Rad_group(0, band=(1.0, 13.6)), Rad_group(1, band=(13.6, 100.0)), Rad_group(2, band=(100.0, oo))]
+    >>> [grp.profile_idx for grp in rad.groups]
+    [0.0, 1.0, 0.0]
+    >>> rad.nph_profile
+    Piecewise((ph_E**(-2.0), ph_E < 13.6), (ph_E**(-1.0), ph_E < 100.0), (ph_E**(-2.0), True))
+    >>> float(rad.photden_tot)  # (1 - 1/13.6) + ln(100/13.6) + 1/100
+    2.931570981481379
     """
+
+    ORDERS: ClassVar[tuple[int, ...]] = (0, 1, 2, 3)
+    """The layouts of the radiation equations (see :meth:`ordered_index`)."""
 
     def __init__(
         self,
         network: Network,
-        props: RadiationProps,
+        config: RadiationConfig,
     ):
         """Parse band edges and construct one :class:`RadiationGroup` per band.
 
@@ -327,46 +432,49 @@ class Radiation:
         network : Network
             The network the radiation field belongs to; stored on
             ``self.network`` and used for shielding look-ups.
-        props : RadiationProps
-            Radiation configuration supplying ``bands`` (photon-energy band
-            edges in eV, ``"inf"`` already replaced by ``sympy.oo``),
-            ``profile_index`` (spectral index *α* for ``n(E) ∝ E^(α-2)``; a
-            scalar or one value per band),
+        config : RadiationConfig
+            The ``[network.radiation]`` config: ``bands`` (photon-energy band
+            edges in eV, ``"inf"`` allowed last), ``profile_index`` (spectral
+            index *α* for ``n(E) ∝ E^(α-2)``; a scalar or one value per band),
             ``mode`` (``"nph"`` photon number density or ``"u"`` energy
             density), ``c`` (speed of light in cm/s, or a string converted to a
-            symbol), and ``background_field``.
-        """
+            symbol), ``background_field`` and ``absorption_attenuates_flux``.
 
+        Raises
+        ------
+        RuntimeError
+            If the band-averaged photon energy diverges at an open band edge
+            (energy-density mode).
+        """
+        self.logger = JaffLogger().get_logger()
         self.network: Network = network
-        self.bands: list[int | float | sp.Basic] = props.bands
-        self.mode: str = props.mode
+        self.config: RadiationConfig = config
+        profile_indices = self._profile_indices(config)
+        self.bands: list[int | float | sp.Basic] = [
+            sp.oo if edge == "inf" else edge for edge in config.bands
+        ]
+        self._check_convergence(profile_indices)
         # Speed of light (cm/s) for k = c * σ * n(E) expressions
         self.c: float | sp.Symbol = (
-            sp.symbols(props.c) if isinstance(props.c, str) else props.c
+            sp.symbols(config.c) if isinstance(config.c, str) else config.c
         )
-        self.background_field = BackgroundField(props.background_field)
-        # Global photoionization database; reactions may override it.
-        self.pi_database: str = props.pi_database
-        self.override_custom_rate: bool = props.override_custom_rate
-        self.override_custom_cross_section: bool = props.override_custom_cross_section
-        # Whether the global absorption coefficient also attenuates the flux.
-        self.absorption_attenuates_flux: bool = props.absorption_attenuates_flux
+        self.background_field = BackgroundField(config.background_field)
 
         self.nbands: int = len(self.bands) - 1
         # Symbolic radiation density variable: energy density (erg/cm³) or
         # photon number density (cm⁻³), depending on the mode.
         self.den = sp.IndexedBase(
-            "radeden" if self.mode == "u" else "photden", shape=(self.nbands,)
+            "radeden" if self.config.mode == "u" else "photden", shape=(self.nbands,)
         )
+        # Symbolic radiation flux variable (the first moment), one per band.
+        self.flux = sp.IndexedBase("rflux", shape=(self.nbands,))
         self.groups: list[RadiationGroup] = [
             RadiationGroup(
                 lower=lower,  # type: ignore
                 upper=self.bands[i + 1],
                 index=i,
                 sym=self.den[i],
-                profile_idx=props.profile_index
-                if not isinstance(props.profile_index, list)
-                else props.profile_index[i],
+                profile_idx=profile_indices[i],
             )
             for i, lower in enumerate(self.bands[:-1])
         ]
@@ -380,6 +488,107 @@ class Radiation:
         # Set by the network once the species are known.
         self.emissivity: sp.Expr | None = None
         self.absorption_coefficient: sp.Expr | None = None
+
+    @staticmethod
+    def _profile_indices(config: RadiationConfig) -> list[float]:
+        """Return the spectral index *α_i* of each band (a scalar applies to all)."""
+        nbands = len(config.bands) - 1
+        if isinstance(config.profile_index, list):
+            return [float(alpha) for alpha in config.profile_index]
+
+        return [float(config.profile_index)] * nbands
+
+    def _check_convergence(self, alphas: list[float]) -> None:
+        """Check the band integrals converge at the open band edges.
+
+        Only the first band reaches ``E → 0`` and only the last reaches
+        ``E → ∞``, so each edge is checked against its own band's index.  A
+        divergent photon-number integral ``∫ n dE`` (``photden``) or, in
+        ``"nph"`` mode, energy integral ``∫ E·n dE`` (``eden``, hence ``eavg``)
+        is logged as a warning; the band keeps the integrator's value, which is
+        then meaningless.
+
+        Raises
+        ------
+        RuntimeError
+            In energy-density mode, if ``<E>`` diverges at a zero lower edge or
+            an infinite upper edge (every rate divides by it).
+        """
+        bands = self.bands
+        alpha_lo, alpha_hi = alphas[0], alphas[-1]
+        starts_at_zero = isinstance(bands[0], (float, int)) and float(bands[0]) == 0.0
+        ends_at_inf = bands[-1] == sp.oo
+
+        if self.config.mode == "u":
+            # The average-energy numerator ∫ E·n(E) dE is the integral of the
+            # energy-density spectrum u(E) = E·n(E) ∝ E^(α-1), i.e. a power law
+            # with index pl_index = (α-2) + 1 = α - 1.
+            # pl_index + 1 = α: α < 0 diverges at E → 0, α > 0 diverges at
+            # E → ∞, and α == 0 (pl_index == -1) log-diverges at both ends.
+            if starts_at_zero and alpha_lo <= 0.0:
+                raise RuntimeError(
+                    f"The integral for average energy will diverge since the radiation band starts from bands[0]: {bands[0]}\n"
+                    "Please try a non-zero value"
+                )
+            if ends_at_inf and alpha_hi >= 0.0:
+                raise RuntimeError(
+                    f'The integral for average energy will diverge since the radiation band ends at bands[{len(bands) - 1}]: "inf"\n'
+                    "Please try a non-infinite value or change the profile_index"
+                )
+
+        first = f"bands[0] = {bands[0]}"
+        last = f'bands[{len(bands) - 1}] = "inf"'
+
+        # ∫ n dE ∝ ∫ E^(α-2) dE converges at E → ∞ for α < 1, at E → 0 for α > 1.
+        if ends_at_inf and alpha_hi >= 1.0:
+            self._warn_divergent("photon number", "∫E^(α-2)dE", last, alpha_hi)
+        if starts_at_zero and alpha_lo <= 1.0:
+            self._warn_divergent("photon number", "∫E^(α-2)dE", first, alpha_lo)
+
+        # ∫ E·n dE ∝ ∫ E^(α-1) dE converges at E → ∞ for α < 0, at E → 0 for
+        # α > 0 ("u" mode raised above).
+        if self.config.mode == "nph":
+            if ends_at_inf and alpha_hi >= 0.0:
+                self._warn_divergent(
+                    "average photon energy", "∫E^(α-1)dE", last, alpha_hi
+                )
+            if starts_at_zero and alpha_lo <= 0.0:
+                self._warn_divergent(
+                    "average photon energy", "∫E^(α-1)dE", first, alpha_lo
+                )
+
+        if (
+            not starts_at_zero
+            and alpha_lo <= 1.0
+            and isinstance(bands[0], (float, int))
+            and float(bands[0]) < 1.0
+        ):
+            self.logger.warning(
+                f"Radiation band starts at bands[0]={bands[0]} eV with "
+                f"profile_index={alpha_lo} (first band): the photon-number "
+                "normalisation integral ∫E^(α-2)dE is lower-edge divergent "
+                "(exponent ≤ -1) and near E→0 becomes ill-conditioned, which "
+                "can yield a negative/garbage photon density. Use a non-zero "
+                "bands[0] ≳ 1 eV or a larger profile_index."
+            )
+
+    def _warn_divergent(
+        self, quantity: str, integral: str, edge: str, alpha: float
+    ) -> None:
+        """Warn that the *quantity* integral of the band at *edge* diverges."""
+        affected = {
+            "photon number": "its photon density normalisation and photon-weighted "
+            "cross sections",
+            "average photon energy": "its average photon energy (eavg) and anything "
+            "converting its photon density to an energy density (e.g. chi_pe with "
+            "dust, the band_xsecs eavg)",
+        }[quantity]
+
+        self.logger.warning(
+            f"The {quantity} integral {integral} of the radiation band at {edge} "
+            f"diverges with profile_index={alpha}: {affected} are meaningless. "
+            "Use a finite / non-zero edge or change the profile_index."
+        )
 
     def _piecewise_profile(self, attr: str) -> sp.Expr:
         """Join the per-band profiles ``grp.<attr>`` into one ``sympy.Piecewise``.
@@ -401,169 +610,235 @@ class Radiation:
 
         return sp.Piecewise(*pieces)
 
-    def get_reaction_rate_props(
-        self, reaction: Reaction
-    ) -> Tuple[sp.Expr, float, List[GroupedPhotoReactionProps]]:
-        """
-        Compute and store symbolic band-averaged rate coefficients for a reaction.
+    def photon_density(self, group: RadiationGroup) -> sp.Expr:
+        """Photon number density of *group* (cm⁻³), from its :attr:`den` symbol.
 
-        Reads the tabulated photo cross section σ(E) from
-        ``reaction.photo.xsec``, then for each frequency band:
-
-        1. Computes the photon-number-weighted band-average cross section
-           ``<σ>_i = ∫ σ n dE / ∫ n dE``.
-        2. Computes the band-average photon energy
-           ``<E>_i = ∫ E n dE / ∫ n dE`` (stored once per band).
-        3. Assembles the symbolic rate coefficient
-           ``k_i = c * den[i] * <σ>_i`` (photon-density mode) or
-           ``k_i = c * den[i] * <σ>_i / <E>_i`` (energy-density mode).
-        4. Assembles the band loss coefficient ``c * den[i] * <σ>_i`` that
-           :func:`~jaff.physics._equations.get_sradodes` removes from the band,
-           with the absorption cross section energy-weighted in
-           energy-density mode (each absorbed photon takes its own energy).
-        5. Collects the loss coefficient (as ``k``), the band-average cross
-           section and the cross-section fraction into one
-           :class:`GroupedPhotoReactionProps` per band.
-
-        After iterating over all bands the total symbolic rate coefficient
-        (sum over bands, in units of s⁻¹ or cm³ s⁻¹ depending on reaction
-        type) is returned as ``k_tot``.
-
-        If the reaction has no cross section (no ``photo.xsec``, or no
-        ``photodecay`` array / ``photodecay_expr``) a ``ValueError`` is raised.
+        ``den[i]`` itself in ``"nph"`` mode; in ``"u"`` mode the energy density
+        divided by the band-average photon energy, ``den[i] / <E>_i``.
 
         Parameters
         ----------
-        reaction : Reaction
-            The photochemical reaction to process.
+        group : RadiationGroup
+            The band.
 
         Returns
         -------
-        tuple[sympy.Expr, float, list[GroupedPhotoReactionProps]]
-            ``(k_tot, xsec_tot, grouped)``: the total rate coefficient summed
-            over bands, the cross section averaged over the whole spectrum
-            (cm²), and one entry per band in ``self.groups`` order.  The
-            caller stores them on ``reaction.rate_coefficient``,
-            ``reaction.photo.xsec.total`` and ``reaction.photo.rgrouped``.
-
-        Notes
-        -----
-        The photon-number spectrum used for averaging is the piecewise power
-        law ``n(E) ∝ E^(α_i - 2)`` in band *i* (``α_i = grp.profile_idx``).
-        For ``α = 1`` this gives a flat energy spectrum; for ``α = 2`` a flat
-        photon spectrum.
-
-        Cross-section integrals (``∫ σ n dE``) use
-        :func:`~jaff.common._integrators.smart_integrate`: tabulated ``(E, σ)``
-        arrays go through ``arr_integrate`` and Verner expressions through
-        ``sym_integrate``.  The remaining analytic integrals over ``n(E)`` and
-        ``E n(E)`` use the same function, which falls back to numerical
-        quadrature when SymPy cannot find a closed form.
+        sympy.Expr
+            The photon density.
         """
-        photo = reaction.photo
-        if photo is None or photo.xsec is None:
-            raise ValueError(
-                f"Photo reaction {reaction} has no cross section (photo.xsec is None)"
-            )
+        density = self.den[group.index]
+        if self.config.mode == "u":
+            return density / group.eavg
 
-        xsec: XsecProps = photo.xsec
+        return density
 
-        # Each reaction carries a single decay-channel cross section, either as
-        # tabulated arrays (NORAD / Leiden) or as a SymPy expression (Verner);
-        # only tabulated sources can carry a separate absorption cross section.
-        absorption: np.ndarray | None = None
-        if xsec.photodecay_expr is not None:
-            E: np.ndarray | sp.Symbol = self.ph_E
-            decay: np.ndarray | sp.Expr = xsec.photodecay_expr
-        else:
-            if xsec.photodecay is None:
-                raise ValueError(
-                    f"Photodecay cross-section cannot be None for reaction: {reaction}"
+    def energy_density(self, group: RadiationGroup) -> sp.Expr:
+        """Radiation energy density of *group* (erg cm⁻³), from its :attr:`den` symbol.
+
+        ``den[i]`` itself in ``"u"`` mode; in ``"nph"`` mode the photon density
+        times the band-average photon energy, ``den[i] · <E>_i``.
+
+        Parameters
+        ----------
+        group : RadiationGroup
+            The band.
+
+        Returns
+        -------
+        sympy.Expr
+            The energy density.
+        """
+        density = self.den[group.index]
+        if self.config.mode == "nph":
+            return density * group.eavg
+
+        return density
+
+    def loss_cross_section(
+        self,
+        xsec: np.ndarray | sp.Expr,
+        ph_E: np.ndarray | sp.Symbol,
+        group: RadiationGroup,
+        ph_profile: np.ndarray | None,
+        photon_average: float | sp.Expr,
+    ) -> float | sp.Expr:
+        """Band-average cross section that sets how fast an absorber drains *group*.
+
+        Each absorbed photon removes one photon (``"nph"`` mode: the
+        photon-number-weighted *photon_average*) or its own energy (``"u"``
+        mode: the energy-weighted average of *xsec*, see
+        :meth:`get_group_average_cross_section`).
+
+        Parameters
+        ----------
+        xsec : numpy.ndarray or sympy.Expr
+            The absorbing cross section (cm²), as for
+            :meth:`get_group_average_cross_section`.
+        ph_E : numpy.ndarray or sympy.Symbol
+            Its photon-energy grid (eV) or symbol.
+        group : RadiationGroup
+            The band.
+        ph_profile : numpy.ndarray or None
+            :meth:`get_photden_profile` on a tabulated *ph_E*, or ``None``.
+        photon_average : float or sympy.Expr
+            The photon-number-weighted band average of *xsec*, already computed.
+
+        Returns
+        -------
+        float or sympy.Expr
+            The loss cross section (cm²).
+        """
+        if self.config.mode != "u":
+            return photon_average
+
+        return self.get_group_average_cross_section(
+            xsec, ph_E, group, ph_profile, energy_weighted=True
+        )
+
+    def odes(self, order: int = 0, form: str = "expanded") -> List[sp.Expr]:
+        """Symbolic right-hand sides of the radiation-moment equations of every band.
+
+        Each band *i* has two moments, the density ``den[i]`` (``radeden`` in
+        erg cm⁻³, or ``photden`` in cm⁻³) and the flux ``rflux[i]``
+        (:attr:`flux`).  Its density equation holds:
+
+        - the losses to photo reactions (each band's loss coefficient
+          ``bands[i].k`` times the reaction's reactant densities); photo
+          reactions whose rate comes from a ``.jfunc`` ``chemRateCoeff<N>`` are not
+          coupled to the bands and are skipped;
+        - the absorption by the medium ``-c · <α>_i · den[i]`` (a
+          ``globalAbsorptionCoefficient``);
+        - the radiation emitted by reactions with a spectral yield
+          (``reaction.rad.group_yields`` times the reaction rate) and the band's
+          ``globalEmissivity``.
+
+        Its flux equation is the density losses with ``den[i] → rflux[i]``;
+        emission is isotropic and feeds the density only, and the absorption
+        enters it only with ``absorption_attenuates_flux``.  With dust, the dust
+        attenuation (:meth:`~jaff.physics.Dust.attenuation`) is subtracted from
+        both.  Transport terms (the flux divergence, the radiation pressure) are
+        not included.
+
+        Parameters
+        ----------
+        order : {0, 1, 2, 3}, optional
+            Layout of the result (see :meth:`ordered_index`):
+
+            - ``0`` (default): ``[den_0, flux_0, den_1, flux_1, ...]``;
+            - ``1``: ``[flux_0, den_0, flux_1, den_1, ...]``;
+            - ``2``: ``[den_0, den_1, ..., flux_0, flux_1, ...]``;
+            - ``3``: ``[flux_0, flux_1, ..., den_0, den_1, ...]``.
+        form : {"expanded", "reduced"}, optional
+            Form of the reaction rates in the emission term (see
+            :class:`~jaff.core.reaction.Rate`), by default ``"expanded"``.  The
+            photo losses use each band's own coefficient and are unaffected.
+
+        Returns
+        -------
+        list of sympy.Expr
+            ``2 * nbands`` expressions, laid out as *order* says.
+
+        Raises
+        ------
+        ValueError
+            If *order* is not one of ``0``, ``1``, ``2``, ``3``, or *form* is
+            unknown.
+        RuntimeError
+            If a photo reaction without a custom rate has no per-band data.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> net = Network(
+        ...     "h_photoionization",
+        ...     radiation={"bands": [1, 13.6, 100, "inf"]},
+        ... )
+        >>> net.radiation.odes()  # [den_0, flux_0, den_1, flux_1, den_2, flux_2]
+        [0, 0, -5.85154082319921e-8*nden[0]*photden[1], -5.85154082319921e-8*nden[0]*rflux[1], -1.1420465158197e-10*nden[0]*photden[2], -1.1420465158197e-10*nden[0]*rflux[2]]
+        """
+        if order not in self.ORDERS:
+            raise ValueError("Invalid order: Supported orders are 0, 1, 2, 3")
+        from ...core.reaction.rate import check_form  # core imports physics
+
+        check_form(form)
+
+        # Obtain the flux-moment equation from the density-moment equation:
+        # replace each density symbol den[i] with the flux rflux[i].
+        flux_map = {g.sym: self.flux[g.index] for g in self.groups}
+        losses = self._photo_losses()
+        emissions = self._emissions(form)
+        dust = self.network.dust
+
+        odes: List[sp.Expr] = [sp.Float(0.0) for _ in range(2 * self.nbands)]
+        for group in self.groups:
+            rate = losses[group.index]
+
+            # Absorption by the medium: -c <α>_i den_i.  Added before the den → rflux
+            # substitution it also attenuates the flux; afterwards only the density.
+            absorption: sp.Expr = sp.Float(0.0)
+            if group.absorption_coefficient is not None:
+                absorption = -self.c * group.absorption_coefficient * group.sym
+            if self.config.absorption_attenuates_flux:
+                rate += absorption
+                absorption = sp.Float(0.0)
+
+            flux = rate.xreplace(flux_map)
+            rate += absorption
+
+            # Emission is isotropic, so it feeds the density equation only.
+            rate += emissions[group.index]
+            if group.emissivity is not None:
+                rate += group.emissivity
+
+            if dust is not None:
+                density_loss, flux_loss = dust.attenuation(group)
+                rate -= density_loss
+                flux -= flux_loss
+
+            ei, fi = self.ordered_index(group.index, order)
+            odes[ei] = rate
+            odes[fi] = flux
+
+        return odes
+
+    def _photo_losses(self) -> List[sp.Expr]:
+        """Per band, the radiation photo reactions remove (a negative rate)."""
+        net = self.network
+        nden = net.symbols.ndens
+        losses: List[sp.Expr] = [sp.Float(0.0) for _ in self.groups]
+        for reaction in jaff_progress.track(
+            net.reactions.with_type("photo"), description="Generating radiation equations"
+        ):
+            photo = reaction.photo
+            # A custom-rate reaction is not coupled to the bands.
+            if photo is not None and photo.custom_rad_rate:
+                continue
+
+            # With radiation, every other photo reaction has its bands (or the
+            # build raised), so missing data is a broken invariant.
+            if photo is None or not photo.bands:
+                raise RuntimeError(
+                    f"Photo reaction {reaction} has no per-band radiation data"
                 )
 
-            assert isinstance(xsec.photon_energy, np.ndarray)
-            E = xsec.photon_energy  # photon energy array in eV
-            decay = xsec.photodecay
+            for band in photo.bands:
+                # k times every reactant density (mass-action kinetics).
+                loss = band.k
+                for reactant in reaction.reactants.core:
+                    loss *= nden[net.species[str(reactant)].index]
+                losses[band.group.index] -= loss
 
-            if xsec.process.absorption:
-                absorption = xsec.photo_absorption
+        return losses
 
-        k_tot: sp.Expr = sp.Float(
-            0.0
-        )  # Accumulates total rate coefficient over all bands
+    def _emissions(self, form: str) -> List[sp.Expr]:
+        """Per band, the radiation emitted by reactions with a spectral yield."""
+        emissions: List[sp.Expr] = [sp.Float(0.0) for _ in self.groups]
+        for reaction in self.network.reactions.radiation_emitters():
+            yields = reaction.rad.group_yields
+            for group, group_yield in zip(self.groups, yields, strict=True):
+                emissions[group.index] += group_yield * reaction.rate.form(form)
 
-        # Total cross section averaged over the full spectrum (cm²),
-        # stored on the reaction for later reference
-        profile = self.get_photden_profile(E) if isinstance(E, np.ndarray) else None
-        xsec_tot: float = self.get_total_average_cross_section(decay, E, profile)
-
-        # Shielding factor, the same for every band: a user-fixed "value", or
-        # the shielding model evaluated once (it may write per-reaction tables).
-        shielding: sp.Expr | float | None = None
-        if photo.shielding is not None:
-            shielding = (
-                photo.shielding.props["value"]
-                if "value" in photo.shielding.props
-                else Photochemistry.shielding(reaction, self.network)
-            )
-
-        # Reset any back-references from a previous run before repopulating.
-        grouped: List[GroupedPhotoReactionProps] = []
-
-        for grp in self.groups:
-            # Photon-number-weighted average cross section in the band:
-            # <σ>_i = ∫ σ(E) n(E) dE / ∫ n(E) dE
-            pr_xsec_avg: float = self.get_group_average_cross_section(
-                decay, E, grp, profile
-            )
-            rad_xsec_avg: float = (
-                self.get_group_average_cross_section(absorption, E, grp, profile)
-                if absorption is not None
-                else pr_xsec_avg
-            )
-            loss_xsec_avg = (
-                self.get_group_average_cross_section(
-                    decay if absorption is None else absorption,
-                    E,
-                    grp,
-                    profile,
-                    energy_weighted=True,
-                )
-                if self.mode == "u"
-                else rad_xsec_avg
-            )
-
-            # Photon-counting rate coefficient: k_rate = c · den[i] · <σ>_i
-            # (units: s⁻¹ for photon-density mode, cm³ s⁻¹ for two-body)
-            k_rate: sp.Expr = self.c * self.den[grp.index] * rad_xsec_avg
-            # Band loss coefficient: what get_sradodes removes from den[i].
-            k: sp.Expr = self.c * self.den[grp.index] * loss_xsec_avg
-            if shielding is not None:
-                k_rate *= shielding
-                k *= shielding
-
-            rgroup: GroupedPhotoReactionProps = GroupedPhotoReactionProps(
-                k=k,
-                xsec=rad_xsec_avg,
-                xsec_frac=rad_xsec_avg / xsec_tot
-                if xsec_tot != 0.0
-                else 0.0,  # fraction of total cross section
-            )
-            grouped.append(rgroup)
-
-            # In energy-density mode, convert from "per eV" to "per photon"
-            # by dividing by the band-average energy <E>_i.
-            k_tot += (
-                k_rate
-                * (
-                    1.0
-                    if not xsec.process.absorption
-                    else (pr_xsec_avg / rad_xsec_avg if rad_xsec_avg != 0.0 else 0.0)
-                )
-                / (grp.eavg if self.mode == "u" else 1)
-            )
-
-        return k_tot, xsec_tot, grouped
+        return emissions
 
     def ordered_index(self, idx: int, order: int) -> tuple[int, int]:
         """
@@ -599,10 +874,22 @@ class Radiation:
 
         Notes
         -----
-        This method is used by :func:`~jaff.physics._equations.get_sradodes`
+        This method is used by :meth:`odes`
         to place each band's pair of moment equations at the correct position
         in the generated ODE array, matching the memory layout expected by
         the downstream numerical integrator.
+
+        Examples
+        --------
+        >>> from jaff import Network
+        >>> net = Network(
+        ...     "h_photoionization",
+        ...     radiation={"bands": [1, 13.6, 100, "inf"]},
+        ... )
+        >>> net.radiation.nbands
+        3
+        >>> [net.radiation.ordered_index(1, order) for order in range(4)]
+        [(2, 3), (3, 2), (1, 4), (4, 1)]
         """
         # Default (order 0): interleaved, density first.
         ei = 2 * idx  # density slot
@@ -643,6 +930,20 @@ class Radiation:
         numpy.ndarray
             The photon-number profile ``E^(profile_idx_i - 2)`` evaluated at
             each energy, same shape as ``ph_energy``.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from jaff import Network
+        >>> net = Network(
+        ...     "h_photoionization",
+        ...     radiation={
+        ...         "bands": [1, 13.6, 100, "inf"],
+        ...         "profile_index": [0, 1, 0],
+        ...     },
+        ... )
+        >>> net.radiation.get_photden_profile(np.array([5.0, 50.0, 200.0]))
+        array([4.0e-02, 2.0e-02, 2.5e-05])
         """
         lowers = np.array([float(grp.lower) for grp in self.groups])
         alphas = np.array([float(grp.profile_idx) for grp in self.groups])
@@ -651,23 +952,6 @@ class Radiation:
         )
 
         return ph_energy ** (alphas[band_idx] - 2)
-
-    def get_eden_profile(self, ph_energy: np.ndarray) -> np.ndarray:
-        """Evaluate the energy-density spectral profile on an energy grid.
-
-        Parameters
-        ----------
-        ph_energy : numpy.ndarray
-            Photon energies in eV.
-
-        Returns
-        -------
-        numpy.ndarray
-            The piecewise energy-density profile ``E^(profile_idx_i - 1)``
-            evaluated at each energy, using each band's own spectral index
-            (see :meth:`get_photden_profile`).
-        """
-        return ph_energy * self.get_photden_profile(ph_energy)
 
     def get_total_average_cross_section(
         self,
@@ -766,6 +1050,57 @@ class Radiation:
 
         return smart_integrate(xsec * profile, ph_E, (group.lower, group.upper)) / norm
 
+    def compute(self) -> None:
+        """Integrate the network's emissivity and absorption over the bands.
+
+        Each spectrum is the ``.jfunc`` function plus every plugin entry of
+        ``config.emissivity`` / ``config.absorption_coefficient`` (summed).  Sets
+        :attr:`emissivity` (the total emissivity spectrum) and each group's
+        ``emissivity`` (its integral over the band), and
+        :attr:`absorption_coefficient` (the total absorption spectrum) and each
+        group's ``absorption_coefficient`` (its band average).  Each is left
+        ``None`` without its function and plugins.  Run by
+        :class:`~jaff.core.Network` once its reactions are linked, so an
+        ``rc_<N>`` in either function is reaction *N*'s final rate coefficient.
+        """
+        resolve = self.network.reactions.resolve_rate_references
+
+        self.emissivity = self._spectrum("globalemissivity", "emissivity")
+        if self.emissivity is not None:
+            values = self.integrate_over_groups(self.emissivity)
+            for group, value in zip(self.groups, values, strict=True):
+                group.emissivity = resolve(value)
+
+        self.absorption_coefficient = self._spectrum(
+            "globalabsorptioncoefficient", "absorption_coefficient"
+        )
+        if self.absorption_coefficient is not None:
+            values = self.average_over_groups(self.absorption_coefficient)
+            for group, value in zip(self.groups, values, strict=True):
+                group.absorption_coefficient = resolve(value)
+
+    def _spectrum(self, function: str, key: str) -> sp.Expr | None:
+        """The ``.jfunc`` *function* plus every plugin entry of ``config.<key>``.
+
+        ``None`` when there is neither.  Each entry's plugin is looked up in the
+        registry of *key* (``emissivity`` or ``absorption_coefficient``).
+        """
+        from .absorption_coefficient import absorption_coefficient_function
+        from .emissivity import emissivity_function
+
+        lookup = {
+            "emissivity": emissivity_function,
+            "absorption_coefficient": absorption_coefficient_function,
+        }[key]
+        terms: list[sp.Expr] = []
+        if function in self.network.functions:
+            terms.append(self.network.functions.value(function))
+        for entry in getattr(self.config, key):
+            plugin = lookup(entry.type)
+            terms.append(getattr(plugin, key)(self.network, entry.params))
+
+        return sp.Add(*terms) if terms else None
+
     def integrate_over_groups(self, spectrum: sp.Expr) -> List[sp.Expr]:
         """Integrate an emitted spectrum over each group, in density-equation units.
 
@@ -796,7 +1131,7 @@ class Radiation:
             If a spectrum with symbols other than ``ph_E`` has no closed-form
             integral over a group.
         """
-        if self.mode == "u":
+        if self.config.mode == "u":
             return [
                 sp.sympify(smart_integrate(spectrum, self.ph_E, (grp.lower, grp.upper)))
                 for grp in self.groups
@@ -841,11 +1176,145 @@ class Radiation:
         return [
             sp.sympify(
                 self.get_group_average_cross_section(
-                    spectrum, self.ph_E, grp, energy_weighted=self.mode == "u"
+                    spectrum, self.ph_E, grp, energy_weighted=self.config.mode == "u"
                 )
             )
             for grp in self.groups
         ]
+
+    def absorbed_average(
+        self,
+        expr: sp.Expr,
+        xsec: np.ndarray | sp.Expr,
+        energy: np.ndarray | sp.Symbol,
+    ) -> List[sp.Expr]:
+        """*expr* (in :attr:`ph_E`) averaged over the photons absorbed from each group.
+
+        ``<f>_i = ∫_i σ n f dE / ∫_i σ n dE``, with the absorbing cross section
+        ``σ`` and the group's photon spectrum ``n``: the weight of a reaction rate,
+        which counts photons, in either mode.  A group where ``σ`` averages to
+        zero gives 0; an *expr* free of ``ph_E`` is returned for every group.
+
+        Parameters
+        ----------
+        expr : sympy.Expr
+            The quantity per absorbed photon, e.g. an energy change per event.
+        xsec : numpy.ndarray or sympy.Expr
+            The cross section (cm²): tabulated on the *energy* grid, or an
+            expression in *energy*, the :attr:`ph_E` symbol.
+        energy : numpy.ndarray or sympy.Symbol
+            The photon-energy grid (eV) of a tabulated *xsec*, or :attr:`ph_E`.
+
+        Returns
+        -------
+        list[sympy.Expr]
+            One average per group, in ``self.groups`` order.
+
+        Raises
+        ------
+        ValueError
+            If, with a tabulated *xsec*, *expr* mixes ``ph_E`` with other
+            quantities other than as a polynomial in ``ph_E``.
+        """
+        if self.ph_E not in expr.free_symbols:
+            return [expr for _ in self.groups]
+
+        if isinstance(energy, np.ndarray):
+            profile = self.get_photden_profile(energy)
+            # A tabulated energy grid comes with a tabulated cross section.
+            terms = self._tabulated_terms(expr, energy, cast(np.ndarray, xsec))
+        else:
+            profile = None
+            terms = [(sp.Float(1.0), xsec * expr)]
+
+        values: List[sp.Expr] = []
+        for group in self.groups:
+            norm = self.get_group_average_cross_section(xsec, energy, group, profile)
+            if norm == 0.0:
+                values.append(sp.Float(0.0))
+                continue
+            values.append(
+                sum(
+                    (
+                        coeff
+                        * self.get_group_average_cross_section(w, energy, group, profile)
+                        / norm
+                        for coeff, w in terms
+                    ),
+                    sp.Float(0.0),
+                )
+            )
+
+        return values
+
+    def _tabulated_terms(
+        self, expr: sp.Expr, energy: np.ndarray, xsec: np.ndarray
+    ) -> List[tuple[sp.Expr, np.ndarray]]:
+        """``expr · σ`` on the table grid as ``(coefficient, weighted table)`` terms.
+
+        A function of ``ph_E`` alone is one term (coefficient 1); a polynomial in
+        ``ph_E`` one term per power, its (possibly symbolic) coefficient kept
+        outside the average.
+        """
+        if expr.free_symbols == {self.ph_E}:
+            values = sp.lambdify(self.ph_E, expr, "numpy")(energy)
+            return [(sp.Float(1.0), xsec * np.broadcast_to(values, energy.shape))]
+        if expr.is_polynomial(self.ph_E):
+            return [
+                (coeff, xsec * energy**power)
+                for (power,), coeff in sp.Poly(expr, self.ph_E).terms()
+            ]
+
+        raise ValueError(
+            f"{expr} mixes ph_E with other quantities, so it cannot be averaged over a "
+            "tabulated cross section: write it as a polynomial in ph_E, or use a "
+            "cross section in ph_E (photoCrossSection<N>)"
+        )
+
+    def emitted_average(self, expr: sp.Expr, spectral_yield: sp.Expr) -> sp.Expr:
+        """*expr* (in :attr:`ph_E`) averaged over the photons a yield emits into the groups.
+
+        ``<f> = Σ_i ∫_i N f dE / Σ_i ∫_i N dE`` with the emitted photons per eV
+        ``N(E) = Y(E) / E``, over the groups only: photons outside them are not
+        part of the field.
+
+        Parameters
+        ----------
+        expr : sympy.Expr
+            The quantity per emitted photon, e.g. an energy change per event.
+        spectral_yield : sympy.Expr
+            The emitted energy per event per unit photon energy, ``Y`` (erg eV⁻¹),
+            in :attr:`ph_E` (a reaction's ``spectralYield<N>``).
+
+        Returns
+        -------
+        sympy.Expr
+            The average (other symbols, e.g. ``tgas``, stay symbolic).
+
+        Raises
+        ------
+        ValueError
+            If the yield emits no photons inside the groups, or an integral with
+            other symbols has no closed form.
+        """
+        photons = spectral_yield / self.ph_E
+
+        def total(integrand: sp.Expr) -> sp.Expr:
+            return sp.sympify(
+                sum(
+                    smart_integrate(integrand, self.ph_E, (grp.lower, grp.upper))
+                    for grp in self.groups
+                )
+            )
+
+        norm = total(photons)
+        if norm.is_zero:
+            raise ValueError(
+                "the spectral yield emits no photons inside the radiation bands, so a "
+                "quantity per emitted photon (ph_E) cannot be averaged"
+            )
+
+        return total(photons * expr) / norm
 
     @property
     def total_emissivity(self) -> sp.Expr | None:
@@ -858,4 +1327,4 @@ class Radiation:
         if self.emissivity is None:
             return None
 
-        return sum((grp.emissivity for grp in self.groups), sp.S.Zero)  # type: ignore[arg-type]
+        return sum((grp.emissivity for grp in self.groups), sp.S.Zero)  # type: ignore

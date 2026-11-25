@@ -64,11 +64,13 @@ def _(mo):
 
     1. **Read** the file and detect each line's format;
     2. **Parse & assemble**: every new species name becomes a `Specie`, every line
-       becomes a `Reaction`;
-    3. **Standardise symbols**: densities in rate expressions are rewritten onto
-       one vector, `nden[i, 0]`, where `i` is the species index;
-    4. **Validate**: mass and charge conservation, sinks/sources, duplicates;
-    5. **Finalise**: build stoichiometry matrices and the set of elements.
+       becomes a `Reaction` (checked for mass and charge conservation as it is
+       built); duplicate reactions are resolved by the duplicate policy;
+    3. **Elements**: collect the set of elements the species are built from;
+    4. **Standardise symbols**: densities in rate expressions are rewritten onto
+       one vector, `nden[i]`, where `i` is the species index;
+    5. **Validate**: sinks/sources, missing recombinations, isomers;
+    6. **Finalise**: build the stoichiometry matrices.
 
     JAFF prints a banner when it loads; the helper cell at the bottom of this
     notebook hides it so the output stays readable.
@@ -96,7 +98,7 @@ def _(mo, net):
     mo.ui.table(
         [
             {"attribute": "net.label", "value": net.label},
-            {"attribute": "net.filename", "value": net.filename.name},
+            {"attribute": "net.filename", "value": net.filename},
             {"attribute": "net.species.count", "value": net.species.count},
             {"attribute": "net.reactions.count", "value": net.reactions.count},
             {
@@ -228,6 +230,59 @@ def _(mo, net):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
+    `net.visualize` draws this structure as figures, with reactions coloured by
+    type. Most of demo1's reactions are written in formats that carry no
+    reaction type, so here we draw `networks/demos/water_co.jet`: a small,
+    chemically consistent network (cosmic-ray-driven formation of water and CO)
+    whose every reaction is typed. `stoichiometry()` is the net-change matrix as
+    a figure: consumed species filled, produced species outlined, each row
+    numbered and coloured by reaction type. `graph()` lays the network out with
+    species in columns by atom count and each reaction as a numbered square
+    between its reactants and products.
+    """)
+    return
+
+
+@app.cell
+def _(WATER_CO, load_network):
+    water = load_network(WATER_CO)
+    return (water,)
+
+
+@app.cell
+def _(water):
+    matrix_fig, _ = water.visualize.stoichiometry(show=False)
+    matrix_fig
+    return
+
+
+@app.cell
+def _(water):
+    graph_fig, _ = water.visualize.graph(show=False)
+    graph_fig
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
+    `species(name)` zooms in on one species: the reactions forming it on the
+    left (with their other reactants), those destroying it on the right (with
+    their other products). Here is water.
+    """)
+    return
+
+
+@app.cell
+def _(water):
+    water_fig, _ = water.visualize.species("H2O", show=False)
+    water_fig
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
     Every reaction should conserve mass and charge, so each row's changes,
     weighted by species mass (or charge), must sum to zero. JAFF already checked
     this during loading (phase 4); here is the charge check done by hand for every
@@ -274,13 +329,14 @@ def _():
     logging.disable(logging.WARNING)
 
     DEMO1 = mo.notebook_dir().parent / "networks" / "demos" / "demo1.jet"
+    WATER_CO = mo.notebook_dir().parent / "networks" / "demos" / "water_co.jet"
 
     def load_network(path: Path, **kwargs) -> Network:
         """Load a network, hiding the banner JAFF prints on stdout."""
         with contextlib.redirect_stdout(io.StringIO()):
             return Network(str(path), **kwargs)
 
-    return DEMO1, load_network, mo
+    return DEMO1, WATER_CO, load_network, mo
 
 
 @app.cell

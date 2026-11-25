@@ -1,3 +1,5 @@
+# ABOUTME: HDF5Dict: dict mirror of an HDF5 file's group/dataset hierarchy with
+# ABOUTME: leaf-dataset schema (_kind/_data/_dtype/_attrs), filters and flatten/nest.
 """
 HDF5 in-memory dictionary representation.
 
@@ -14,13 +16,16 @@ keys:
     ``"linear"`` for a plain N-D array; ``"compound"`` for a NumPy
     structured-dtype (record) array.
 ``_data``
-    The actual data as a NumPy array (result of ``dataset[()]``).
+    The actual data as a NumPy array (result of ``dataset[()]``).  Text
+    (variable- or fixed-length strings, and the text fields of a compound
+    dataset) is decoded to ``str`` in an ``object`` array, not ``bytes``.
 ``_dtype``
     For ``"linear"``: a JAFF dtype token string (e.g. ``"f64"``).
     For ``"compound"``: a ``{field_name: dtype_token}`` mapping.
 ``_attrs``
     ``{attr_name: attr_value}`` dictionary of HDF5 dataset attributes.
-    May be empty; omitted entirely if the dataset has no attributes.
+    Always present when read from a file; an empty dict if the dataset has
+    no attributes.
 ``_name``
     Optional human-readable name, read from the ``_name`` HDF5 attribute
     if it was previously stored by :class:`~jaff.drivers.HDF5`.
@@ -36,12 +41,18 @@ to NumPy dtypes.  :meth:`HDF5Dict._from_np` provides the inverse mapping.
 
 Examples
 --------
->>> from pathlib import Path
->>> hd = HDF5Dict(Path("rates.hdf5"))
->>> hd["/temperatures"]["_kind"]
+>>> import h5py
+>>> import numpy as np
+>>> with h5py.File("rates.hdf5", "w") as f:
+...     f["temperatures"] = np.logspace(1, 4, 5)
+...     f["rates/k1"] = np.ones(5)
+>>> hd = HDF5Dict("rates.hdf5")
+>>> hd["temperatures"]["_kind"]
 'linear'
->>> hd["/temperatures"]["_dtype"]
+>>> hd["temperatures"]["_dtype"]
 'f64'
+>>> hd["rates"]["k1"]["_attrs"]
+{}
 """
 
 import fnmatch
@@ -75,6 +86,14 @@ class HDF5Dict(dict):
           A ``"file.h5::/internal/group"`` string (``::`` delimiter) parses
           from the named internal group onward.
         * ``dict`` — use directly without any HDF5 parsing.
+    include : str, list of str, or None, optional
+        Keep only datasets whose bare name, or the bare name of any ancestor
+        group, matches one of these :func:`fnmatch.fnmatch` patterns
+        (default ``None``: keep all).  Ignored for a plain ``dict``.
+    exclude : str, list of str, or None, optional
+        Drop any dataset or group whose bare name, or any ancestor's, matches
+        one of these patterns; wins over *include* (default ``None``: drop
+        nothing).  Ignored for a plain ``dict``.
 
     Raises
     ------
@@ -83,10 +102,18 @@ class HDF5Dict(dict):
 
     Examples
     --------
+    Wrap a plain dict, write it with :class:`~jaff.drivers.HDF5`, then read the
+    file back:
+
+    >>> import numpy as np
+    >>> from jaff.drivers import HDF5
+    >>> from jaff.types import HDF5Dict
     >>> hd = HDF5Dict(
-    ...     {"rates": {"_kind": "linear", "_data": arr, "_dtype": "f64", "_attrs": {}}}
+    ...     {"rates": {"_kind": "linear", "_data": np.array([1.0, 2.0]), "_dtype": "f64"}}
     ... )
-    >>> hd2 = HDF5Dict(Path("output.hdf5"))
+    >>> HDF5().from_dict("output.hdf5", hd, mode="w")
+    >>> HDF5Dict("output.hdf5")["rates"]["_data"]
+    array([1., 2.])
     """
 
     def __init__(
@@ -194,10 +221,9 @@ class HDF5Dict(dict):
 
         Examples
         --------
-        >>> hd = HDF5Dict(Path("rates.hdf5"))
-        >>> flat = hd.flatten()
-        >>> list(flat.keys())
-        ['/temperatures', '/rates/k1', '/rates/k2']
+        >>> hd = HDF5Dict("rates.hdf5")  # the file from the module example
+        >>> list(hd.flatten().keys())
+        ['/rates/k1', '/temperatures']
         """
         if not d:
             d = self
@@ -329,7 +355,7 @@ class HDF5Dict(dict):
             ds_name = attrs.pop("_name", None)
             node = {
                 "_kind": "compound" if obj.dtype.fields else "linear",
-                "_data": obj[()],  # Read all data into memory
+                "_data": self.__read_data(obj),  # Read all data into memory
                 "_attrs": attrs,
             }
             if ds_name is not None:
@@ -408,6 +434,54 @@ class HDF5Dict(dict):
             cls.__prune_empty(child)
             if all(k.startswith("_") for k in child):
                 del node[key]
+
+    @staticmethod
+    def __read_data(obj: h5py.Dataset) -> Any:
+        """
+        Read a dataset's values, decoding text to ``str``.
+
+        h5py returns strings (variable- or fixed-length) as ``bytes``; a text
+        dataset is read through :meth:`h5py.Dataset.asstr` instead, and the
+        text fields of a compound dataset are decoded into ``object`` fields.
+
+        Parameters
+        ----------
+        obj : h5py.Dataset
+            Dataset to read.
+
+        Returns
+        -------
+        Any
+            The dataset's values (a NumPy array, or a scalar for a scalar
+            dataset) with text as ``str``.
+        """
+        if h5py.check_string_dtype(obj.dtype) is not None:
+            return obj.asstr()[()]
+
+        data = obj[()]
+        names = obj.dtype.names or ()
+        text = {
+            n: info.encoding
+            for n in names
+            if (info := h5py.check_string_dtype(obj.dtype[n])) is not None
+        }
+        if not text:
+            return data
+
+        decoded = np.empty(
+            np.shape(data),
+            dtype=[(n, object if n in text else obj.dtype[n]) for n in names],
+        )
+        for n in names:
+            values = data[n]
+            if n in text:
+                values = np.vectorize(
+                    lambda v, enc=text[n]: v.decode(enc) if isinstance(v, bytes) else v,
+                    otypes=[object],
+                )(values)
+            decoded[n] = values
+
+        return decoded
 
     def __decode_dtype(self, dtype) -> str:
         """

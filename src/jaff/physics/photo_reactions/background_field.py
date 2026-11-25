@@ -1,3 +1,5 @@
+# ABOUTME: BackgroundField: a tabulated reference radiation field (draine, ISRF,
+# ABOUTME: blackbody, ...) loaded from the bundled HDF5 store
 """Reference background radiation field loaded from the bundled HDF5 store.
 
 A :class:`BackgroundField` is the tabulated spectrum of a named reference

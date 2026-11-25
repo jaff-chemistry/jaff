@@ -50,7 +50,7 @@ for s in net.species:
 
 ```text
 0: H   mass=1.67377e-24 g  charge=+0
-1: H+  mass=1.67377e-24 g  charge=+1
+1: H+  mass=1.67286e-24 g  charge=+1
 2: e-  mass=9.10938e-28 g  charge=-1
 ```
 
@@ -65,7 +65,7 @@ for r in net.reactions:
 ```
 
 ```text
-H -> H+ + e-
+H + _PHOTON -> H+ + e-
 H+ + e- -> H
 ```
 
@@ -87,22 +87,34 @@ write — run through the [`jaffgen`](../user-guide/code-generation/jaffgen.md) 
 
 ```bash
 jaffgen \
-    --network  networks/h_photoionization/h_photo.jet \
+    --network  networks/demos/demo2.jet \
     --template fortran_dlsodes \
     --outdir   generated/
 ```
 
 ```text
 INFO     Network loaded successfully!
+...
 INFO     Successfully generated files
 ```
 
-`generated/` now holds a complete, buildable Fortran solver:
+`generated/demo2_fortran_dlsodes_<date>-<time>/` (a new folder for each run)
+now holds a complete Fortran solver that builds with `make`
+(using `gfortran`), plus `config.toml`, a record of the settings `jaffgen` ran
+with:
 
 ```text
-commons.f90  fluxes.f90  ode.f90  reactions.f90  main.f90  Makefile
-opkda1.f     opkda2.f    opkdmain.f
+chemistry.f90  user_functions.f90  solver.f90  main.f90  Makefile
+opkda1.f       opkda2.f            opkdmain.f  config.toml
 ```
+
+<!-- prettier-ignore -->
+!!! note "Photochemical networks"
+    The same command works for `h_photo.jet`, but its photo-ionization rate is
+    emitted as a call to `photorates(...)`, which the `fortran_dlsodes`
+    template does not define. It compiles, but `user_functions.f90` holds only
+    a stub that stops the run: replace it (and the stubs of its partial
+    derivatives) with your own `photorates` before running.
 
 Each template names its own language with a `$$JAFF LANG` line or by its file
 extension; see [jaffgen](../user-guide/code-generation/jaffgen.md) for the other
@@ -110,10 +122,9 @@ built-in templates and input options.
 
 From here the [Code Generation](../user-guide/code-generation/index.md) guide
 shows how to write your own templates with the
-[directive language](../user-guide/code-generation/template-syntax.md). The
-[`Builder`](../user-guide/advanced-code-generation/builder.md) API does the same
-generation but is intended for manual code generation when the template syntax is
-insufficient.
+[directive language](../user-guide/code-generation/template-syntax.md). For
+code generation from Python, when the template syntax is insufficient, see
+[`Codegen`](../user-guide/advanced-code-generation/codegen.md).
 
 ## Next steps
 
@@ -121,7 +132,7 @@ insufficient.
 2. **Working with Networks** — [inspect, filter, and export](../user-guide/working-with-networks/index.md) loaded networks.
 3. **Code Generation** — the [template directive language](../user-guide/code-generation/template-syntax.md) and the [`jaffgen`](../user-guide/code-generation/jaffgen.md) CLI.
 4. **Examples** — step-by-step [example notebooks](examples.md) from loading a network to running generated solvers.
-5. **API Reference** — the complete [API documentation](../api/index.md).
+5. **API Reference** — the complete [API documentation](../reference/index.md).
 
 ## Example networks
 

@@ -99,7 +99,7 @@ and Jacobian expressions — is your work, and you may license it however you ch
 including in proprietary software.
 
 The caveat is **bundled template code**: JAFF ships solver templates (under
-`src/jaff/templates/`) that are themselves MIT-licensed, and some generated files
+`templates/`) that are themselves MIT-licensed, and some generated files
 incorporate that template code. Where your output contains JAFF template code, that
 portion remains under the MIT License and its copyright/permission notice should be
 retained.

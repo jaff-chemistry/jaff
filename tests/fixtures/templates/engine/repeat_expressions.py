@@ -11,8 +11,10 @@ def rates():
 
 def rates_cse():
     k = {}
-    $$JAFF REPEAT idx, rate, cse IN rates
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> rates } }
     cse$idx$ = $cse$
+    $$JAFF END
+    $$JAFF REPEAT idx, rate IN rates { CSE { GROUP -> rates } }
     k[$idx$] = $rate$
     $$JAFF END
     return k
@@ -43,39 +45,53 @@ def odes():
 
 
 def odes_cse():
-    $$JAFF REPEAT idx, ode, cse IN odes
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> odes } }
     tmp$idx$_v = $cse$
+    $$JAFF END
+    $$JAFF REPEAT idx, ode IN odes { CSE { GROUP -> odes } }
     dy[$idx$] = $ode$
     $$JAFF END
 
 
 def rhs():
-    $$JAFF REPEAT idx, rhs IN rhses
+    $$JAFF REPEAT idx, rhs IN rhses { THERMAL { MODE -> dedt } }
     f[$idx$] = $rhs$
     $$JAFF END
 
 
 def rhs_cse_replace():
-    $$JAFF REPEAT idx, rhs, cse IN rhses {
+    $$JAFF REPEAT idx, cse IN cses {
         REPLACE {
             "nden\[(\d+)\]" -> "y[\1]"
             "tgas" -> "T"
         }
+        GROUP { NAME -> rhs }
     }
     x$idx$ = $cse$
+    $$JAFF END
+    $$JAFF REPEAT idx, rhs IN rhses {
+        REPLACE {
+            "nden\[(\d+)\]" -> "y[\1]"
+            "tgas" -> "T"
+        }
+        THERMAL { MODE -> dedt }
+        CSE { GROUP -> rhs }
+    }
     f[$idx+1$] = $rhs$
     $$JAFF END
 
 
 def jacobian():
-    $$JAFF REPEAT idx, expr IN jacobian
-    J[$idx$][$idx$] = $expr$
+    $$JAFF REPEAT idx, jac IN jacobian
+    J[$idx$][$idx$] = $jac$
     $$JAFF END
 
 
 def jacobian_cse():
-    $$JAFF REPEAT idx, expr, cse IN jacobian
+    $$JAFF REPEAT idx, cse IN cses { GROUP { NAME -> jacobian } }
     c$idx$ = $cse$
-    J[$idx$, $idx$] = $expr$
-    J1[$idx+1$, $idx+1$] = $expr$
+    $$JAFF END
+    $$JAFF REPEAT idx, jac IN jacobian { CSE { GROUP -> jacobian } }
+    J[$idx$, $idx$] = $jac$
+    J1[$idx+1$, $idx+1$] = $jac$
     $$JAFF END

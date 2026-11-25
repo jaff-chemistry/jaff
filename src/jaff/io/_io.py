@@ -1,13 +1,13 @@
+# ABOUTME: .jaff network serialization (gzip JSON) and quokka-compatible
+# ABOUTME: rate-coefficient table building/writing (txt and HDF5).
 """
-Serialization, deserialization, and tabulation utilities for JAFF network files.
+Serialization and tabulation utilities for JAFF network files.
 
-This module provides three public entry-points:
+This module provides these public entry-points:
 
 * ``to_jaff_file`` -- serialize a :class:`~jaff.Network` to a gzip-compressed
-  JSON file with the ``jaff.network_json`` format marker.
-* ``from_jaff_file`` -- deserialize such a file (or a legacy uncompressed one)
-  back into a :class:`~jaff.io._typing.JaffProps` dict that can be handed
-  directly to the :class:`~jaff.Network` constructor.
+  JSON file with the ``jaff.network_json`` format marker.  Loading ``.jaff``
+  files is not supported at the moment.
 * ``get_table`` / ``write_data_table`` -- build a rate-coefficient lookup
   table over a temperature grid and optionally write it to a quokka-compatible
   text or HDF5 file.
@@ -16,8 +16,9 @@ The file format
 ---------------
 A ``.jaff`` file is a gzip-compressed UTF-8 JSON document with the top-level
 keys ``format``, ``schema_version``, ``jaff_version``, ``sympy_schema_version``,
-``sympy_version``, ``label``, ``file_name``, ``species``, ``rate_symbols``, and
-``reactions``.  SymPy expressions are stored via the versioned compact encoding
+``sympy_version``, ``label``, ``file_name``, ``species``, ``rate_symbols``,
+``reactions``, ``dEdt_extra``, ``emissivity``, and ``absorption_coefficient``
+(the last two ``null`` without radiation).  SymPy expressions are stored via the versioned compact encoding
 in :mod:`jaff.common._sympy_json` (``SCHEMA_VERSION = 2``).
 """
 
@@ -28,18 +29,16 @@ import json
 import logging
 from dataclasses import asdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, cast
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 from sympy import (
     Basic,
-    Expr,
     Float,
     Heaviside,
     Max,
     Min,
     Piecewise,
-    Symbol,
     __version__,
     expand_log,
     lambdify,
@@ -50,25 +49,19 @@ from sympy.core.function import AppliedUndef
 from .. import __version__ as jaff_version
 from ..common import SCHEMA_VERSION as SYMPY_SCHEMA
 from ..common import fast_log2, inverse_fast_log2, is_jaff_file
-from ..common import from_jsonable as sympy_from_jsonable
 from ..common import to_jsonable as sympy_to_jsonable
 from ..drivers.hdf5 import HDF5
-from ..errors import NotJaffFileError
 from ..types import HDF5Dict
 from ._logger import JaffLogger, jaff_progress
 
 if TYPE_CHECKING:
     from .. import Network, Reaction, Specie, Species
-    from ..core._typing import ReactionProps
     from ..core.reaction import Reactions
-    from ..physics import XsecProps
 else:
     Specie = "Specie"
     Species = "Species"
     Reaction = "Reaction"
     Network = "Network"
-
-from ._typing import JaffProps
 
 
 def to_jaff_file(filename: str | Path, net: "Network"):
@@ -84,8 +77,8 @@ def to_jaff_file(filename: str | Path, net: "Network"):
     Parameters
     ----------
     filename : str or pathlib.Path
-        Destination path.  If the path does not already end with ``.jaff`` (or
-        ``.jaff.gz``) the ``.jaff`` suffix is appended automatically.
+        Destination path.  If it is not already a ``.jaff`` (or ``.jaff.gz``)
+        path, its suffix is replaced by ``.jaff`` (added if it has none).
     net : Network
         The reaction network to serialize.
 
@@ -162,7 +155,7 @@ def to_jaff_file(filename: str | Path, net: "Network"):
         "sympy_schema_version": SYMPY_SCHEMA,
         "sympy_version": __version__,
         "label": net.label,
-        "file_name": str(net.filename),
+        "file_name": str(net.filepath),
         "species": [
             {
                 "name": sp.name,
@@ -185,8 +178,8 @@ def to_jaff_file(filename: str | Path, net: "Network"):
                 {
                     s
                     for r in net.reactions
-                    if isinstance(r.rate_coefficient, Basic)
-                    for s in r.rate_coefficient.free_symbols
+                    if isinstance(r.rate.coefficient, Basic)
+                    for s in r.rate.coefficient.free_symbols
                 }
                 | set(net.thermodynamics.dEdt_extra.volumetric.free_symbols),
                 key=lambda s: s.name,
@@ -196,10 +189,10 @@ def to_jaff_file(filename: str | Path, net: "Network"):
             {
                 "reactants": [s.name for s in r.reactants],
                 "products": [s.name for s in r.products],
-                "rate": encode_maybe_sympy(r.rate_coefficient),
+                "rate": encode_maybe_sympy(r.rate.coefficient),
                 "tmin": r.tmin,
                 "tmax": r.tmax,
-                "t_cutoff": r.t_cutoff,
+                "t_cutoff": r.config.t_cutoff,
                 "rate_segments": [
                     {
                         "rate": encode_maybe_sympy(s.rate),
@@ -208,20 +201,16 @@ def to_jaff_file(filename: str | Path, net: "Network"):
                     }
                     for s in r.rate_segments
                 ],
-                "dE": encode_maybe_sympy(r.dE),
+                "dE": encode_maybe_sympy(r.energy.per_event),
                 "custom_rad_rate": r.photo is not None and r.photo.custom_rad_rate,
-                "original_string": r.original_string,
+                "original_string": r.source.line,
                 "index": r.index,
                 "type": r.type,
-                "format": r._format,
-                "pi_database": r.photo.pi_database if r.photo is not None else None,
+                "format": r.source.format,
+                "pi_database": _photo_setting(r, "pi_database"),
                 "xsecs": _encode_custom_xsec_props(r, encode_maybe_sympy),
                 "spectral_yield": encode_maybe_sympy(r.rad.spectral_yield),
-                "shielding": (
-                    {"type": r.photo.shielding.type, "props": r.photo.shielding.props}
-                    if r.photo is not None and r.photo.shielding is not None
-                    else None
-                ),
+                "shielding": _encode_shielding(r),
             }
             for r in net.reactions
         ],
@@ -236,6 +225,26 @@ def to_jaff_file(filename: str | Path, net: "Network"):
 
     with gzip.open(filename, "wt", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, sort_keys=True)
+
+
+def _photo_setting(reaction: Reaction, name: str) -> Any:
+    """A photo reaction's resolved photo setting; ``None`` otherwise."""
+    if reaction.photo is None:
+        return None
+
+    return getattr(reaction.photo.config, name)
+
+
+def _encode_shielding(reaction: Reaction) -> dict[str, Any] | None:
+    """A photo reaction's shielding as ``{"type", "props"}``, or ``None``."""
+    shielding = _photo_setting(reaction, "shielding")
+    if shielding is None:
+        return None
+
+    return {
+        "type": shielding.type,
+        "props": shielding.params.model_dump(exclude_unset=True),
+    }
 
 
 def _encode_custom_xsec_props(
@@ -259,314 +268,6 @@ def _encode_custom_xsec_props(
     }
 
 
-def _decode_xsec_props(
-    xsecs: dict, decode_expr: Callable[[Any], Expr | None]
-) -> XsecProps:
-    """Rebuild an :class:`XsecProps` from its JSON-serialized dict form.
-
-    Cross-section arrays are JSON-serialized as plain lists; restore them to
-    numpy arrays so the loaded XsecProps matches the in-memory type;
-    *decode_expr* restores the Verner ``photodecay_expr``.
-    """
-    from ..physics.photo_reactions._photochemistry import (
-        XsecProcess,
-        XsecProps,
-        XsecUnits,
-    )
-
-    def as_array(key: str) -> np.ndarray | None:
-        value = xsecs.get(key)
-
-        return None if value is None else np.asarray(value, dtype=float)
-
-    return XsecProps(
-        units=XsecUnits(**xsecs["units"]),
-        process=XsecProcess(**xsecs["process"]),
-        database=xsecs["database"],
-        photon_energy=as_array("photon_energy"),
-        photo_absorption=as_array("photo_absorption"),
-        photodecay=as_array("photodecay"),
-        photodecay_expr=decode_expr(xsecs.get("photodecay_expr")),
-    )
-
-
-def from_jaff_file(filename: str | Path, errors=False):
-    """
-    Deserialize a ``.jaff`` file into a :class:`~jaff.io._typing.JaffProps` dict.
-
-    Transparently handles both gzip-compressed files (the current default) and
-    legacy plain-text JSON files by sniffing the two-byte magic header
-    ``\\x1f\\x8b`` before opening.
-
-    Parameters
-    ----------
-    filename : str or pathlib.Path
-        Path to a ``.jaff`` or ``.jaff.gz`` file.
-    errors : bool, optional
-        Reserved for future use; currently ignored.
-
-    Returns
-    -------
-    JaffProps
-        A typed dict containing ``file_name``, ``label``, ``species``
-        (:class:`~jaff.core.Species`), and ``reactions`` (list of
-        :class:`~jaff.core._typing.ReactionProps` dicts).  This can be passed
-        directly to the :class:`~jaff.Network` constructor.
-
-    Raises
-    ------
-    FileNotFoundError
-        If *filename* does not exist on disk.
-    NotJaffFileError
-        If the file extension does not identify it as a JAFF network file.
-    ValueError
-        If the JSON payload is malformed, has an unrecognised ``format`` tag,
-        or uses an unsupported ``schema_version``.
-    """
-    from .. import Specie, Species
-
-    if isinstance(filename, str):
-        filename = Path(filename)
-
-    if not filename.exists():
-        raise FileNotFoundError(filename)
-
-    if not is_jaff_file(filename):
-        raise NotJaffFileError("Supplied file is not a jaff network file", filename)
-
-    # Prefer gzip if the filename indicates it; otherwise, sniff the magic header
-    # so we can transparently read both compressed and legacy uncompressed files.
-    use_gzip = filename.suffix == ".gz"
-    if not use_gzip:
-        with open(filename, "rb") as fb:
-            use_gzip = fb.read(2) == b"\x1f\x8b"
-
-    opener = gzip.open if use_gzip else open
-    with opener(filename, "rt", encoding="utf-8") as f:
-        payload = json.load(f)
-
-    if not isinstance(payload, dict) or payload.get("format") != "jaff.network_json":
-        raise ValueError("Not a jaff.network_json file")
-    if payload.get("schema_version") != 1:
-        raise ValueError(
-            f"Unsupported Network schema_version={payload.get('schema_version')!r}"
-        )
-
-    net_data: JaffProps = {
-        "file_name": Path(payload.get("file_name")),
-        "label": payload.get("label"),
-        "species": Species(),
-        "reactions": [],
-    }
-
-    species_payload = payload.get("species") or []
-    if not isinstance(species_payload, list):
-        raise ValueError("Invalid species list in JSON")
-
-    by_index: dict[int, str] = {}
-    seen_names: set[str] = set()
-    for spj in species_payload:
-        if not isinstance(spj, dict):
-            raise ValueError("Invalid species entry in JSON")
-        name = spj.get("name")
-        idx = spj.get("index")
-        if not isinstance(name, str) or not isinstance(idx, int):
-            raise ValueError("Invalid species name/index in JSON")
-        if idx < 0:
-            raise ValueError(f"Invalid negative species index {idx} for {name!r}")
-        if idx in by_index:
-            raise ValueError(f"Duplicate species index {idx}")
-        if name in seen_names:
-            raise ValueError(f"Duplicate species name {name!r}")
-        by_index[idx] = name
-        seen_names.add(name)
-
-    expected = set(range(len(by_index)))
-    if set(by_index) != expected:
-        raise ValueError(
-            "Species indices must be contiguous 0.."
-            f"{len(by_index) - 1}; got {sorted(by_index)}"
-        )
-
-    species_list = Species()
-
-    for idx in sorted(by_index.keys()):
-        name = by_index[idx]
-        species_list.add(Specie(name, idx))
-
-    net_data["species"] = species_list
-
-    species_by_name = {sp.name: sp for sp in species_list}
-    special_by_name: dict[str, "Specie"] = {}
-
-    def resolve_specie(name: str) -> "Specie":
-        if name in species_by_name:
-            return species_by_name[name]
-        if not name.startswith("_"):
-            raise ValueError(
-                f"Reaction references undeclared species {name!r} that is absent "
-                "from the .jaff species table"
-            )
-        if name not in special_by_name:
-            special_by_name[name] = Specie(name, -1)
-        return special_by_name[name]
-
-    rate_symbols_payload = payload.get("rate_symbols") or []
-    rate_symbol_assumptions = {}
-    if isinstance(rate_symbols_payload, list):
-        for item in rate_symbols_payload:
-            if not isinstance(item, dict):
-                continue
-            name = item.get("name")
-            assumptions = item.get("assumptions") or {}
-            if not isinstance(name, str) or not isinstance(assumptions, dict):
-                continue
-            rate_symbol_assumptions[name] = {
-                k: v
-                for k, v in assumptions.items()
-                if isinstance(k, str) and isinstance(v, bool)
-            }
-
-    def apply_symbol_assumptions(expr):
-        """
-        Re-create free symbols in *expr* with their stored assumption flags.
-
-        SymPy assumptions (e.g. ``positive=True``) affect simplification; they
-        are round-tripped via the ``rate_symbols`` payload so that the
-        deserialized expression is semantically equivalent to the original.
-        """
-        if not rate_symbol_assumptions:
-            return expr
-        # Only rebuild plain Symbols; leave MatrixSymbols (e.g. ``nden``) intact,
-        # otherwise their MatrixElement indices (``nden[i, 0]``) cannot be rebuilt.
-        symbols = [
-            s
-            for s in expr.free_symbols
-            if isinstance(s, Symbol) and s.name in rate_symbol_assumptions
-        ]
-        if not symbols:
-            return expr
-        replacements = {}
-        for sym in symbols:
-            assumptions = rate_symbol_assumptions.get(sym.name, {})
-            replacements[sym] = Symbol(sym.name, **assumptions)
-        return expr.xreplace(replacements)
-
-    def decode_maybe_sympy(node):
-        """
-        Decode a single rate-field node from the JSON payload.
-
-        Handles three cases:
-
-        * ``None`` -- returned as-is.
-        * ``{"kind": "string", "value": …}`` -- plain-string rate expression.
-        * Any other list/int/float/dict -- passed to the compact sympy_json
-          decoder and then re-tagged with the correct symbol assumptions.
-        """
-        if node is None:
-            return None
-        if isinstance(node, dict):
-            kind = node.get("kind")
-            if kind == "string":
-                value = node.get("value")
-                if not isinstance(value, str):
-                    raise ValueError("Invalid string value encoding")
-                return value
-            if kind is not None:
-                raise ValueError(f"Unknown encoded value kind={kind!r}")
-        if isinstance(node, (dict, list, int, float)):
-            return apply_symbol_assumptions(sympy_from_jsonable(node))
-        raise ValueError("Invalid encoded value")
-
-    reactions_payload = payload.get("reactions") or []
-    if not isinstance(reactions_payload, list):
-        raise ValueError("Invalid reactions list in JSON")
-
-    reactions_out: list[ReactionProps] = []
-    for rj in reactions_payload:
-        if not isinstance(rj, dict):
-            raise ValueError("Invalid reaction entry in JSON")
-        reactants_names = rj.get("reactants") or []
-        products_names = rj.get("products") or []
-        if not isinstance(reactants_names, list) or not isinstance(products_names, list):
-            raise ValueError("Invalid reactants/products list in JSON")
-        try:
-            reactants = [resolve_specie(str(n)) for n in reactants_names]
-            products = [resolve_specie(str(n)) for n in products_names]
-        except Exception as e:
-            raise ValueError(f"Invalid species in reaction: {e}") from e
-
-        rate = decode_maybe_sympy(rj.get("rate"))
-        dE = decode_maybe_sympy(rj.get("dE"))
-        custom_rad_rate = rj.get("custom_rad_rate")
-        tmin = rj.get("tmin")
-        tmax = rj.get("tmax")
-        t_cutoff = rj.get("t_cutoff") or "clip"
-        segments_payload = rj.get("rate_segments")
-        if isinstance(segments_payload, list) and segments_payload:
-            rate_segments = [
-                {
-                    "rate": decode_maybe_sympy(s.get("rate")),
-                    "tmin": s.get("tmin"),
-                    "tmax": s.get("tmax"),
-                }
-                for s in segments_payload
-                if isinstance(s, dict)
-            ]
-        else:
-            rate_segments = [{"rate": rate, "tmin": tmin, "tmax": tmax}]
-        original_string = rj.get("original_string") or ""
-        reaction_type = rj.get("type") or "unknown"
-        pi_database = rj.get("pi_database")
-        shielding = rj.get("shielding")
-        xsecs = rj.get("xsecs")
-        xsec_props = (
-            _decode_xsec_props(xsecs, decode_maybe_sympy)
-            if isinstance(xsecs, dict)
-            else None
-        )
-
-        reactions_out.append(
-            cast(
-                "ReactionProps",
-                {
-                    "reactants": reactants,
-                    "products": products,
-                    "rate": rate,
-                    "dE": dE,
-                    "custom_rad_rate": custom_rad_rate,
-                    "tmin": tmin,
-                    "tmax": tmax,
-                    "t_cutoff": t_cutoff,
-                    "rate_segments": rate_segments,
-                    "original_string": original_string,
-                    **({"index": rj["index"]} if "index" in rj else {}),
-                    "reaction_type": reaction_type,
-                    "format": rj.get("format"),
-                    "pi_database": pi_database,
-                    "shielding": shielding,
-                    "xsec_props": xsec_props,
-                    "spectral_yield": decode_maybe_sympy(rj.get("spectral_yield")),
-                },
-            )
-        )
-
-    net_data["reactions"] = reactions_out
-
-    if "dEdt_extra" in payload:
-        net_data["dEdt_extra"] = decode_maybe_sympy(payload.get("dEdt_extra"))
-
-    if payload.get("emissivity") is not None:
-        net_data["emissivity"] = decode_maybe_sympy(payload["emissivity"])
-
-    if payload.get("absorption_coefficient") is not None:
-        net_data["absorption_coefficient"] = decode_maybe_sympy(
-            payload["absorption_coefficient"]
-        )
-
-    return net_data
-
-
 def get_table(
     reactions: Reactions,
     logger: logging.Logger | None,
@@ -582,12 +283,12 @@ def get_table(
     """
     Build a temperature-indexed rate-coefficient lookup table for a reaction list.
 
-    Only reactions whose rate expression depends **solely** on ``tgas`` (gas
-    temperature) are tabulated.  Rates that also depend on ``av`` (visual
-    extinction), ``crate`` (cosmic-ray rate), or any undefined SymPy function
-    are filled with ``NaN``.  Before classification, ``av`` is substituted with
-    ``0.0`` and ``crate`` with ``1.0`` to eliminate those symbols where the
-    dependence is trivial.
+    Before classification, ``av`` (visual extinction) is substituted with
+    ``0.0`` and ``crate`` (cosmic-ray rate) with ``1.0``, so rates depending
+    on them are tabulated at those values.  After that substitution, constant
+    rates and rates depending **solely** on ``tgas`` (gas temperature) are
+    tabulated; rates depending on any other symbol, or containing an undefined
+    SymPy function, are filled with ``NaN``.
 
     The temperature grid is built adaptively: starting from ``nT`` points the
     algorithm doubles the grid by inserting midpoints until the maximum relative
@@ -608,11 +309,11 @@ def get_table(
         Logger instance used for progress/diagnostic messages.  When ``None``
         a default :class:`~jaff.io._logger.JaffLogger` is constructed.
     T_min : float or None, optional
-        Minimum temperature in K.  Inferred from ``reaction.tmin`` values when
-        not supplied.
+        Minimum temperature in K.  The smallest ``reaction.tmin`` when not
+        supplied.
     T_max : float or None, optional
-        Maximum temperature in K.  Inferred from ``reaction.tmax`` values when
-        not supplied.
+        Maximum temperature in K.  The largest ``reaction.tmax`` when not
+        supplied.
     nT : int, optional
         Initial number of temperature grid points (default ``64``).  The
         adaptive refinement may increase this significantly.
@@ -647,30 +348,34 @@ def get_table(
     Raises
     ------
     ValueError
-        If ``T_min`` or ``T_max`` cannot be determined from the reaction list
-        and were not provided explicitly.
+        If ``T_min`` (``T_max``) is not supplied and no reaction has a finite
+        ``tmin`` (``tmax``), e.g. *reactions* is empty; or if
+        ``T_min >= T_max``.
 
     Notes
     -----
     The log-expand trick (``expand_log(log(r))``) is applied before
     :func:`sympy.lambdify` to keep intermediate values in a numerically safe
-    range.  The lambdified function is evaluated element-by-element in a Python
-    loop rather than with a vectorised NumPy call because SymPy (as of v1.13)
-    does not reliably generate broadcasting-safe expressions for all rate forms.
+    range.  Each lambdified rate is evaluated with a single vectorised NumPy
+    call over the grid; rates containing ``Piecewise``, ``Heaviside``, ``Min``
+    or ``Max`` (and any rate whose vectorised result has the wrong shape) are
+    evaluated point by point in a Python loop instead.
     """
 
     if logger is None:
         logger = JaffLogger().get_logger()
 
     if T_min is None:
-        T_min = np.nanmin([r.tmin if r.tmin is not None else np.nan for r in reactions])
+        T_min = min((r.tmin for r in reactions if r.tmin is not None), default=None)
     if T_max is None:
-        T_max = np.nanmax([r.tmax if r.tmax is not None else np.nan for r in reactions])
-    if T_min is None or T_max is None:
+        T_max = max((r.tmax for r in reactions if r.tmax is not None), default=None)
+    if T_min is None or T_max is None or not np.isfinite([T_min, T_max]).all():
         raise ValueError(
             "could not determine T_min or T_max from "
             "reaction list; set T_min and T_max manually"
         )
+    if T_min >= T_max:
+        raise ValueError(f"T_min ({T_min}) must be below T_max ({T_max})")
 
     react_sympy = [r.get_sympy() for r in reactions]
 
@@ -738,7 +443,7 @@ def get_table(
             f_eval = eval_rate(i, f, temp)
             log_rates[i, :] = np.clip(f_eval, a_min=None, a_max=np.log(rate_max))
 
-    # Fifth step: do adaptive growth of table
+    # Adaptive growth of the table
     if err_tol is not None:
         with jaff_progress.indeterminate("Refining rate table"):
             while True:
@@ -821,19 +526,21 @@ def write_data_table(
     ------------------------
     ``txt``
         A plain-text file with a header block describing the reactions followed
-        by the data in the quokka 1-D table layout::
+        by the data in the quokka 1-D table layout:
 
-            1              # table dimensionality
-            <nReact>       # number of outputs per entry
-            2 or 3         # axis spacing (2 = log10, 3 = fast_log)
-            <nTemp>        # number of temperature points
-            <T_min> <T_max>
-            <coeff row 0>
-            ...
+        ```text
+        1              # table dimensionality
+        <nReact>       # number of outputs per entry
+        2 or 3         # axis spacing (2 = log10, 3 = fast_log)
+        <nTemp>        # number of temperature points
+        <T_min> <T_max>
+        <coeff row 0>
+        ...
+        ```
 
     ``hdf5``
-        An HDF5 file structured as a quokka ``reaction_coeff`` group with
-        dataset attributes ``input_names``, ``input_units``, ``xlo``, ``xhi``,
+        An HDF5 file structured as a quokka ``reaction_coeff`` group with the
+        group attributes ``input_names``, ``input_units``, ``xlo``, ``xhi``,
         and ``spacing``.
 
     Parameters
@@ -846,8 +553,9 @@ def write_data_table(
         Destination path.  The output format is deduced from the file
         extension when ``format="auto"``.
     label : str or None, optional
-        Human-readable network label written into the file header.  Defaults
-        to the file stem when ``None``.
+        Human-readable network label: the text header's ``Network name`` line,
+        or the HDF5 file's ``network_name`` attribute (next to a
+        ``description`` attribute).  Defaults to the file stem when ``None``.
     T_min : float or None, optional
         Minimum temperature in K.  See :func:`get_table`.
     T_max : float or None, optional
@@ -990,6 +698,11 @@ def write_data_table(
 
         hdfdict = HDF5Dict(
             {
+                # File attributes: the text format's header lines.
+                "_attrs": {
+                    "description": "JAFF auto-generated rate coefficient table",
+                    "network_name": label,
+                },
                 "reaction_coeff": {
                     "_attrs": {
                         "input_names": ["temperature"],
@@ -1012,7 +725,7 @@ def write_data_table(
                         "_data": coef,
                         "_kind": "linear",
                     },
-                }
+                },
             }
         )
 

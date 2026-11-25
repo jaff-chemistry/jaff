@@ -166,6 +166,9 @@ def copy_hdf5(
 def decompress_hdf5(src: Path, dst: Path, source_sha256: str) -> None:
     """Write an uncompressed, contiguous copy of HDF5 *src* to *dst*.
 
+    Datasets with unlimited dimensions stay chunked (unfiltered), since HDF5
+    requires chunked storage for them.
+
     Parameters
     ----------
     src : Path
@@ -203,7 +206,7 @@ def _installed_source(dst: Path, src: Path, is_hdf5: bool) -> str | None:
     sidecar = _sidecar(src)
     if not sidecar.exists():
         return None
-    source, output = sidecar.read_text().split()
+    source, output = sidecar.read_text(encoding="utf-8").split()
     return source if file_sha256(dst) == output else None
 
 
@@ -262,5 +265,7 @@ def install_file(
 
     _write_atomic(src, dst, source_sha256, is_hdf5)
     if not is_hdf5:
-        _sidecar(src).write_text(f"{source_sha256} {file_sha256(dst)}\n")
+        _sidecar(src).write_text(
+            f"{source_sha256} {file_sha256(dst)}\n", encoding="utf-8"
+        )
     return True

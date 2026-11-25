@@ -2,6 +2,7 @@
 # ABOUTME: equation-of-state builders (eos subpackage)
 
 from .internal_energy import DEDt, InternalEnergy
+from .specie_thermodynamics import SpecieThermodynamics
 from .thermodynamics import Thermodynamics
 
-__all__ = ["DEDt", "InternalEnergy", "Thermodynamics"]
+__all__ = ["DEDt", "InternalEnergy", "SpecieThermodynamics", "Thermodynamics"]

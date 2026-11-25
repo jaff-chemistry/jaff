@@ -1,3 +1,6 @@
+# ABOUTME: AuxiliaryFunctionParser: parses .jfunc auxiliary function files
+# ABOUTME: Handles @var globals and @function ... @return blocks
+
 """Parser for JAFF auxiliary function files (.jfunc).
 
 A ``.jfunc`` file may define global symbolic constants and named functions
@@ -21,6 +24,12 @@ fully-substituted SymPy expressions.
 
 Cross-function dependencies are resolved with a DFS to support one function
 calling another, while detecting circular references.
+
+Calls to the unit conversions of :mod:`jaff.physics.units` (``nm_to_eV(x)``,
+``pc_to_cm(r)`` ...; any letter case) and the built-in CGS constants
+(:data:`CONSTANTS`: ``kB``, ``c_light``, ``amu`` ...; exact case) are replaced by
+their value once the file is parsed. A ``@var``, ``@function``, function
+argument or local variable named like one of them is an error.
 """
 
 from functools import cached_property
@@ -33,7 +42,42 @@ from sympy.core.function import AppliedUndef
 
 from ....common import float_piecewise_branches, resolve_symbolic_dependencies
 from ....errors import ParserError
+from ....physics import constants as _c
+from ....physics import units
 from .function_props import AuxiliaryFunctionProps
+
+#: The unit conversions of :mod:`jaff.physics.units`, by lower-cased name: a
+#: ``.jfunc`` file may call them in any case.
+CONVERTERS: dict[str, Callable[[Any], Any]] = {
+    name.lower(): getattr(units, name) for name in units.__all__
+}
+
+#: Built-in constants a ``.jfunc`` file may use by name (exact case), as CGS
+#: values from :mod:`jaff.physics.constants`.
+CONSTANTS: dict[str, float] = {
+    "c_light": float(_c.c.cgs.value),
+    "h_planck": float(_c.h.cgs.value),
+    "hbar": float(_c.hbar.cgs.value),
+    "kB": float(_c.k_B.cgs.value),
+    "G_grav": float(_c.G.cgs.value),
+    "e_charge": float(_c.e.esu.value),
+    "m_e": float(_c.m_e.cgs.value),
+    "m_p": float(_c.m_p.cgs.value),
+    "m_n": float(_c.m_n.cgs.value),
+    "amu": float(_c.u.cgs.value),
+    "N_A": float(_c.N_A.value),
+    "sigma_SB": float(_c.sigma_sb.cgs.value),
+    "a_rad": float(_c.a_rad.cgs.value),
+    "sigma_T": float(_c.sigma_T.cgs.value),
+    "a_bohr": float(_c.a0.cgs.value),
+    "alpha_fs": float(_c.alpha.value),
+    "Ry": float(_c.Ry.to("erg").value),
+    "pc": float(_c.pc.cgs.value),
+    "au": float(_c.au.cgs.value),
+    "M_sun": float(_c.M_sun.cgs.value),
+    "L_sun": float(_c.L_sun.cgs.value),
+    "R_sun": float(_c.R_sun.cgs.value),
+}
 
 
 class AuxiliaryFunctionParser:
@@ -57,8 +101,13 @@ class AuxiliaryFunctionParser:
 
     Examples
     --------
-    >>> with AuxiliaryFunctionParser("network.jfunc") as afp:
+    Parse the functions of the bundled COthin network (from a clone's root):
+
+    >>> from jaff.core.parsers.auxiliary_func import AuxiliaryFunctionParser
+    >>> with AuxiliaryFunctionParser("networks/COthin/react_COthin.jfunc") as afp:
     ...     funcs = afp.get_dict()
+    >>> sorted(funcs)
+    ['fhnoj', 'fselfh2']
     """
 
     def __init__(self, file: Path | str):
@@ -103,6 +152,7 @@ class AuxiliaryFunctionParser:
 
         self.__parse_file()
         self.__resolve_func_deps()
+        self.__apply_builtins()
 
     def __repr__(self):
         """Return canonical string representation of this parser instance.
@@ -132,6 +182,66 @@ class AuxiliaryFunctionParser:
         self.globals.clear()
         self.__dict__.clear()
         self.og_line = self.line = self.cline = ""
+
+    def __check_name(self, name: str, kind: str) -> None:
+        """Raise if *name* is a unit conversion (any case) or a built-in constant.
+
+        Raises
+        ------
+        ParserError
+            If *name* matches a :mod:`jaff.physics.units` function or a key of
+            :data:`CONSTANTS`.
+        """
+        name = name.strip()
+        if name.lower() in CONVERTERS:
+            taken = "a unit conversion of jaff.physics.units"
+        elif name in CONSTANTS:
+            taken = "a built-in constant"
+        else:
+            return
+
+        raise ParserError(
+            f"{kind} '{name}' has the name of {taken}; choose another name",
+            self.og_line,
+            self.nline,
+            self.file,
+        )
+
+    def __apply_builtins(self) -> None:
+        """Replace unit-conversion calls and built-in constants by their values.
+
+        Runs after the file's own functions are inlined, so the only undefined
+        calls left are converters and functions the network supplies (such as
+        interpolators); the latter are left as they are. Conversions are
+        replaced innermost first, then constants.
+
+        Raises
+        ------
+        ParserError
+            If a conversion is called with other than one argument.
+        """
+
+        def is_converter(e: sp.Basic) -> bool:
+            return isinstance(e, AppliedUndef) and e.func.__name__.lower() in CONVERTERS
+
+        def convert(e: Any) -> sp.Basic:
+            name = e.func.__name__.lower()
+            if len(e.args) != 1:
+                raise ParserError(
+                    f"Unit conversion '{name}' takes one argument, got {len(e.args)}",
+                    fname=self.file,
+                )
+
+            return sp.sympify(CONVERTERS[name](e.args[0]))
+
+        for func in self.func_dict.values():
+            expr = func.expr.replace(is_converter, convert)
+            values = {
+                symbol: sp.Float(CONSTANTS[symbol.name])
+                for symbol in expr.free_symbols
+                if isinstance(symbol, sp.Symbol) and symbol.name in CONSTANTS
+            }
+            func.expr = expr.xreplace(values)
 
     def get_dict(self) -> dict[str, AuxiliaryFunctionProps]:
         """Return the parsed function dictionary.
@@ -190,7 +300,8 @@ class AuxiliaryFunctionParser:
 
         When inside a function block, delegates to :meth:`__parse_function`.
         Lines starting with ``@`` are dispatched to :meth:`__parse_token`.
-        Comment-only lines (starting with ``#``) are skipped.
+        Any other line outside a function block (comments included) is
+        ignored.
         """
         if self.scope == "function":
             self.__parse_function()
@@ -254,6 +365,7 @@ class AuxiliaryFunctionParser:
                 "Invalid variable encountered", self.og_line, self.nline, self.file
             )
         var, expr = tokens[0].strip(), tokens[1].strip()
+        self.__check_name(var, "Variable")
 
         try:
             self.globals[str(var)] = sp.parse_expr(expr)
@@ -280,7 +392,8 @@ class AuxiliaryFunctionParser:
         Raises
         ------
         ParserError
-            If the declaration is malformed (missing parentheses or arguments).
+            If the declaration is malformed (missing parentheses).  An empty
+            argument list (``"f()"``) is accepted.
         """
         self.__set_scope("function")
         if not self.globals_parsed:
@@ -295,17 +408,18 @@ class AuxiliaryFunctionParser:
                 "Invalid function decleration", self.og_line, self.nline, self.file
             )
         name, rest = parts[0].lower(), parts[1]
+        self.__check_name(parts[0].strip(), "Function")
         rest = rest.split(")", maxsplit=1)
 
         if len(rest) != 2:
             raise ParserError(
                 "Invalid function decleration", self.og_line, self.nline, self.file
             )
-        args = [
-            sp.parse_expr(arg.strip())
-            for arg in rest[0].split(",")
-            if len(arg.strip()) > 0
-        ]
+        names = [arg.strip() for arg in rest[0].split(",") if len(arg.strip()) > 0]
+        for arg in names:
+            self.__check_name(arg, "Argument")
+
+        args = [sp.parse_expr(arg) for arg in names]
 
         self.current_func = name
         self.func_dict[name] = AuxiliaryFunctionProps(expr=sp.Float(0.0), args=args)
@@ -341,6 +455,7 @@ class AuxiliaryFunctionParser:
             )
 
         var, expr = splitline[0].strip(), splitline[1].strip()
+        self.__check_name(var, "Variable")
         try:
             self.func_dict[self.current_func]._locals[str(var)] = sp.parse_expr(expr)
         except (SyntaxError, TokenError, TypeError, sp.SympifyError) as e:

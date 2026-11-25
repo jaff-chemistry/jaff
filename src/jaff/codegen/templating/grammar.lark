@@ -11,6 +11,7 @@ command: "REPEAT" names "IN" ATOM       -> repeat
        | "DEFINE" ATOM                  -> define
        | "LANG" ATOM                    -> lang
        | "COMMENT" STRING               -> comment
+       | "CALL" ATOM                    -> call
        | "END"                          -> end
 
 options: "{" option* "}"

@@ -1,8 +1,12 @@
+# ABOUTME: RateSegments: a reaction's ordered per-temperature-range rate pieces
+# ABOUTME: Collapses the segments into one Piecewise rate in tgas
+
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import replace
+from typing import TYPE_CHECKING, Callable
 
-from sympy import Basic, Expr, Piecewise
+from sympy import Basic, Expr, Piecewise, S
 
 from ....types import Catalogue
 from . import RateSegment
@@ -19,24 +23,33 @@ class RateSegments(Catalogue[RateSegment]):
     ``(tmin, tmax)`` bounds.  The pieces are collapsed into a single SymPy
     expression by :meth:`evaluate_equivalent_rate`.
 
+    Out-of-range behaviour follows the owning reaction's ``t_cutoff`` setting
+    (``reaction.config.t_cutoff``): ``"clip"`` holds the boundary rate below
+    the first / above the last range, ``"zero"`` makes it 0 there and
+    ``"extrapolate"`` lets the outermost segments extend unbounded.
+
     Parameters
     ----------
+    reaction : Reaction
+        The reaction the segments belong to.
     segments : list[RateSegment]
         Initial rate segments.
-    mode : str
-        Out-of-range behaviour.  ``"clip"`` holds the boundary rate below the
-        first / above the last range; any other value lets the outermost
-        segments extend unbounded.
+
+    Attributes
+    ----------
+    reaction : Reaction
+        The reaction the segments belong to.
     """
 
-    def __init__(self, segments: list[RateSegment], mode: str):
+    def __init__(self, reaction: Reaction, segments: list[RateSegment]):
         _by_temp: dict[tuple[float | None, float | None], RateSegment] = {}
 
         if segments is not None:
             _by_temp = {(rs.tmin, rs.tmax): rs for rs in segments}
 
         super().__init__(segments, _by_temp)
-        self.mode: str = mode
+        self.reaction: Reaction = reaction
+        self._equivalent: Expr | None = None
 
     def add(self, segment: RateSegment):
         """Append a rate segment, keyed by its ``(tmin, tmax)`` range.
@@ -63,22 +76,53 @@ class RateSegments(Catalogue[RateSegment]):
         self._by_prop[tup] = segment
         self._list.append(segment)
         self.count = len(self._list)
+        self._equivalent = None
+
+    def map_rates(self, function: Callable[[Expr], Expr]) -> None:
+        """Swap each segment's rate for ``function(rate)``, keeping its range and source.
+
+        Parameters
+        ----------
+        function : Callable[[Expr], Expr]
+            Maps a segment's rate to its new rate.
+        """
+        self._list = [replace(seg, rate=function(seg.rate)) for seg in self._list]
+        self._by_prop = {(seg.tmin, seg.tmax): seg for seg in self._list}
+        self._equivalent = None
+
+    @property
+    def equivalent_rate(self) -> Expr:
+        """The segments collapsed into one rate (see :meth:`evaluate_equivalent_rate`).
+
+        Cached until the segments change (:meth:`add`, :meth:`map_rates`).
+
+        Returns
+        -------
+        Expr
+            The equivalent rate expression in ``tgas``.
+        """
+        if self._equivalent is None:
+            self._equivalent = self.sort().evaluate_equivalent_rate()
+
+        return self._equivalent
 
     def __repr__(self):
         return "<RateSegment Object>"
 
-    def evaluate_equivalent_rate(self, r: Reaction) -> Expr:
+    def evaluate_equivalent_rate(self) -> Expr:
         """Collapse the segments into a single SymPy ``Piecewise`` rate.
 
         Segments must be sorted by ascending temperature (call :meth:`sort`
         first).  Each range contributes its own rate; the gap between two
         adjacent ranges is bridged by linear interpolation of the two bounding
-        rates.  Out-of-range behaviour follows :attr:`mode` (``"clip"`` holds
-        the boundary value, otherwise the end segments extend unbounded).
+        rates.  Out-of-range behaviour follows the reaction's ``t_cutoff`` (``"clip"`` holds
+        the boundary value, ``"zero"`` gives 0, ``"extrapolate"`` lets the end segments
+        extend unbounded).  A range covers ``tmin <= tgas < tmax``.
 
-        A lone segment with a temperature-independent rate, or one that is fully
-        unbounded (no ``tmin`` *and* no ``tmax``, i.e. valid at every
-        temperature), is returned as-is without wrapping in a ``Piecewise``.
+        A fully unbounded lone segment (no ``tmin`` *and* no ``tmax``, i.e. valid at
+        every temperature) is returned as-is without wrapping in a ``Piecewise``; so is
+        a lone temperature-independent rate, except under ``"zero"``, where its
+        limits make it 0 outside them.
 
         Under ``"clip"`` each **defined** outer bound is held independently: a
         range open on one side (e.g. ``tmin`` set, ``tmax`` ``None``) clamps its
@@ -99,6 +143,9 @@ class RateSegments(Catalogue[RateSegment]):
         from ...network import NetworkSymbols
 
         tgas = NetworkSymbols.tgas
+        r = self.reaction
+        clip = r.config.t_cutoff == "clip"
+        zero = r.config.t_cutoff == "zero"
         ls = self._list
         first = ls[0]
         last = ls[-1]
@@ -106,7 +153,7 @@ class RateSegments(Catalogue[RateSegment]):
         # No piecewise needed only for a lone segment: a single, temperature-
         # independent rate, or one fully unbounded (valid at every temperature).
         # With multiple segments the later pieces may differ, so never shortcut.
-        if len(ls) == 1 and not first.rate.has(tgas):
+        if len(ls) == 1 and not first.rate.has(tgas) and not zero:
             return first.rate
         if len(ls) == 1 and first.tmin is None and first.tmax is None:
             return first.rate
@@ -117,10 +164,12 @@ class RateSegments(Catalogue[RateSegment]):
 
         segs: list[tuple[Expr, Basic | bool]] = []
 
-        # Lower edge: hold the boundary rate below tmin (clip, when a lower
-        # bound exists); an open lower end just extrapolates.
-        if self.mode == "clip" and first.tmin is not None:
+        # Lower edge: hold the boundary rate (clip) or 0 (zero) below tmin, when a
+        # lower bound exists; an open lower end just extrapolates.
+        if clip and first.tmin is not None:
             segs.append((first.rate.xreplace({tgas: first.tmin}), tgas < first.tmin))
+        if zero and first.tmin is not None:
+            segs.append((S.Zero, tgas < first.tmin))
 
         segs.append(_body(first))
 
@@ -128,11 +177,11 @@ class RateSegments(Catalogue[RateSegment]):
         for i, seg in enumerate(ls[1:]):
             prev = ls[i]
             if prev.tmax is None or seg.tmin is None:
-                raise ValueError(
-                    f"Reaction {r} should have a well defined temperature since it's a multi temperature range reaction"
+                raise self._range_error(
+                    "interior bounds of a multi-range rate must be defined"
                 )
             if prev.tmax > seg.tmin:
-                raise ValueError(f"Temperature ranges shouldn't overlap for reaction {r}")
+                raise self._range_error("temperature ranges overlap")
 
             a = prev.tmax  # left boundary
             b = seg.tmin  # right boundary
@@ -145,10 +194,12 @@ class RateSegments(Catalogue[RateSegment]):
             # Always emit this range's own body (touching ranges have no gap).
             segs.append(_body(seg))
 
-        # Upper edge: hold the boundary rate above tmax (clip, when an upper
-        # bound exists); otherwise the last segment extends unbounded.
-        if self.mode == "clip" and last.tmax is not None:
+        # Upper edge: hold the boundary rate (clip) or 0 (zero) above tmax, when an
+        # upper bound exists; otherwise the last segment extends unbounded.
+        if clip and last.tmax is not None:
             segs.append((last.rate.xreplace({tgas: last.tmax}), True))
+        elif zero and last.tmax is not None:
+            segs.append((S.Zero, True))
         else:
             segs[-1] = (segs[-1][0], True)
 
@@ -174,16 +225,42 @@ class RateSegments(Catalogue[RateSegment]):
         """
         self._list = sorted(self._list, key=lambda s: (s.tmin is not None, s.tmin))
 
-        ranges = [(s.tmin, s.tmax) for s in self._list]
-        for i, (tmin, tmax) in enumerate(ranges):
-            if tmin is None and i > 0:
-                raise ValueError(
-                    f"Only the lowest temperature range may be open below; got {ranges}"
+        last = len(self._list) - 1
+        for i, seg in enumerate(self._list):
+            if seg.tmin is None and i > 0:
+                raise self._range_error(
+                    "only the lowest temperature range may be open below"
                 )
 
-            if tmax is None and i < len(ranges) - 1:
-                raise ValueError(
-                    f"Only the highest temperature range may be open above; got {ranges}"
+            if seg.tmax is None and i < last:
+                raise self._range_error(
+                    "only the highest temperature range may be open above"
                 )
 
         return self
+
+    def _range_error(self, problem: str) -> ValueError:
+        """Build the error for an invalid set of temperature ranges.
+
+        Names the reaction and lists every segment's range with the network
+        line it came from, in the current order.
+
+        Parameters
+        ----------
+        problem : str
+            What is wrong with the ranges.
+
+        Returns
+        -------
+        ValueError
+            The error to raise.
+        """
+        r = self.reaction
+        spans = [f"({seg.tmin}, {seg.tmax})" for seg in self._list]
+        width = max(map(len, spans))
+        rows = "\n".join(
+            f"  {span:<{width}}  {seg.source or 'no source line'}"
+            for span, seg in zip(spans, self._list)
+        )
+
+        return ValueError(f"{r.verbatim} [type={r.type}]: {problem}:\n{rows}")

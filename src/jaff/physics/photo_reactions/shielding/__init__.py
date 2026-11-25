@@ -1,45 +1,119 @@
-from jaff.common._helper import import_subpackages
-from jaff.errors import ParserError, RegistrationError
+# ABOUTME: Registry of the line-shielding plugins, keyed by (name, reaction);
+# ABOUTME: discovers the plugin subpackages on first lookup
+from __future__ import annotations
 
-from ._base import ShieldingFunction
+from typing import cast
 
-_REGISTER: dict[tuple[str, str | None], ShieldingFunction] = {}
-_DISCOVERED: bool = False
+from jaff.common.registry import Registry
+from jaff.config.plugin_table import check_shared_settings
+from jaff.config.plugin_table import settings_model as generic_settings_model
+from jaff.errors import ParserError
 
+from ._base import ShieldingFunction, ShieldingResult
+from .config import ShieldingParams
 
-def _register(cls: type[ShieldingFunction]) -> type[ShieldingFunction]:
-    key = (cls.name, cls.reaction)
-    if key in _REGISTER:
-        raise RegistrationError(
-            f"Key already exists for shielding function: {cls.name}, {cls.reaction}"
-        )
-
-    _REGISTER[key] = cls()
-    return cls
-
-
-def _discover_shielding() -> None:
-    global _DISCOVERED
-    if not _DISCOVERED:
-        import_subpackages(__name__)
-        _DISCOVERED = True
+_REGISTRY: Registry[ShieldingFunction] = Registry(
+    "shielding function", packages=[__name__]
+)
+"""The shielding plugins, keyed by ``(name, reaction)``; this package's subpackages."""
 
 
-def _get_shielding_function(name: str, reaction: str | None):
-    _discover_shielding()
-    name = name.lower()
-    key = (name, reaction)
+def register(cls: type[ShieldingFunction]) -> type[ShieldingFunction]:
+    """Class decorator registering a shielding plugin under ``(name, reaction)``.
 
-    if key not in _REGISTER:
-        # Fall back to a global function registered with reaction=None.
-        key = (name, None)
+    Parameters
+    ----------
+    cls : type[ShieldingFunction]
+        The plugin class; one instance is registered.
 
-    if key not in _REGISTER:
+    Returns
+    -------
+    type[ShieldingFunction]
+        *cls*, unchanged.
+
+    Raises
+    ------
+    RegistrationError
+        If a plugin with the same ``(name, reaction)`` is already registered, or
+        one with the same name has another ``config_model()``.
+    """
+    check_shared_settings(_REGISTRY, cls)
+
+    return _REGISTRY.register(cls)
+
+
+def shielding_functions() -> dict[tuple[str, str | None], ShieldingFunction]:
+    """Every registered shielding plugin, keyed by ``(name, reaction)``.
+
+    ``reaction`` is ``None`` for a global plugin (any reaction).
+
+    Returns
+    -------
+    dict[tuple[str, str or None], ShieldingFunction]
+        A copy of the registry.
+    """
+    return _REGISTRY.items()
+
+
+def settings_model(name: str) -> type[ShieldingParams]:
+    """The settings model (``config_model()``) of the shielding type *name*.
+
+    Every plugin of one name shares it (see :func:`register`).
+
+    Parameters
+    ----------
+    name : str
+        The ``shielding.type`` value (case-insensitive).
+
+    Returns
+    -------
+    type[ShieldingParams]
+
+    Raises
+    ------
+    ParserError
+        If no plugin has that name.
+    """
+    return cast(
+        type[ShieldingParams], generic_settings_model(_REGISTRY, name, "shielding")
+    )
+
+
+def shielding_function(name: str, reaction: str | None) -> ShieldingFunction:
+    """The shielding plugin of type *name* for the serialized *reaction*.
+
+    A plugin bound to *reaction* wins over a global one of the same name.
+
+    Parameters
+    ----------
+    name : str
+        The ``shielding.type`` value (case-insensitive).
+    reaction : str or None
+        The serialized reaction, or ``None`` for a global plugin only.
+
+    Returns
+    -------
+    ShieldingFunction
+
+    Raises
+    ------
+    ParserError
+        If no plugin of that type applies to *reaction*.
+    """
+    plugin = _REGISTRY.find(name, reaction)
+    if plugin is None:
         raise ParserError(
             f"Invalid shielding function type {name} or reaction {reaction} is not supported"
         )
 
-    return _REGISTER[key]
+    return plugin
 
 
-__all__ = [_register, ShieldingFunction]
+__all__ = [
+    "register",
+    "settings_model",
+    "shielding_function",
+    "shielding_functions",
+    "ShieldingFunction",
+    "ShieldingResult",
+]

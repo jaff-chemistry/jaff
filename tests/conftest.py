@@ -11,15 +11,14 @@ from typing import Callable, Dict
 import pytest
 
 from jaff import Network
-from tests.codegen_render import (
+from tests._paths import FIXTURES_DIR, SNAPSHOTS_DIR
+from tests.helpers.codegen_render import (
     NETWORKS,
     UPDATE,
     refresh_golden,
     render,
     template_files,
 )
-
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture(autouse=True)
@@ -67,7 +66,7 @@ def make_network(tmp_path):
         unique ``network_<n>.dat``.
     **kwargs
         Forwarded to :class:`~jaff.Network` (e.g. ``duplicate_policy``,
-        ``errors``).
+        ``strict``).
     """
     counter = {"n": 0}
 
@@ -88,7 +87,7 @@ def sample_network(fixtures_dir):
     return Network(str(fixtures_dir / "sample_kida.dat"))
 
 
-_SNAP_DIR = Path(__file__).parent / "snapshots" / "parser_output"
+_SNAP_DIR = SNAPSHOTS_DIR / "parser_output"
 
 
 class _SnapshotStore:
@@ -127,8 +126,8 @@ def rendered(tmp_path_factory: pytest.TempPathFactory) -> Callable[[str], Path]:
 
     def get(name: str) -> Path:
         if name not in cache:
-            out = tmp_path_factory.mktemp(f"render_{name}")
-            render(NETWORKS[name], template_files(name), out)
+            outdir = tmp_path_factory.mktemp(f"render_{name}")
+            out = render(NETWORKS[name], template_files(name), outdir)
             if UPDATE:
                 refresh_golden(name, out)
             cache[name] = out

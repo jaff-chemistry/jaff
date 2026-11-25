@@ -1,3 +1,6 @@
+# ABOUTME: Species: ordered, name-indexed catalogue of a network's Specie objects
+# ABOUTME: Lookup by name, serialized form or index
+
 """Ordered, name-indexed :class:`Species` catalogue for JAFF networks.
 
 ``Species`` supports look-up by name (``species["H2O"]``), by serialized form
@@ -7,9 +10,10 @@
 from __future__ import annotations
 
 from functools import cached_property
+from collections.abc import Sequence
+from typing import Any, Literal, overload
 
 from ...types import Catalogue, Vector
-from .._typing import ElementProps
 from ..elements import Elements
 from .specie import Specie
 
@@ -21,34 +25,43 @@ class Species(Catalogue[Specie]):
     (``species["+/H/H/O"]``), and by integer index (``species[0]``).  The
     ``ne`` parameter on many accessor methods excludes the electron species
     (``"e-"``), which is often treated separately in network solvers.
+
+    Vector accessors (:meth:`names`, :meth:`masses`, :meth:`charges`, ...)
+    return one entry per species in catalogue order.
+
+    Attributes
+    ----------
+    count : int
+        Total number of species in the collection.
+
+    Examples
+    --------
+    >>> from jaff.core.species import Species
+    >>> species = Species(["H2", "H+", "e-"])
+    >>> species["H+"].name
+    'H+'
+    >>> species["H/H"].name
+    'H2'
+    >>> species[0].name
+    'H2'
+    >>> species.names(ne=True)
+    ['H2', 'H+']
+    >>> species.count
+    3
     """
-
-    _mass_dict: dict | None = None
-
-    @classmethod
-    def configure(cls, mass_dict: dict[str, ElementProps]) -> None:
-        """Override the mass dictionary and propagate it to ``Specie``.
-
-        Parameters
-        ----------
-        mass_dict : dict[str, ElementProps]
-            Custom mass dictionary.
-        """
-        cls._mass_dict = mass_dict
-        Specie.configure(mass_dict)
 
     def __init__(
         self,
-        species: list[Specie] | list[str] | None = None,
+        species: Sequence[Specie | str] | None = None,
         check_length: bool = True,
     ):
         """Initialise the species catalogue.
 
         Parameters
         ----------
-        species : list[Specie] | list[str] | None, optional
-            Initial species.  Plain strings are converted to ``Specie``
-            objects with indices assigned in list order.  If ``None``, an
+        species : sequence of Specie or str, or None, optional
+            Initial species, ``Specie`` objects and names in any mix.  Names
+            are converted to ``Specie`` objects indexed by their list position.  If ``None``, an
             empty catalogue is created (items can be added with ``add``).
         check_length : bool, optional
             If ``True`` (default), the base ``Catalogue`` verifies that the
@@ -58,14 +71,15 @@ class Species(Catalogue[Specie]):
         """
         _by_name: dict[str, Specie] | None = None
         _by_serialized: dict[str, Specie] = {}
+        _species: list[Specie] | None = None
 
         if species is not None:
-            if species and isinstance(species[0], str):
-                species = [Specie(name, idx) for idx, name in enumerate(species)]  # type: ignore[arg-type]
-            _by_name = {sp.name: sp for sp in species}  # type: ignore
-            _by_serialized = {sp.serialized: sp for sp in species}  # type: ignore
-
-        _species: list[Specie] = species  # type: ignore
+            _species = [
+                Specie(item, idx) if isinstance(item, str) else item
+                for idx, item in enumerate(species)
+            ]
+            _by_name = {sp.name: sp for sp in _species}
+            _by_serialized = {sp.serialized: sp for sp in _species}
 
         super().__init__(_species, _by_name, check_length)
         self._by_serialized = _by_serialized
@@ -80,7 +94,7 @@ class Species(Catalogue[Specie]):
         self.__frozen = True
 
     def __repr__(self):
-        return f"Catalogue({self.names()!r})"
+        return f"{type(self).__name__}({self.names()!r})"
 
     def add(self, specie: Specie) -> None:
         """Append a new species to the catalogue if not already present.
@@ -97,7 +111,8 @@ class Species(Catalogue[Specie]):
         ValueError
             If *specie* is not a ``Specie`` instance.
         RuntimeError
-            If the catalogue has been frozen (see :meth:`freeze`).
+            If the catalogue has been frozen (``Network`` freezes it before
+            running the parsers' post-processing hooks).
         """
         if not isinstance(specie, Specie):
             raise ValueError(f"'{specie}' must be an instance of 'Specie'")
@@ -151,6 +166,11 @@ class Species(Catalogue[Specie]):
         Returns
         -------
         Specie
+
+        Raises
+        ------
+        KeyError
+            If no species has this serialized form.
         """
         return self._by_serialized[serialized]
 
@@ -165,11 +185,19 @@ class Species(Catalogue[Specie]):
         Returns
         -------
         Specie
+
+        Raises
+        ------
+        KeyError
+            If no species has this name.
         """
         return self._by_prop[name]
 
     def get_list(self) -> list[Specie]:
         """Return the underlying ordered list of ``Specie`` objects.
+
+        The list itself is returned, not a copy, so mutating it mutates the
+        catalogue.
 
         Returns
         -------
@@ -179,6 +207,10 @@ class Species(Catalogue[Specie]):
 
     def names(self, ne: bool = False) -> Vector[str]:
         """Return a ``Vector`` of species names.
+
+        Names are returned in catalogue (insertion) order.  ``ne=True`` is
+        useful when building solver state vectors that treat electrons
+        separately.
 
         Parameters
         ----------
@@ -195,6 +227,9 @@ class Species(Catalogue[Specie]):
     def masses(self, ne: bool = False) -> Vector[float | None]:
         """Return a ``Vector`` of species masses in grams (CGS).
 
+        Each mass is the sum over the species' constituent atoms (see
+        :attr:`Specie.mass`).
+
         Parameters
         ----------
         ne : bool, optional
@@ -209,6 +244,10 @@ class Species(Catalogue[Specie]):
     def exploded(self, ne: bool = False) -> Vector[list[str]]:
         """Return a ``Vector`` of atom lists (one per species).
 
+        Each entry is the sorted atomic-symbol list with repetition (e.g.
+        ``["H", "H", "O"]`` for H2O); charge tokens (``"+"``, ``"-"``) are
+        included.
+
         Parameters
         ----------
         ne : bool, optional
@@ -222,6 +261,10 @@ class Species(Catalogue[Specie]):
 
     def latex(self, dollars: bool = True, ne: bool = False) -> Vector[str]:
         """Return a ``Vector`` of LaTeX species strings.
+
+        See :meth:`Specie.latex` for the formatting rules.  Unlike
+        :meth:`Specie.latex`, *dollars* defaults to ``True`` here so the
+        strings render inline.
 
         Parameters
         ----------
@@ -239,6 +282,9 @@ class Species(Catalogue[Specie]):
     def charges(self, ne: bool = False) -> Vector[int]:
         """Return a ``Vector`` of net charges in units of elementary charge.
 
+        The charge is derived by counting trailing ``"+"`` and ``"-"``
+        characters in the species name; ``"e-"`` is always ``-1``.
+
         Parameters
         ----------
         ne : bool, optional
@@ -252,6 +298,10 @@ class Species(Catalogue[Specie]):
 
     def serialized(self, ne: bool = False) -> Vector[str]:
         """Return a ``Vector`` of canonical serialized species strings.
+
+        Each entry is ``"/".join(sorted(exploded))``.  Isomers share the same
+        serialized key, making these strings suitable for isomer-insensitive
+        comparison.
 
         Parameters
         ----------
@@ -267,6 +317,10 @@ class Species(Catalogue[Specie]):
     def elements(self, ne: bool = False) -> Vector[Elements]:
         """Return a ``Vector`` of ``Elements`` collections (one per species).
 
+        Each ``Elements`` instance lists the unique chemical elements present
+        in the corresponding species and is used to build composition
+        matrices.
+
         Parameters
         ----------
         ne : bool, optional
@@ -281,10 +335,21 @@ class Species(Catalogue[Specie]):
     def e_idx(self) -> int | None:
         """Return the integer index of the electron species, or ``None``.
 
+        Needed when building solver state vectors that place the electron
+        density at a fixed position.  The value is the electron's
+        :attr:`Specie.index`.
+
         Returns
         -------
         int or None
             ``None`` when ``"e-"`` is not in this catalogue.
+
+        Examples
+        --------
+        >>> Species(["H2", "H+", "e-"]).e_idx()
+        2
+        >>> Species(["H2"]).e_idx() is None
+        True
         """
         if "e-" in self:
             return self["e-"].index
@@ -316,6 +381,11 @@ class Species(Catalogue[Specie]):
         Returns
         -------
         Vector[str]
+
+        Examples
+        --------
+        >>> Species(["HCO+", "e-"]).normalized_names()
+        ['hcoj', 'ek']
         """
         return Vector(
             [s.name.replace("+", pos).replace("-", neg).strip().lower() for s in self]
@@ -350,7 +420,11 @@ class Species(Catalogue[Specie]):
 
         return out
 
-    def neutral(self, attr: str = "") -> Vector[Specie | int]:
+    @overload
+    def neutral(self, attr: Literal[""] = "") -> Vector[Specie]: ...
+    @overload
+    def neutral(self, attr: str) -> Vector[Any]: ...
+    def neutral(self, attr: str = "") -> Vector[Specie] | Vector[Any]:
         """Return neutral (charge == 0) species or one of their attributes.
 
         Parameters
@@ -358,11 +432,15 @@ class Species(Catalogue[Specie]):
         attr : str, optional
             If given, return the named attribute of each neutral species
             instead of the ``Specie`` object itself.  Must be one of the
-            values in ``Specie._ATTRS``.
+            values in ``Specie._ATTRS``: ``charge``, ``elements``,
+            ``exploded``, ``fidx``, ``index``, ``mass``, ``name``,
+            ``serialized``.
 
         Returns
         -------
-        Vector[Specie | int]
+        Vector
+            The neutral ``Specie`` objects, or with *attr* the value of that
+            attribute for each (e.g. names, masses).
 
         Raises
         ------
@@ -377,26 +455,41 @@ class Species(Catalogue[Specie]):
 
         return Vector([s for s in self if s.charge == 0])
 
-    def charged(self, attr: str = "", ne: bool = False) -> Vector[Specie]:
+    @overload
+    def charged(self, attr: Literal[""] = "", ne: bool = False) -> Vector[Specie]: ...
+    @overload
+    def charged(self, attr: str, ne: bool = False) -> Vector[Any]: ...
+    def charged(self, attr: str = "", ne: bool = False) -> Vector[Specie] | Vector[Any]:
         """Return charged (charge != 0) species or one of their attributes.
 
         Parameters
         ----------
         attr : str, optional
             If given, return the named attribute of each charged species.
-            Must be one of the values in ``Specie._ATTRS``.
+            Must be one of the values in ``Specie._ATTRS`` (see
+            :meth:`neutral`).
         ne : bool, optional
             If ``True``, exclude the electron species (``"e-"``),
             by default ``False``.
 
         Returns
         -------
-        Vector[Specie]
+        Vector
+            The charged ``Specie`` objects, or with *attr* the value of that
+            attribute for each (e.g. names, charges).
 
         Raises
         ------
         ValueError
             If *attr* is not a valid ``Specie`` attribute name.
+
+        Examples
+        --------
+        >>> species = Species(["H2", "H+", "e-"])
+        >>> species.charged("name")
+        ['H+', 'e-']
+        >>> species.charged("name", ne=True)
+        ['H+']
         """
         if attr:
             if attr not in Specie._ATTRS:
@@ -424,5 +517,13 @@ class Species(Catalogue[Specie]):
         -------
         Vector[int]
             ``1`` for charged species, ``0`` for neutral.
+
+        Examples
+        --------
+        >>> species = Species(["H2", "H+", "e-"])
+        >>> species.charge_truths()
+        [0, 1, 1]
+        >>> species.charge_truths(ne=True)
+        [0, 1]
         """
         return Vector([int(bool(s.charge)) for s in self if not (ne and s.name == "e-")])

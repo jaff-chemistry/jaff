@@ -1,3 +1,5 @@
+# ABOUTME: IndexedValue/IndexedList containers for indexed array assignments used in
+# ABOUTME: codegen, with normal/nested/flattened modes and conversions between them.
 """
 Indexed expression containers for code generation.
 
@@ -19,8 +21,9 @@ IndexedList
 Structural modes
 ----------------
 normal
-    All :class:`IndexedValue` objects have single-element index lists and
-    scalar (non-iterable, non-``IndexedValue``) values.
+    All :class:`IndexedValue` objects have single-element index lists, and no
+    value contains :class:`IndexedValue` objects.  Values may be scalars or
+    plain (possibly nested) lists, e.g. ``IndexedList([[1, 2], [3, 4]])``.
 nested
     Each :class:`IndexedValue` value may itself be an :class:`IndexedList`
     of :class:`IndexedValue` objects, representing a 2-D structure.
@@ -152,9 +155,24 @@ class IndexedList(list):
             TypeError: If items contain a mix of IndexedValue and non-IndexedValue objects
 
         Example:
-            >>> IndexedList([1, 2, 3])  # Creates IndexedValue objects with single indices
-            >>> IndexedList([[1, 2], [3, 4]], flatten=True)  # Flattens with 2D indices
-            >>> IndexedList([[1, 2], [3, 4]], nested=True)  # Preserves nested structure
+            >>> print(IndexedList([1, 2, 3]))  # IndexedValue objects with single indices
+            IndexedList[
+            [0] -> 1
+            [1] -> 2
+            [2] -> 3
+            ]
+            >>> print(IndexedList([[1, 2], [3, 4]], flatten=True))  # 2D indices
+            IndexedList[
+            [0, 0] -> 1
+            [0, 1] -> 2
+            [1, 0] -> 3
+            [1, 1] -> 4
+            ]
+            >>> print(IndexedList([[1, 2], [3, 4]], nested=True))  # nested structure
+            IndexedList[
+            [0] -> [[0] -> 1, [1] -> 2]
+            [1] -> [[0] -> 3, [1] -> 4]
+            ]
         """
         self.verbose = verbose
         if flatten and nested:
@@ -367,7 +385,7 @@ class IndexedList(list):
             str: One of 'normal', 'nested', or 'flattened'
                 - 'flattened': Any IndexedValue has multi-dimensional indices (len > 1)
                 - 'nested': Any IndexedValue has an iterable value containing IndexedValue objects
-                - 'normal': All IndexedValues have single indices and values without nested IndexedValues
+                - 'normal': All IndexedValues have single indices and no value contains IndexedValues
 
         Example:
             >>> lst = IndexedList([1, 2, 3])

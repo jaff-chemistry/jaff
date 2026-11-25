@@ -20,5 +20,7 @@ TOKENS: Dict[str, Getter] = {
     "filepath": lambda c: c.file,
     "dedt": lambda c: c.cg.get_dedt(),
     "dtdt": lambda c: c.cg.get_dtdt(),
+    "eos": lambda c: c.cg.get_eos(),
+    "eos_dt": lambda c: c.cg.get_eos_dt(),
     "e_idx": lambda c: c.net.species.e_idx(),
 }

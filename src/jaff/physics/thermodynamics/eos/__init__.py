@@ -1,7 +1,6 @@
-# ABOUTME: Equation-of-state package: re-exports EosProps and EosFactory
-# ABOUTME: for symbolic internal-energy construction
+# ABOUTME: Equation-of-state package: re-exports EosFactory for symbolic
+# ABOUTME: internal-energy construction (the EOS config lives in .config)
 
 from .eos_factory import EosFactory
-from .eos_props import EosProps
 
-__all__ = ["EosFactory", "EosProps"]
+__all__ = ["EosFactory"]

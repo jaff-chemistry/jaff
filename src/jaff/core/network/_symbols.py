@@ -13,11 +13,12 @@ package's initialisation (``io``, ``core.reaction``, ``physics``) must therefore
 from __future__ import annotations
 
 from functools import cached_property, reduce
-from typing import TYPE_CHECKING, ClassVar, Sequence
+from typing import TYPE_CHECKING, ClassVar, Collection
 
-from sympy import Basic, Expr, Float, Function, IndexedBase, S, Symbol
+from sympy import Basic, Expr, Float, Function, IndexedBase, Symbol, sympify
 from sympy.core.function import AppliedUndef, UndefinedFunction
 
+from ...chemistry import periodic_table
 from ...errors import ParserError
 
 if TYPE_CHECKING:
@@ -27,6 +28,14 @@ if TYPE_CHECKING:
 
 class NetworkSymbols:
     """Canonical symbols and symbolic quantities of a network.
+
+    Reached as ``net.symbols``.  It owns the fixed physics symbols
+    (class attributes, also usable as ``NetworkSymbols.<name>`` without a
+    network), the cached density expressions (:attr:`ndens`, :attr:`ntot`,
+    :attr:`rho`, :attr:`n_hnuc`, :meth:`element_sum`), the rate-coefficient
+    symbols (:attr:`krates`), the introspection sets
+    filled after loading (:attr:`variables`, :attr:`interp_functions`,
+    :attr:`undefined_functions`) and :meth:`standardize`.
 
     Attributes
     ----------
@@ -41,12 +50,14 @@ class NetworkSymbols:
     chi_pe : Symbol
         Photoelectric-band field placeholder, replaced by :meth:`standardize`.
     zd : Symbol
-        Grain charge (``Zd``).
+        Dust abundance relative to the Milky Way (``Zd``, the dust-to-gas
+        ratio over its Milky-Way value): scales the dust attenuation of the
+        radiation (:meth:`~jaff.physics.dust.Dust.attenuation`).
     vdisp : Symbol
         Velocity dispersion [cm s⁻¹].
     ph_E : Symbol
         Photon energy [eV]: the variable of cross sections, spectral profiles
-        and ``deltaRad`` functions.
+        and ``spectralYield`` functions.
     photorates : UndefinedFunction
         Placeholder function for photo-reaction rates.
 
@@ -56,6 +67,17 @@ class NetworkSymbols:
     parsed with ``parse_expr``, which creates assumption-free symbols, and SymPy
     only treats two symbols as equal when name *and* assumptions match.  Adding
     e.g. ``positive=True`` here would silently break substitution and ``diff``.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> net = Network("h_photoionization")
+    >>> net.symbols.ntot
+    nden[0] + nden[1] + nden[2]
+    >>> net.symbols.variables
+    frozenset({tgas})
+    >>> net.symbols.tgas
+    tgas
     """
 
     tgas: ClassVar[Symbol] = Symbol("tgas")
@@ -131,6 +153,22 @@ class NetworkSymbols:
         return IndexedBase("nden", shape=(self._net.species.count,))
 
     @cached_property
+    def krates(self) -> IndexedBase:
+        """Symbolic ``krate`` indexed base for the reactions' rate coefficients.
+
+        Entry ``krate[r]`` stands for the rate coefficient of ``net.reactions[r]``
+        (its position in the catalogue, ``Reaction.catalogue_index``), as used by
+        the reduced form of a rate (:class:`~jaff.core.reaction.Rate`).  Cached so
+        every consumer shares one symbol.
+
+        Returns
+        -------
+        sympy.IndexedBase
+            The ``krate`` indexed base symbol.
+        """
+        return IndexedBase("krate", shape=(len(self._net.reactions),))
+
+    @cached_property
     def ntot(self) -> Expr:
         """Total number density ``Σ_i nden[i]`` over all species.
 
@@ -166,7 +204,7 @@ class NetworkSymbols:
         ``H+`` once, ...) times its number density, so the sum is the total H
         nuclei density rather than a molecular count.  Equivalent to the
         ``n_H_nuc`` grammar token; used directly by the dust radiation-moment
-        source terms (see :mod:`jaff.physics._equations`), cached so every
+        source terms (see :meth:`~jaff.physics.Dust.attenuation`), cached so every
         consumer shares one expression.
 
         Returns
@@ -202,74 +240,6 @@ class NetworkSymbols:
 
         return self._element_sums[element]
 
-    def weighted_rate(self, weights: Sequence[Basic | float], rtol: float = 0.0) -> Expr:
-        """Rate of ``Σ_i w_i n_i``: ``Σ_r (Σ_i w_i ν_ri) F_r``.
-
-        ``ν = product_matrix − reactant_matrix`` (core species) and ``F_r`` are the
-        reaction fluxes (:meth:`Network.sfluxes`).  Flux expressions are substituted,
-        so the result can be differentiated and shares CSE with the species rows.
-        Reactions whose coefficient is exactly zero are skipped.
-
-        Parameters
-        ----------
-        weights : Sequence[Basic | float]
-            One weight per species, in species-index order.
-        rtol : float, optional
-            Numeric weights only: a reaction coefficient ``c_r = Σ_i w_i ν_ri`` is
-            treated as zero when ``|c_r| <= rtol · Σ_i |w_i ν_ri|``, i.e. when it is a
-            floating-point rounding residue of terms that cancel exactly in
-            principle.  Default ``0.0`` keeps every non-zero coefficient.
-
-        Returns
-        -------
-        Expr
-            The weighted rate [weight units · cm⁻³ s⁻¹].
-
-        Raises
-        ------
-        ValueError
-            If the number of weights differs from the number of species.
-        """
-        weights = list(weights)
-        if len(weights) != self._net.species.count:
-            raise ValueError(
-                f"weighted_rate needs one weight per species "
-                f"({self._net.species.count}), got {len(weights)}"
-            )
-
-        net = self._net
-        nu = net.product_matrix - net.reactant_matrix
-        total = S.Zero
-        for row, flux in zip(nu, net.sfluxes()):
-            terms = [w * int(n) for w, n in zip(weights, row) if n]
-            coeff = sum(terms)
-            if rtol and abs(coeff) <= rtol * sum(abs(t) for t in terms):
-                continue
-
-            if coeff != 0:
-                total += coeff * flux
-
-        return total
-
-    @cached_property
-    def dntot_dt(self) -> Expr:
-        """Chemical rate of total number density, ``Σ_r Δn_r F_r`` [cm⁻³ s⁻¹]."""
-        return self.weighted_rate([1] * self._net.species.count)
-
-    @cached_property
-    def drho_dt(self) -> Expr:
-        """Chemical rate of mass density, ``Σ_r Δm_r F_r`` [g cm⁻³ s⁻¹].
-
-        Never forced to zero: every reaction contributes its actual mass change,
-        so the per-cell rate is kept even for reactions that pass
-        :meth:`Reaction.check_mass`.  Only floating-point rounding residues
-        (``|Δm_r| <= 1e-12 · Σ_i |m_i ν_ri|``, far below one electron mass) are
-        dropped, so the expression -- and the Jacobian sparsity -- does not depend
-        on the last bits of the species masses.  Unset masses count as ``0``.
-        """
-        masses = [s.mass or 0.0 for s in self._net.species]
-        return self.weighted_rate(masses, rtol=1e-12)
-
     # The introspection caches below are filled on first access (Network.__init__,
     # after loading).  Mutating rates or thermodynamics afterwards leaves them stale.
 
@@ -280,12 +250,12 @@ class NetworkSymbols:
         ``dE`` because only the aggregate has its convenience symbols (``n_X``,
         ...) resolved to ``nden`` entries.  With radiation, the reactions'
         ``group_yields`` and the groups' ``emissivity`` (from ``globalEmissivity``)
-        are included.
+        and ``absorption_coefficient`` are included.
         """
         net = self._net
         expressions = [
-            *(r.rate_coefficient for r in net.reactions),
-            net.thermodynamics.dEdt_chemical.volumetric,
+            *(r.rate.coefficient for r in net.reactions),
+            net.thermodynamics.dEdt_chemical().volumetric,
             net.thermodynamics.dEdt_extra.volumetric,
         ]
         if net.radiation is not None:
@@ -304,32 +274,35 @@ class NetworkSymbols:
         return frozenset().union(*(self.free_symbols(e) for e in self._expressions()))
 
     @cached_property
-    def _applied_functions(self) -> frozenset[str]:
-        """Names of all undefined (applied) functions across network expressions."""
+    def applied_functions(self) -> frozenset[AppliedUndef]:
+        """Calls of undefined functions across network expressions, with their arguments.
+
+        Each call is a SymPy ``AppliedUndef`` (``call.func.__name__`` its name,
+        ``call.args`` its arguments). :attr:`interp_functions` and
+        :attr:`undefined_functions` are their names.
+        """
         return frozenset(
-            call.func.__name__
-            for e in self._expressions()
-            for call in e.atoms(AppliedUndef)
+            call for e in self._expressions() for call in e.atoms(AppliedUndef)
         )
 
     @cached_property
     def interp_functions(self) -> frozenset[str]:
         """Names of interpolation functions (containing ``"interp"``)."""
-        return frozenset(name for name in self._applied_functions if "interp" in name)
+        names = (call.func.__name__ for call in self.applied_functions)
+
+        return frozenset(name for name in names if "interp" in name)
 
     @cached_property
     def undefined_functions(self) -> frozenset[str]:
         """Names of undefined, non-interpolation functions."""
-        return frozenset(name for name in self._applied_functions if "interp" not in name)
+        names = (call.func.__name__ for call in self.applied_functions)
+
+        return frozenset(name for name in names if "interp" not in name)
 
     @cached_property
     def _element_lookup(self) -> dict[str, str]:
-        """Lower-cased element token -> canonical element symbol.
-
-        Valid only once ``net.mass_dict`` is loaded; first touched by
-        :meth:`standardize`, which runs after loading.
-        """
-        return {s.lower(): s for s in self._net.mass_dict}
+        """Lower-cased element token -> canonical element symbol (the periodic table)."""
+        return {s.lower(): s for s in periodic_table()}
 
     @cached_property
     def _charge_reverse(self) -> dict[str, Specie]:
@@ -340,22 +313,24 @@ class NetworkSymbols:
         """
         return self._net.species.charge_reverse_map()
 
-    def standardize(self, expr: Basic) -> Expr:
+    def standardize(self, expr: Basic, keep: Collection[Basic] = ()) -> Expr:
         """Replace convenience symbols with ``nden``-based expressions.
 
         ``ntot`` → :attr:`ntot`; ``n_<species>`` → that species' density;
         ``n_e`` → electron density; ``n_<element>_nuc`` → :meth:`element_sum`
         (or the free symbol ``n<element>_nuc`` when the network was built with
-        ``expand_nuclei=False``); ``rc_<int>`` → the rate of the reaction whose
-        file-side number is ``<int>`` (looked up via ``reactions.by_source_index``,
-        not the catalogue position, so it stays dedup-safe and consistent with
-        ``chemRateN``); ``chi_pe`` → ``net.dust.pe.chi`` (needs radiation and
-        dust).  Name matching is case-insensitive.
+        ``expand_nuclei=False``); ``chi_pe`` → ``net.dust.pe.chi`` (needs
+        radiation and dust).  Name matching is case-insensitive, except ``n_e``,
+        which is recognised only in lower case.  ``rc_<int>`` references to
+        another reaction's rate are left alone: see
+        :meth:`~jaff.core.reaction.Reactions.link`.
 
         Parameters
         ----------
         expr : Basic
             Expression to standardize.
+        keep : Collection[Basic], optional
+            Symbols to leave alone, e.g. a ``.jfunc`` function's own parameters.
 
         Returns
         -------
@@ -365,8 +340,8 @@ class NetworkSymbols:
         Raises
         ------
         ParserError
-            On an unknown species/element, a charged nucleus alias, a missing
-            ``rc_`` target, or ``chi_pe`` without radiation or dust.
+            On an unknown species/element, a charged nucleus alias, or
+            ``chi_pe`` without radiation or dust.
         ValueError
             If two species collide case-insensitively (e.g. ``CO`` / ``Co``).
         """
@@ -374,7 +349,7 @@ class NetworkSymbols:
             return Float(0.0)
 
         reps = {}
-        for fs in expr.free_symbols:
+        for fs in expr.free_symbols - set(keep):
             repl = self._replacement(str(fs))
             if repl is not None:
                 reps[fs] = repl
@@ -387,8 +362,8 @@ class NetworkSymbols:
         Raises
         ------
         ParserError
-            For ``chi_pe`` without radiation/dust, or an ``rc_`` target that is
-            not in the network (see also :meth:`_density_replacement`).
+            For ``chi_pe`` without radiation/dust (see also
+            :meth:`_density_replacement`).
         """
         net = self._net
         low_name = name.lower()
@@ -405,27 +380,13 @@ class NetworkSymbols:
                 raise ParserError(
                     "In order to replace the 'chi_pe' symbol, dust must be enabled"
                 )
-            return net.dust.pe.chi
+            chi = net.dust.pe.chi
+            # chi is None only without radiation, rejected above.
+            assert chi is not None
+            return sympify(chi)
 
         if low_name.startswith("n_"):
             return self._density_replacement(name)
-
-        if low_name.startswith("rc_"):
-            try:
-                num = int(name[3:])
-            except ValueError:
-                net.logger.error(
-                    f"The 'rc_' keyword in {net.spec.funcfile} must be followed by "
-                    f"an integer\ndenoting the reaction number. Found {name}"
-                )
-                return None
-
-            rxn = net.reactions.by_source_index(num)
-            if rxn is None:
-                raise ParserError(
-                    f"'{name}' references reaction {num}, which is not in the network"
-                )
-            return rxn.rate_coefficient
 
         return None
 
@@ -454,7 +415,7 @@ class NetworkSymbols:
                 raise ParserError(
                     f"'{name}' requests a nucleus sum for unknown element '{base}'"
                 )
-            if not net.spec.expand_nuclei:
+            if not net.config.expand_nuclei:
                 return Symbol(f"n{base}_nuc")
 
             total = self.element_sum(element)

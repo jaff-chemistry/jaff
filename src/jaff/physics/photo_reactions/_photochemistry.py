@@ -1,3 +1,5 @@
+# ABOUTME: Photochemistry: per-reaction photo cross-section look-ups (NORAD, Verner,
+# ABOUTME: Leiden, custom) stored as XsecProps
 """
 Look-ups for photochemical cross sections.
 
@@ -11,7 +13,7 @@ Three databases are used:
 
 Photodissociation always comes from Leiden.  Photoionisation follows the
 reaction's ``pi_database`` override, then the global
-:attr:`RadiationProps.pi_database`, then the remaining databases (see
+``network.reactions.photo.pi_database``, then the remaining databases (see
 :meth:`Photochemistry.get_xsec`).  All look-ups are keyed by
 ``reaction.serialized`` (or the normalised proxy string).
 """
@@ -33,12 +35,14 @@ from ...drivers.pooch import (
 )
 from ...errors import ParserError
 from ...io import JaffLogger
-from ._radiation_props import PI_DATABASES
-from .shielding import _get_shielding_function
 
 if TYPE_CHECKING:
     from ...core import Reaction
-    from ...core.network import Network
+    from ...core.reaction.config import ReactionsConfig
+
+
+#: Photoionization cross-section databases, in fallback order after the user's choice.
+PI_DATABASES: tuple[str, ...] = ("norad", "verner", "leiden")
 
 
 @dataclass
@@ -55,6 +59,52 @@ class XsecProcess:
 
 @dataclass(eq=False)
 class XsecProps:
+    """Cross sections of a photo reaction's single decay channel.
+
+    Built by :class:`Photochemistry` (:meth:`~Photochemistry.get_xsec` or
+    :meth:`~Photochemistry.get_custom_xsec`) and held as
+    ``reaction.photo.xsec``.  A cross section is either tabulated on a
+    photon-energy grid (NORAD, Leiden) or an expression in ``ph_E`` (Verner, or
+    a ``.jfunc`` ``photoCrossSection<N>`` function).
+
+    Attributes
+    ----------
+    units : XsecUnits
+        Units of the data: ``photon_energy="eV"`` and
+        ``cross_section="cm^2"``.
+    process : XsecProcess
+        ``absorption`` (``True`` when a separate photo-absorption table is
+        loaded) and ``decay_type`` (``"ionization"`` or ``"dissociation"``).
+    database : str
+        Source of the cross section: ``"norad"``, ``"verner"``, ``"leiden"``
+        or ``"custom"`` (a ``photoCrossSection<N>`` function).
+    photon_energy : numpy.ndarray or None
+        Photon-energy grid (eV) of a tabulated cross section; ``None`` for a
+        symbolic one.
+    photo_absorption : numpy.ndarray or None
+        Tabulated photo-absorption cross section (cm²) on ``photon_energy``,
+        or ``None`` when there is none.
+    photodecay : numpy.ndarray or None
+        Tabulated photodecay (photoionisation / photodissociation) cross
+        section (cm²) on ``photon_energy``; ``None`` for a symbolic one.
+    photodecay_expr : sympy.Expr or None
+        Photodecay cross section (cm²) as an expression in ``ph_E`` (eV);
+        ``None`` for a tabulated one.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> net = Network(
+    ...     "h_photoionization",
+    ...     radiation={"bands": [1, 13.6, 100, "inf"]},
+    ... )
+    >>> xsec = net.reactions.photo_reactions()[0].photo.xsec
+    >>> xsec.database, xsec.process.decay_type, xsec.process.absorption
+    ('norad', 'ionization', False)
+    >>> xsec.photon_energy.shape == xsec.photodecay.shape
+    True
+    """
+
     units: XsecUnits
     process: XsecProcess
     database: Literal["norad", "verner", "leiden", "custom"]
@@ -62,21 +112,45 @@ class XsecProps:
     photo_absorption: np.ndarray | None
     photodecay: np.ndarray | None
     photodecay_expr: Expr | None
-    # Cross section averaged over the whole radiation spectrum (cm²); 0.0 until
-    # the rate is computed when radiation is enabled, None without radiation.
-    # An expression when a photoCrossSection uses other symbols (e.g. tgas).
-    total: float | Expr | None = None
 
 
 class Photochemistry:
     """Cross-section provider for photo-reactions.
 
     Resolves per-reaction photoionisation / photodissociation / photoabsorption
-    cross sections from the JAFF database and the tabulated Leiden, NORAD, and
-    Verner data files.
+    cross sections from the tabulated Leiden and NORAD data files and the
+    Verner (1996) fits in the JAFF database (``verner_cross_sections`` table).
+
+    The reactions catalogue builds one on first use
+    (:attr:`~jaff.core.reaction.Reactions.photochemistry`), and every photo
+    reaction stores what it resolves as ``reaction.photo.xsec`` (an
+    :class:`XsecProps`).  Photodissociation always
+    comes from Leiden; photoionisation follows the reaction's ``pi_database``,
+    then ``[network.reactions.photo] pi_database`` (``"norad"`` by default),
+    then the other databases in the order ``norad``, ``verner``, ``leiden``.
+
+    Attributes
+    ----------
+    config : ReactionsConfig
+        The reactions catalogue's settings (read-only): a reaction's own
+        ``pi_database`` (``config.own``) must be a photoionisation.
+    logger : logging.Logger
+        The JAFF logger, used by :meth:`log_fallback_summary`.
+    fallbacks : list of tuple of (str, str, str)
+        ``(key, requested, used)`` for every photoionisation resolved from a
+        fallback database since the last :meth:`log_fallback_summary`.
+
+    Examples
+    --------
+    >>> from jaff import Network
+    >>> from jaff.physics import Photochemistry
+    >>> net = Network("h_photoionization")
+    >>> rxn = net.reactions.photo_reactions()[0]
+    >>> Photochemistry(net.reactions.config).get_xsec(rxn).database
+    'norad'
     """
 
-    def __init__(self, network: Network):
+    def __init__(self, config: ReactionsConfig):
         """Ensure the cross-section and shielding data files are available locally.
 
         Constructing a :class:`Photochemistry` triggers
@@ -85,8 +159,13 @@ class Photochemistry:
         Leiden line-shielding tables), downloading both on first use (a network
         fetch unless already cached). Instantiate once and reuse rather than per
         reaction.
+
+        Parameters
+        ----------
+        config : ReactionsConfig
+            The settings of the reactions catalogue that owns it.
         """
-        self.net = network
+        self.config: ReactionsConfig = config
         self.logger: logging.Logger = JaffLogger().get_logger()
         # (key, requested, used) for photoionizations resolved from a fallback
         # database; reported once by log_fallback_summary().
@@ -95,48 +174,18 @@ class Photochemistry:
         download_shielding()
 
     def _lookup_key(self, reaction: Reaction) -> str:
-        """Database key: the proxy string when proxy photoreactions are enabled."""
-        if self.net._use_proxy_photoreaction:
+        """Database key: the proxy string when the reaction uses proxy lookups."""
+        photo = reaction.photo
+        if photo is not None and photo.config.use_proxy_photoreaction:
             return reaction.normalized_proxy_reaction_str()
 
         return reaction.serialized
-
-    def get_verner_xsec(self, reaction: Reaction) -> Expr | None:
-        """
-        Query the JAFF database for the Verner photoionisation cross section.
-
-        Verner cross sections are analytic fits to photoionisation cross
-        sections from Verner et al. (1996) stored as SymPy-parseable strings
-        in the ``verner_cross_sections`` SQLite table.
-
-        Parameters
-        ----------
-        reaction : Reaction
-            Reaction whose look-up key (see :meth:`_lookup_key`) is queried.
-
-        Returns
-        -------
-        sympy.Expr or None
-            The SymPy expression for σ(E) if the reaction is found, or
-            ``None`` if no entry exists.
-
-        Notes
-        -----
-        The expression uses the symbol ``ph_E`` (photon energy in eV) as the
-        independent variable and returns cross sections in cm²; it is zero
-        outside ``[E_th, E_max]``.
-
-        References
-        ----------
-        Verner, D. A. et al. 1996, ApJ, 465, 487
-        """
-        return self._verner_expr(self._lookup_key(reaction))
 
     @staticmethod
     def _verner_expr(key: str) -> Expr | None:
         with JaffDb() as jdb:
             table = jdb.table("verner_cross_sections")
-            rows: list = table.rows(conditions=f"reaction = '{key}'")
+            rows: list = table.rows(conditions="reaction = ?", params=[key])
 
         return sympify(rows[0]["xsecs"]) if rows else None
 
@@ -144,7 +193,7 @@ class Photochemistry:
     def _tabulated_row(key: str) -> dict[str, Any] | None:
         with JaffDb() as jdb:
             table = jdb.table("photo_reaction_cross_sections")
-            rows: list = table.rows(conditions=f"reaction = '{key}'")
+            rows: list = table.rows(conditions="reaction = ?", params=[key])
 
         return rows[0] if rows else None
 
@@ -156,29 +205,24 @@ class Photochemistry:
 
         return "e-" in key.partition("__")[2].split(".")
 
-    @staticmethod
-    def _pi_override(reaction: Reaction) -> str | None:
-        """The reaction's own ``pi_database``, or ``None`` when it has none."""
+    def _pi_override(self, reaction: Reaction) -> str | None:
+        """The ``pi_database`` set for the reaction itself, or ``None``."""
+        own = self.config.own(reaction.serialized)
 
-        return reaction.photo.pi_database if reaction.photo is not None else None
+        return (
+            own.photo.pi_database if own is not None and own.photo is not None else None
+        )
 
     def _pi_order(self, reaction: Reaction) -> list[str]:
         """Databases to try: the chosen one, then :data:`PI_DATABASES` order."""
-        rad = self.net.radiation
-        chosen = self._pi_override(reaction) or (
-            rad.pi_database if rad is not None else "norad"
-        )
+        photo = reaction.photo
+        chosen = photo.config.pi_database if photo is not None else None
+        assert chosen is not None, f"{reaction}: unresolved photo config"
 
         return list(dict.fromkeys([chosen, *PI_DATABASES]))
 
-    def _default_total(self) -> float | None:
-        """Initial :attr:`XsecProps.total`: ``0.0`` with radiation, else ``None``."""
-        return 0.0 if self.net.radiation is not None else None
-
     @staticmethod
-    def _tabulated_xsec(
-        db: str, loc: str, row: dict[str, Any], total: float | None
-    ) -> XsecProps:
+    def _tabulated_xsec(db: str, loc: str, row: dict[str, Any]) -> XsecProps:
         """Read one tabulated (Leiden / NORAD) HDF5 group into an XsecProps."""
         pr_xsec = HDF5().to_dict(str(JAFF_DIR.resolve() / loc))
         photo_absorption = pr_xsec.get("photoabsorption", {}).get("_data", None)
@@ -194,7 +238,6 @@ class Photochemistry:
             photo_absorption=photo_absorption,
             photodecay=pr_xsec.get("photodecay", {}).get("_data", None),
             photodecay_expr=None,
-            total=total,
         )
 
     def _load(self, db: str, key: str, row: dict[str, Any] | None) -> XsecProps | None:
@@ -213,13 +256,12 @@ class Photochemistry:
                 photo_absorption=None,
                 photodecay=None,
                 photodecay_expr=expr,
-                total=self._default_total(),
             )
 
         if row is None or not row[db]:
             return None
 
-        return self._tabulated_xsec(db, row[db], row, self._default_total())
+        return self._tabulated_xsec(db, row[db], row)
 
     def get_custom_xsec(self, reaction: Reaction, expr: Expr) -> XsecProps:
         """Cross sections from a ``.jfunc`` ``photoCrossSection`` function.
@@ -252,7 +294,6 @@ class Photochemistry:
             photo_absorption=None,
             photodecay=None,
             photodecay_expr=expr,
-            total=self._default_total(),
         )
 
     def get_xsec(self, reaction: Reaction, required: bool = False) -> XsecProps | None:
@@ -260,14 +301,15 @@ class Photochemistry:
         Resolve the cross sections for a photo-reaction.
 
         Photodissociation comes from Leiden.  Photoionisation tries, in order,
-        ``reaction.photo.pi_database`` (or the global
-        :attr:`RadiationProps.pi_database`, ``"norad"`` without radiation),
+        the reaction's resolved ``config.photo.pi_database`` (its own setting,
+        else the global ``network.reactions.photo.pi_database``, ``"norad"`` by
+        default),
         then ``norad``, ``verner``, ``leiden`` (duplicates removed).  Fallbacks to
         a later database are recorded and reported once by
         :meth:`log_fallback_summary`.
 
         The look-up key is ``reaction.normalized_proxy_reaction_str()`` when
-        ``self.net._use_proxy_photoreaction`` is set, otherwise
+        the reaction's ``use_proxy_photoreaction`` setting is on, otherwise
         ``reaction.serialized``.
 
         Parameters
@@ -291,8 +333,10 @@ class Photochemistry:
         Raises
         ------
         ParserError
-            If ``reaction.photo.pi_database`` is set on a non-photoionisation
-            reaction, or *required* and no database has the reaction.
+            If a ``pi_database`` is set for the reaction itself (its own
+            ``[network.reactions.reaction."<serialized>".photo]`` entry) and it
+            is not a photoionisation, or *required* and no database has the
+            reaction.
         """
         key = self._lookup_key(reaction)
         row = self._tabulated_row(key)
@@ -346,48 +390,3 @@ class Photochemistry:
         )
 
         self.fallbacks.clear()
-
-    @staticmethod
-    def shielding(reaction: Reaction, network: Network) -> Expr:
-        """Build the symbolic shielding factor for a photo-reaction.
-
-        The shielding function named by ``reaction.photo.shielding.type`` is
-        resolved from the
-        shielding registry via
-        :func:`~jaff.physics.photo_reactions.shielding._get_shielding_function`.
-        Lookup is keyed by ``(type, reaction.serialized)`` and prefers a
-        reaction-specific (local) function, falling back to a global one
-        registered with ``reaction=None``.  The resolved
-        :class:`~jaff.physics.photo_reactions.shielding._base.ShieldingFunction`
-        instance's ``get_shielding(reaction, network)`` produces the factor.
-
-        The result is not cached: ``photo.shielding.props`` holds only the
-        user's settings (a ``value`` entry there fixes the factor instead), so
-        callers evaluate it once per reaction.
-
-        Parameters
-        ----------
-        reaction : Reaction
-            Reaction to shield; its ``photo.shielding.type`` selects
-            the shielding function.
-        network : Network
-            Network the reaction belongs to, forwarded to the shielding
-            function for species/column-density look-ups.
-
-        Returns
-        -------
-        sympy.Expr
-            Dimensionless shielding factor multiplying the photo-rate.
-
-        Raises
-        ------
-        ParserError
-            If no shielding function is registered for ``type`` either locally
-            (for this reaction) or as a global fallback.
-        """
-        shielding = reaction.photo.shielding if reaction.photo is not None else None
-        assert shielding is not None, f"{reaction} is not shielded"
-
-        shielding_fn = _get_shielding_function(shielding.type, reaction.serialized)
-
-        return shielding_fn.get_shielding(reaction, network)

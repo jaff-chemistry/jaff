@@ -1,0 +1,37 @@
+! Water and CO from cosmic-ray-driven ion-molecule chemistry in a diffuse/
+! translucent cloud: a small, chemically consistent demo network (20 reactions,
+! 15 species) in KIDA format, so every reaction carries its type (itype):
+!   1 cosmic ray, 3 photo, 4 two-body (ion-neutral), 8 dissociative/radiative
+!   recombination, 9 grain (H2 formation; an effective rate per H pair).
+! Rates are representative literature values (KIDA / UMIST), rounded; they are
+! for demonstration, not for science. Formulas: 1 = alpha * crate,
+! 2 = alpha * chi * exp(-gamma * av), 3 = Kooij alpha (T/300)^beta exp(-gamma/T).
+!
+! Columns as in networks/GOW/GOW.jet (see http://kida.astrochem-tools.org):
+!   *Reactants 3x(s10+' ') + ' ' *Products 5x(s10+' ') + 2x' '                            *alpha     *beta      *gamma     F        g      err *itype Tmin  Tmax *frml  *ID ni r
+! Hydrogen: cosmic rays ionise H2, H2+ + H2 gives H3+, the proton donor of
+! the ion chemistry; H2 re-forms on grains
+H2         CR                     H2+        e-                                            9.700e-01  0.000e+00  0.000e+00 2.00e+00 0.00e+00 logn  1  -9999   9999  1     1 1  1
+H2         H2+                    H          H3+                                           2.080e-09  0.000e+00  0.000e+00 2.00e+00 0.00e+00 logn  4     10    300  3     2 1  1
+H2+        e-                     H          H                                             2.530e-07 -5.000e-01  0.000e+00 2.00e+00 0.00e+00 logn  8     10    300  3     3 1  1
+H3+        e-                     H          H2                                            2.340e-08 -5.200e-01  0.000e+00 2.00e+00 0.00e+00 logn  8     10    300  3     4 1  1
+H          H                      H2                                                       4.950e-17  5.000e-01  0.000e+00 2.00e+00 0.00e+00 logn  9     10    300  3     5 1  1
+! Oxygen chain: H3+ protonates O, hydrogen abstraction builds up H3O+, and
+! dissociative recombination of each ion gives O, OH and water
+H3+        O                      H2         OH+                                           7.980e-10 -1.560e-01  1.410e+00 2.00e+00 0.00e+00 logn  4     10    300  3     6 1  1
+OH+        H2                     H          H2O+                                          9.700e-10  0.000e+00  0.000e+00 2.00e+00 0.00e+00 logn  4     10    300  3     7 1  1
+H2O+       H2                     H          H3O+                                          6.400e-10  0.000e+00  0.000e+00 2.00e+00 0.00e+00 logn  4     10    300  3     8 1  1
+OH+        e-                     H          O                                             3.750e-08 -5.000e-01  0.000e+00 2.00e+00 0.00e+00 logn  8     10    300  3     9 1  1
+H2O+       e-                     H          OH                                            8.600e-08 -5.000e-01  0.000e+00 2.00e+00 0.00e+00 logn  8     10    300  3    10 1  1
+H3O+       e-                     H          H2O                                           7.100e-08 -5.000e-01  0.000e+00 2.00e+00 0.00e+00 logn  8     10    300  3    11 1  1
+H3O+       e-                     H          H          OH                                 3.050e-07 -5.000e-01  0.000e+00 2.00e+00 0.00e+00 logn  8     10    300  3    12 1  1
+! Carbon: H3+ + CO and C+ + H2O give HCO+, which recombines to CO
+H3+        CO                     H2         HCO+                                          1.700e-09  0.000e+00  0.000e+00 2.00e+00 0.00e+00 logn  4     10    300  3    13 1  1
+C+         H2O                    H          HCO+                                          9.000e-10  0.000e+00  0.000e+00 2.00e+00 0.00e+00 logn  4     10    300  3    14 1  1
+HCO+       e-                     H          CO                                            2.750e-07 -6.400e-01  0.000e+00 2.00e+00 0.00e+00 logn  8     10    300  3    15 1  1
+C+         e-                     C                                                        4.400e-12 -6.100e-01  0.000e+00 2.00e+00 0.00e+00 logn  8     10    300  3    16 1  1
+! Photo-processes destroy C, CO, H2O and OH (rate * chi * exp(-gamma * av))
+C          Photon                 C+         e-                                            3.500e-10  0.000e+00  3.760e+00 2.00e+00 0.00e+00 logn  3  -9999   9999  2    17 1  1
+CO         Photon                 C          O                                             2.400e-10  0.000e+00  3.880e+00 2.00e+00 0.00e+00 logn  3  -9999   9999  2    18 1  1
+H2O        Photon                 H          OH                                            8.000e-10  0.000e+00  2.200e+00 2.00e+00 0.00e+00 logn  3  -9999   9999  2    19 1  1
+OH         Photon                 H          O                                             3.800e-10  0.000e+00  2.660e+00 2.00e+00 0.00e+00 logn  3  -9999   9999  2    20 1  1

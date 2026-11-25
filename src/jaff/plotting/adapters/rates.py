@@ -3,7 +3,7 @@
 
 """Rate coefficients as plotting series.
 
-Duck-typed: a "reaction" is anything with a ``rate_coefficient`` (and optionally
+Duck-typed: a "reaction" is anything with a ``rate.coefficient`` (and optionally
 ``tmin`` / ``tmax`` / ``get_latex``), so this module never imports
 :mod:`jaff.core`.
 """
@@ -14,7 +14,7 @@ import math
 from typing import Any
 
 import numpy as np
-from sympy import Basic, lambdify
+from sympy import Basic, Symbol, lambdify
 
 from ...io import JaffLogger
 from ._common import label_of as _label_of
@@ -85,7 +85,7 @@ def rate_series(
     Parameters
     ----------
     item
-        A reaction-like object (has ``rate_coefficient``), a SymPy expression, or an
+        A reaction-like object (has ``rate.coefficient``), a SymPy expression, or an
         ``(x, y)`` tuple of arrays.
     tmin, tmax : float or None
         Temperature range (K).  For reactions falls back to the reaction's
@@ -104,13 +104,16 @@ def rate_series(
     Returns
     -------
     dict or None
-        ``None`` (with a warning) if the rate cannot be evaluated
-        numerically, e.g. photo or cosmic-ray rates with free symbols.
+        ``None`` if the rate cannot be evaluated numerically, e.g. photo or
+        cosmic-ray rates with free symbols; this is logged as a warning, or
+        at debug level when *quiet*.
 
     Raises
     ------
     ValueError
-        A bare SymPy expression without ``tmin`` and ``tmax``.
+        A bare SymPy expression without ``tmin`` and ``tmax``, or (for a
+        reaction or SymPy expression) temperature bounds that do not satisfy
+        ``0 < tmin < tmax``.
     TypeError
         An unsupported *item* type.
     """
@@ -122,17 +125,17 @@ def rate_series(
             "label": label or "",
         }
 
-    if hasattr(item, "rate_coefficient"):
+    if hasattr(getattr(item, "rate", None), "coefficient"):
         t0 = _first(tmin, _usable(getattr(item, "tmin", None)), DEFAULT_TMIN)
         t1 = _first(tmax, _usable(getattr(item, "tmax", None)), DEFAULT_TMAX)
         lab = label if label is not None else _label_of(item)
-        return _evaluate(item.rate_coefficient, var, t0, t1, npoints, lab, quiet)
+        return _evaluate(item.rate.coefficient, var, t0, t1, npoints, lab, quiet)
 
     if isinstance(item, Basic):
         if tmin is None or tmax is None:
             raise ValueError("tmin and tmax are required for bare SymPy expressions.")
         syms = list(item.free_symbols)
-        sym = syms[0].name if len(syms) == 1 else var
+        sym = syms[0].name if len(syms) == 1 and isinstance(syms[0], Symbol) else var
         lab = label if label is not None else str(item)
         return _evaluate(item, sym, tmin, tmax, npoints, lab, quiet)
 

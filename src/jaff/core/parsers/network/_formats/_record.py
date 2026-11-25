@@ -1,22 +1,29 @@
+# ABOUTME: Record types passed between the network-parser engine and format parsers
+# ABOUTME: Record (detected line), ParsedRecord (parsed reaction), ParseResult
+
+
 class Record:
-    """A detected-but-not-yet-processed reaction line.
+    """A detected-but-not-yet-processed line: a reaction or a directive.
 
     Captured in the engine's detection phase and handed to the owning format's
-    ``process`` method. ``metadata`` snapshots the live parser state the format
-    needs, so deferred processing never reads stale mutable state.
+    ``process`` method.  The engine leaves ``metadata`` empty and no bundled
+    parser reads it.
 
     Attributes
     ----------
     source_index : int
-        File-side reaction number (0-based, stable under dedup).
+        File-side reaction number (0-based, stable under dedup); ``-1`` for a
+        directive line.
     line : str
         Raw file line.
     nline : int
         1-based file line number (for error messages).
     format : str
-        Owning format name.
+        Name of the handler that detected the line; the owning parser uses it
+        to dispatch the record.
     metadata : dict
-        Snapshot of the format state this line depends on.
+        Optional per-line data; ``{}`` unless passed in (the engine never
+        does).
     sub_order : int
         Tie-breaker for a single line expanding into several reactions.
     """
@@ -41,56 +48,70 @@ class Record:
 class ParsedRecord:
     """A fully parsed reaction produced by a format family's ``process``.
 
-    The engine sorts these by ``(source_index, sub_order)`` and converts each to
-    the ``parsedListProps`` dict consumed by ``Network``.  ``metadata`` is
-    parser-private data that ends up on the reaction as ``Reaction._metadata``
-    for the parser's post-processing hook.
+    The engine sets :attr:`format`, lower-cases :attr:`rate`, sorts the records
+    by ``(source_index, sub_order)`` and hands them to ``Network``, which builds
+    the species and reactions from them.
+
+    Attributes
+    ----------
+    reactants : list[str]
+        Reactant names, as written (pseudo-species such as ``_PHOTON``
+        included).
+    products : list[str]
+        Product names, as written.
+    tmin : float or None
+        Lower temperature bound (K), or ``None``.
+    tmax : float or None
+        Upper temperature bound (K), or ``None``.
+    rate : str
+        The rate expression, a SymPy-parsable string.
+    type : str
+        Reaction type concluded by the parser (e.g. ``"photo"``).
+    line : str
+        The network-file line the reaction came from.
+    source_index : int
+        File-side reaction number (0-based, in file order).
+    nline : int
+        1-based line number of ``line`` in the network file.
+    sub_order : int
+        Tie-breaker for a single line expanding into several reactions.
+    metadata : dict
+        Parser-private data that ends up on the reaction as
+        ``Reaction._metadata`` for the parser's post-processing hook (``{}``
+        for every bundled parser).
+    format : str or None
+        Name of the parser that produced the record; set by the engine
+        (``None`` until then).
     """
 
     def __init__(
         self,
-        r: list[str],
-        p: list[str],
+        reactants: list[str],
+        products: list[str],
         tmin: float | None,
         tmax: float | None,
         rate: str,
         type: str,
-        string: str,
+        line: str,
         source_index: int,
+        nline: int,
         sub_order: int = 0,
         metadata: dict | None = None,
+        format: str | None = None,
     ):
-        self.r = r
-        self.p = p
-        self.tmin = tmin
-        self.tmax = tmax
-        self.rate = rate
-        self.type = type
-        self.string = string
-        self.source_index = source_index
-        self.sub_order = sub_order
+        """Store the parsed fields; see the class attributes."""
+        self.reactants: list[str] = reactants
+        self.products: list[str] = products
+        self.tmin: float | None = tmin
+        self.tmax: float | None = tmax
+        self.rate: str = rate
+        self.type: str = type
+        self.line: str = line
+        self.source_index: int = source_index
+        self.nline: int = nline
+        self.sub_order: int = sub_order
         self.metadata: dict = metadata if metadata is not None else {}
-
-    def as_parsed_props(self, format: str) -> dict:
-        """Convert to the engine's ``parsedListProps`` dict, tagged with *format*.
-
-        Parameters
-        ----------
-        format : str
-            Name of the parser that produced this record (``Parser.name``).
-        """
-        return {
-            "r": self.r,
-            "p": self.p,
-            "tmin": self.tmin,
-            "tmax": self.tmax,
-            "rate": self.rate,
-            "type": self.type,
-            "string": self.string,
-            "source_index": self.source_index,
-            "format": format,
-            "metadata": self.metadata,
-        }
+        self.format: str | None = format
 
 
 class ParseResult:

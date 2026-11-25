@@ -1,0 +1,1228 @@
+# This file contains special function definitions for the GOW network.
+# The functions here are sympy translations of the implementation in
+# https://github.com/PrincetonUniversity/athena/blob/chemistry_zsfr/src/chemistry/network/kida_network_files/gow17/kida_gow17.cpp
+
+# There are three main types of functions found in this file:
+# 1. Rate coefficient functions with names of the form @function chemRateCoeffN
+# where N indicates which reaction in the reaction list this rate
+# coefficient is for (starting the count at N = 0), and
+# 2. Change in thermal energy functions with names of the form @function deltaEN,
+# which give the change in gas thermal energy per occurence of reaction N,
+# in units of erg, so positive values correspond to exothermic reactions
+# and negative values to endothemic ones.
+# 3. The function @function heatingCoolingRate function, which gives the net heating
+# - cooling rate for all radiative processes that are not associated with
+# chemical reactions, in units of erg / s / cm^3
+
+# Note that not every reaction is represented in this file. If there
+# is no @function chemRateCoeff function for a given reaction number, that means
+# the reaction rate does not use a customized functional form, and
+# is instead derived from the standard chemical network format. If there
+# is no deltaE function for a given reaction, that means that the change
+# in gas thermal energy associated with that reaction is neglected and
+# treated as approximately zero -- this might for example be the
+# situation for an exothermic reaction but one where all the excess
+# energy is given to a photon that then escapes.
+
+# There are also other functions with names of the form @XXXX, which
+# are helper functions that will be substituted into the expressions
+# used in the @function chemRateCoeff and @function deltaE functions.
+
+# A note to help interpret the rate coefficient functions:
+# rates in JAFF are always computed as k * n1 * n2 * ...,
+# where n1, n2, ... are the number densities of the reactants. This
+# is the correct expression most of the time, but some reactions
+# scale with number density differently; for example, grain-assisted
+# reactions generally have rates that go like n1 * n_H_nuc * d2g, where
+# n_H_nuc = total H nucleus number density and d2g = dust to gas ratio.
+# For these reactions, the rate coefficient expressions must be
+# derived by solving k * n1 * n2 * ... = true rate, which is why
+# we sometimes have number densities in the denominators for these
+# reactions.
+
+################################################################
+# Global constants
+################################################################
+
+# Note -- all quantities in CGS units
+@var c_a = c_light * a_rad         # c * a_rad
+@var TCMB = 2.73                   # CMB temperature at z = 0
+@var H2_OPR = 3.0                  # Ratio of ortho-H2 to para-H2
+@var f_oH2 = H2_OPR / (H2_OPR + 1) # Fraction of ortho-H2
+@var f_pH2 = 1 - f_oH2             # Fraction of para-H2
+@var d2g_solar = 0.01              # "Solar" dust to gas ratio
+@var alpha_GD = 3.2e-34  # Dust-gas collisional coupling coefficient at Solar dust abundance
+@var sigma_d10 = 2e-25   # Dust cross section per H to 10 K thermal radiation at Solar dust abundance
+@var sigma_dISRF = 3e-22 # Dust cross section per H to ISRF radiation at Solar dust abundance
+
+################################################################
+# Helper functions used by other functions below
+################################################################
+
+@function kcr_H_fac(n_H_nuc, n_H, n_H2)
+    # Ratio of total to primary H ionization rate
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_H Number densty of H0 atoms in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+    @return 2.3 * (n_H2/n_H_nuc) + 1.5 * (n_H/n_H_nuc)
+
+@function qcr_H(n_H_nuc, n_e)
+    # Mean energy in eV delivered to the gas per primary CR ionization of
+    # an H atom (Dalgarno & McCray 1972, as in DESPOTIC). This is the atomic
+    # part of qcr, without the abundance weighting.
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_e Number density of free electrons in cm^-3
+    xe = n_e / n_H_nuc
+    @return 6.5 + 26.4 * (xe / (xe + 0.07))**0.5
+
+@function qcr_H2(n_H_nuc)
+    # Mean energy in eV delivered to the gas per primary CR ionization of
+    # an H2 molecule (Glassgold+ 2012 fit from DESPOTIC). This is the
+    # molecular part of qcr, without the abundance weighting.
+    # n_H_nuc Number density of H nuclei in cm^-3
+    logn = log(n_H_nuc, 10)
+    @return Piecewise((10, logn < 2), \
+        (10 + 3*(logn-2)/2, (logn >=2) & (logn < 4)), \
+        (13 + 4*(logn-4)/3, (logn >= 4) & (logn < 7)), \
+        (17 + (logn-7)/3, (logn >= 7) & (logn < 10)), \
+        (18, True))
+
+@function qcr(n_H_nuc, n_e, n_H, n_H2)
+    # This is the mean energy in eV delivered to the gas per
+    # primary CR ionization, averaged per H nucleus. The model here
+    # follows the approach in DESPOTIC (Krumholz 2014), which involes a
+    # weighted average between the results of Dalgarno & McCray (1972)
+    # for atomic gas and Glassgold+ (2012) for molecular gas.
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_e Number density of free electrons in cm^-3
+    # n_H Number densty of H0 atoms in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+    xH = n_H / n_H_nuc
+    xH2 = n_H2 / n_H_nuc
+    @return xH * qcr_H(n_H_nuc, n_e) + 2.0 * xH2 * qcr_H2(n_H_nuc)
+
+@function ncrH2(tgas, n_H_nuc, n_H, n_H2, k_photo)
+    # Critical density of excited H2
+    # tgas Gas temperature in K
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_H Number densty of H0 atoms in cm^-3
+    # n_H2 Number densty of H2 molecules in cm^-3
+    # k_photo Photodissocation rate per H2, in s^-1
+    # This is an approximate critical density for excited H2, used
+    # to determine partition of energies of excited H2 between collisional
+    # and radiative losses. Taken from Visser et al. (2018).
+    xH = n_H / n_H_nuc
+    xH2 = n_H2 / n_H_nuc
+    t = 1 + tgas/1e3
+    geff_H = 10**(-11.06 + 0.0555/t - 2.390/t**2)
+    geff_H2 = 10**(-11.08 - 3.671/t - 2.023/t**2)
+    @return (2e-7 + k_photo) / (geff_H * xH + geff_H2 * xH2)
+
+@function kgr_gong(tgas, chi, av, n_e, c0, c1, c2, c3, c4, c5, c6)
+    # tgas Gas temperature in K
+    # chi Radiation field strength in Draine (1972) units
+    # av V-band extinction in magnitudes
+    # n_e Free electron number density in cm^-3
+    # c0 Fitting coefficient
+    # c1 Fitting coefficient
+    # c2 Fitting coefficient
+    # c3 Fitting coefficient
+    # c4 Fitting coefficient
+    # c5 Fitting coefficient
+    # c6 Fitting coefficient
+
+    # This function implements Gong et al's expression for
+    # grain-assisted rate coefficients, k_gr
+
+    # Gong's psi factor
+    psi = 1.7 * chi * exp(-1.87*av) * sqrt(tgas) / n_e
+
+    # Gong's k_gr
+    logT = log(tgas)
+    k_gr = 1e-14 * c0 / (1 + c1 * psi**c2 * \
+        (1 + c3 * tgas**c4 * psi**(-c5-c6*logT)))
+
+    @return k_gr
+
+@function n2ncr(tgas, n_H_nuc, n_H, n_H2)
+    # Ratio of density to excited H2 critical density for H2
+    # collisional dissociation
+    # tgas Gas temperature in K
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_H Number density of atomic H in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+
+    logT4 = log(tgas/10**4, 10)
+    ncrH = 10**(3 - 0.416 * logT4 - 0.327 * logT4**2)
+    ncrH2 = 10**(4.845 - 1.3 * logT4 + 1.62 * logT4**2)
+    div_ncr = (n_H/n_H_nuc) / ncrH + (n_H2/n_H_nuc) / ncrH2
+    ncr = Piecewise((1e50, div_ncr < 1e-50), (1 / div_ncr, True))
+    n2ncr = n_H_nuc / ncr
+    @return n2ncr
+
+################################################################
+# Self-shielding helper functions
+################################################################
+
+@function fshield_H2(ncol_H2)
+    # H2 self-shielding, Draine & Bertoldi (1996) analytic form
+    # (gow17 Shielding::fShield_H2),
+    # ncol_H2 -> H2 column density in cm^-2
+    # vdisp -> velocity dispersion in cm / s
+
+    b5 = 2.0**0.5 * vdisp / 1.0e5
+    x = ncol_H2 / 5.0e14
+
+    @return 0.965 / (1 + x/b5)**2 \
+        + 0.035 / sqrt(1 + x) * exp(-8.5e-4 * sqrt(1 + x))
+
+@function fshield_C(ncol_C, ncol_H2)
+    # C self-shielding + shielding by H2, Tielens & Hollenbach (1985)
+    # (gow17 Shielding::fShield_C).
+    # ncol_C -> neutral C column density in cm^-2
+    # ncol_H2 -> H2 column density in cm^-2
+
+    tau_H2 = 1.2e-14 * 2 * ncol_H2
+    y = 1.17e-8 * tau_H2
+    ry = exp(-y) / (1 + y)
+    rc = exp(-1.6e-17 * ncol_C)
+
+    @return rc * ry
+
+################################################################
+# Rate coefficient functions
+################################################################
+
+@function chemRateCoeff0(crate, n_H_nuc, n_H, n_H2)
+    # Reaction 0: H + CR -> H+ + e-
+    # crate Primary ionization rate per H nucleon in s^-1
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_H Number densty of H0 atoms in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+
+    @return kcr_H_fac(n_H_nuc, n_H, n_H2) * crate
+
+@function chemRateCoeff1(crate, n_H_nuc, n_H, n_H2)
+    # Reaction 1: H2 + CR -> H2+ + e-
+    # crate Primary ionization rate per H nucleon in s^-1
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_H Number densty of H0 atoms in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+
+    @return 2 * kcr_H_fac(n_H_nuc, n_H, n_H2) * crate
+
+@function chemRateCoeff4(crate, n_H)
+    # Reaction 4: CO + H -> HCO+ + e^-
+    # n_H Number densty of H0 atoms in cm^-3
+    # This is a composite reaction that is actually a proxy for
+    # CO + CR -> CO+ + e^- followed by CO+ + H -> HCO+. The
+    # true reaction rate per unit volume is 6.52 * crate * nCO,
+    # so as noted above we derive the rate coefficient k by solving
+    # 6.52 * crate * nCO = k * n_H * nCO.
+
+    @return 6.52 * crate / n_H
+
+@function chemRateCoeff8(chi, av, d2g, n_H_nuc, n_C, n_H2)
+    # Reaction 8 (network ID 9): C + Photon -> C+ + e-
+    # Base Draine photo rate (alpha*chi*exp(-gamma*av)) times C
+    # self-shielding. Providing this chemRateCoeff replaces the standard
+    # .jet rate, so the dust attenuation term is included explicitly.
+    # chi Radiation field in Draine (1978) units
+    # av  V-band extinction in magnitudes
+    # d2g Dust to gas mass ratio
+    # n_H_nuc  Number density of H nuclei in cm^-3
+    # n_C Number density of neutral C atoms in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+
+    alpha = 3.5e-10
+    gamma = 3.76
+
+    @return alpha * chi * exp(-gamma * av) * fshield_C(ncol_C, ncol_H2)
+
+@function chemRateCoeff10(chi, av, d2g, n_H_nuc, n_CO, n_H2)
+    # Reaction 10 (network ID 11): CO + Photon -> C + O
+    # Base Draine photo rate times CO self-shielding + shielding by H2
+    # (Visser+2009, via wrapper-provided fShield_CO_interp2d).
+    # chi Radiation field in Draine (1978) units
+    # av  V-band extinction in magnitudes
+    # d2g Dust to gas mass ratio
+    # n_H_nuc  Number density of H nuclei in cm^-3
+    # n_CO Number density of CO molecules in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+
+    alpha = 2.4e-10
+    gamma = 3.88
+
+    @return alpha * chi * exp(-gamma * av) * fShield_CO_interp2d(ncol_CO, ncol_H2)
+
+@function chemRateCoeff13(chi, av, d2g, n_H_nuc, n_H2)
+    # Reaction 13 (network ID 14): H2 + Photon -> H + H
+    # Base Draine photo rate times H2 self-shielding (Draine & Bertoldi
+    # 1996).
+    # chi Radiation field in Draine (1978) units
+    # av  V-band extinction in magnitudes
+    # d2g Dust to gas mass ratio
+    # n_H_nuc  Number density of H nuclei in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+
+    alpha = 5.7e-11
+    gamma = 4.18
+
+    @return alpha * chi * exp(-gamma * av) * fshield_H2(ncol_H2)
+
+@function chemRateCoeff14(d2g, n_H_nuc, n_H)
+    # Reaction 14: H + H -> H2 (grain-assisted)
+    # d2g Dust to gas mass ratio
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_H Number densty of H0 atoms in cm^-3
+    # True rate = 3e-17 * n_H * n_H_nuc * (d2g / d2g_solar)
+
+    @return 3.0e-17 * (d2g / d2g_solar) * (n_H_nuc / n_H)
+
+@function chemRateCoeff15(d2g, tgas, chi, av, n_H_nuc, n_e)
+    # Reaction 15: H+ + e- -> H (grain-assisted)
+    # d2g Dust to gas mass ratio
+    # tgas Gas temperature in K
+    # chi ISRF strength normalized to the Draine (1978) field
+    # av Visual extinction in magnitudes
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_e Number density of free electrons in cm^-3
+    # This is a grain-assisted reaction for which the true rate
+    # is k_gr(av, n_e, tgas) * (d2g / d2g_solar) * n_H_nuc+ * n_H_nuc, where
+    # k_gr(av, n_e, tgas) is a specified function.
+
+    # Gong's coefficients for H+
+    c0 = 12.25
+    c1 = 8.074e-6
+    c2 = 1.378
+    c3 = 5.087e2
+    c4 = 1.586e-2
+    c5 = 0.4723
+    c6 = 1.102e-5
+
+    # Compute final rate
+    @return kgr_gong(tgas, chi, av, n_e, c0, c1, c2, c3, c4, c5, c6) * \
+        (d2g / d2g_solar) * n_H_nuc/n_e
+
+@function chemRateCoeff16(d2g, tgas, chi, av, n_H_nuc, n_e)
+    # Reaction 16: C+ + e- -> C (grain-assisted)
+    # d2g Dust to gas mass ratio
+    # tgas Gas temperature in K
+    # chi ISRF strength normalized to the Draine (1978) field
+    # av Visual extinction in magnitudes
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_e Number density of free electrons in cm^-3
+    # This is a grain-assisted reaction for which the true rate
+    # is k_gr(av, n_e, tgas) * (d2g / d2g_solar) * nC+ * n_H_nuc, where
+    # k_gr(av, n_e, tgas) is a specified function.
+
+    # Gong's coefficients for C+
+    c0 = 45.58
+    c1 = 6.089e-3
+    c2 = 1.128
+    c3 = 4.331e2
+    c4 = 4.845e-2
+    c5 = 0.8120
+    c6 = 1.333e-4
+
+    # Compute final rate
+    @return kgr_gong(tgas, chi, av, n_e, c0, c1, c2, c3, c4, c5, c6) * \
+        (d2g / d2g_solar) * n_H_nuc/n_e
+
+@function chemRateCoeff17(d2g, tgas, chi, av, n_H_nuc, n_e)
+    # Reaction 17: He+ + e- -> He (grain-assisted)
+    # d2g Dust to gas mass ratio
+    # tgas Gas temperature in K
+    # chi ISRF strength normalized to the Draine (1978) field
+    # av Visual extinction in magnitudes
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_e Number density of free electrons in cm^-3
+    # This is a grain-assisted reaction for which the true rate
+    # is k_gr(av, n_e, tgas) * (d2g / d2g_solar) * nHe+ * n_H_nuc, where
+    # k_gr(av, n_e, tgas) is a specified function.
+
+    # Gong's coefficients for He+
+    c0 = 5.572
+    c1 = 3.185e-7
+    c2 = 1.512
+    c3 = 5.115e3
+    c4 = 3.903e-7
+    c5 = 0.4956
+    c6 = 5.494e-7
+
+    # Compute final rate
+    @return kgr_gong(tgas, chi, av, n_e, c0, c1, c2, c3, c4, c5, c6) * \
+        (d2g / d2g_solar) * n_H_nuc/n_e
+
+@function chemRateCoeff18(d2g, tgas, chi, av, n_H_nuc, n_e)
+    # Reaction 18: Si+ + e- -> Si (grain-assisted)
+    # d2g Dust to gas mass ratio
+    # tgas Gas temperature in K
+    # chi ISRF strength normalized to the Draine (1978) field
+    # av Visual extinction in magnitudes
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_e Number density of free electrons in cm^-3
+    # This is a grain-assisted reaction for which the true rate
+    # is k_gr(av, n_e, tgas) * (d2g / d2g_solar) * nSi+ * n_H_nuc, where
+    # k_gr(av, n_e, tgas) is a specified function.
+
+    # Gong's coefficients for Si+
+    c0 = 2.166
+    c1 = 5.678e-8
+    c2 = 1.874
+    c3 = 4.375e4
+    c4 = 1.635e-6
+    c5 = 0.8964
+    c6 = 7.538e-5
+
+    # Compute final rate
+    @return kgr_gong(tgas, chi, av, n_e, c0, c1, c2, c3, c4, c5, c6) * \
+        (d2g / d2g_solar) * n_H_nuc/n_e
+
+@function chemRateCoeff19(tgas, n_e)
+    # Reaction 19: C + H3+ + e- -> H2 + CHx
+    # tgas Gas temperature in K
+    # n_e Number density of free electrons in cm^-3
+    # This is a composite reaction for H3+ + C -> CH+ + H2
+    # followed by CH+ + e^- -> CH. The true rate is
+    # k(tgas) * nC * nH3+, so we deduce the rate coefficient
+    # k_JAFF in JAFF by setting this equal to k_JAFF n_e nC nH3+
+
+    # Constants appearing in Gong's function
+    n_kCHx = 2.31e-3
+    A_kCHx = 1.04e-9
+    c0 = 3.4e-8
+    c1 = 6.97e-9
+    c2 = 1.31e-7
+    c3 = 1.51e-4
+    T0 = 7.62
+    T1 = 1.38
+    T2 = 2.66e1
+    T3 = 8.11e3
+
+    # Rate coefficient fitting functions
+    k1 = A_kCHx * (300/tgas)**n_kCHx
+    k2 = c0 * exp(-T0/tgas) + c1 * exp(-T1/tgas) + \
+        c2 * exp(-T2/tgas) + c3 * exp(-T3/tgas)
+
+    # Final rate coefficient
+    k = (k1 + tgas**-1.5 * k2) / n_e
+    @return k
+
+@function chemRateCoeff20(tgas, n_e, n_H_nuc, n_H2)
+    # Reaction 20: O + H3+ + e- -> H2 + OHx
+    # tgas Gas temperature in K
+    # n_e Number density of free electrons in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+    # This is a composite reaction. The true rate is
+    # k(tgas) * nO * nH3+, so we
+    # deduce the rate coefficient k_JAFF in JAFF by setting this
+    # equal to k_JAFF n_e nO nH3+
+
+    # Branching ratios
+    H2Oplus_ratio = Piecewise( \
+        (1e10, n_e/n_H_nuc < 1e-50), \
+        (6e-10 / (5.3e-6 / sqrt(tgas)) * (n_H2/n_e), True) \
+    )
+    fac_H2Oplus_H2 = H2Oplus_ratio / (H2Oplus_ratio + 1)
+    fac_H2Oplus_e = 1 / (H2Oplus_ratio + 1)
+
+    # Rate coefficient
+    k = 1.99e-9 * tgas**-0.19 * fac_H2Oplus_H2 / n_e
+    @return k
+
+@function chemRateCoeff21(tgas, n_e, n_H2)
+    # Reaction 21: O + H3+ + e- -> H2 + O + H
+    # tgas Gas temperature in K
+    # n_e Number density of free electrons in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+    # This is a composite reaction. The true rate is
+    # k(tgas) * nO * nH3+, so we
+    # deduce the rate coefficient k_JAFF in JAFF by setting this
+    # equal to k_JAFF n_e nO nH3+
+
+    # Branching ratios
+    H2Oplus_ratio = Min(6e-10 / (5.3e-6 / sqrt(tgas)) * (n_H2/n_e), 1e10)
+    fac_H2Oplus_H2 = H2Oplus_ratio / (H2Oplus_ratio + 1)
+    fac_H2Oplus_e = 1 / (H2Oplus_ratio + 1)
+
+    # Rate coefficient
+    k = 1.99e-9 * tgas**-0.19 * fac_H2Oplus_e / n_e
+    @return k
+
+@function chemRateCoeff22(tgas, n_e, n_H2)
+    # Reaction 22: H2 + O+ + e- -> H + OHx
+    # tgas Gas temperature in K
+    # n_e Number density of free electrons in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+    # This is a composite reaction. The true rate is
+    # k(tgas) * nO+ * n_H2, so we
+    # deduce the rate coefficient k_JAFF in JAFF by setting this
+    # equal to k_JAFF n_e n_H2 nO+
+
+    # Branching ratios
+    H2Oplus_ratio = Min(6e-10 / (5.3e-6 / sqrt(tgas)) * (n_H2/n_e), 1e10)
+    fac_H2Oplus_H2 = H2Oplus_ratio / (H2Oplus_ratio + 1)
+    fac_H2Oplus_e = 1 / (H2Oplus_ratio + 1)
+
+    # Rate coefficient
+    k = 1.6e-9 * fac_H2Oplus_H2 / n_e
+    @return k
+
+@function chemRateCoeff23(tgas, n_e, n_H2)
+    # Reaction 23: H2 + O+ + e- -> H + H + O
+    # tgas Gas temperature in K
+    # n_e Number density of free electrons in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+    # This is a composite reaction. The true rate is
+    # k(tgas) * nO+ * n_H2, so we
+    # deduce the rate coefficient k_JAFF in JAFF by setting this
+    # equal to k_JAFF n_e n_H2 nO+
+
+    # Branching ratios
+    H2Oplus_ratio = Min(6e-10 / (5.3e-6 / sqrt(tgas)) * (n_H2/n_e), 1e10)
+    fac_H2Oplus_H2 = H2Oplus_ratio / (H2Oplus_ratio + 1)
+    fac_H2Oplus_e = 1 / (H2Oplus_ratio + 1)
+
+    # Rate coefficient
+    k = 1.6e-9 * fac_H2Oplus_e / n_e
+    @return k
+
+@function chemRateCoeff27(tgas, n_e)
+    # Reaction 27: H2 + C+ + e- -> CHx + H
+    # tgas Gas temperature in K
+    # n_e Number density of free electrons in cm^-3
+    # This is a composite reaction. The true rate is
+    # k(tgas) * nC+ * n_H2, so we
+    # deduce the rate coefficient k_JAFF in JAFF by setting this
+    # equal to k_JAFF n_e n_H2 nC+
+
+    @return 2.31e-13 * tgas**-1.3 * exp(-23/tgas) / n_e
+
+@function chemRateCoeff28(tgas, n_e)
+    # Reaction 28: H2 + C+ + e- -> CH + H + H
+    # tgas Gas temperature in K
+    # n_e Number density of free electrons in cm^-3
+    # This is a composite reaction. The true rate is
+    # k(tgas) * nC+ * n_H2, so we
+    # deduce the rate coefficient k_JAFF in JAFF by setting this
+    # equal to k_JAFF n_e n_H2 nC+
+
+    @return 0.99e-13 * tgas**-1.3 * exp(-23/tgas) / n_e
+
+@function chemRateCoeff32(tgas)
+    # Reaction 33: He+ + e- -> He
+    # tgas Gas temperature in K
+
+    logT = log(tgas, 10)
+    @return 1e-11 * tgas**-0.5 * (11.19 + (-1.676 + \
+        (-0.2852 + 0.04433 * logT) * logT) * logT)
+
+@function chemRateCoeff35(tgas)
+    # Reaction 36: C+ + e- -> C
+    # tgas Gas temperature in K
+
+    # Constants in Gong's function for C+ reaction rate
+    A = 2.995e-9
+    B = 0.7849
+    T0 = 6.670e-3
+    T1 = 1.943e6
+    C = 0.1597
+    T2 = 4.955e4
+
+    # Gong's formula
+    BN = B + C * exp(-T2/tgas)
+    term1 = sqrt(tgas / T0)
+    term2 = sqrt(tgas / T1)
+    alpharr = A / ( term1 * (1+term1)**(1-BN) * (1+term2)**(1+BN) )
+    alphadr = tgas**(-3/2) * (6.346e-9 * exp(-1.217e1/tgas) + \
+        9.793e-9 * exp(-7.38e1/tgas) + 1.634e-6 * exp(-1.523e4/tgas))
+
+    # @return
+    @return alpharr + alphadr
+
+@function chemRateCoeff37(tgas)
+    # Reaction 38: H2 + H2+ -> H + H3+
+    # tgas Gas temperature in K
+
+    @return 1.76e-9 * tgas**0.042 * exp(-tgas / 46600.)
+
+@function chemRateCoeff39(tgas)
+    # Reaction 40: H+ + e- -> H
+    # tgas Gas temperature in K
+
+    @return 2.753e-14 * (315614/tgas)**1.5 * (1 + \
+        (115188./tgas)**0.407)**-2.242
+
+@function chemRateCoeff40(tgas, n_H_nuc, n_H, n_H2)
+    # Reaction 41: H2 + H -> H + H + H
+    # tgas Gas temperature in K
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_H Number density of atomic H in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+
+    k9l = 6.67e-12 * sqrt(tgas) * exp(-(1 + 63590/tgas))
+    k9h = 3.52e-9 * exp(-43900/tgas)
+    logk9l = log(k9l, 10)
+    logk9h = log(k9h, 10)
+    n2ncr_ = n2ncr(tgas, n_H_nuc, n_H, n_H2)
+
+    @return Piecewise((10**(logk9h * n2ncr_ / (1 + n2ncr_) + \
+        logk9l / (1 + n2ncr_)), tgas > 7.0e2), (0, True))
+
+@function chemRateCoeff41(tgas, n_H_nuc, n_H, n_H2)
+    # Reaction 42: H2 + H2 -> H + H + H2
+    # tgas Gas temperature in K
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_H Number density of atomic H in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+
+    k10l = 5.996e-30 * tgas**4.1881 / (1 + 6.761e-6*tgas)**5.6881 \
+        * exp(-54657.4/tgas)
+    k10h = 1.3e-9 * exp(-53300/tgas)
+    logk10l = log(k10l, 10)
+    logk10h = log(k10h, 10)
+    n2ncr_ = n2ncr(tgas, n_H_nuc, n_H, n_H2)
+
+    @return Piecewise((10**(logk10h * n2ncr_ / \
+        (1 + n2ncr_) + logk10l / (1 + n2ncr_)), tgas > 7.0e2), \
+        (0, True))
+
+@function chemRateCoeff42(tgas)
+    # Reaction 43: H + e- -> H+ + e- + e-
+    # tgas Gas temperature in K
+
+    lnTe = log(tgas * 8.6173e-5)
+    @return Piecewise((exp(-3.271396786e1 + 1.35365560e1 * lnTe \
+        - 5.73932875 * lnTe**2 + 1.56315498 * lnTe**3 \
+        - 2.877056e-1 * lnTe**4 + 3.48255977e-2 * lnTe**5 \
+        - 2.63197617e-3 * lnTe**6 + 1.11954395e-4 * lnTe**7 \
+        - 2.03914985e-6 * lnTe**8), tgas > 7.0e2), (0, True))
+
+@function chemRateCoeff48(tgas)
+    # Reaction 49: O + H+ -> O+ + H
+    # tgas Gas temperature in K
+
+    @return (1.1e-11 * tgas**0.517 + 4.0e-10 * tgas**6.69e-3 ) \
+        * exp(-227/tgas)
+
+@function chemRateCoeff49(tgas)
+    # Reaction 50: O+ + H -> O + H+
+    # tgas Gas temperature in K
+
+    @return 4.99e-11 * tgas**0.405 + 7.5e-10 * tgas**-0.458
+
+
+################################################################
+# Chemical energy change functions
+################################################################
+
+@function deltaE0(n_H_nuc, n_e, n_H, n_H2)
+    # Reaction 0: H + CR -> H+ + e-
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_e Number density of free electrons in cm^-3
+    # n_H Number densty of H0 atoms in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+    # The energy change here is Draine (2011)'s fit to
+    # Note that qCR is energy change per primary ionization,
+    # while our rate coefficient expressions also include secondaries,
+    # so we need to divide those out to get the right energy
+    # deposition per primary. The reaction rate already counts H atoms
+    # only, so the energy per event is the atomic qcr_H, not the
+    # abundance-weighted qcr (which would weight by x_H a second time).
+
+    sec_per_prim = kcr_H_fac(n_H_nuc, n_H, n_H2)
+    @return eV_to_erg(qcr_H(n_H_nuc, n_e)) / sec_per_prim
+
+@function deltaE1(n_H_nuc, n_H, n_H2)
+    # Reaction 1: H2 + CR -> H2+ + e-
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_H Number densty of H0 atoms in cm^-3
+    # n_H2 Number density of H2 molecules in cm^-3
+    # The energy change here is Krumholz (2014)'s fit to results
+    # from Glassgold+ (2012). Note that this fit is energy
+    # change per primary ionization, while our rate coefficient
+    # expressions also include secondaries, so we need to divide
+    # those out to get the right energy deposition per primary. The
+    # reaction rate already counts H2 molecules only, so the energy per
+    # event is the molecular qcr_H2, not the abundance-weighted qcr.
+
+    sec_per_prim = kcr_H_fac(n_H_nuc, n_H, n_H2)
+    @return eV_to_erg(qcr_H2(n_H_nuc)) / sec_per_prim
+
+# Benchmark copy of networks/GOW: deltaE2 (He + CR heating) is removed, as in the
+# reference runs (tests/e2e GOW benchmark). Without a deltaE function the reaction
+# deposits no thermal energy.
+
+@function deltaE13(tgas, n_H_nuc, n_H, n_H2, chi, av)
+    # Reaction 13: H2 + photon -> H + H
+    # tgas Gas temperature in K
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_H Number densty of H0 atoms in cm^-3
+    # n_H2 Number densty of H2 molecules in cm^-3
+    # This energy combines two distinct heating sources. One is the
+    # excess kinetic energy of dissociated H2, and the other is
+    # FUV pumping: absorptions of FUV by H2 that results in excitation
+    # but not photodissociation, but where some of the associated
+    # energy is desposited to the gas as thermal energy by collisions.
+    # The result is from Visser+ (2018)
+
+    k_photo = 5.7e-11 * chi * exp(-4.18 * av) * fshield_H2(ncol_H2)
+    f = 1 / (1 + ncrH2(tgas, n_H_nuc, n_H, n_H2, k_photo) / n_H_nuc)
+
+    @return eV_to_erg(0.4 + 8 * 2 * f)
+
+@function deltaE14(tgas, n_H_nuc, n_H, n_H2, chi, av)
+    # Reaction 14: H + H -> H2 (grain-assisted)
+    # tgas Gas temperature in K
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_H Number densty of H0 atoms in cm^-3
+    # n_H2 Number densty of H2 molecules in cm^-3
+    # Energy released by H2 formation on grains; the model impelemented
+    # here is equation 6.43 of Hollenbach & McKee (1979), but with ncrH2
+    # updated using the model of Visser+ (2018)
+
+    k_photo = 5.7e-11 * chi * exp(-4.18 * av) * fshield_H2(ncol_H2)
+    f = 1 / (1 + ncrH2(tgas, n_H_nuc, n_H, n_H2, k_photo) / n_H_nuc)
+
+    @return eV_to_erg(0.2 + 4.2*f)
+
+@function deltaE40()
+    # Reaction 41: H2 + H -> H + H + H
+    @return eV_to_erg(-4.48)
+
+@function deltaE41()
+    # Reaction 42: H2 + H2 -> H + H + H2
+    @return eV_to_erg(-4.48)
+
+@function deltaE42()
+    # Reaction 43: H + e- -> H+ + e- + e-
+    @return eV_to_erg(-13.6)
+
+
+################################################################
+# Extra heating and cooling functions
+################################################################
+
+#### Heating functions ####
+
+@function heating_grainPE(chi, av, d2g, tgas, n_H_nuc, n_e)
+    # Grain photoelectric heating rate, in erg cm^-3 s^-1. The
+    # expression here comes from Weingartner & Draine (2001),
+    # their equation 44, using the coefficients from their Table 2
+    # for the R_V = 3.1, b_c = 4.0, ISRF case.
+    # chi Radiation field in Draine (1972) units
+    # av V-band extinction in magnitudes
+    # d2g Dust to gas mass ratio
+    # tgas Gas temperature in K
+    # n_H_nuc Number density of H nuclei in cm^-3
+    # n_e Number density of free electrons in cm^-3
+
+    # Fit coefficients
+    C = Array([5.22, 2.25, 0.04996, 0.00430, 0.147, 0.431, 0.692])
+
+    # Psi factor appearing in grain charging
+    psi = 1.7 * chi * exp(-1.87*av) * sqrt(tgas) / n_e + 50
+
+    # PE heating rate
+    @return 1e-26 * 1.7 * chi * exp(-1.87*av) * d2g / d2g_solar * n_H_nuc * (C[0] + C[1] * tgas**C[4]) / \
+        (1 + C[2] * psi**C[5] * (1 + C[3] * psi**C[6]))
+
+#### Cooling functions ####
+
+# Generic cooling solvers for 2- and 3-level systems
+
+@function cooling_2level(T10, A10, g0, g1, k10, tgas)
+    # Optically thin collisional cooling rate per atom for a two-level atom
+    # T10 Energy difference between the levels in K
+    # A10 Einstein coefficient for the transition in s^-1
+    # g0 Degeneracy of lower state
+    # g1 Degeneracy of upper state
+    # k10 Total collisional de-excitation rate in s^-1
+    # tgas Gas temperature in K
+
+    # Collisional excitation rate coefficient
+    k01 = (g1/g0) * exp(-T10/tgas) * k10
+
+    # Population ratio
+    n1_to_n0 = k01 / (k10 + A10)
+
+    # Fraction in upper state
+    f_up = n1_to_n0 / (1 + n1_to_n0)
+
+    # Final cooling rate
+    @return f_up * A10 * kB * T10
+
+@function cooling_3level(T20, T21, A10, A20, A21, g0, g1, g2, k10, k20, k21, tgas)
+    # Optically thin collisional cooling rate per atom for a three-level atom
+    # T10 Energy difference between levels 1 and 0 in K
+    # T21 Energy difference between levels 2 and 1 in K
+    # A10 Einstein coefficient for the 1->0 transition in s^-1
+    # A20 Einstein coefficient for the 2->0 transition in s^-1
+    # A21 Einstein coefficient for the 2->1 transition in s^-1
+    # g0 Degeneracy of state 0
+    # g1 Degeneracy of state 1
+    # g2 Degeneracy of state 2
+    # k10 Total collisional de-excitation rate from 1->0 in s^-1
+    # k20 Total collisional de-excitation rate from 2->0 in s^-1
+    # k21 Total collisional de-excitation rate from 2->1 in s^-1
+    # tgas Gas temperature in K
+
+    # Get collisional excitation rate coefficients
+    T10 = T20 - T21
+    k01 = (g1/g0) * exp(-T10/tgas) * k10
+    k02 = (g2/g0) * exp(-T20/tgas) * k20
+    k12 = (g2/g1) * exp(-T21/tgas) * k21
+
+    # Total de-excitation rates
+    R10 = k10 + A10
+    R20 = k20 + A20
+    R21 = k21 + A21
+
+    # Factors arising from linear system solution
+    a0 = R10 * R20 + R10 * R21 + k12 * R20
+    a1 = k01 * R20 + k01 * R21 + k02 * R21
+    a2 = k02 * R10 + k02 * k12 + k12 * k01
+    de = a0 + a1 + a2
+
+    # Fraction in each excited state
+    f1 = a1 / de
+    f2 = a2 / de
+
+    # Total cooling rate
+    @return kB * (f1 * A10 * T10 + f2 * (A20 * T20 + A21 * T21))
+
+# Cooling for hydrogenic species
+
+@function cooling_LyA(n_H, n_e, tgas)
+    # Lyman alpha cooing rate
+    # n_H Number density of neutral hydrogen atoms, in cm^-3
+    # n_e Number density of free electrons, in cm^-3
+    # tgas Gas temperature in K
+
+    # Constants
+    A10 = 6.265e8         # Einstein A in s^-1
+    T10 = 1.184e5       # Energy of upper state in K
+    g0 = 1              # Degeneracy of lower state
+    g1 = 3              # Degeneracy of upper state
+
+    # Get de-excitation rate coefficient
+    T4 = tgas / 1e4
+    k10 = 1.77e-8 * T4**0.15 / (1 + (T4/5)**0.65) * n_e
+
+    # Compute cooling rate
+    @return n_H * cooling_2level(T10, A10, g0, g1, k10, tgas)
+
+@function cooling_H2(n_H2, n_H, n_Hj, n_He_nuc, n_e, tgas)
+    # Cooling rate for H2
+    # n_H2 Number density of hydrogen molecules, in cm^-3
+    # n_H Number density of neutral hydrogen atoms, in cm^-3
+    # n_Hj Number density of H+ ions, in cm^-3
+    # n_He_nuc Number density of He nuclei, in cm^-3
+    # n_e Number density of free electrons, in cm^-3
+    # tgas Gas temperature in K
+
+    # Convenience factors
+    Tlim = Piecewise((tgas, tgas < 6000.), (6000., True))
+    T3 = Tlim / 1e3
+    logT3 = log(T3, 10)
+
+    # Cooling rate due to H0 collisions
+    L_H0 = Piecewise(\
+        ( \
+            10**(-16.818342e0 + 3.7383713e1 * logT3 \
+                + 5.8145166e1*logT3**2 + 4.8656103e1*logT3**3 \
+                + 2.0159831e1*logT3**4 + 3.8479610e0*logT3**5), \
+            Tlim < 100. \
+        ), \
+        ( \
+            10.**(-2.4311209e1 + 3.5692468e0 * logT3 \
+                - 1.1332860e1*logT3**2 -2.7850082e1*logT3**3 \
+                - 2.1328264e1*logT3**4 -4.2519023e0*logT3**5), \
+            (Tlim >= 100.) & (Tlim < 1e3) \
+        ), \
+        ( \
+            10.**(-2.4311209e1 + 4.6450521e0 * logT3 \
+                - 3.7209846e0*logT3**2 + 5.9369081e0*logT3**3 \
+                - 5.5108049e0*logT3**4 +1.5538288e0*logT3**5), \
+            True \
+        ) \
+    )
+
+    # Cooling rate due to H2 collisions
+    L_H2 = 10.**(-2.3962112e1 + 2.09433740e0*logT3 \
+        - 0.77151436e0*logT3**2 + 0.43693353e0*logT3**3 \
+        - 0.14913216e0*logT3**4 - 0.033638326e0*logT3**5)
+
+    # Cooling rate due to He collisions
+    L_He = 10.**(-2.3689237e1 + 2.1892372e0*logT3 \
+        - 0.81520438e0*logT3**2 +0.29036281e0*logT3**3 \
+        - 0.16596184e0*logT3**4 +0.19191375e0*logT3**5)
+
+    # Cooling rate due to H+ collisions
+    L_Hp = 10.**(-2.2089523e1 + 1.5714711e0*logT3 \
+        + 0.015391166e0*logT3**2 - 0.23619985e0*logT3**3 \
+        - 0.51002221e0*logT3**4 + 0.32168730e0*logT3**5)
+
+    # Cooling rate due to free electron collisions
+    L_e = Piecewise( \
+        (\
+            10.**(-2.1928796e1 + 1.6815730e1*logT3 \
+                + 9.6743155e1*logT3**2 + 3.4319180e2*logT3**3 \
+                + 7.3471651e2*logT3**4 + 9.8367576e2*logT3**5 \
+                + 8.0181247e2*logT3**6 + 3.6414446e2*logT3**7 \
+                + 7.0609154e1*logT3**8), \
+            tgas < 500 \
+        ), \
+        ( \
+            10.**(-2.2921189e1 + 1.6802758e0*logT3 \
+                + 0.93310622e0*logT3**2 + 4.0406627e0*logT3**3 \
+                - 4.7274036e0*logT3**4 - 8.8077017e0*logT3**5 \
+                + 8.9167183*logT3**6 + 6.4380698*logT3**7 \
+                - 6.3701156*logT3**8), \
+            True \
+        ) \
+    )
+
+    # Get low-density cooling rate
+    Lambda_n0 = L_H0 * n_H + L_H2 * n_H2 + L_He * n_He_nuc + L_Hp * n_Hj + L_e * n_e
+
+    # Get LTE cooling rate from rotational and vibrational modes
+    Lambda_LTE_rot = (9.5e-22*T3**3.76) / (1.+0.12*T3**2.1) \
+        * exp(-(0.13/T3)**3) + 3.e-24*exp(-0.51/T3)
+    Lambda_LTE_vib = 6.7e-19*exp(-5.86/T3) + 1.6e-18*exp(-11.7/T3)
+    Lambda_LTE = Lambda_LTE_rot + Lambda_LTE_vib
+
+    # Get total cooling rate
+    cool_rate = Piecewise( \
+        (0, (tgas < 10) | (Lambda_n0 < 1e-100)), \
+        (Lambda_LTE / (1 + Lambda_LTE/Lambda_n0), True) \
+    )
+    @return cool_rate * n_H2
+
+# Cooling for carbon species
+
+@function cooling_C0(n_C, n_H, n_H2, n_e, tgas)
+    # Cooling rate due to C fine structrure emission; C is treated
+    # as a three-level system and the cooling rate is computed
+    # assuming optically thin conditions. Collision rate coefficient
+    # approximations are set to match those used by Gong et al.
+    # n_C Number density of neutral C atoms, in cm^-3
+    # n_H Number density of neutral hydrogen atoms, in cm^-3
+    # n_H2 Number density of hydrogen molecules, in cm^-3
+    # n_e Number density of free electrons, in cm^-3
+    # tgas Gas temperature in K
+
+    # Constants
+    A10 = 7.880e-8         # Einstein A for 1->0 in s^-1
+    A20 = 1.810e-14        # Einstein A for 2->0 in s^-1
+    A21 = 2.650e-07        # Einstein A for 2->1 in s^-1
+    T10 = 23.62            # Energy of state 1 in K
+    T20 = 62.46            # Energy of state 2 in K
+    T21 = T20 - T10        # Energy of state 3 in K
+    g0 = 1                 # Degeneracy of state 0
+    g1 = 3                 # Degeneracy of state 1
+    g2 = 5                 # Degeneracy of state 2
+
+    # Convenience shorthands
+    T2 = tgas/100
+    lnT2 = log(T2)
+    lnT = log(tgas)
+
+    # Collision rate coefficients for free electrons
+    lngamma10e = Piecewise((\
+        (((-6.56325e-4*lnT -1.50892e-2)*lnT + 3.61184e-1)*lnT-7.73782e-1)*lnT - 9.25141, \
+            tgas < 1e3), \
+        (\
+        (((1.0508e-1*lnT - 3.47620)*lnT + 4.2595e1)*lnT - 2.27913e2)*lnT + 4.446e2, \
+            True)\
+        )
+    lngamma20e = Piecewise((\
+        (((0.705277e-2*lnT - 0.111338)*lnT +0.697638)*lnT - 1.30743)*lnT -7.69735, \
+            tgas < 1e3), \
+        (\
+        (((9.38138e-2*lnT - 3.03283)*lnT +3.61803e1)*lnT - 1.87474e2)*lnT + 3.50609e2, \
+            True)\
+        )
+    lngamma21e = Piecewise((\
+        (((2.35272e-3*lnT - 4.18166e-2)*lnT +0.358264)*lnT - 0.57443)*lnT - 7.4387, \
+            tgas < 1e3),\
+        (\
+        (((9.78573e-2*lnT - 3.19268)*lnT +3.85049e1)*lnT - 2.02193e2)*lnT + 3.86186e2, \
+            True) \
+        )
+    efac = 8.629e-8 * sqrt(1e4/tgas)
+    q10_e = efac * exp(lngamma10e) / g1
+    q20_e = efac * exp(lngamma20e) / g2
+    q21_e = efac * exp(lngamma21e) / g2
+
+    # Collision rate coefficients for neutral hydrogen
+    q10_H0 = 1.26e-10 * T2**(0.115+0.057*lnT2)
+    q20_H0 = 0.89e-10 * T2**(0.228+0.046*lnT2)
+    q21_H0 = 2.64e-10 * T2**(0.231+0.046*lnT2)
+
+    # Collision rate coefficients for para-H2
+    q10_pH2 = 0.67e-10 * T2**(-0.085+0.102*lnT2)
+    q20_pH2 = 0.86e-10 * T2**(-0.010+0.048*lnT2)
+    q21_pH2 = 1.75e-10 * T2**(0.072+0.064*lnT2)
+
+    # Collision rate coefficients for otho-H2
+    q10_oH2 = 0.71e-10 * T2**(-0.004+0.049*lnT2)
+    q20_oH2 = 0.69e-10 * T2**(0.169+0.038*lnT2)
+    q21_oH2 = 1.48e-10 * T2**(0.263+0.031*lnT2)
+
+    # Total collision rates over all species
+    k10 = q10_e * n_e + q10_H0 * n_H + (f_pH2 * q10_pH2 + f_oH2 * q10_oH2) * n_H2
+    k20 = q20_e * n_e + q20_H0 * n_H + (f_pH2 * q20_pH2 + f_oH2 * q20_oH2) * n_H2
+    k21 = q21_e * n_e + q21_H0 * n_H + (f_pH2 * q21_pH2 + f_oH2 * q21_oH2) * n_H2
+
+    # return total cooling rate
+    cool_rate = Piecewise((\
+        cooling_3level(T20, T21, A10, A20, A21, g0, g1, g2, \
+            k10, k20, k21, tgas), \
+        tgas < 1e6), \
+        (0, True) \
+    )
+    @return n_C * cool_rate
+
+@function cooling_Cplus(n_Cj, n_H, n_H2, n_e, tgas)
+    # Cooling rate due to C+ emission; C+ is treated as a two-level
+    # system and the cooling rate is computed assuming optically
+    # thin conditions. Collision rate coefficient approximations
+    # are set to match those used by Gong et al.
+    # n_Cj Number density of C+ ions, in cm^-3
+    # n_H Number density of neutral hydrogen atoms, in cm^-3
+    # n_H2 Number density of hydrogen molecules, in cm^-3
+    # n_e Number density of free electrons, in cm^-3
+    # tgas Gas temperature in K
+
+    # Constants
+    A10 = 2.300e-6      # Einstein A in s^-1
+    T10 = 91.21         # Energy of upper state in K
+    g0 = 2              # Degeneracy of lower state
+    g1 = 4              # Degeneracy of upper state
+
+    # Get de-excitation rate coefficients
+    k_e = 4.53e-8 * sqrt(1.0e4 / tgas)
+    T2 = tgas / 100
+    k_H = 7.58e-10 * T2**(0.1281 + 0.0087 * log(T2))
+    k_oH2 = Piecewise( (1e-10 * (5.33 + 0.11*T2), tgas < 500), \
+        (3.74757785025e-10 * tgas**0.07, True))
+    k_pH2 = Piecewise( (1e-10 * (4.43 + 0.33*T2), tgas < 500), \
+        (3.88997286356e-10 * tgas**0.07, True))
+
+    # Get total collisional de-excitation rate coefficient
+    k10 = k_e * n_e + k_H * n_H + (k_oH2 * f_oH2 + k_pH2 * f_pH2) * n_H2
+
+    # Compute cooling rate
+    @return n_Cj * cooling_2level(T10, A10, g0, g1, k10, tgas)
+
+# Cooling for oxygen species
+
+@function cooling_O0(n_O, n_H, n_H2, n_e, tgas)
+    # Cooling rate due to O fine structrure emission; O is treated
+    # as a three-level system and the cooling rate is computed
+    # assuming optically thin conditions. Collision rate coefficient
+    # approximations are set to match those used by Gong et al.
+    # n_C Number density of neutral C atoms, in cm^-3
+    # n_H Number density of neutral hydrogen atoms, in cm^-3
+    # n_H2 Number density of hydrogen molecules, in cm^-3
+    # n_e Number density of free electrons, in cm^-3
+    # tgas Gas temperature in K
+
+    # Constants
+    A10 = 8.91e-5          # Einstein A for 1->0 in s^-1
+    A20 = 1.34e-10         # Einstein A for 2->0 in s^-1
+    A21 = 1.75e-5          # Einstein A for 2->1 in s^-1
+    T10 = 227.8            # Energy of state 1 in K
+    T20 = 326.6            # Energy of state 2 in K
+    T21 = T20 - T10        # Energy of state 3 in K
+    g0 = 5                 # Degeneracy of state 0
+    g1 = 3                 # Degeneracy of state 1
+    g2 = 1                 # Degeneracy of state 2
+
+    # Convenience shorthands
+    T2 = tgas/100
+    lnT2 = log(T2)
+
+    # Collision rate coefficients for free electrons
+    q10_e = 5.12e-10 * tgas**-0.075
+    q20_e = 4.86e-10 * tgas**-0.026
+    q21_e = 1.08e-14 * tgas**0.926
+
+    # Collision rate coefficients for neutral hydrogen
+    q10_H0 = 3.57e-10 * T2**(0.419-0.003*lnT2)
+    q20_H0 = 3.19e-10 * T2**(0.369-0.006*lnT2)
+    q21_H0 = 4.34e-10 * T2**(0.755-0.160*lnT2)
+
+    # Collision rate coefficients for para-H2
+    q10_pH2 = 1.49e-10 * T2**(0.264+0.025*lnT2)
+    q20_pH2 = 1.90e-10 * T2**(0.203+0.041*lnT2)
+    q21_pH2 = 2.10e-12 * T2**(0.889+0.043*lnT2)
+
+    # Collision rate coefficients for ortho-H2
+    q10_oH2 = 1.37e-10 * T2**(0.296+0.043*lnT2)
+    q20_oH2 = 2.23e-10 * T2**(0.237+0.058*lnT2)
+    q21_oH2 = 3.00e-12 * T2**(1.198+0.525*lnT2)
+
+    # Total collision rates over all species
+    k10 = q10_e * n_e + q10_H0 * n_H + (f_pH2 * q10_pH2 + f_oH2 * q10_oH2) * n_H2
+    k20 = q20_e * n_e + q20_H0 * n_H + (f_pH2 * q20_pH2 + f_oH2 * q20_oH2) * n_H2
+    k21 = q21_e * n_e + q21_H0 * n_H + (f_pH2 * q21_pH2 + f_oH2 * q21_oH2) * n_H2
+
+    # return total cooling rate
+    @return n_O * cooling_3level(T20, T21, A10, A20, A21, g0, g1, g2, \
+            k10, k20, k21, tgas)
+
+# Cooling for CO
+@function cooling_CO(n_CO, n_H, n_H2, n_e, tgas, gradv, n_H_nuc)
+    # Coolisional cooling rate for CO
+    # n_CO Number density of CO molecules, in cm^-3
+    # n_H Number density of neutral hydrogen atoms, in cm^-3
+    # n_H2 Number density of hydrogen molecules, in cm^-3
+    # n_e Number density of free electrons, in cm^-3
+    # tgas Gas temperature in K
+    # gradv Velocity gradient in s^-1
+    # n_H_nuc Number density of H nuclei, in cm^-3
+
+    # This routine computes the cooling rate using an approximation
+    # originally taken from Omukai+ 2010, ApJ, 722, 1793, and modified
+    # by Gong+ 2017 to include turbulent line broadening
+
+    # Set floor on velocity gradient
+    mCO = (12 + 15.9949) * amu   # C12 + O16 mass
+    vth = sqrt(2 * kB * tgas / mCO)
+    Lmax = 3.0e20    # Maximum length scale in cm
+    gradv_small = vth / Lmax
+
+    # Set velocity gradient
+    gradv_lim = Max(gradv, gradv_small)
+
+    # Effective CO column entering the LVG escape probability, as
+    # \tilde{N} = N_CO / dv in cm^-2 / (km s^-1). Two regimes:
+    #  - Local (ncol_H = 0): the
+    #    Sobolev / velocity-gradient escape, \tilde{N} = n_CO / gradv_lim.
+    #  - Depth sweep (ncol_H > 0): use the RAW line-of-sight CO column ncol_CO
+    #    with the size-linewidth velocity bCO_L = km_to_cm(sqrt((N_H/n_H_nuc)/pc)), where the
+    #    cloud depth L = N_H/n_H_nuc is built from the RAW H column ncol_H
+
+    L = ncol_H / n_H_nuc                                       # physical cloud depth, cm
+    bCO_L = km_to_cm(sqrt(Max(L, 1e-30) / pc))             # cm/s (floored to avoid /0)
+    LVG_local = km_to_cm(n_CO / gradv_lim)
+    LVG_global = km_to_cm(ncol_CO / bCO_L)
+    LVG_param = Piecewise((LVG_local, ncol_H <= 0), (LVG_global, True))
+
+    # Get effective number density
+    neff = n_H2 + 1.75 * tgas**(1/4) * n_H + 680.1/tgas**(1/4) * n_e
+
+    # Table lookup of the four functions entering the fit
+    L0 = L0_CO_interp1d(tgas)
+    LLTE = LLTE_CO_interp2d(tgas, LVG_param)
+    nHalf = nHalf_CO_interp2d(tgas, LVG_param)
+    alpha = alpha_CO_interp2d(tgas, LVG_param)
+
+    # Combine results
+    inv_LCO = 1/L0 + neff/LLTE + 1/L0 * (neff/nHalf)**alpha * (1 - nHalf*L0/LLTE)
+
+    # Get limiting factor, used to force cooling rate to 0 at tgas = 0
+    limiter = (1 - exp(-tgas))**1000
+
+    # Get cooling rate
+    cooling_rate = 1/inv_LCO * neff * n_CO * limiter
+    @return cooling_rate
+
+# Cooling for dust
+
+@function cooling_dust_coll(chi, av, d2g, tgas, n_H_nuc)
+    # Collsional cooling rate for dust (though in principle could
+    # be heating as well)
+    # chi Radiation field in Draine (1972) units
+    # av V-band extinction in magnitudes
+    # d2g Dust to gas mass ratio
+    # tgas Gas temperature in k
+    # n_H_nuc Number density of H nuclei, in cm^-3
+
+    # Get cooling rate in the limit where dust temperature is set
+    # solely by gas collisions; in this gas the dust temperature is
+    # given implicitly by the solution to
+    #    0.01 * sigma_d10 * c_light * a * T_d**4 =
+    #       alpha_GD * n_H_nuc * T_g**(1/2) * (T_g - T_d)
+    # Since this is a 6th order equation in T_d, it does not have an
+    # analytic root, and thus the cooling rate cannot be written down
+    # explicity in SymPy. Instead, we introduce here an unspecified
+    # function of n_H_nuc and tgas, which the wrapping code will have to
+    # provide in the form of either a numerical solver or a table
+    # interpolation of the solution.
+    psi_coll = PsiGD_coll_interp2d(n_H_nuc, tgas)
+    cool_rate_coll = psi_coll * d2g / d2g_solar * n_H_nuc
+
+    # Get dust heating rate from CMB and ISRF
+    heat_rate_CMB = sigma_d10 * 0.01 * c_a * TCMB**6
+    heat_rate_ISRF = 3.9e-24 * chi * exp(-1.87*av)
+
+    # Get dust temperature assuming radiative heating dominates
+    Td_rad = ( (heat_rate_CMB + heat_rate_ISRF) / (0.01 * sigma_d10 * c_a) )**(1/6)
+
+    # Get dust cooling rate assuming radiative heating sets dust temp
+    cool_rate_rad = alpha_GD * (d2g / d2g_solar) * n_H_nuc**2 * sqrt(tgas) * (tgas - Td_rad)
+
+    # @return min cooling rate
+    @return Min(cool_rate_coll, cool_rate_rad)
+
+@function cooling_dust_rec(chi, av, d2g, tgas, n_e)
+    # Dust recombination cooling
+    # chi Radiation field in Draine (1972) units
+    # av V-band extinction in magnitudes
+    # d2g Dust to gas mass ratio
+    # tgas Gas temperature in k
+    # n_e Number density of free electrons, in cm^-3
+
+    # Grain charge state parameter
+    x = 1.7 * chi * exp(-1.87*av) * sqrt(tgas) / (n_e + 1e-50) + 50
+    lnx = log(x)
+
+    # Fit coefficients
+    D = Array([0.4535, 2.234, -6.266, 1.442, 0.05089])
+
+    # Cooling rate
+    @return 1e-28 * n_e * n_H_nuc * (d2g / d2g_solar) * \
+        tgas**(D[0] + D[1]/lnx) * \
+        exp( D[2] + (D[3] - D[4]*lnx)*lnx )
+
+
+#### Total heating and cooling rate not associated with chemical reactions ####
+
+@function heatingCoolingRate(chi, av, d2g, tgas, n_H_nuc, n_H, n_H2, n_Cj, n_C, n_O, n_CO, n_e, gradv)
+    # Total heating - cooling rate from all processes
+    # chi Radiation field in Draine (1972) units
+    # av V-band extinction in magnitudes
+    # d2g Dust to gas mass ratio
+    # tgas Gas temperature in k
+    # n_H_nuc Number density of H nuclei, in cm^-3
+    # n_H Number density of neutral hydrogen atoms, in cm^-3
+    # n_H2 Number density of hydrogen molecules, in cm^-3
+    # n_Cj Number density of C+ ions, in cm^-3
+    # n_C Number density of atomic C, in cm^-3
+    # n_O Number density of atomic O, in cm^-3
+    # n_CO Number density of CO molecules, in cm^-3
+    # n_e Number density of free electrons, in cm^-3
+    # gradv Velocity gradient in s^-1
+
+    # Note: that the following heating and cooling sources at not
+    # included here because they are associated with chemical reactions
+    # -- CR ionization
+    # -- H2 formation heating
+    # -- H2 radiative pumping and radiative dissociation
+    # -- H2 collisional dissociation
+    # On the other hand, recombination of e- onto grains is included here,
+    # because we do not explicitly treat this reaction
+
+    @return heating_grainPE(chi, av, d2g, tgas, n_H_nuc, n_e) \
+        - cooling_LyA(n_H, n_e, tgas) \
+        - cooling_H2(n_H2, n_H, n_Hj, n_He_nuc, n_e, tgas) \
+        - cooling_Cplus(n_Cj, n_H, n_H2, n_e, tgas) \
+        - cooling_C0(n_C, n_H, n_H2, n_e, tgas) \
+        - cooling_O0(n_O, n_H, n_H2, n_e, tgas) \
+        - cooling_CO(n_CO, n_H, n_H2, n_e, tgas, gradv, n_H_nuc) \
+        - cooling_dust_coll(chi, av, d2g, tgas, n_H_nuc) \
+        - cooling_dust_rec(chi, av, d2g, tgas, n_e)

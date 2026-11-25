@@ -1,3 +1,6 @@
+# ABOUTME: KROME @format: header handler declaring the reaction-line column layout
+# ABOUTME: Updates the parser state used by later reaction lines
+
 """KROME ``@format:`` header — declares the column layout for reaction lines."""
 
 import re

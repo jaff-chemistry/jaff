@@ -1,9 +1,18 @@
+# ABOUTME: Collapses per-reaction Leiden .h5 and NORAD .dat cross-section files into
+# ABOUTME: combined HDF5 files (one group per reaction channel, eV + cm^2).
 """Collapse the per-reaction cross-section files into two combined HDF5 files.
 
 The Leiden (``data/xsecs/leiden/*.h5``) and NORAD/OP (``data/xsecs/op/*.dat``)
 folders each hold one file per reaction.  This utility merges each folder into a
 single HDF5 file -- ``data/xsecs/leiden.h5`` and ``data/xsecs/op.h5`` -- with one
-group per reaction (group name = the serialized stem, e.g. ``"CH__C.H"``).
+group per reaction (group name = the source file's serialized stem, e.g.
+``"CH__C.H"``).
+
+This script no longer reproduces the shipped data as-is: JAFF reads
+``data/xsecs/leiden.hdf5`` and ``data/xsecs/norad.hdf5`` (not ``leiden.h5`` /
+``op.h5``), whose group keys and ``reactants`` attrs all carry ``_PHOTON`` on
+the reactant side (e.g. ``"CH._PHOTON__C.H"``) and whose root attrs include
+``jaff_source_sha256``.
 
 Schema
 ------
@@ -207,7 +216,7 @@ def collapse_op(op_dir: Path, out_path: Path, logger) -> int:
 
         for f in files:
             stem = f.stem
-            lines = f.read_text().splitlines()
+            lines = f.read_text(encoding="utf-8").splitlines()
             hdr = _parse_op_header([ln for ln in lines if ln.startswith("#")])
             data = np.loadtxt(f, comments="#")
             energy_ev, xsec_cm2 = data[:, 0], data[:, 1]
@@ -239,7 +248,7 @@ def collapse_op(op_dir: Path, out_path: Path, logger) -> int:
 
 
 def main() -> None:
-    """Build ``leiden.h5`` and ``op.h5`` in ``data/xsecs/``."""
+    """Build ``leiden.h5`` and ``op.h5`` in ``data/xsecs/`` (see the module notes)."""
     logger = JaffLogger().get_logger()
     xsecs = XSECS_DATA_DIR
     collapse_leiden(xsecs / "leiden", xsecs / "leiden.h5", logger)

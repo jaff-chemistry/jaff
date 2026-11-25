@@ -1,3 +1,6 @@
+# ABOUTME: KIDA fixed-width column reaction handler
+# ABOUTME: Maps the KIDA itype column to a JAFF reaction type and agent species
+
 """KIDA format: fixed-width column reaction handler."""
 
 import re
@@ -114,13 +117,13 @@ class KidaReaction:
             rr.append(agent)
 
         return {
-            "r": rr,
-            "p": pp,
+            "reactants": rr,
+            "products": pp,
             "tmin": t_min,
             "tmax": tmax,
             "rate": rate,
             "type": rtype,
-            "string": line.strip(),
+            "line": line.strip(),
         }
 
     @staticmethod

@@ -1,4 +1,4 @@
-# ABOUTME: TemplateParser facade of the new $$JAFF engine: renders one template file
+# ABOUTME: TemplateParser facade of the $$JAFF engine: renders one template file
 # ABOUTME: Language from $$JAFF LANG or the file extension; echo comment from COMMENT
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from .blocks import Block, CommandBlock
 from .commands import Comment, Lang
 from .context import RenderContext
 from .engine import split_blocks
+from .functions import TemplateFunctions
 from .render import render_blocks
 
 if TYPE_CHECKING:
@@ -22,36 +23,108 @@ if TYPE_CHECKING:
 class TemplateParser:
     """Render a ``$$JAFF`` template for a network.
 
+    A template is an ordinary source file whose ``$$JAFF`` directive lines
+    (``SUB``, ``REPEAT``, ``REDUCE``, ``DEFINE``, ...) expand to code generated
+    from the network by :class:`~jaff.codegen.Codegen`; every other line is
+    copied verbatim.  The directive syntax is described in the user guide's
+    *Template Syntax* page.  This is the engine behind the ``jaffgen``
+    command, which renders every file of a template directory with it.
+
     The target language is the template's ``$$JAFF LANG`` or, without one, the
-    language that claims the file extension. Echoed directives use the
+    language that claims the file extension (see
+    :meth:`~jaff.codegen.Language.from_extension`). Echoed directives use the
     template's ``$$JAFF COMMENT`` token, else the language's comment. A file
     without directives and without a known language (a Makefile, a TOML file)
-    is copied unchanged.
+    is copied unchanged.  Fortran output is re-wrapped so no statement exceeds
+    the free-form line length.
 
-    Examples:
-        >>> net = Network("networks/react_COthin")
-        >>> output = TemplateParser(net, Path("template.cpp")).parse_file()
+    Parameters
+    ----------
+    network : Network
+        Network to generate code for.
+    file : Path
+        Template path.
+    echo_directives : bool, optional
+        Whether directives appear as comments in the output.  Default ``True``.
+    functions : TemplateFunctions, optional
+        Functions for ``$$JAFF CALL``; ``None`` (the default) when the template
+        has no ``jaffgen_template_functions.py``.
+
+    Attributes
+    ----------
+    net : Network
+        Network the template is rendered for.
+    file : Path
+        Template path.
+    echo_directives : bool
+        Whether directives are echoed as comments in the output.
+    functions : TemplateFunctions or None
+        Functions for ``$$JAFF CALL``.
+
+    Examples
+    --------
+    Given ``nspec.cpp``:
+
+    ```cpp
+    $$JAFF SUB nspec
+    const int n = $nspec$;
+    $$JAFF END
+    ```
+
+    >>> from pathlib import Path
+    >>> from jaff import Network
+    >>> from jaff.codegen import TemplateParser
+    >>> net = Network("COthin")
+    >>> print(TemplateParser(net, Path("nspec.cpp")).parse_file(), end="")
+    // $$JAFF SUB nspec
+    const int n = 37;
+    // $$JAFF END
+    >>> TemplateParser(net, Path("nspec.cpp"), echo_directives=False).parse_file()
+    'const int n = 37;\\n'
     """
 
     def __init__(
-        self, network: Network, file: Path, echo_directives: bool = True
+        self,
+        network: Network,
+        file: Path,
+        echo_directives: bool = True,
+        functions: Optional[TemplateFunctions] = None,
     ) -> None:
-        """Remember what to render; nothing is read until ``parse_file``.
+        """Remember what to render; nothing is read until :meth:`parse_file`.
 
-        Args:
-            network: Network to generate code for.
-            file: Template path.
-            echo_directives: Whether directives appear as comments in the output.
+        Parameters
+        ----------
+        network : Network
+            Network to generate code for.
+        file : Path
+            Template path.
+        echo_directives : bool, optional
+            Whether directives appear as comments in the output.  Default
+            ``True``.
+        functions : TemplateFunctions, optional
+            Functions for ``$$JAFF CALL``.  Default ``None``.
         """
         self.net = network
         self.file = Path(file)
         self.echo_directives = echo_directives
+        self.functions = functions
 
     def parse_file(self) -> str:
         """Render the template and return the generated code.
 
-        Raises:
-            ParserError: If the template is invalid or names no usable language.
+        Reads :attr:`file`, expands its ``$$JAFF`` directives against
+        :attr:`net` and returns the result; the output is not written to disk.
+
+        Returns
+        -------
+        str
+            The rendered source, or the file's text unchanged if it has no
+            directives and no known language.
+
+        Raises
+        ------
+        ParserError
+            If the template is invalid or names no usable language.
         """
         text = self.file.read_text(encoding="utf-8")
         blocks = split_blocks(text, self.file)
@@ -61,7 +134,14 @@ class TemplateParser:
 
         lang, comment = self._settings(blocks, text)
         cg = Codegen(network=self.net, lang=lang)
-        ctx = RenderContext(self.net, cg, self.file, self.echo_directives, comment)
+        ctx = RenderContext(
+            self.net,
+            cg,
+            self.file,
+            self.echo_directives,
+            comment,
+            functions=self.functions,
+        )
         output = render_blocks(blocks, ctx)
 
         if cg.lang.name == "fortran":
@@ -72,9 +152,11 @@ class TemplateParser:
     def _settings(self, blocks: List[Block], text: str) -> Tuple[str, Optional[str]]:
         """The language name and the echo comment token (``None``: the language's).
 
-        Raises:
-            ParserError: For an unknown ``LANG``, or no ``LANG`` and an extension
-                no language claims.
+        Raises
+        ------
+        ParserError
+            For an unknown ``LANG``, or no ``LANG`` and an extension no language
+            claims.
         """
         lang: Optional[Lang] = None
         lang_block: Optional[CommandBlock] = None

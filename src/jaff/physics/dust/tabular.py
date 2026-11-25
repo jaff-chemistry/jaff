@@ -1,3 +1,5 @@
+# ABOUTME: Tabular: the tabulated Milky Way dust cross sections for the configured
+# ABOUTME: R_V, read from dust.hdf5, and their band averages
 from __future__ import annotations
 
 from functools import cached_property
@@ -89,11 +91,6 @@ class Tabular:
         """Mean scattering-angle cosine <cos theta> (dimensionless)."""
         return self._data["cos"]["_data"]
 
-    @cached_property
-    def scattering_cos2(self) -> np.ndarray:
-        """Mean squared scattering-angle cosine <cos^2 theta> (dimensionless)."""
-        return self._data["cos2"]["_data"]
-
     def avg_cross_section_per_hnuc(
         self, kind: str, bounds: tuple[float | Basic, float | Basic]
     ) -> Expr | float:
@@ -154,9 +151,9 @@ class Tabular:
         )
 
     def _load_cross_sections(self) -> HDF5Dict:
-        # rv is validated in Dust.__init__; :.1f matches the dust.hdf5 group
+        # rv is validated by DustConfig._check_rv; :.1f matches the dust.hdf5 group
         # names (mw_rv3.1 / mw_rv4.0 / mw_rv5.5).
         data: HDF5Dict = HDF5().to_dict(
-            f"{DATA_DIR / 'dust' / 'dust.hdf5'}::mw_rv{self.dust.rv:.1f}"
+            f"{DATA_DIR / 'dust' / 'dust.hdf5'}::mw_rv{self.dust.config.rv:.1f}"
         )
         return data

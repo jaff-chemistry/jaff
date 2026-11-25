@@ -9,16 +9,18 @@ import pytest
 import sympy
 from matplotlib.collections import LineCollection
 
-from jaff.core.reaction import PhotoReactionProps
 from jaff.plotting.adapters import normalize_processes, rate_series, xsec_series
-from tests.xsec_props import make_xsec_props
+from tests.helpers.xsec_props import make_xsec_props, stub_photo
 
 TGAS = sympy.Symbol("tgas")
 
 
 def _reaction(rate, tmin=None, tmax=None):
     return SimpleNamespace(
-        rate_coefficient=rate, tmin=tmin, tmax=tmax, get_latex=lambda: "$A \\to B$"
+        rate=SimpleNamespace(coefficient=rate),
+        tmin=tmin,
+        tmax=tmax,
+        get_latex=lambda: "$A \\to B$",
     )
 
 
@@ -28,10 +30,12 @@ def _photo(processes=("photodecay",), band_xsecs=None):
         photon_energy=energy, **{p: np.full(11, 1e-18) for p in processes}
     )
     return SimpleNamespace(
-        photo=PhotoReactionProps(xsec=xs),
-        band_xsecs=band_xsecs
-        if band_xsecs is not None
-        else pd.DataFrame(columns=["lower", "upper", "eavg", "xsec", "xsec_frac"]),
+        photo=SimpleNamespace(
+            xsec=xs,
+            band_xsecs=band_xsecs
+            if band_xsecs is not None
+            else pd.DataFrame(columns=["lower", "upper", "eavg", "xsec", "xsec_frac"]),
+        ),
         get_latex=lambda: "$C \\to C^+$",
     )
 
@@ -155,7 +159,7 @@ class TestXsecExtras:
         assert bar["x_hi"][1] == np.inf and bar["x_lo"][1] == pytest.approx(13.6)
 
     def test_band_bars_render_nm(self):
-        from jaff.plotting.render import render
+        from jaff.plotting import render
         from jaff.plotting.spec import FigureSpec
 
         bar = xsec_series(_photo(band_xsecs=self._bands()), bands=True, energy_unit="nm")[
@@ -186,7 +190,7 @@ class TestXsecExtras:
         E = sympy.Symbol("ph_E")
         expr = sympy.Piecewise((0, E < 10), (1e-18 * (10 / E) ** 3, E < 100), (0, True))
         r = SimpleNamespace(
-            photo=PhotoReactionProps(
+            photo=stub_photo(
                 xsec=make_xsec_props(photodecay_expr=expr, database="verner")
             ),
             get_latex=lambda: "x",
@@ -200,7 +204,7 @@ class TestXsecExtras:
         assert xsec_series(_photo(("photodecay",)), processes=["photo_absorption"]) == []
 
     def test_no_energy_returns_empty(self):
-        r = SimpleNamespace(photo=PhotoReactionProps(xsec=make_xsec_props()))
+        r = SimpleNamespace(photo=stub_photo(xsec=make_xsec_props()))
         assert xsec_series(r) == []
 
 

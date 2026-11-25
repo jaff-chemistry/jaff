@@ -118,7 +118,7 @@ def render_each_line(
     transform: Callable[[str], str],
     replacements: List[Tuple[Pattern[str], str]],
 ) -> str:
-    """Render every body line: leading spaces kept, content through *transform*.
+    """Render every body line: indentation kept, content through *transform*.
 
     Used by SUB, GET and HAS; see :func:`finish_line` for REPLACE.
     """

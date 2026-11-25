@@ -23,12 +23,12 @@
     ],
     [
       "H",
-      "_GRAIN"
+      "_PHOTON"
     ],
     2.73,
     5500.0,
     "3.92e-13*invte**0.6353e0",
-    "unknown"
+    "recombination"
   ],
   [
     2,
@@ -38,12 +38,12 @@
     ],
     [
       "H",
-      "_GRAIN"
+      "_PHOTON"
     ],
     5500.0,
     100000000.0,
     "exp(-28.61303380689232e0-0.7241125657826851e0*lnte-0.02026044731984691e0*lnte**2-0.002380861877349834e0*lnte**3-0.0003212605213188796e0*lnte**4-0.00001421502914054107e0*lnte**5+4.989108920299513e-6*lnte**6+5.755614137575758e-7*lnte**7-1.856767039775261e-8*lnte**8-3.071135243196595e-9*lnte**9)",
-    "unknown"
+    "recombination"
   ],
   [
     3,
@@ -69,12 +69,12 @@
     ],
     [
       "He",
-      "_GRAIN"
+      "_PHOTON"
     ],
     2.73,
     9280.0,
     "3.92e-13*invte**0.6353e0",
-    "unknown"
+    "recombination"
   ],
   [
     5,
@@ -84,12 +84,12 @@
     ],
     [
       "He",
-      "_GRAIN"
+      "_PHOTON"
     ],
     9280.0,
     100000000.0,
     "1.54e-9*(1.e0+0.3e0/exp(8.099328789667e0*invte))/(exp(40.49664394833662e0*invte)*te**1.5e0)+3.92e-13/te**0.6353e0",
-    "unknown"
+    "recombination"
   ],
   [
     6,
@@ -223,12 +223,12 @@
     ],
     [
       "He+",
-      "_GRAIN"
+      "_PHOTON"
     ],
     2.73,
     100000000.0,
     "3.36e-10/sqrtgas/(tgas*1.e-3)**0.2/(1e0+(tgas*1.e-6)**0.7)",
-    "unknown"
+    "recombination"
   ],
   [
     15,
@@ -238,12 +238,12 @@
     ],
     [
       "H-",
-      "_GRAIN"
+      "_PHOTON"
     ],
     2.73,
     100000000.0,
     "6.77e-15*te**0.8779e0",
-    "unknown"
+    "recombination"
   ],
   [
     16,
@@ -283,12 +283,12 @@
     ],
     [
       "H2+",
-      "_GRAIN"
+      "_PHOTON"
     ],
     2.73,
     6700.0,
     "1.85e-23*tgas**1.8e0",
-    "unknown"
+    "radiative_association"
   ],
   [
     19,
@@ -298,12 +298,12 @@
     ],
     [
       "H2+",
-      "_GRAIN"
+      "_PHOTON"
     ],
     6700.0,
     100000000.0,
     "5.81e-16*(tgas/5.62e4)**(-0.6657e0*log10(tgas/5.62e4))",
-    "unknown"
+    "radiative_association"
   ],
   [
     20,
@@ -594,12 +594,12 @@
     ],
     [
       "C",
-      "_GRAIN"
+      "_PHOTON"
     ],
     2.73,
     7950.0,
     "4.67e-12*(t32)**(-0.6e0)",
-    "unknown"
+    "recombination"
   ],
   [
     39,
@@ -609,12 +609,12 @@
     ],
     [
       "C",
-      "_GRAIN"
+      "_PHOTON"
     ],
     7950.0,
     21140.0,
     "1.23e-17*(t32)**2.49*exp(21845.6e0*invt)",
-    "unknown"
+    "recombination"
   ],
   [
     40,
@@ -624,12 +624,12 @@
     ],
     [
       "C",
-      "_GRAIN"
+      "_PHOTON"
     ],
     21140.0,
     21140.0,
     "9.62e-8*(t32)**(-1.37)*exp(-115786.2e0*invt)",
-    "unknown"
+    "recombination"
   ],
   [
     41,
@@ -639,12 +639,12 @@
     ],
     [
       "Si",
-      "_GRAIN"
+      "_PHOTON"
     ],
     2.73,
     2000.0,
     "7.5e-12*(t32)**(-0.55e0)",
-    "unknown"
+    "recombination"
   ],
   [
     42,
@@ -654,12 +654,12 @@
     ],
     [
       "Si",
-      "_GRAIN"
+      "_PHOTON"
     ],
     2000.0,
     null,
     "4.86e-12*(t32)**(-0.32e0)",
-    "unknown"
+    "recombination"
   ],
   [
     43,
@@ -669,12 +669,12 @@
     ],
     [
       "O",
-      "_GRAIN"
+      "_PHOTON"
     ],
     2.73,
     400.0,
     "1.30e-10*(tgas)**(-0.64e0)",
-    "unknown"
+    "recombination"
   ],
   [
     44,
@@ -684,12 +684,12 @@
     ],
     [
       "O",
-      "_GRAIN"
+      "_PHOTON"
     ],
     400.0,
     100000000.0,
     "1.41e-10*(tgas)**(-0.66e0) + 7.4e-4*(tgas)**(-1.5e0)*exp(-1.75e5*invt)*(1.e0+0.062e0*exp(-1.45e5*invt))",
-    "unknown"
+    "recombination"
   ],
   [
     45,
@@ -957,12 +957,12 @@
     ],
     [
       "Si+",
-      "_GRAIN"
+      "_PHOTON"
     ],
     2.73,
     100000000.0,
     "1.75e-12*(tgas/1e4)**(-0.6346e0)",
-    "unknown"
+    "recombination"
   ],
   [
     63,
@@ -3367,7 +3367,7 @@
     ],
     null,
     null,
-    "7.1e-7*exp(-.5*user_av)",
+    "7.1e-7*exp(-.5*av)",
     "photo"
   ],
   [
@@ -3381,7 +3381,7 @@
     ],
     null,
     null,
-    "1.1e-9*exp(-1.9*user_av)",
+    "1.1e-9*exp(-1.9*av)",
     "photo"
   ],
   [
@@ -3395,7 +3395,7 @@
     ],
     null,
     null,
-    "5.6e-11*exp(-3.74*user_av)*user_h2self",
+    "5.6e-11*exp(-3.74*av)*user_h2self",
     "photo"
   ],
   [
@@ -3409,7 +3409,7 @@
     ],
     null,
     null,
-    "4.9e-13*exp(-1.8*user_av)",
+    "4.9e-13*exp(-1.8*av)",
     "photo"
   ],
   [
@@ -3423,7 +3423,7 @@
     ],
     null,
     null,
-    "4.9e-13*exp(-2.3*user_av)",
+    "4.9e-13*exp(-2.3*av)",
     "photo"
   ],
   [
@@ -3437,7 +3437,7 @@
     ],
     null,
     null,
-    "3.1e-10*exp(-3.*user_av)",
+    "3.1e-10*exp(-3.*av)",
     "photo"
   ],
   [
@@ -3451,7 +3451,7 @@
     ],
     null,
     null,
-    "2.4e-7*exp(-.9*user_av)",
+    "2.4e-7*exp(-.9*av)",
     "photo"
   ],
   [
@@ -3465,7 +3465,7 @@
     ],
     null,
     null,
-    "8.7e-10*exp(-1.2*user_av)",
+    "8.7e-10*exp(-1.2*av)",
     "photo"
   ],
   [
@@ -3479,7 +3479,7 @@
     ],
     null,
     null,
-    "7.7e-10*exp(-2.8*user_av)",
+    "7.7e-10*exp(-2.8*av)",
     "photo"
   ],
   [
@@ -3493,7 +3493,7 @@
     ],
     null,
     null,
-    "2.6e-10*exp(-2.5*user_av)",
+    "2.6e-10*exp(-2.5*av)",
     "photo"
   ],
   [
@@ -3507,7 +3507,7 @@
     ],
     null,
     null,
-    "7.1e-10*exp(-1.7*user_av)",
+    "7.1e-10*exp(-1.7*av)",
     "photo"
   ],
   [
@@ -3521,7 +3521,7 @@
     ],
     null,
     null,
-    "5.9e-10*exp(-2.3*user_av)",
+    "5.9e-10*exp(-2.3*av)",
     "photo"
   ],
   [
@@ -3535,7 +3535,7 @@
     ],
     null,
     null,
-    "4.6e-10*exp(-1.7*user_av)",
+    "4.6e-10*exp(-1.7*av)",
     "photo"
   ],
   [
@@ -3549,7 +3549,7 @@
     ],
     null,
     null,
-    "1e-9*exp(-1.7*user_av)",
+    "1e-9*exp(-1.7*av)",
     "photo"
   ],
   [
@@ -3563,7 +3563,7 @@
     ],
     null,
     null,
-    "1e-9*exp(-1.7*user_av)",
+    "1e-9*exp(-1.7*av)",
     "photo"
   ],
   [
@@ -3577,7 +3577,7 @@
     ],
     null,
     null,
-    "1.5e-10*exp(-2.1*user_av)",
+    "1.5e-10*exp(-2.1*av)",
     "photo"
   ],
   [
@@ -3591,7 +3591,7 @@
     ],
     null,
     null,
-    "2.4e-7*exp(-.5*user_av)",
+    "2.4e-7*exp(-.5*av)",
     "photo"
   ],
   [
@@ -3605,7 +3605,7 @@
     ],
     null,
     null,
-    "3.7e-10*exp(-1.7*user_av)",
+    "3.7e-10*exp(-1.7*av)",
     "photo"
   ],
   [
@@ -3619,7 +3619,7 @@
     ],
     null,
     null,
-    "1.6e-12*exp(-3.1*user_av)",
+    "1.6e-12*exp(-3.1*av)",
     "photo"
   ],
   [
@@ -3633,7 +3633,7 @@
     ],
     null,
     null,
-    "1e-12*exp(-1.8*user_av)",
+    "1e-12*exp(-1.8*av)",
     "photo"
   ],
   [
@@ -3647,7 +3647,7 @@
     ],
     null,
     null,
-    "6e-10*exp(-1.7*user_av)",
+    "6e-10*exp(-1.7*av)",
     "photo"
   ],
   [
@@ -3661,7 +3661,7 @@
     ],
     null,
     null,
-    "3.2e-11*exp(-3.9*user_av)",
+    "3.2e-11*exp(-3.9*av)",
     "photo"
   ],
   [
@@ -3787,7 +3787,7 @@
     ],
     null,
     null,
-    "5.6e-11*exp(-3.7*user_av)",
+    "5.6e-11*exp(-3.7*av)",
     "photo"
   ],
   [
@@ -3801,7 +3801,7 @@
     ],
     null,
     null,
-    "7e-10*exp(-1.8*user_av)",
+    "7e-10*exp(-1.8*av)",
     "photo"
   ],
   [
@@ -3815,7 +3815,7 @@
     ],
     null,
     null,
-    "2.e-10*exp(-3.53*user_av)",
+    "2.e-10*exp(-3.53*av)",
     "photo"
   ],
   [

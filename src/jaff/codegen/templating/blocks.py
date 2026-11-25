@@ -21,7 +21,8 @@ class CommandBlock:
     """One ``$$JAFF`` directive: command, options, raw header lines and body lines.
 
     ``body_lines`` and ``end_lines`` are empty for commands without a body
-    (``DEFINE``); ``end_lines`` holds the raw ``$$JAFF END`` line otherwise.
+    (``DEFINE`` and the file settings ``LANG`` and ``COMMENT``); ``end_lines``
+    holds the raw ``$$JAFF END`` line otherwise.
     """
 
     command: Command

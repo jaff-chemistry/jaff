@@ -1,0 +1,8 @@
+# Settings of the python_solve_ivp template. They sit above the network's own
+# jaff.toml, so leave a section commented out to keep the network's choice.
+
+# Equation of state: rhs() and jacobian() carry dT/dt and its derivatives from it,
+# and chemistry.internal_energy() prints its energy.
+# [network.thermodynamics.eos]
+# type = "ideal"
+# gamma = 1.6666666666667

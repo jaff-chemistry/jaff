@@ -1,3 +1,6 @@
+# ABOUTME: PRIZMO parser: arrow-notation reactions and VARIABLES { } directives
+# ABOUTME: Seeds temperature shorthand globals (t32, invtgas, ...)
+
 """PRIZMO parser: arrow-notation reactions + ``VARIABLES { }`` directives."""
 
 from sympy import Basic, parse_expr
@@ -7,7 +10,7 @@ from ......errors import ParserError
 
 from .._parser import Parser, register
 from .._record import ParsedRecord, ParseResult
-from .reaction import PrizmoReaction
+from .reaction import PrizmoReaction, PrizmoReactionFallback
 from .vars import PrizmoVars
 
 
@@ -32,7 +35,7 @@ class PrizmoParser(Parser):
     }
 
     def __init__(self):
-        self.handlers = [PrizmoVars(), PrizmoReaction()]
+        self.handlers = [PrizmoVars(), PrizmoReaction(), PrizmoReactionFallback()]
 
     def process(self, records) -> ParseResult:
         """Walk the PRIZMO bucket in file order.
@@ -54,6 +57,7 @@ class PrizmoParser(Parser):
                     ParsedRecord(
                         **fields,
                         source_index=rec.source_index,
+                        nline=rec.nline,
                         sub_order=rec.sub_order,
                     )
                 )
@@ -70,7 +74,7 @@ class PrizmoParser(Parser):
         ``n`` is the reaction's 1-based position in
         ``network.reactions.with_type("photo")``, so every format numbers photo
         reactions the same way.  A photo reaction without the placeholder (e.g.
-        one whose rate comes from a ``.jfunc`` ``chemRate``) leaves its number
+        one whose rate comes from a ``.jfunc`` ``chemRateCoeff``) leaves its number
         unused.
 
         Raises
@@ -79,12 +83,10 @@ class PrizmoParser(Parser):
             If a placeholder is left in any of this parser's reactions.
         """
         for n, rea in enumerate(network.reactions.with_type("photo"), start=1):
-            for seg in rea.rate_segments:
-                seg.rate = self._number_photo(seg.rate, n)
-            rea.rate_coefficient = self._number_photo(rea.rate_coefficient, n)
+            rea.rate_segments.map_rates(lambda rate, n=n: self._number_photo(rate, n))
 
         for rea in network.reactions.with_format(self.name):
-            exprs = [rea.rate_coefficient, *(seg.rate for seg in rea.rate_segments)]
+            exprs = [rea.rate.coefficient, *(seg.rate for seg in rea.rate_segments)]
             if any(self._placeholders(expr) for expr in exprs):
                 raise ParserError(f"Unresolved photo placeholder in {rea}")
 

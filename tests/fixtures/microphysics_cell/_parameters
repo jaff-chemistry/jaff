@@ -1,0 +1,16 @@
+# ABOUTME: Runtime parameters of the one-zone test: temperature, end time and the file
+# ABOUTME: of initial number densities (one "species density" pair per line)
+@namespace: unit_test
+
+# temperature floor [K] and density floor [g cm^-3] for the EOS
+small_temp    real       1.e0
+small_dens    real       1.e-60
+
+# initial gas temperature [K]
+temperature   real       1.e2
+
+# end time of the single burn [s]
+tmax          real       1.e14
+
+# initial number densities [cm^-3]: "name value" per line; unlisted species start at 0
+initial_file  string     "initial.txt"
