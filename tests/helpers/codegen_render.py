@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 
-from tests.jaffgen_run import run_jaffgen
+from tests.helpers.jaffgen_run import run_jaffgen
 from tests._paths import FIXTURES_DIR, GOLDEN_DIR, REPO_ROOT
 
 REPO = REPO_ROOT

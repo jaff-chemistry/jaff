@@ -180,8 +180,8 @@ schema and reference machinery. Every folder has an `__init__.py`.
 
 - **Data paths**: import from `tests._paths` (`FIXTURES_DIR`, `SNAPSHOTS_DIR`,
   `GOLDEN_DIR`, `REPO_ROOT`); never build paths from `Path(__file__)`.
-- **Shared helpers** live at `tests/` root and are imported as
-  `from tests.xsec_props import ...` / `from tests.codegen_render import ...`.
+- **Shared helpers** live in `tests/helpers/` and are imported as
+  `from tests.helpers.xsec_props import ...` / `from tests.helpers.codegen_render import ...`.
 - **Fixtures** (`tests/conftest.py`): `make_network(lines, name=..., **kwargs)` builds a
   `Network` from inline reaction lines in `tmp_path`; `fixtures_dir`,
   `sample_network`; an autouse fixture silences the banner and logging.
@@ -398,19 +398,19 @@ docs/           # Documentation
   reaction absorbs (`Radiation.absorbed_average`, per band, photon-weighted in both modes) or emits
   (`Radiation.emitted_average`, `Y/E`); both or
   neither is a `ParserError` (spec .superpowers/specs/2026-11-24-reaction-energy.md). Test-only plugins live in
-  `tests/energy_change_plugins.py` and are installed per test (`install(monkeypatch)`),
+  `tests/helpers/energy_change_plugins.py` and are installed per test (`install(monkeypatch)`),
   never into the real registry (they would leak into the committed-schema test). Global
   heating/cooling: `physics/thermodynamics/heating_cooling_rate/` (`HeatingCoolingRateFunction`
   plugins, `heating_cooling_rate(net, params)` in erg cm⁻³ s⁻¹; own registry, never bound to
   a reaction), listed in `[network.thermodynamics] heating_cooling_rate = [{type = ...}, ...]`;
   `dEdt_extra` = `.jfunc` `heatingCoolingRate` + every entry (summed; an exact copy of an
   entry is rejected, the same type with other settings is not; `check_no_copies` in
-  `plugin_table`). Test-only plugins: `tests/heating_cooling_rate_plugins.py`. Radiation:
+  `plugin_table`). Test-only plugins: `tests/helpers/heating_cooling_rate_plugins.py`. Radiation:
   `physics/photo_reactions/emissivity/` and `.../absorption_coefficient/` (plugins return a
   spectrum in `ph_E`: erg cm⁻³ s⁻¹ eV⁻¹ / cm⁻¹), listed in `[network.radiation] emissivity` /
   `absorption_coefficient`; `Radiation.compute()` sums them with the `.jfunc`
   `globalEmissivity` / `globalAbsorptionCoefficient`, then integrates / averages the total per
-  group (`radiation.emissivity` etc. are the totals). Test-only: `tests/radiation_plugins.py`. Docs:
+  group (`radiation.emissivity` etc. are the totals). Test-only: `tests/helpers/radiation_plugins.py`. Docs:
   `docs/user-guide/configuration/plugins.md` (selecting plugins, `.jfunc` precedence / summing,
   lists) and `docs/development/writing-plugins.md` (writing each kind; keep its examples
   runnable)

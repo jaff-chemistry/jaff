@@ -19,7 +19,7 @@ from typing import Any, Callable, Dict, List, Tuple
 import pytest
 
 from jaff import Network
-from tests.codegen_render import (
+from tests.helpers.codegen_render import (
     GOLDEN,
     NETWORKS,
     TEMPLATES,
@@ -121,7 +121,7 @@ def test_generated_matches_golden(
     ]
     assert not non_finite, (
         f"{where}: golden is non-finite at these inputs; adjust the sampling "
-        f"ranges in tests/codegen_render.py\n{_format_rows(non_finite)}"
+        f"ranges in tests/helpers/codegen_render.py\n{_format_rows(non_finite)}"
     )
 
     # Entries missing on one side count as 0 (codegen omits exact zeros); each

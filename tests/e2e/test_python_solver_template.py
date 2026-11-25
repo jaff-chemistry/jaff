@@ -10,7 +10,7 @@ import pytest
 
 from jaff import Network
 from tests._paths import REPO_ROOT
-from tests.python_solver import generate, load
+from tests.helpers.python_solver import generate, load
 
 NETWORKS = {
     "demo2": str(REPO_ROOT / "networks" / "demos" / "demo2.jet"),

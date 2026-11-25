@@ -15,7 +15,7 @@ import pytest
 
 from jaff.physics.constants import k_B
 from jaff.physics.thermodynamics.eos.config import IdealEosConfig
-from tests.codegen_render import NETWORKS, draw_inputs, evaluate, free_names, load
+from tests.helpers.codegen_render import NETWORKS, draw_inputs, evaluate, free_names, load
 
 KB = k_B.cgs.value
 GAMMA = IdealEosConfig().gamma

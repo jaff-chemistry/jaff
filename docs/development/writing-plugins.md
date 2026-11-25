@@ -278,8 +278,8 @@ registered under one `name` (the same type bound to several reactions) must shar
 
 Test a plugin through a `Network` that selects it. In JAFF's own tests, test-only
 plugins never go into the real registries (they would leak into later tests, e.g. the
-committed-schema comparison): `tests/energy_change_plugins.py`,
-`tests/heating_cooling_rate_plugins.py` and `tests/radiation_plugins.py` install them
+committed-schema comparison): `tests/helpers/energy_change_plugins.py`,
+`tests/helpers/heating_cooling_rate_plugins.py` and `tests/helpers/radiation_plugins.py` install them
 into a fresh registry per test with `install(monkeypatch)`.
 
 ## Checklist

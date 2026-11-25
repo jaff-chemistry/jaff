@@ -16,9 +16,9 @@ from types import SimpleNamespace
 import pytest
 
 from jaff import Network
-from tests import microphysics_cell
+from tests.helpers import microphysics_cell
 from tests._paths import FIXTURES_DIR, REPO_ROOT
-from tests.python_solver import generate, reference
+from tests.helpers.python_solver import generate, reference
 
 DEMO2 = str(REPO_ROOT / "networks" / "demos" / "demo2.jet")
 GOW = str(FIXTURES_DIR / "GOW_benchmark" / "GOW.jet")

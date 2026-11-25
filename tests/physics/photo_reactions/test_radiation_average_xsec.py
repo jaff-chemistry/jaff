@@ -10,7 +10,7 @@ import sympy as sp
 
 from jaff.physics.photo_reactions.config import RadiationConfig
 from jaff.physics.photo_reactions._radiation import Radiation
-from tests.xsec_props import make_xsec_props, stub_photo
+from tests.helpers.xsec_props import make_xsec_props, stub_photo
 
 BANDS = [1.0, 2.0, 3.0]
 

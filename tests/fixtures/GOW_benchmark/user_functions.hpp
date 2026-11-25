@@ -1,7 +1,7 @@
 // ABOUTME: GOW's CO-cooling and dust tables (from networks/GOW/GOW.hdf5) for the generated
 // ABOUTME: rosenbrock_cpp and kokkos_ode code: replaces their user_functions.hpp (GOW benchmark)
 //
-// The C++ counterpart of tests/gow_tables.py (same arrays, same lookups): values
+// The C++ counterpart of tests/helpers/gow_tables.py (same arrays, same lookups): values
 // are log-encoded (L0CO, LLTECO and the dust logps as -log10, nhalfCO as +log10,
 // alphaCO direct); the CO tables are stored [Neff][T] with axes T [K] and log10
 // N_CO,eff, the dust table [nH][Tg] with axes log10 Tg and log10 nH. Lookups

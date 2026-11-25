@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 from tests._paths import REPO_ROOT
-from tests.jaffgen_run import run_folder
+from tests.helpers.jaffgen_run import run_folder
 
 REPO = REPO_ROOT
 DEMO2 = REPO / "networks" / "demos" / "demo2.jet"

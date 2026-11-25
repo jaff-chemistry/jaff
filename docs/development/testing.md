@@ -84,8 +84,8 @@ at the top level:
 tests/
 ├── conftest.py          # shared fixtures (make_network, quiet logging, …)
 ├── _paths.py            # TESTS_DIR, REPO_ROOT, FIXTURES_DIR, SNAPSHOTS_DIR, GOLDEN_DIR
-├── xsec_props.py        # shared helpers imported as tests.<module>
-├── codegen_render.py
+├── helpers/             # shared helpers imported as tests.helpers.<module>: code-generation
+│                        #   runners, build harnesses, test-only plugins, data builders
 ├── core/
 │   ├── network/         # Network construction, validation, serialization, densities
 │   ├── reaction/        # rate expressions, rate segments, temperature cutoffs

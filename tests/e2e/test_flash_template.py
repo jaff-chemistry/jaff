@@ -4,7 +4,7 @@
 
 The file checks need only JAFF. The build tests set up and compile the one-zone
 simulation in a temporary overlay of the FLASH checkout named by ``FLASH_HOME``
-(:mod:`tests.flash_overlay`), which they leave untouched.
+(:mod:`tests.helpers.flash_overlay`), which they leave untouched.
 """
 
 import os
@@ -17,9 +17,9 @@ from types import SimpleNamespace
 import pytest
 
 from jaff import Network
-from tests import flash_overlay
+from tests.helpers import flash_overlay
 from tests._paths import REPO_ROOT
-from tests.python_solver import generate, reference
+from tests.helpers.python_solver import generate, reference
 
 DEMO2 = str(REPO_ROOT / "networks" / "demos" / "demo2.jet")
 UNIT = Path("source/physics/sourceTerms/KromeChemistry/KromeChemistryMain")

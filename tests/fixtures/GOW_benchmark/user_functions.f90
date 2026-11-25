@@ -1,7 +1,7 @@
 ! ABOUTME: GOW's CO-cooling and dust tables (from networks/GOW/GOW.hdf5) for the generated
 ! ABOUTME: fortran_dlsodes solver: replaces its user_functions.f90 in the GOW benchmark
 !
-! The Fortran counterpart of tests/gow_tables.py (same arrays, same lookups):
+! The Fortran counterpart of tests/helpers/gow_tables.py (same arrays, same lookups):
 ! values are log-encoded (L0CO, LLTECO and the dust logps as -log10, nhalfCO as
 ! +log10, alphaCO direct); the CO tables are stored [Neff][T] with axes T [K] and
 ! log10 N_CO,eff, the dust table [nH][Tg] with axes log10 Tg and log10 nH.

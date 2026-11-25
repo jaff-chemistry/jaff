@@ -10,7 +10,7 @@ import pytest
 import sympy as sp
 
 from jaff.core.network.config import NetworkConfig
-from tests.jaffgen_run import run_jaffgen
+from tests.helpers.jaffgen_run import run_jaffgen
 from jaff.common._integrators import get_bounds
 from jaff.core.network import NetworkSymbols
 from jaff.errors import ParserError
@@ -19,7 +19,7 @@ from jaff.physics.photo_reactions._photochemistry import Photochemistry, XsecPro
 from jaff.physics.photo_reactions._radiation import Radiation
 from jaff.plotting.adapters.xsecs import _sampled_xsecs
 from tests._paths import REPO_ROOT
-from tests.xsec_props import stub_photo
+from tests.helpers.xsec_props import stub_photo
 
 BANDS = [6.0, 13.6, 100.0, 1000.0]
 

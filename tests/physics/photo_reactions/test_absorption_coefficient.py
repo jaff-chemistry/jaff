@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 import sympy as sp
 
-from tests.jaffgen_run import run_jaffgen
+from tests.helpers.jaffgen_run import run_jaffgen
 from jaff.physics.photo_reactions.config import RadiationConfig
 
 BANDS = [6.0, 13.6, 100.0]

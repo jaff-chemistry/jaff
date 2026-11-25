@@ -5,7 +5,7 @@ import pytest
 from pydantic import ValidationError
 from sympy import Float
 
-from tests.heating_cooling_rate_plugins import install
+from tests.helpers.heating_cooling_rate_plugins import install
 from jaff import Network
 from jaff.errors import ParserError
 from jaff.physics.thermodynamics.config import ThermodynamicsConfig

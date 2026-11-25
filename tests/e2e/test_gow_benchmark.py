@@ -11,7 +11,7 @@ reach equilibrium by ~2e13 s; their last row (7e20 s) is the equilibrium state.
 The RHS and Jacobian are generated from the network by the current code, for
 the ``python_solve_ivp``, ``fortran_dlsodes``, ``rosenbrock_cpp``, ``kokkos_ode``,
 ``microphysics`` and ``flash`` templates; the test supplies only the table functions
-(:mod:`tests.gow_tables`, and the same tables in
+(:mod:`tests.helpers.gow_tables`, and the same tables in
 ``tests/fixtures/GOW_benchmark/user_functions.f90`` and ``.hpp``), the start state
 (the reference's first row) and the parameters below. The Rosenbrock integrator
 evolves the specific internal energy instead of the temperature; VODE
@@ -19,7 +19,7 @@ evolves the specific internal energy instead of the temperature; VODE
 Microphysics evolves the specific energy with the generated EOS (rtol 1e-8, one
 burn in the one-zone test, ``tests/fixtures/microphysics_cell``); FLASH burns the
 generated network with its DLSODES once per FLASH step (rtol 1e-8), in a temporary
-overlay of the checkout named by ``FLASH_HOME`` (:mod:`tests.flash_overlay`).
+overlay of the checkout named by ``FLASH_HOME`` (:mod:`tests.helpers.flash_overlay`).
 The gas sits at the cloud face: no extinction, all column densities 0, so every
 shielding factor is 1.
 """
@@ -33,9 +33,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from tests import flash_overlay, gow_tables, kokkos_build, microphysics_cell
+from tests.helpers import flash_overlay, gow_tables, kokkos_build, microphysics_cell
 from tests._paths import FIXTURES_DIR
-from tests.python_solver import generate, load
+from tests.helpers.python_solver import generate, load
 
 BENCHMARK = FIXTURES_DIR / "GOW_benchmark"
 

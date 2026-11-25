@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tests.jaffgen_run import run_jaffgen
+from tests.helpers.jaffgen_run import run_jaffgen
 from jaff.errors import ParserError
 from jaff.physics.photo_reactions.config import RadiationConfig
 

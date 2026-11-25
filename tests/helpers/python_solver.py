@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from tests.jaffgen_run import run_jaffgen
+from tests.helpers.jaffgen_run import run_jaffgen
 
 MODULES = ("chemistry", "solver")
 

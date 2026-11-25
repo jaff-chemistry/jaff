@@ -12,7 +12,7 @@ import pytest
 
 from jaff import Network
 from tests._paths import FIXTURES_DIR, SNAPSHOTS_DIR
-from tests.codegen_render import (
+from tests.helpers.codegen_render import (
     NETWORKS,
     UPDATE,
     refresh_golden,

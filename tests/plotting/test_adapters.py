@@ -10,7 +10,7 @@ import sympy
 from matplotlib.collections import LineCollection
 
 from jaff.plotting.adapters import normalize_processes, rate_series, xsec_series
-from tests.xsec_props import make_xsec_props, stub_photo
+from tests.helpers.xsec_props import make_xsec_props, stub_photo
 
 TGAS = sympy.Symbol("tgas")
 

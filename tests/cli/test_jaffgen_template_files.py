@@ -12,7 +12,7 @@ import jaff
 from jaff.cli.jaffgen._engine import JaffGen
 from jaff.config import JAFF_DIR, TEMPLATES_DIR
 from tests._paths import REPO_ROOT
-from tests.jaffgen_run import run_folder
+from tests.helpers.jaffgen_run import run_folder
 
 #: Static solver files each template ships besides its $$JAFF templates.
 STATIC = {

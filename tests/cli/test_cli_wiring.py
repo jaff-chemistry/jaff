@@ -15,7 +15,7 @@ from jaff.cli.jaffgen.config import load_jaffgen_config
 from jaff.errors import ParserError
 from jaff.physics.thermodynamics.eos.config import IdealEosConfig
 from tests._paths import FIXTURES_DIR
-from tests.jaffgen_run import run_folder
+from tests.helpers.jaffgen_run import run_folder
 
 FIXTURES = FIXTURES_DIR
 DUP = str(FIXTURES / "duplicate_temp_range.dat")

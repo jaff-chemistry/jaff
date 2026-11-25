@@ -5,7 +5,7 @@ import pytest
 from pydantic import ValidationError
 from sympy import Float
 
-from tests.energy_change_plugins import install
+from tests.helpers.energy_change_plugins import install
 from jaff import Network
 from jaff.core.reaction.config import ReactionsConfig
 from jaff.errors import ParserError

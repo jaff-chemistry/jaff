@@ -16,7 +16,7 @@ from jaff.physics.photo_reactions.shielding import (
     shielding_function,
 )
 from jaff.physics.photo_reactions.shielding.global_.leiden import Leiden
-from tests.jaffgen_run import run_folder
+from tests.helpers.jaffgen_run import run_folder
 
 H2_PHOTO = "H2 -> H + H  []  PHOTO, 11.2\n"
 H2_KEY = "H2._PHOTON__H.H"

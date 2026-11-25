@@ -13,7 +13,7 @@ import sympy
 
 from jaff.plotting import plot, plot_rates, plot_xsecs
 from tests._paths import REPO_ROOT
-from tests.xsec_props import make_xsec_props, stub_photo
+from tests.helpers.xsec_props import make_xsec_props, stub_photo
 
 TGAS = sympy.Symbol("tgas")
 

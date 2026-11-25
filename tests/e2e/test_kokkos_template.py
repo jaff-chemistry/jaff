@@ -22,9 +22,9 @@ import numpy as np
 import pytest
 
 from jaff import Network
-from tests import kokkos_build
+from tests.helpers import kokkos_build
 from tests._paths import FIXTURES_DIR, REPO_ROOT
-from tests.python_solver import generate
+from tests.helpers.python_solver import generate
 
 pytestmark = pytest.mark.skipif(
     not sys.platform.startswith("linux")

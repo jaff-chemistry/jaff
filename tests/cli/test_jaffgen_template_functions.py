@@ -8,7 +8,7 @@ import pytest
 
 from jaff.cli.jaffgen._engine import JaffGen, run_config
 from tests._paths import FIXTURES_DIR
-from tests.jaffgen_run import run_folder, run_jaffgen
+from tests.helpers.jaffgen_run import run_folder, run_jaffgen
 
 NETWORK = FIXTURES_DIR / "react_cie_hepp.jet"
 FUNCTIONS = "jaffgen_template_functions.py"

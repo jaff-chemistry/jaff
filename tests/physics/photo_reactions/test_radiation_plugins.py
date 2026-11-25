@@ -4,7 +4,7 @@
 import pytest
 from pydantic import ValidationError
 
-from tests.radiation_plugins import install
+from tests.helpers.radiation_plugins import install
 from jaff.errors import ParserError
 from jaff.physics.photo_reactions.config import RadiationConfig
 
