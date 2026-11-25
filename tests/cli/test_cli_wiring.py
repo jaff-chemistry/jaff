@@ -486,7 +486,10 @@ class TestConfigToml:
         assert not (out / "jaffgen.toml").exists()
         assert written["network"]["label"] == "from_cli"
         assert written["network"]["reactions"]["t_cutoff"] == "extrapolate"
-        assert written["jaffgen"]["network_file"] == str((tmp_path / "net.dat").resolve())
+        assert (
+            written["jaffgen"]["network_file"]
+            == (tmp_path / "net.dat").resolve().as_posix()
+        )
 
     def test_reloads_as_the_same_config(self, tmp_path):
         TestFuncfileWiring()._generate(tmp_path, "--label", "x")
@@ -689,7 +692,7 @@ class TestOutputDirRecorded:
         gen.run()
         written = tomllib.loads((gen.output_dir / "config.toml").read_text())
 
-        assert written["jaffgen"]["output_dir"] == str(tmp_path / "generated")
+        assert written["jaffgen"]["output_dir"] == (tmp_path / "generated").as_posix()
 
     def test_configured_output_dir_is_in_config_toml(self, tmp_path):
         """The base directory is recorded, not the run folder inside it."""
@@ -699,7 +702,7 @@ class TestOutputDirRecorded:
         gen.run()
         written = tomllib.loads((gen.output_dir / "config.toml").read_text())
 
-        assert written["jaffgen"]["output_dir"] == str((tmp_path / "out").resolve())
+        assert written["jaffgen"]["output_dir"] == (tmp_path / "out").resolve().as_posix()
 
 
 class TestRunFolder:
