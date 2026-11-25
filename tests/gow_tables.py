@@ -612,45 +612,66 @@ DUST_PS = np.array(
 ).reshape(15, 10)
 
 
-def _clamp(x: float, axis: np.ndarray) -> float:
-    return min(max(x, axis[0]), axis[-1])
+# Interpolation: an exact port of the Gong+17 reference (pdr interp.cpp and
+# thermo.cpp CoolingCOR / CoolingDust), as Microphysics' networks/GOW/gow_interp.H:
+#   * linear interpolation, and past either table edge the end segment is
+#     EXTRAPOLATED (no clamping);
+#   * CO: T linear in K, capped above at 2000 K; second argument NCOeff*1e5 on
+#     the axis log10(x + 1e13);
+#   * the CO tables above are GOW.hdf5 flattened T-major (N fastest), i.e.
+#     table[iT, iN] after reshape(11, 11); the reference stores them N-major
+#     (data[iN*lenT + iT]). (The previous version indexed them as [iN, iT].)
+#   * dust: (log10 T, log10 n_H), DUST_PS[inH, iT] as in the reference.
 
 
-def _linear(x: float, axis: np.ndarray, values: np.ndarray) -> float:
-    return float(np.interp(_clamp(x, axis), axis, values))
+def _index(axis: np.ndarray, x: float) -> int:
+    """Reference LinearInterpIndex_: first index of the bracketing segment."""
+    n = len(axis)
+    if x < axis[0]:
+        return 0
+    if x > axis[-1]:
+        return n - 2
+    i = 0
+    while x > axis[i]:
+        i += 1
+    return max(i - 1, 0)  # guards the reference's x == axis[0] edge case
 
 
-def _bilinear(x: float, y: float, xs: np.ndarray, ys: np.ndarray, z: np.ndarray) -> float:
-    """Interpolate ``z[iy][ix]`` linearly in x and y, clamped to the edges."""
-    x, y = _clamp(x, xs), _clamp(y, ys)
-    i = int(np.clip(np.searchsorted(xs, x) - 1, 0, len(xs) - 2))
-    j = int(np.clip(np.searchsorted(ys, y) - 1, 0, len(ys) - 2))
-    fx = (x - xs[i]) / (xs[i + 1] - xs[i])
-    fy = (y - ys[j]) / (ys[j + 1] - ys[j])
-    low = (1 - fx) * z[j, i] + fx * z[j, i + 1]
-    high = (1 - fx) * z[j + 1, i] + fx * z[j + 1, i + 1]
-
-    return float((1 - fy) * low + fy * high)
+def _lin(x0: float, x1: float, y0: float, y1: float, x: float) -> float:
+    return y0 + ((y1 - y0) / (x1 - x0)) * (x - x0)
 
 
-def _log10(x: float) -> float:
-    return float(np.log10(max(x, 1e-300)))
+def _lp2(xs: np.ndarray, ys: np.ndarray, z, x: float, y: float) -> float:
+    """Reference LP2D on z(iy, ix) = z[iy][ix]."""
+    i, j = _index(xs, x), _index(ys, y)
+    f1 = _lin(xs[i], xs[i + 1], z(j, i), z(j, i + 1), x)
+    f2 = _lin(xs[i], xs[i + 1], z(j + 1, i), z(j + 1, i + 1), x)
+    return float(_lin(ys[j], ys[j + 1], f1, f2, y))
 
 
 def _co(table: np.ndarray, tgas: float, lvg: float) -> float:
-    log_t, log_n = _log10(tgas), _log10(lvg + 1e-13)
+    t = min(float(tgas), 2000.0)
+    log_n = float(np.log10(lvg + 1.0e13))
+    return _lp2(CO_T, CO_LOG_NEFF, lambda iN, iT: table[iT, iN], t, log_n)
 
-    return _bilinear(log_t, log_n, np.log10(CO_T), CO_LOG_NEFF, table)
+
+def _l0(tgas: float) -> float:
+    t = min(float(tgas), 2000.0)
+    i = _index(CO_T, t)
+    return float(_lin(CO_T[i], CO_T[i + 1], CO_L0[i], CO_L0[i + 1], t))
+
+
+def _dust(n_h: float, tgas: float) -> float:
+    return _lp2(DUST_LOG_T, DUST_LOG_NH, lambda inH, iT: DUST_PS[inH, iT],
+                float(np.log10(tgas)), float(np.log10(n_h)))
 
 
 FUNCTIONS = {
-    "l0_co_interp1d": lambda tgas: 10 ** -_linear(_log10(tgas), np.log10(CO_T), CO_L0),
+    "l0_co_interp1d": lambda tgas: 10 ** -_l0(tgas),
     "llte_co_interp2d": lambda tgas, lvg: 10 ** -_co(CO_LLTE, tgas, lvg),
     "nhalf_co_interp2d": lambda tgas, lvg: 10 ** _co(CO_NHALF, tgas, lvg),
     "alpha_co_interp2d": lambda tgas, lvg: _co(CO_ALPHA, tgas, lvg),
-    "psigd_coll_interp2d": lambda n_h, tgas: (
-        10 ** -_bilinear(_log10(tgas), _log10(n_h), DUST_LOG_T, DUST_LOG_NH, DUST_PS)
-    ),
+    "psigd_coll_interp2d": lambda n_h, tgas: 10 ** -_dust(n_h, tgas),
     "fshield_co_interp2d": lambda *args: 1.0,
 }
 """The GOW table functions by the name the generated code calls them."""
