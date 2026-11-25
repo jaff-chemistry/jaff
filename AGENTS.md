@@ -167,7 +167,14 @@ from jaff import Network
 - Test function naming: `test_<description>()`
 - Use pytest fixtures in `conftest.py`
 - Use `@pytest.mark.parametrize` for parameterized tests
-- Compare floats with `pytest.approx` (also numbers inside snapshots)
+- Compare every number from a computation with `pytest.approx`, never `==` or a
+  string match: floats, numbers inside snapshots and docstring `Examples` output
+  (`tests/meta/test_docstring_examples.py` compares the numbers there with
+  `pytest.approx`, so paste the real output). The last digits differ between
+  platforms (macOS and Linux maths libraries)
+- Write paths and text files the same on every OS: `encoding="utf-8"` on every
+  `open` / `read_text` / `write_text` (Windows defaults to cp1252), and compare or
+  write relative paths with `.as_posix()` (Windows `str()` uses backslashes)
 
 ## Tests
 

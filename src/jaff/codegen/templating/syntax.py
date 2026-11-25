@@ -92,7 +92,9 @@ class _ToDirective(Transformer):
 @cache
 def _parser() -> Lark:
     """The header parser, built once per process."""
-    return Lark(GRAMMAR.read_text(), parser="lalr", propagate_positions=True)
+    return Lark(
+        GRAMMAR.read_text(encoding="utf-8"), parser="lalr", propagate_positions=True
+    )
 
 
 def _add_group(

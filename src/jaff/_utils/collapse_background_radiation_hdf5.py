@@ -83,7 +83,7 @@ def collapse_background_radiation(rad_dir: Path, out_path: Path, logger) -> int:
         h5.attrs["created"] = date.today().isoformat()
 
         for f in files:
-            lines = f.read_text().splitlines()
+            lines = f.read_text(encoding="utf-8").splitlines()
             hdr = _parse_header([ln for ln in lines if ln.startswith("#")])
             # genfromtxt + invalid_raise=False drops malformed rows (e.g. a
             # truncated final line) instead of aborting the whole file.

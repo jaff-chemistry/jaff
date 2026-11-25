@@ -36,7 +36,8 @@ def gow(tmp_path_factory) -> SimpleNamespace:
 
 
 def test_writes_the_network_and_its_eos(gow):
-    names = {str(p.relative_to(gow.folder)) for p in gow.folder.rglob("*")}
+    # Forward slashes on every OS, as the expected names are written.
+    names = {p.relative_to(gow.folder).as_posix() for p in gow.folder.rglob("*")}
 
     assert {
         "pynucastro.net",

@@ -385,7 +385,7 @@ def download_raw(raw_dir: Path, logger) -> int:
                 text = fetch(f"{BASE_URL}/{stem}/{stem}.{infix}.txt")
                 if text is None:
                     continue
-                (raw_dir / f"{stem}.{infix}.txt").write_text(text)
+                (raw_dir / f"{stem}.{infix}.txt").write_text(text, encoding="utf-8")
                 saved += 1
                 logger.info(f"downloaded {stem}.{infix}.txt")
                 break  # most-accurate variant found; stop
@@ -420,7 +420,7 @@ def parse_local(raw_dir: Path, outdir: Path, logger) -> int:
         charge = stage - 1
         ne = z - charge
 
-        text = raw_path.read_text()
+        text = raw_path.read_text(encoding="utf-8")
         try:
             fmt, blocks = parse(text)
             blocks = keep_ground(blocks)
@@ -438,7 +438,7 @@ def parse_local(raw_dir: Path, outdir: Path, logger) -> int:
 
         ser = serialized_name(symbol, charge)
         ion = symbol + "+" * charge
-        with open(outdir / f"{ser}.dat", "w") as f:
+        with open(outdir / f"{ser}.dat", "w", encoding="utf-8") as f:
             f.write("# NORAD (Nahar/OSU) ground-state photoionisation cross section\n")
             f.write(f"# reaction: {ion} -> {ion}+ + e-   serialized: {ser}\n")
             f.write(

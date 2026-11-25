@@ -11,7 +11,7 @@ the module-owned config models.
 from __future__ import annotations
 
 import tomllib
-from pathlib import Path
+from pathlib import Path, PurePath
 from types import UnionType
 from typing import (
     Annotated,
@@ -29,6 +29,7 @@ from typing import (
 
 import tomli_w
 from pydantic import BaseModel, ValidationError
+from pydantic_core import to_jsonable_python
 
 from ..errors import ParserError
 from .base import KeyPath, format_validation_errors
@@ -45,11 +46,11 @@ __all__ = [
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 
-def dump_config(config: BaseModel, schema: Path | None = None) -> str:
+def dump_config(config: BaseModel, schema: PurePath | None = None) -> str:
     """Write *config* as TOML text: every key, defaults included.
 
-    Paths are written as strings and shielding tables flat, as in a config
-    file; keys whose value is ``None`` (unset optionals) and empty tables are
+    Paths are written as strings with forward slashes on every OS (Windows reads
+    them too) and shielding tables flat, as in a config file; keys whose value is ``None`` (unset optionals) and empty tables are
     omitted, as TOML has no null; a ``[jaffgen]`` section comes first.  The
     text loads back into an equal config.
 
@@ -57,7 +58,7 @@ def dump_config(config: BaseModel, schema: Path | None = None) -> str:
     ----------
     config : BaseModel
         A validated config (e.g. a ``JaffgenTomlConfig``).
-    schema : Path or None, optional
+    schema : PurePath or None, optional
         JSON Schema to name in a leading ``#:schema`` line, for editors.
 
     Returns
@@ -65,13 +66,27 @@ def dump_config(config: BaseModel, schema: Path | None = None) -> str:
     str
         The TOML text.
     """
-    data = _drop_none(config.model_dump(mode="json"))
+    data = _drop_none(to_jsonable_python(_posix(config.model_dump())))
     if "jaffgen" in data:
         data = {"jaffgen": data.pop("jaffgen"), **data}
 
-    header = f"#:schema {schema}\n\n" if schema is not None else ""
+    header = f"#:schema {schema.as_posix()}\n\n" if schema is not None else ""
 
     return header + tomli_w.dumps(data)
+
+
+def _posix(value: Any) -> Any:
+    """Copy *value* with every path as a string with forward slashes."""
+    if isinstance(value, PurePath):
+        return value.as_posix()
+
+    if isinstance(value, dict):
+        return {key: _posix(item) for key, item in value.items()}
+
+    if isinstance(value, (list, tuple)):
+        return [_posix(item) for item in value]
+
+    return value
 
 
 def _drop_none(value: Any) -> Any:

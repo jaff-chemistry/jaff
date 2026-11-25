@@ -3,11 +3,11 @@
 
 import copy
 import tomllib
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
-from jaff.cli.jaffgen.config import JaffgenTomlConfig
+from jaff.cli.jaffgen.config import JaffgenConfig, JaffgenTomlConfig
 from jaff.config.loader import (
     atomic_tables,
     deep_merge,
@@ -432,3 +432,13 @@ class TestDumpLayout:
         assert dump_config(
             JaffgenTomlConfig(), schema=Path("/s/jaffgen.schema.json")
         ).startswith("#:schema /s/jaffgen.schema.json\n")
+
+    def test_windows_paths_are_written_with_forward_slashes(self):
+        # str() of a Windows path uses backslashes; the file must not depend on the OS.
+        run = JaffgenConfig.model_construct(output_dir=PureWindowsPath(r"C:\abs\out"))
+        config = JaffgenTomlConfig.model_construct(jaffgen=run)
+
+        text = dump_config(config, schema=PureWindowsPath(r"C:\s\jaffgen.schema.json"))
+
+        assert text.startswith("#:schema C:/s/jaffgen.schema.json\n")
+        assert tomllib.loads(text)["jaffgen"]["output_dir"] == "C:/abs/out"

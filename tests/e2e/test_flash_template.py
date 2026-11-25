@@ -39,9 +39,10 @@ def cothin(tmp_path_factory) -> SimpleNamespace:
 
 
 def test_writes_the_units_under_flash_paths_named_after_the_network(cothin):
-    files = {str(p.relative_to(cothin.folder)) for p in cothin.folder.rglob("*.*")}
+    # Forward slashes on every OS, as the expected names are written.
+    files = {p.relative_to(cothin.folder).as_posix() for p in cothin.folder.rglob("*.*")}
     label = cothin.net.label  # the network file's stem, react_COthin
-    unit, comp, sim = UNIT / label, COMPOSITION / label, SIMULATION / label
+    unit, comp, sim = ((d / label).as_posix() for d in (UNIT, COMPOSITION, SIMULATION))
 
     assert {
         f"{unit}/chemistry.f90",

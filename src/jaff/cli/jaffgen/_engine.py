@@ -425,7 +425,7 @@ class JaffGen:
         # the run folder: a rerun from this file makes a new folder beside this one.
         jaffgen = self.config.jaffgen.model_copy(update={"output_dir": self.output_root})
         config = JaffgenTomlConfig(jaffgen=jaffgen, network=self.net.config)
-        path.write_text(dump_config(config, schema=schema))
+        path.write_text(dump_config(config, schema=schema), encoding="utf-8")
         self.logger.info(f"[cyan]{path.name}[/] created at {path.parent}")
 
     def handle_data_tables(self) -> None:
@@ -511,7 +511,7 @@ class JaffGen:
 
             outfile: Path = self.output_dir / self._output_path(file.relpath)
             outfile.parent.mkdir(parents=True, exist_ok=True)
-            outfile.write_text(lines)
+            outfile.write_text(lines, encoding="utf-8")
 
             self.logger.info(f"[cyan]{outfile.name}[/] created at {outfile.parent}")
 

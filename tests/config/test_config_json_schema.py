@@ -99,7 +99,9 @@ def test_speed_of_light_default_is_in_schema():
 
 @pytest.mark.parametrize("name", ["jaff", "jaffgen"])
 def test_committed_schema_matches_models(name):
-    committed = json.loads((SCHEMA_DIR / f"{name}.schema.json").read_text())
+    committed = json.loads(
+        (SCHEMA_DIR / f"{name}.schema.json").read_text(encoding="utf-8")
+    )
 
     assert committed == schema_files()[name], (
         "Run `python -m jaff.config.json_schema` to regenerate the schemas"

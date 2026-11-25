@@ -216,7 +216,7 @@ def collapse_op(op_dir: Path, out_path: Path, logger) -> int:
 
         for f in files:
             stem = f.stem
-            lines = f.read_text().splitlines()
+            lines = f.read_text(encoding="utf-8").splitlines()
             hdr = _parse_op_header([ln for ln in lines if ln.startswith("#")])
             data = np.loadtxt(f, comments="#")
             energy_ev, xsec_cm2 = data[:, 0], data[:, 1]

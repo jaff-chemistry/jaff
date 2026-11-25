@@ -9,6 +9,7 @@ import importlib
 import io
 import logging
 import pkgutil
+import re
 
 import matplotlib
 import pytest
@@ -34,6 +35,44 @@ _INPUT_FILES = {
 _REPO_LINKS = ("networks",)
 
 _FLAGS = doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE
+
+#: A number in example output: an integer, a decimal or one in exponent notation.
+_NUMBER = re.compile(r"[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][-+]?\d+)?")
+
+#: Relative tolerance of numbers in example output: the last digits of a float differ
+#: between platforms' maths libraries (macOS vs glibc).  No absolute tolerance, so tiny
+#: values (cross sections ~1e-19) are compared as strictly as large ones.
+_REL = 1e-12
+
+
+class _ApproxChecker(doctest.OutputChecker):
+    """Doctest output comparison with the numbers compared by ``pytest.approx``.
+
+    Output that matches as text passes as usual.  Otherwise the text between the
+    numbers must match exactly and every number must equal the expected one within
+    :data:`_REL`, so documented output stays the real output of one platform.
+    """
+
+    def check_output(self, want: str, got: str, optionflags: int) -> bool:
+        if super().check_output(want, got, optionflags):
+            return True
+
+        wanted, found = _NUMBER.findall(want), _NUMBER.findall(got)
+        if len(wanted) != len(found):
+            return False
+        if any(
+            float(g) != pytest.approx(float(w), rel=_REL, abs=0)
+            for w, g in zip(wanted, found)
+        ):
+            return False
+
+        # The numbers agree: compare the text with the expected numbers put in.
+        expected = iter(wanted)
+
+        return super().check_output(
+            want, _NUMBER.sub(lambda _: next(expected), got), optionflags
+        )
+
 
 #: Examples known to fail, with why; empty this list rather than add to it.
 XFAIL: dict[str, str] = {}
@@ -98,7 +137,7 @@ def test_docstring_example(module, test, _module_dirs, monkeypatch):
     logging.disable(logging.CRITICAL)
     out = io.StringIO()
     try:
-        runner = doctest.DocTestRunner(optionflags=_FLAGS)
+        runner = doctest.DocTestRunner(checker=_ApproxChecker(), optionflags=_FLAGS)
         runner.run(test, out=out.write, clear_globs=True)
     finally:
         logging.disable(logging.NOTSET)
@@ -114,3 +153,29 @@ def test_examples_are_found():
     assert "jaff.drivers.csv.csv_to_df" in names
     assert len(names) > 100
     assert set(XFAIL) <= names, "XFAIL names an example that no longer exists"
+
+
+class TestApproxChecker:
+    @pytest.mark.parametrize(
+        ("want", "got"),
+        [
+            ("1.2403886126668026e-19\n", "1.240388612666803e-19\n"),
+            ("(1.95e-18, 15.735906475383057)\n", "(1.95e-18, 15.735906475383056)\n"),
+            ("5.85154082319921e-8*photden[1]\n", "5.851540823199211e-8*photden[1]\n"),
+        ],
+    )
+    def test_last_digit_differences_pass(self, want, got):
+        assert _ApproxChecker().check_output(want, got, _FLAGS)
+
+    @pytest.mark.parametrize(
+        ("want", "got"),
+        [
+            ("1.2403886126668026e-19\n", "1.2403886e-19\n"),  # beyond the tolerance
+            ("1.0e-19\n", "5.0e-19\n"),  # tiny values have no absolute tolerance
+            ("2.0*photden[1]\n", "2.0*photden[2]\n"),  # an index is a number too
+            ("2.0*photden[1]\n", "2.0*nden[1]\n"),  # text must match exactly
+            ("(1.0, 2.0)\n", "(1.0, 2.0, 3.0)\n"),
+        ],
+    )
+    def test_other_differences_fail(self, want, got):
+        assert not _ApproxChecker().check_output(want, got, _FLAGS)
