@@ -381,6 +381,7 @@ under shorter variable names.
 | `element_density_matrix` | `idx, element`                 | Element content of each species (2D)               | —             |
 | `element_truth_matrix`   | `idx, element`                 | Whether each species contains each element (2D)    | —             |
 | `radiation_boundaries`   | `idx, radiation_boundary`      | Band edges, length `nbands + 1`; empty without radiation | —       |
+| `profile_indices`        | `idx, profile_index`           | Spectral index α of each band's photon-number spectrum `n(E) ∝ E^(α-2)`; empty without radiation | — |
 
 ### REPEAT option groups
 
