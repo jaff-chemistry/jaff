@@ -95,6 +95,9 @@ $$JAFF END
 
 	/// whether each chemical band also integrates a flux attenuation factor; jaff emits one per band
 	static constexpr bool integrate_rad_flux = true;
+	/// whether dust absorbs chemical-band photons and the network returns the absorbed energy (Q_dust) that heats it;
+	/// jaff networks don't support this yet.
+	static constexpr bool ChemBandDustHeating = false;
 
 	/// The runtime parameters. Kernels take a copy by value.
 	struct Params {
